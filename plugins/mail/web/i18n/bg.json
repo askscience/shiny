@@ -147,5 +147,11 @@
   "plugin.mail.provider.fastmail.settingsLabel": "Настройки на Fastmail SMTP/IMAP",
   "plugin.mail.provider.proton.text": "Proton Mail няма пряк IMAP — инсталирайте Proton Mail Bridge, после го добавете тук като персонализиран акаунт на 127.0.0.1 (IMAP порт 1143, SMTP порт 1025) с потребителското име и паролата, които Bridge ви показва.",
   "plugin.mail.provider.proton.bridgeLabel": "Proton Mail Bridge",
-  "plugin.mail.provider.custom.text": "Използвайте адресите, портовете и сигурността на IMAP и SMTP сървъра на доставчика си. Повечето доставчици вече изискват парола за приложение или OAuth2 вместо обикновената ви парола."
+  "plugin.mail.provider.custom.text": "Използвайте адресите, портовете и сигурността на IMAP и SMTP сървъра на доставчика си. Повечето доставчици вече изискват парола за приложение или OAuth2 вместо обикновената ви парола.",
+  "plugin.mail.reader.openAttachment": "Отвори",
+  "plugin.mail.reader.saveAttachment": "Запази в Изтегляния",
+  "plugin.mail.toast.attachmentSaved": "Запазено в {path}",
+  "plugin.mail.toast.attachmentFailed": "Прикаченият файл не можа да бъде получен",
+  "plugin.mail.compose.attach": "Прикачи файлове…",
+  "plugin.mail.compose.removeAttachment": "Премахни прикачения файл"
 }

@@ -22,5 +22,6 @@
   "plugin.terminal.ctx.copy": "Copier",
   "plugin.terminal.ctx.paste": "Coller",
   "plugin.terminal.ctx.clearScrollback": "Effacer le défilement",
-  "plugin.terminal.ctx.closeTab": "Fermer l'onglet"
+  "plugin.terminal.ctx.closeTab": "Fermer l'onglet",
+  "plugin.terminal.keys.label": "Touches du terminal"
 }

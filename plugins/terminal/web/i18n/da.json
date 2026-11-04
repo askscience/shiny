@@ -21,5 +21,6 @@
   "plugin.terminal.ctx.copy": "Kopiér",
   "plugin.terminal.ctx.paste": "Sæt ind",
   "plugin.terminal.ctx.clearScrollback": "Ryd rullehistorik",
-  "plugin.terminal.ctx.closeTab": "Luk fane"
+  "plugin.terminal.ctx.closeTab": "Luk fane",
+  "plugin.terminal.keys.label": "Terminaltaster"
 }

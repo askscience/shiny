@@ -22,5 +22,6 @@
   "plugin.terminal.ctx.copy": "Copiază",
   "plugin.terminal.ctx.paste": "Lipește",
   "plugin.terminal.ctx.clearScrollback": "Golește istoricul de derulare",
-  "plugin.terminal.ctx.closeTab": "Închide fila"
+  "plugin.terminal.ctx.closeTab": "Închide fila",
+  "plugin.terminal.keys.label": "Taste terminal"
 }

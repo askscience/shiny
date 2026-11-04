@@ -23,5 +23,6 @@
   "plugin.terminal.ctx.copy": "Kopiuj",
   "plugin.terminal.ctx.paste": "Wklej",
   "plugin.terminal.ctx.clearScrollback": "Wyczyść bufor przewijania",
-  "plugin.terminal.ctx.closeTab": "Zamknij kartę"
+  "plugin.terminal.ctx.closeTab": "Zamknij kartę",
+  "plugin.terminal.keys.label": "Klawisze terminala"
 }

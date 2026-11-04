@@ -510,9 +510,14 @@ nothing of the desktop shows through.
   look of whichever profile is pointed at or picked. `auth.js` keeps every id of
   the old form (`#login-btn`, `#login-password`, …) as its contract.
 - **Lock screen** (`web/js/lockScreen.js`). Settings → Account → Lock screen:
-  on/off, *Ask for the password*, *Lock after* 1–60 idle minutes
-  (`lock.screen`, `getLockScreen()` / `setLockScreen()`, `lock:settings`). It
-  locks after the idle time (a suspend shows up as a jump in the idle clock),
+  on/off, *Ask for the password*, and *Lock after* an amount in seconds or
+  minutes (10 s – 24 h) or *Never* (`lock.screen` → `{ enabled, password,
+  idle }`, `idle` in seconds, 0 = never; `getLockScreen()` /
+  `setLockScreen()`, `lock:settings`). It locks after the idle time (a
+  suspend shows up as a jump in the idle clock; input the app's DOM cannot see
+  — same-origin frames are hooked, the Browser's native page reports its
+  navigations, playing media counts, and with the focus outside the DOM the
+  wait is tripled),
   before a suspend from the power menu, from the power menu's **Lock**, on
   `Super+L` / `Ctrl+Alt+L`, and on a `lock:now` event. Once the stage covers
   the desktop, `#app` is made inert and invisible and `body.lock-active` sends
@@ -854,15 +859,46 @@ Settings (`web/js/settingsWindow.js`), Plugins (`pluginsWindow.js`) and Chats
 (`chatHistory.js`) are built-in windows, not plugin tiles. They share the window
 chrome and the UI library, and are opened from the right of the HUD.
 
-The Plugins window (`web/css/plugins.css`) puts its two tabs (Installed / Craft
-apps), the search field and Install in the window bar (`data-window-bar`). The
-scrolling area opens with a `largeTitle()` ("Plugins" / "Craft apps" with a mono
-count that rolls when it changes) that hands over to the bar as it scrolls.
-Cards are flat cells on a hairline: a monochrome icon in a grey square tile, the
-name, a one-line description, mono meta ("V0.1.0 · API 1 · TRAVEL"), Open as the
-ink arrow pill, the other actions as grey pills, and the per-window mode as a
-compact grey select. Cards cascade in with `listReveal()` when a tab loads; the
-install log is a hairline section with a mono eyebrow and mono lines.
+The Plugins window (`pluginsWindow.js`, `web/css/plugins.css`) speaks the
+editorial window language of Settings and the Installer: the window bar
+carries a mono "PLUGINS" name, the search, install-from-a-file and one mono
+status with a dot ("1 to update"); below it a numbered rail (01 Craft apps · 02
+Installed · 03 Updates · 04 Install activity, each with a mono count), a stage
+and a live manifest.
+
+- **Stage** — a mono "01 / 04" kicker over a large display title and a
+  one-line description, then an *index*: hairline rows with a mono number, the
+  app's icon, its name in display type, a muted line, mono metadata and one
+  arrow pill (Get / Update / Open, or Turn on for a plugin). A download fills
+  the row's own hairline in the accent. Craft opens with big display counts
+  (apps, installed, new) on hairlines and Get all; Installed has category chips;
+  Updates has Update all, Check for updates and the automatic-update switch;
+  Install activity is the log as mono lines on hairlines. The search lists
+  Craft apps and plugins in one index.
+- **Manifest** — the selected app (by default the newest one not installed):
+  its icon as a 3D slab — eight layers behind the face, each a step darker in
+  the app's brand colour, a sheen and a floor shadow — that the pointer or a
+  finger tilts; then the name, its line, the action, mono key/value rows
+  (version, latest, size, publisher, status), AI control, how its window opens,
+  links and removal with an inline confirmation.
+- **Narrower windows** — below 1080 px the manifest becomes a panel that slides
+  over the stage when an app is picked (back button or Escape closes it); below
+  760 px the rail becomes a numbered strip over the stage; below 560 px the index
+  drops its numbers and lines. A phone reads the same window.
+
+Motion follows Settings → Appearance → Motion: a section change cascades the
+stage in with `listReveal()`, counts roll (`rollNumber()`), a new selection
+brings the slab in with `cardEnter()` and the manifest with `listReveal()`.
+In CSS, per language: the slab turns slowly on a cinematic ease (kinetic),
+bobs on a spring (fluid) or orbits in depth with its shadow breathing (depth),
+and its tilt settles on the same curve; a hovered row slides its name
+(kinetic), springs its icon (fluid) or lifts its icon while the other rows step
+back (depth); the manifest panel slides on the matching curve. While the store
+is polled during a download only the percentages are patched in place, so the
+slab, hovers and scroll never reset.
+
+Craft icons come from `/api/plugins/store/icon` (so they show before the
+install); every other colour is a theme token.
 
 ## Preferences
 

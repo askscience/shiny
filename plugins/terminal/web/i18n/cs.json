@@ -23,5 +23,6 @@
   "plugin.terminal.ctx.copy": "Kopírovat",
   "plugin.terminal.ctx.paste": "Vložit",
   "plugin.terminal.ctx.clearScrollback": "Vymazat historii rolování",
-  "plugin.terminal.ctx.closeTab": "Zavřít tab"
+  "plugin.terminal.ctx.closeTab": "Zavřít tab",
+  "plugin.terminal.keys.label": "Klávesy terminálu"
 }

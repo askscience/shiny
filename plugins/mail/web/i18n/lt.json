@@ -155,5 +155,11 @@
   "plugin.mail.provider.fastmail.settingsLabel": "Fastmail SMTP / IMAP nustatymai",
   "plugin.mail.provider.proton.text": "Proton Mail neturi tiesioginio IMAP — įdiekite Proton Mail Bridge, tada pridėkite jį čia kaip pasirinktinę paskyrą adresu 127.0.0.1 (IMAP prievadas 1143, SMTP prievadas 1025) su naudotojo vardu ir slaptažodžiu, kuriuos jums parodo Bridge.",
   "plugin.mail.provider.proton.bridgeLabel": "Proton Mail Bridge",
-  "plugin.mail.provider.custom.text": "Naudokite savo teikėjo IMAP ir SMTP serverių adresus, prievadus ir saugumą. Dauguma teikėjų dabar reikalauja programos slaptažodžio arba OAuth2 vietoj įprasto slaptažodžio."
+  "plugin.mail.provider.custom.text": "Naudokite savo teikėjo IMAP ir SMTP serverių adresus, prievadus ir saugumą. Dauguma teikėjų dabar reikalauja programos slaptažodžio arba OAuth2 vietoj įprasto slaptažodžio.",
+  "plugin.mail.reader.openAttachment": "Atidaryti",
+  "plugin.mail.reader.saveAttachment": "Išsaugoti į Atsisiuntimus",
+  "plugin.mail.toast.attachmentSaved": "Išsaugota: {path}",
+  "plugin.mail.toast.attachmentFailed": "Nepavyko gauti priedo",
+  "plugin.mail.compose.attach": "Pridėti failų…",
+  "plugin.mail.compose.removeAttachment": "Pašalinti priedą"
 }

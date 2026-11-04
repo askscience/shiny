@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 // Optional browser verification; no production bundler or dependency is added.
 // SHINY_PLAYWRIGHT_MODULE=/path/to/playwright/package.json node scripts/test-responsive-ui.mjs
+// SHINY_UI_LOCALE=it (any catalog code) runs the windows in that language.
 const { chromium } = createRequire(process.env.SHINY_PLAYWRIGHT_MODULE || import.meta.url)('playwright');
 const root=fileURLToPath(new URL('../',import.meta.url));
 const failures=[];
@@ -83,6 +84,8 @@ try{
  for(const name of plugins){
  const page=await context.newPage();const errors=[];const fonts=[];page.on('request',r=>{if(r.resourceType()==='font' && new URL(r.url()).origin!==new URL(page.url()).origin) fonts.push(r.url());});page.on('pageerror',e=>errors.push(e.message));
  await page.route('https://**',r=>r.abort());
+ // SHINY_UI_LOCALE=it runs every window in that interface language.
+ if(process.env.SHINY_UI_LOCALE) await page.addInitScript(code=>{try{localStorage.setItem('ui.locale',code);}catch(_){}},process.env.SHINY_UI_LOCALE);
  await page.goto(`http://127.0.0.1:${server.address().port}/test`);
  await page.evaluate(async()=>{const {setFont}=await import('/ui/index.js');setFont('DejaVu Serif');});
  try{
@@ -171,10 +174,26 @@ try{
      }
      return false;
    }).slice(0,15).map(e=>e.className || e.tagName);
-   return {over,bars,clipped};
+   // A word split across two lines (letter by letter in a narrow box) reads
+   // as broken; only a box that hyphenates on purpose may do it.
+   const broken=[];
+   const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);
+   for(let n=walker.nextNode();n;n=walker.nextNode()){
+     const p=n.parentElement;
+     if(!p||!p.getClientRects().length||p.closest('textarea,input,pre,code,.xterm,[hidden]')||getComputedStyle(p).hyphens==='auto')continue;
+     for(const m of n.data.matchAll(/\p{L}{2,}/gu)){
+       // Part of an address, a path or a link: that has to break somewhere.
+       const run=n.data.slice(0,m.index).split(/\s/).pop()+n.data.slice(m.index).split(/\s/)[0];
+       if(/[@/.:_\\-]/.test(run))continue;
+       const r=document.createRange();r.setStart(n,m.index);r.setEnd(n,m.index+m[0].length);
+       const rects=[...r.getClientRects()].filter(x=>x.width>0);
+       if(rects.length>1&&Math.abs(rects[0].top-rects[rects.length-1].top)>2)broken.push(`${m[0]} <${p.className||p.tagName}>`);
+     }
+   }
+   return {over,bars,clipped,broken:[...new Set(broken)].slice(0,12)};
  });
  console.log(JSON.stringify({name,size,errors,...report}));
- if(errors.length || report.over.length || report.clipped.length || fonts.length) failures.push({name,size,errors,over:report.over,clipped:report.clipped,fonts});
+ if(errors.length || report.over.length || report.clipped.length || report.broken.length || fonts.length) failures.push({name,size,errors,over:report.over,clipped:report.clipped,broken:report.broken,fonts});
  if(process.env.SHINY_UI_SCREENSHOTS) await page.screenshot({path:`${process.env.SHINY_UI_SCREENSHOTS}/${name}-${size.width}x${size.height}${size.tileWidth ? `-tile${size.tileWidth}` : ''}-${theme}.png`});
  if(name==='settings') {
   for(const id of ['account','appearance','desktop','assistant','voice','images','music','touchbar','remote','system']) {
@@ -198,7 +217,12 @@ try{
   assert.equal(await trigger.getAttribute('aria-expanded'),'false');
  }
  if(name==='plugins') {
-  const select=page.locator('.ui-select').first();
+  // The window mode lives in the manifest of an installed plugin with a window.
+  const tap=async(loc)=>{ if(size.touch===false) await loc.click(); else await loc.tap(); };
+  await tap(page.locator('.pw-rail-item[data-section="installed"]'));
+  await tap(page.locator('.pw-row').first());
+  await page.waitForTimeout(400);
+  const select=page.locator('.pw-manifest .ui-select').first();
   if(size.touch===false) await select.click(); else await select.tap();
   await page.locator('.ui-select-menu').waitFor({state:'visible'});
   const box=await page.locator('.ui-select-menu').boundingBox();

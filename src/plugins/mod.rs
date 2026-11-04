@@ -6,6 +6,7 @@ pub mod loader;
 pub mod installer;
 pub mod admin_api;
 pub mod store;
+pub mod craft_discovery;
 pub mod craft_mcp;
 pub mod craft_control;
 

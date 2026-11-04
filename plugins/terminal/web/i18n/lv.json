@@ -22,5 +22,6 @@
   "plugin.terminal.ctx.copy": "Kopēt",
   "plugin.terminal.ctx.paste": "Ielīmēt",
   "plugin.terminal.ctx.clearScrollback": "Notīrīt ritināšanas vēsturi",
-  "plugin.terminal.ctx.closeTab": "Aizvērt cilni"
+  "plugin.terminal.ctx.closeTab": "Aizvērt cilni",
+  "plugin.terminal.keys.label": "Termināļa taustiņi"
 }

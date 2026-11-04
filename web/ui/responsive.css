@@ -12,7 +12,9 @@
 .ui-tool.ui-btn { width: 32px; height: 32px; padding: 0; border-radius: var(--radius-sm); }
 .ui-tool--danger:hover:not(:disabled) { color: var(--error); border-color: var(--error); }
 .ui-segmented { flex-wrap: wrap; }
-.ui-segmented > button { min-width: 0; overflow-wrap: break-word; text-wrap: balance; }
+/* A segment is never narrower than its longest word: when the row runs out
+   of room the segments wrap as a whole, never a word letter by letter. */
+.ui-segmented > button { min-width: min-content; overflow-wrap: normal; text-wrap: balance; }
 .ui-select-option[aria-disabled="true"] { opacity: .5; cursor: default; }
 .ui-modal,.ui-sheet { box-sizing: border-box; padding: max(12px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left)); }
 .ui-modal-card,.ui-sheet-card { min-width: 0; max-width: 100%; max-height: calc(100dvh - 24px); box-sizing: border-box; }

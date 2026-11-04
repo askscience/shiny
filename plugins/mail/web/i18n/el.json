@@ -147,5 +147,11 @@
   "plugin.mail.provider.fastmail.settingsLabel": "Ρυθμίσεις SMTP/IMAP του Fastmail",
   "plugin.mail.provider.proton.text": "Το Proton Mail δεν έχει άμεσο IMAP — εγκαταστήστε το Proton Mail Bridge και προσθέστε το εδώ ως προσαρμοσμένο λογαριασμό στη διεύθυνση 127.0.0.1 (θύρα IMAP 1143, θύρα SMTP 1025) με το όνομα χρήστη και τον κωδικό πρόσβασης που σας δείχνει το Bridge.",
   "plugin.mail.provider.proton.bridgeLabel": "Proton Mail Bridge",
-  "plugin.mail.provider.custom.text": "Χρησιμοποιήστε τις διευθύνσεις διακομιστών IMAP και SMTP του παρόχου σας, τις θύρες και την ασφάλεια. Οι περισσότεροι πάροχοι απαιτούν πλέον κωδικό εφαρμογής ή OAuth2 αντί για τον κανονικό κωδικό πρόσβασης."
+  "plugin.mail.provider.custom.text": "Χρησιμοποιήστε τις διευθύνσεις διακομιστών IMAP και SMTP του παρόχου σας, τις θύρες και την ασφάλεια. Οι περισσότεροι πάροχοι απαιτούν πλέον κωδικό εφαρμογής ή OAuth2 αντί για τον κανονικό κωδικό πρόσβασης.",
+  "plugin.mail.reader.openAttachment": "Άνοιγμα",
+  "plugin.mail.reader.saveAttachment": "Αποθήκευση στις Λήψεις",
+  "plugin.mail.toast.attachmentSaved": "Αποθηκεύτηκε στο {path}",
+  "plugin.mail.toast.attachmentFailed": "Δεν ήταν δυνατή η λήψη του συνημμένου",
+  "plugin.mail.compose.attach": "Επισύναψη αρχείων…",
+  "plugin.mail.compose.removeAttachment": "Αφαίρεση συνημμένου"
 }

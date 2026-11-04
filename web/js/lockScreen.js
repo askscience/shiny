@@ -7,8 +7,9 @@
  * invisible once the stage covers it, and the Browser's native page steps
  * aside (`body.lock-active`, see nativeShouldShow in the Browser plugin).
  *
- *   lock     after `after` idle minutes (Settings → Account → Lock screen;
- *            see "Idle clock" for the input the DOM cannot see),
+ *   lock     after `idle` seconds without input — or never — (Settings →
+ *            Account → Lock screen; see "Idle clock" for the input the DOM
+ *            cannot see),
  *            before a suspend (powerMenu.js), from the power menu, on
  *            Super+L / Ctrl+Alt+L, or on a `lock:now` event;
  *   wake     a phone swipes up (the stage follows the finger); a desktop
@@ -425,7 +426,8 @@ function checkIdle() {
     return;
   }
   const unseen = typeof document.hasFocus === 'function' && !document.hasFocus();
-  const limit = s.after * 60000 * (unseen ? 3 : 1);
+  if (!s.idle) return;
+  const limit = s.idle * 1000 * (unseen ? 3 : 1);
   if (Date.now() - lastActivity >= limit) lockNow();
 }
 

@@ -21,5 +21,6 @@
   "plugin.terminal.ctx.copy": "Kopiëren",
   "plugin.terminal.ctx.paste": "Plakken",
   "plugin.terminal.ctx.clearScrollback": "Terugscrollgeschiedenis wissen",
-  "plugin.terminal.ctx.closeTab": "Tabblad sluiten"
+  "plugin.terminal.ctx.closeTab": "Tabblad sluiten",
+  "plugin.terminal.keys.label": "Terminaltoetsen"
 }

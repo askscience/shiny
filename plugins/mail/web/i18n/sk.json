@@ -155,5 +155,11 @@
   "plugin.mail.provider.fastmail.settingsLabel": "Nastavenia SMTP/IMAP pre Fastmail",
   "plugin.mail.provider.proton.text": "Proton Mail nemá priamy IMAP — nainštalujte Proton Mail Bridge a potom ho tu pridajte ako vlastný účet na 127.0.0.1 (port IMAP 1143, port SMTP 1025) s používateľským menom a heslom, ktoré vám Bridge zobrazí.",
   "plugin.mail.provider.proton.bridgeLabel": "Proton Mail Bridge",
-  "plugin.mail.provider.custom.text": "Použite adresy serverov IMAP a SMTP svojho poskytovateľa, porty a zabezpečenie. Väčšina poskytovateľov dnes vyžaduje heslo aplikácie alebo OAuth2 namiesto bežného hesla."
+  "plugin.mail.provider.custom.text": "Použite adresy serverov IMAP a SMTP svojho poskytovateľa, porty a zabezpečenie. Väčšina poskytovateľov dnes vyžaduje heslo aplikácie alebo OAuth2 namiesto bežného hesla.",
+  "plugin.mail.reader.openAttachment": "Otvoriť",
+  "plugin.mail.reader.saveAttachment": "Uložiť do Sťahovaných",
+  "plugin.mail.toast.attachmentSaved": "Uložené do {path}",
+  "plugin.mail.toast.attachmentFailed": "Prílohu sa nepodarilo získať",
+  "plugin.mail.compose.attach": "Priložiť súbory…",
+  "plugin.mail.compose.removeAttachment": "Odstrániť prílohu"
 }

@@ -147,5 +147,11 @@
   "plugin.mail.provider.fastmail.settingsLabel": "Fastmail SMTP/IMAP beállítások",
   "plugin.mail.provider.proton.text": "A Proton Mailnek nincs közvetlen IMAP-ja — telepítse a Proton Mail Bridge-et, majd adja hozzá itt egyéni fiókként a 127.0.0.1 címen (IMAP-port 1143, SMTP-port 1025) azzal a felhasználónévvel és jelszóval, amelyet a Bridge megjelenít.",
   "plugin.mail.provider.proton.bridgeLabel": "Proton Mail Bridge",
-  "plugin.mail.provider.custom.text": "Használja a szolgáltatója IMAP- és SMTP-kiszolgálócímeit, portjait és biztonsági beállításait. A legtöbb szolgáltató ma már alkalmazásjelszót vagy OAuth2-t igényel a szokásos jelszava helyett."
+  "plugin.mail.provider.custom.text": "Használja a szolgáltatója IMAP- és SMTP-kiszolgálócímeit, portjait és biztonsági beállításait. A legtöbb szolgáltató ma már alkalmazásjelszót vagy OAuth2-t igényel a szokásos jelszava helyett.",
+  "plugin.mail.reader.openAttachment": "Megnyitás",
+  "plugin.mail.reader.saveAttachment": "Mentés a Letöltésekbe",
+  "plugin.mail.toast.attachmentSaved": "Mentve ide: {path}",
+  "plugin.mail.toast.attachmentFailed": "Nem sikerült lekérni a mellékletet",
+  "plugin.mail.compose.attach": "Fájlok csatolása…",
+  "plugin.mail.compose.removeAttachment": "Melléklet eltávolítása"
 }

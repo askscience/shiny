@@ -12,10 +12,29 @@
   moves the mouse or presses a key; the account password is asked only when
   Settings → Account → Lock screen says so, checked without opening a new
   session (`/api/auth/verify-password`). The lock screen itself and the idle
-  time (1–60 minutes) are set there too (`web/js/lockScreen.js`).
+  time — any amount of seconds or minutes, or never — are set there too
+  (`web/js/lockScreen.js`).
+- Craft store: new Craft apps join the store on their own. Once a day it
+  reads the ArtCraft launcher's release feed and the `storytold` GitHub
+  account, and adds every app whose release carries a web build; what it
+  finds is remembered across restarts (`src/plugins/craft_discovery.rs`,
+  `<plugins_dir>/.craft-store.json`). TextureCraft, MaterialCraft, Craft
+  Anything and SolidCraft (community, Tangency Labs) are in the built-in
+  catalog too.
+- Craft store: each app's brand colour, publisher and community flag in the
+  catalog, and its icon before it is installed
+  (`GET /api/plugins/store/icon`).
 
 ### Changed
 
+- Words no longer break letter by letter in narrow places: a segmented
+  control's segment is never narrower than its longest word (the row wraps
+  between segments instead), labels and values use `overflow-wrap:
+  break-word` rather than `anywhere`, the Settings summary's values keep
+  their words, Mail's reader shows its actions as icons in a narrow column,
+  and long radio station names hyphenate.
+- Translations: every interface language now has every string of the shell
+  and of the Files, Studio, Mail, PDF and Terminal windows.
 - Sign-in screen: an editorial stage instead of the card — the time set very
   large with an accent colon, the date and the weather beside a numbered profile
   index in display type with arrow pills, and the password on a hairline with a
@@ -25,6 +44,14 @@
   desktop in the chosen motion language (kinetic masks, fluid springs, depth
   blur and parallax). The lock screen is the same stage (`web/js/gate.js`,
   `web/css/gate.css`).
+- Plugins window: rebuilt in the editorial language of Settings and the
+  Installer — a numbered rail (Craft apps, Installed, Updates, Install
+  activity), an index of apps in display type with arrow pills and the
+  download filling each row's hairline, and a live manifest with the selected
+  app as a 3D slab in its brand colour that tilts with the pointer and idles
+  in the chosen motion language. Narrow windows and phones get the manifest as
+  a sliding panel and the rail as a strip.
+
 - Window overview: the windows are a grid of cards with a small title and a
   close button under each, instead of the strip or the cloud — no headline,
   no Prev / Next, no drift. The grid scrolls when the windows outnumber the

@@ -21,5 +21,6 @@
   "plugin.terminal.ctx.copy": "Kopieren",
   "plugin.terminal.ctx.paste": "Einfügen",
   "plugin.terminal.ctx.clearScrollback": "Bildschirmpuffer löschen",
-  "plugin.terminal.ctx.closeTab": "Tab schließen"
+  "plugin.terminal.ctx.closeTab": "Tab schließen",
+  "plugin.terminal.keys.label": "Terminal-Tasten"
 }

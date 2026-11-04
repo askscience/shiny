@@ -159,5 +159,11 @@
   "plugin.mail.provider.fastmail.settingsLabel": "Issettjar SMTP/IMAP ta' Fastmail",
   "plugin.mail.provider.proton.text": "Proton Mail m'għandux IMAP dirett — installa Proton Mail Bridge, imbagħad żidu hawn bħala kont personalizzat fuq 127.0.0.1 (port IMAP 1143, port SMTP 1025) bl-username u l-password li jurik Bridge.",
   "plugin.mail.provider.proton.bridgeLabel": "Proton Mail Bridge",
-  "plugin.mail.provider.custom.text": "Uża l-indirizzi tas-servers IMAP u SMTP tal-fornitur tiegħek, il-ports u s-sigurtà. Ħafna fornituri issa jeħtieġu app password jew OAuth2 minflok il-password normali tiegħek."
+  "plugin.mail.provider.custom.text": "Uża l-indirizzi tas-servers IMAP u SMTP tal-fornitur tiegħek, il-ports u s-sigurtà. Ħafna fornituri issa jeħtieġu app password jew OAuth2 minflok il-password normali tiegħek.",
+  "plugin.mail.reader.openAttachment": "Iftaħ",
+  "plugin.mail.reader.saveAttachment": "Issejvja f'Tniżżil",
+  "plugin.mail.toast.attachmentSaved": "Issejvjat f'{path}",
+  "plugin.mail.toast.attachmentFailed": "Il-mehmuż ma setax jinkiseb",
+  "plugin.mail.compose.attach": "Ehmeż fajls…",
+  "plugin.mail.compose.removeAttachment": "Neħħi l-mehmuż"
 }

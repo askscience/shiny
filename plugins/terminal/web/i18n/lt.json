@@ -23,5 +23,6 @@
   "plugin.terminal.ctx.copy": "Kopijuoti",
   "plugin.terminal.ctx.paste": "Įklijuoti",
   "plugin.terminal.ctx.clearScrollback": "Išvalyti slinkties istoriją",
-  "plugin.terminal.ctx.closeTab": "Uždaryti kortelę"
+  "plugin.terminal.ctx.closeTab": "Uždaryti kortelę",
+  "plugin.terminal.keys.label": "Terminalo klavišai"
 }

@@ -147,5 +147,11 @@
   "plugin.mail.provider.fastmail.settingsLabel": "Fastmailin SMTP/IMAP-asetukset",
   "plugin.mail.provider.proton.text": "Proton Mailissa ei ole suoraa IMAP-tukea — asenna Proton Mail Bridge ja lisää se sitten tähän mukautettuna tilinä osoitteessa 127.0.0.1 (IMAP-portti 1143, SMTP-portti 1025) käyttäen käyttäjänimeä ja salasanaa, jotka Bridge näyttää sinulle.",
   "plugin.mail.provider.proton.bridgeLabel": "Proton Mail Bridge",
-  "plugin.mail.provider.custom.text": "Käytä palveluntarjoajasi IMAP- ja SMTP-palvelinosoitteita, portteja ja suojausta. Useimmat tarjoajat vaativat nykyään sovellussalasanan tai OAuth2:n tavallisen salasanan sijaan."
+  "plugin.mail.provider.custom.text": "Käytä palveluntarjoajasi IMAP- ja SMTP-palvelinosoitteita, portteja ja suojausta. Useimmat tarjoajat vaativat nykyään sovellussalasanan tai OAuth2:n tavallisen salasanan sijaan.",
+  "plugin.mail.reader.openAttachment": "Avaa",
+  "plugin.mail.reader.saveAttachment": "Tallenna Latauksiin",
+  "plugin.mail.toast.attachmentSaved": "Tallennettu: {path}",
+  "plugin.mail.toast.attachmentFailed": "Liitteen hakeminen epäonnistui",
+  "plugin.mail.compose.attach": "Liitä tiedostoja…",
+  "plugin.mail.compose.removeAttachment": "Poista liite"
 }

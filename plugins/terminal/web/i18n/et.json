@@ -21,5 +21,6 @@
   "plugin.terminal.ctx.copy": "Kopeeri",
   "plugin.terminal.ctx.paste": "Kleebi",
   "plugin.terminal.ctx.clearScrollback": "Tühjenda kerimisajalugu",
-  "plugin.terminal.ctx.closeTab": "Sulge vaheleht"
+  "plugin.terminal.ctx.closeTab": "Sulge vaheleht",
+  "plugin.terminal.keys.label": "Terminali klahvid"
 }

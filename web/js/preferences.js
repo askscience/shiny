@@ -480,19 +480,30 @@ export function applyDesktopSurface() {
 }
 
 /* ── Lock screen ─────────────────────────────────────────────
- * Settings → Account → Lock screen. `enabled` turns the lock screen on (an
- * idle desk locks itself after `after` minutes, and it locks before a
- * suspend and on demand); `password` asks for the account password to
+ * Settings → Account → Lock screen. `enabled` turns the lock screen on (it
+ * locks before a suspend and on demand); `idle` is the inactivity, in
+ * seconds, after which the desk locks itself — 0 is "never" (the lock screen
+ * is still there on demand); `password` asks for the account password to
  * unlock — without it a swipe up, a key or a mouse move is enough.
  * js/lockScreen.js reads these and follows `lock:settings`.
  * ───────────────────────────────────────────────────────────── */
 
 const LOCK_SCREEN_KEY = 'lock.screen';
 
-/** Minutes of inactivity Settings offers before the desk locks itself. */
-export const LOCK_AFTER_CHOICES = [1, 2, 5, 10, 15, 30, 60];
+/** The idle time Settings accepts, in seconds (0 = never). */
+export const LOCK_IDLE_MIN = 10;
+export const LOCK_IDLE_MAX = 24 * 60 * 60;
 
-const DEFAULT_LOCK_SCREEN = { enabled: true, password: true, after: 5 };
+const DEFAULT_LOCK_SCREEN = { enabled: true, password: true, idle: 5 * 60 };
+
+function lockIdle(src) {
+  // Earlier builds stored whole minutes as `after`.
+  const raw = src.idle !== undefined ? Number(src.idle)
+    : (src.after !== undefined ? Number(src.after) * 60 : DEFAULT_LOCK_SCREEN.idle);
+  if (!Number.isFinite(raw)) return DEFAULT_LOCK_SCREEN.idle;
+  if (raw <= 0) return 0;
+  return Math.round(clamp(raw, LOCK_IDLE_MIN, LOCK_IDLE_MAX));
+}
 
 export function getLockScreen() {
   const stored = readJson(scopedKey(LOCK_SCREEN_KEY), {});
@@ -500,7 +511,7 @@ export function getLockScreen() {
   return {
     enabled: src.enabled === undefined ? DEFAULT_LOCK_SCREEN.enabled : src.enabled !== false,
     password: src.password === undefined ? DEFAULT_LOCK_SCREEN.password : src.password !== false,
-    after: LOCK_AFTER_CHOICES.includes(Number(src.after)) ? Number(src.after) : DEFAULT_LOCK_SCREEN.after,
+    idle: lockIdle(src),
   };
 }
 

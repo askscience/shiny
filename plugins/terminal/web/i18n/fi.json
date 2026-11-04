@@ -21,5 +21,6 @@
   "plugin.terminal.ctx.copy": "Kopioi",
   "plugin.terminal.ctx.paste": "Liitä",
   "plugin.terminal.ctx.clearScrollback": "Tyhjennä vierityshistoria",
-  "plugin.terminal.ctx.closeTab": "Sulje välilehti"
+  "plugin.terminal.ctx.closeTab": "Sulje välilehti",
+  "plugin.terminal.keys.label": "Päätteen näppäimet"
 }

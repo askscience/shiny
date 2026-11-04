@@ -151,5 +151,11 @@
   "plugin.mail.provider.fastmail.settingsLabel": "Fastmail SMTP/IMAP iestatījumi",
   "plugin.mail.provider.proton.text": "Proton Mail nav tieša IMAP — instalējiet Proton Mail Bridge, pēc tam pievienojiet to šeit kā pielāgotu kontu uz 127.0.0.1 (IMAP ports 1143, SMTP ports 1025) ar lietotājvārdu un paroli, ko jums parāda Bridge.",
   "plugin.mail.provider.proton.bridgeLabel": "Proton Mail Bridge",
-  "plugin.mail.provider.custom.text": "Izmantojiet sava pakalpojumu sniedzēja IMAP un SMTP serveru adreses, portus un drošību. Lielākā daļa sniedzēju tagad pieprasa lietotnes paroli vai OAuth2, nevis parasto paroli."
+  "plugin.mail.provider.custom.text": "Izmantojiet sava pakalpojumu sniedzēja IMAP un SMTP serveru adreses, portus un drošību. Lielākā daļa sniedzēju tagad pieprasa lietotnes paroli vai OAuth2, nevis parasto paroli.",
+  "plugin.mail.reader.openAttachment": "Atvērt",
+  "plugin.mail.reader.saveAttachment": "Saglabāt mapē Lejupielādes",
+  "plugin.mail.toast.attachmentSaved": "Saglabāts: {path}",
+  "plugin.mail.toast.attachmentFailed": "Nevarēja iegūt pielikumu",
+  "plugin.mail.compose.attach": "Pievienot failus…",
+  "plugin.mail.compose.removeAttachment": "Noņemt pielikumu"
 }

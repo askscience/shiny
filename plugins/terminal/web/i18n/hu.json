@@ -21,5 +21,6 @@
   "plugin.terminal.ctx.copy": "Másolás",
   "plugin.terminal.ctx.paste": "Beillesztés",
   "plugin.terminal.ctx.clearScrollback": "Visszagörgetés törlése",
-  "plugin.terminal.ctx.closeTab": "Lap bezárása"
+  "plugin.terminal.ctx.closeTab": "Lap bezárása",
+  "plugin.terminal.keys.label": "Terminálbillentyűk"
 }

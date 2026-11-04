@@ -159,5 +159,11 @@
   "plugin.mail.provider.fastmail.settingsLabel": "Socruithe SMTP/IMAP Fastmail",
   "plugin.mail.provider.proton.text": "Níl IMAP díreach ag Proton Mail — suiteáil Proton Mail Bridge, ansin cuir anseo é mar chuntas saincheaptha ar 127.0.0.1 (port IMAP 1143, port SMTP 1025) leis an ainm úsáideora agus an pasfhocal a thaispeánann Bridge duit.",
   "plugin.mail.provider.proton.bridgeLabel": "Proton Mail Bridge",
-  "plugin.mail.provider.custom.text": "Úsáid seoltaí, poirt agus slándáil fhreastalaí IMAP agus SMTP do sholáthraí. Teastaíonn pasfhocal aipe nó OAuth2 ó fhormhór na soláthraithe anois in ionad do ghnáthphasfhocal."
+  "plugin.mail.provider.custom.text": "Úsáid seoltaí, poirt agus slándáil fhreastalaí IMAP agus SMTP do sholáthraí. Teastaíonn pasfhocal aipe nó OAuth2 ó fhormhór na soláthraithe anois in ionad do ghnáthphasfhocal.",
+  "plugin.mail.reader.openAttachment": "Oscail",
+  "plugin.mail.reader.saveAttachment": "Sábháil in Íoslódálacha",
+  "plugin.mail.toast.attachmentSaved": "Sábháilte i {path}",
+  "plugin.mail.toast.attachmentFailed": "Níorbh fhéidir an ceangaltán a fháil",
+  "plugin.mail.compose.attach": "Ceangail comhaid…",
+  "plugin.mail.compose.removeAttachment": "Bain an ceangaltán"
 }

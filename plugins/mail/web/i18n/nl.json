@@ -147,5 +147,11 @@
   "plugin.mail.provider.fastmail.settingsLabel": "Fastmail SMTP/IMAP-instellingen",
   "plugin.mail.provider.proton.text": "Proton Mail heeft geen directe IMAP — installeer Proton Mail Bridge en voeg het hier toe als aangepast account op 127.0.0.1 (IMAP-poort 1143, SMTP-poort 1025) met de gebruikersnaam en het wachtwoord die Bridge je toont.",
   "plugin.mail.provider.proton.bridgeLabel": "Proton Mail Bridge",
-  "plugin.mail.provider.custom.text": "Gebruik de IMAP- en SMTP-serveradressen, poorten en beveiliging van je aanbieder. De meeste aanbieders vragen nu om een app-wachtwoord of OAuth2 in plaats van je gewone wachtwoord."
+  "plugin.mail.provider.custom.text": "Gebruik de IMAP- en SMTP-serveradressen, poorten en beveiliging van je aanbieder. De meeste aanbieders vragen nu om een app-wachtwoord of OAuth2 in plaats van je gewone wachtwoord.",
+  "plugin.mail.reader.openAttachment": "Openen",
+  "plugin.mail.reader.saveAttachment": "Opslaan in Downloads",
+  "plugin.mail.toast.attachmentSaved": "Opgeslagen in {path}",
+  "plugin.mail.toast.attachmentFailed": "Kon de bijlage niet ophalen",
+  "plugin.mail.compose.attach": "Bestanden bijvoegen…",
+  "plugin.mail.compose.removeAttachment": "Bijlage verwijderen"
 }

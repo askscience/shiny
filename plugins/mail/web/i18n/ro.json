@@ -151,5 +151,11 @@
   "plugin.mail.provider.fastmail.settingsLabel": "Setările SMTP/IMAP Fastmail",
   "plugin.mail.provider.proton.text": "Proton Mail nu are IMAP direct — instalează Proton Mail Bridge, apoi adaugă-l aici ca un cont personalizat pe 127.0.0.1 (port IMAP 1143, port SMTP 1025) cu numele de utilizator și parola pe care ți le arată Bridge.",
   "plugin.mail.provider.proton.bridgeLabel": "Proton Mail Bridge",
-  "plugin.mail.provider.custom.text": "Folosește adresele serverelor IMAP și SMTP ale furnizorului tău, porturile și securitatea. Majoritatea furnizorilor cer acum o parolă de aplicație sau OAuth2 în locul parolei obișnuite."
+  "plugin.mail.provider.custom.text": "Folosește adresele serverelor IMAP și SMTP ale furnizorului tău, porturile și securitatea. Majoritatea furnizorilor cer acum o parolă de aplicație sau OAuth2 în locul parolei obișnuite.",
+  "plugin.mail.reader.openAttachment": "Deschide",
+  "plugin.mail.reader.saveAttachment": "Salvează în Descărcări",
+  "plugin.mail.toast.attachmentSaved": "Salvat în {path}",
+  "plugin.mail.toast.attachmentFailed": "Atașamentul nu a putut fi obținut",
+  "plugin.mail.compose.attach": "Atașează fișiere…",
+  "plugin.mail.compose.removeAttachment": "Elimină atașamentul"
 }

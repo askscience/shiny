@@ -23,5 +23,6 @@
   "plugin.terminal.ctx.copy": "Копіювати",
   "plugin.terminal.ctx.paste": "Вставити",
   "plugin.terminal.ctx.clearScrollback": "Очистити історію прокрутки",
-  "plugin.terminal.ctx.closeTab": "Закрити вкладку"
+  "plugin.terminal.ctx.closeTab": "Закрити вкладку",
+  "plugin.terminal.keys.label": "Клавіші термінала"
 }

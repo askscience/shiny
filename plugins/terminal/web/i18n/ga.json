@@ -24,5 +24,6 @@
   "plugin.terminal.ctx.copy": "Cóipeáil",
   "plugin.terminal.ctx.paste": "Greamaigh",
   "plugin.terminal.ctx.clearScrollback": "Glan an scrollú siar",
-  "plugin.terminal.ctx.closeTab": "Dún an cluaisín"
+  "plugin.terminal.ctx.closeTab": "Dún an cluaisín",
+  "plugin.terminal.keys.label": "Eochracha an teirminéil"
 }

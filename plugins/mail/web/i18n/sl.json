@@ -155,5 +155,11 @@
   "plugin.mail.provider.fastmail.settingsLabel": "Nastavitve Fastmail SMTP/IMAP",
   "plugin.mail.provider.proton.text": "Proton Mail ne pozna neposrednega IMAP — namestite Proton Mail Bridge in ga tukaj dodajte kot račun po meri na 127.0.0.1 (vrata IMAP 1143, vrata SMTP 1025) z uporabniškim imenom in geslom, ki vam ju prikaže Bridge.",
   "plugin.mail.provider.proton.bridgeLabel": "Proton Mail Bridge",
-  "plugin.mail.provider.custom.text": "Uporabite naslove strežnikov IMAP in SMTP, vrata in varnost svojega ponudnika. Večina ponudnikov zdaj zahteva geslo aplikacije ali OAuth2 namesto običajnega gesla."
+  "plugin.mail.provider.custom.text": "Uporabite naslove strežnikov IMAP in SMTP, vrata in varnost svojega ponudnika. Večina ponudnikov zdaj zahteva geslo aplikacije ali OAuth2 namesto običajnega gesla.",
+  "plugin.mail.reader.openAttachment": "Odpri",
+  "plugin.mail.reader.saveAttachment": "Shrani v Prenose",
+  "plugin.mail.toast.attachmentSaved": "Shranjeno v {path}",
+  "plugin.mail.toast.attachmentFailed": "Priloge ni bilo mogoče pridobiti",
+  "plugin.mail.compose.attach": "Priloži datoteke…",
+  "plugin.mail.compose.removeAttachment": "Odstrani prilogo"
 }

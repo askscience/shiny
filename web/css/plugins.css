@@ -1,316 +1,561 @@
-/* Plugins window — app-store surface that lives in a tile, in the editorial
-   window language (Files is the reference): tabs, search and Install in the
-   window bar; a large title with a mono count that hands over to the bar as
-   the list scrolls; flat cards with a grey icon tile, a one-line description,
-   mono meta and pill actions; the activity log on a hairline. Window chrome
-   (frame, radius) comes from tiles.css; colours are theme tokens only. */
+/* Plugins window (js/pluginsWindow.js) — the editorial window language of
+   Settings and the Installer: a numbered rail, a stage with a mono kicker
+   over a large display title, a live manifest of mono key/value rows on
+   hairlines, arrow pills, no drop shadows, tokens only. Its one object of its
+   own is the selected app as a 3D slab in the app's brand colour
+   (`--app-color`), tilted by the pointer and idling in the user's motion
+   language (`html[data-motion]`). */
 
 .plugins-tile {
-  --plugins-line: color-mix(in srgb, var(--text) 9%, transparent);
-  --plugins-pill: var(--ed-pill, var(--glass-strong));
-  --plugins-pill-hover: var(--ed-pill-hover, var(--glass-hover));
-  --plugins-box: var(--surface-strong, var(--glass-strong));
+  --pw-line: color-mix(in srgb, var(--text) 9%, transparent);
+  --pw-pill: var(--ed-pill, var(--glass-strong));
+  --pw-pill-hover: var(--ed-pill-hover, var(--glass-hover));
+  --pw-rail: 220px;
+  --pw-manifest: 340px;
+  --pw-gutter: clamp(20px, 2.6cqw, 40px);
+  --pw-ease: var(--ease-cinematic, cubic-bezier(0.76, 0, 0.24, 1));
+  color: var(--text);
+  font-family: var(--font-body);
 }
+.plugins-tile,
+.plugins-tile * { box-sizing: border-box; }
+.plugins-tile .hidden { display: none !important; }
 
-/* ── Window bar ────────────────────────────────────────────── */
-.plugins-bar {
+/* ── Window bar: a mono name, search, install, one mono status ── */
+.pw-chrome {
   display: flex;
   align-items: center;
   gap: 10px;
+  flex: 0 0 auto;
   min-width: 0;
   min-height: var(--tile-header-height, 36px);
-  padding: 4px 10px 4px 2px;
+  padding-inline: 4px 10px;
 }
-/* The large title's handover: it fades in here as the list scrolls. */
-.plugins-bar-title {
-  flex: 1 1 auto;
-  min-width: 8px;
-  overflow: hidden;
-  color: var(--text);
-  font-size: 13px;
-  font-weight: 500;
-  letter-spacing: -0.01em;
-  text-align: center;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  opacity: var(--sc, 0);
-  pointer-events: none;
-}
+.pw-chrome-title { flex: 0 0 auto; }
+.pw-chrome-spacer { flex: 1 1 auto; min-width: 8px; }
+.pw-search.ui-search { flex: 0 1 240px; min-width: 120px; }
+.pw-chrome-status { display: inline-flex; align-items: center; gap: 7px; min-width: 0; overflow: hidden; }
+.pw-status-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pw-status-dot { width: 6px; height: 6px; flex: none; border-radius: 50%; background: var(--ok); }
+.pw-status-dot.is-news { background: var(--accent); }
 
-/* ── Tabs (installed plugins / Craft store): flat, the active one on the grey pill ── */
-.plugins-tabs { flex: none; display: flex; gap: 2px; }
-.plugins-tabs .ui-chip {
-  height: 28px;
-  padding: 0 12px;
+/* ── Shell: rail · stage · manifest ─────────────────────────── */
+.pw-window { display: flex; flex: 1 1 auto; min-width: 0; min-height: 0; }
+.pw-window.is-dragging { background: var(--glass-hover); outline: 1.5px dashed var(--text-secondary); outline-offset: -8px; }
+.pw-layout {
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--pw-rail) minmax(0, 1fr) var(--pw-manifest);
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.pw-layout.is-busy { cursor: progress; }
+
+/* Rail — Settings' flat numbered list: a mono number and a label per row,
+   the active row on the grey pill, a mono count at the end. */
+.pw-rail {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  padding: 20px 12px;
+  overflow: auto;
+  border-inline-end: 1px solid var(--pw-line);
+}
+.pw-rail-head { display: flex; flex-direction: column; gap: 4px; padding: 2px 10px 18px; }
+.pw-rail-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  line-height: 1.05;
+}
+.pw-rail-list { display: flex; flex-direction: column; gap: 1px; }
+.pw-rail-item {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  width: 100%;
+  min-height: 36px;
+  padding: 8px 10px;
   border: 0;
+  border-radius: var(--radius-sm, 10px);
   background: transparent;
   color: var(--text-secondary);
-  font-size: 12.5px;
-  font-weight: 500;
+  font: inherit;
+  font-size: 13px;
+  text-align: start;
+  cursor: pointer;
+  transition: background var(--motion-feedback) var(--motion-ease), color var(--motion-feedback) var(--motion-ease);
 }
-.plugins-tabs .ui-chip:hover { background: var(--glass-hover); color: var(--text); }
-.plugins-tabs .ui-chip.is-active { background: var(--plugins-pill); color: var(--text); }
+.pw-rail-item:hover { background: var(--glass-hover); color: var(--text); }
+.pw-rail-item.is-active { background: var(--pw-pill); color: var(--text); font-weight: 500; }
+.pw-rail-num,
+.pw-rail-count {
+  flex: none;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.06em;
+}
+.pw-rail-label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pw-rail-item.has-news .pw-rail-count { color: var(--accent); }
 
-/* ── Toolbar: a flat grey search and the Install pill ──────── */
-.plugins-bar .plugins-toolbar {
-  flex: 0 1 auto;
+/* Stage */
+.pw-stage { min-width: 0; min-height: 0; overflow-y: auto; }
+.pw-stage-body {
   display: flex;
-  flex-wrap: nowrap;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  gap: 22px;
+  padding: 28px var(--pw-gutter) 40px;
   min-width: 0;
 }
-.plugins-search.ui-search {
-  --search-size: 30px;
-  --search-plate: var(--plugins-pill);
-  flex: 0 1 220px;
-  min-width: 120px;
-  border-radius: var(--radius-sm, 10px);
+.pw-stage-head { display: flex; flex-direction: column; gap: 8px; }
+.pw-kicker { font-variant-numeric: tabular-nums; }
+.pw-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(34px, 5.2cqw, 64px);
+  font-weight: 600;
+  letter-spacing: -0.05em;
+  line-height: 0.95;
+  overflow-wrap: break-word;
 }
-.plugins-search.ui-search:hover { --search-plate: var(--plugins-pill-hover); }
-.plugins-search .ui-input { padding: 0 4px 0 12px; font-size: 12.5px; }
-.plugins-search .ui-search-action,
-.plugins-search .ui-search-action:hover { background: transparent; color: var(--muted); }
+.pw-subtitle { max-width: 62ch; margin: 2px 0 0; color: var(--text-secondary); font-size: 13px; line-height: 1.55; }
 
-/* ── Scrolling area ────────────────────────────────────────── */
-.plugins-window {
-  flex: 1;
+/* Big numbers with a mono label under each, on hairlines. */
+.pw-facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px 36px;
+  padding: 14px 0;
+  border-block: 1px solid var(--pw-line);
+}
+.pw-fact { display: flex; flex-direction: column; gap: 4px; }
+.pw-fact-num {
+  font-family: var(--font-display);
+  font-size: 40px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.05em;
+  line-height: 1;
+}
+.pw-facts-action { margin-left: auto; align-self: center; }
+.pw-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.pw-chips .ui-chip { border: 0; }
+.pw-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.pw-auto { display: inline-flex; align-items: center; gap: 10px; margin-left: auto; }
+
+/* ── The index ──────────────────────────────────────────────── */
+.pw-index { display: flex; flex-direction: column; border-top: 1px solid var(--pw-line); }
+.pw-row {
+  --p: 0;
+  position: relative;
+  display: grid;
+  grid-template-columns: 28px 40px minmax(0, 1fr) auto auto;
+  grid-template-areas: 'num icon text meta pill';
+  align-items: center;
+  gap: 16px;
+  min-height: 72px;
+  padding: 14px 12px;
+  border-bottom: 1px solid var(--pw-line);
+  cursor: pointer;
+  transition: background var(--motion-feedback) var(--motion-ease), opacity var(--motion-reveal) var(--motion-ease);
+}
+.pw-row:hover { background: var(--glass-hover); }
+.pw-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+/* Selection = the Installer's grey pill fill. */
+.pw-row.is-selected { border-bottom-color: transparent; border-radius: var(--radius-sm, 10px); background: var(--pw-pill); }
+.pw-row.is-dim .pw-row-name { color: var(--text-secondary); }
+/* A download fills the row's own hairline. */
+.pw-row.is-busy::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  height: 2px;
+  width: calc(var(--p) * 1%);
+  background: var(--accent);
+  transition: width var(--motion-reveal) var(--motion-ease);
+}
+.pw-row.is-failed .pw-row-meta { color: var(--error); }
+.pw-row-num { grid-area: num; color: var(--muted); font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.06em; font-variant-numeric: tabular-nums; }
+.pw-row .pw-icon { grid-area: icon; }
+.pw-row-text { grid-area: text; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.pw-row-name {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  line-height: 1.1;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.pw-row-new,
+.pw-row-meta {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.pw-row-new { color: var(--accent); }
+.pw-row-line { overflow: hidden; color: var(--muted); font-size: 12.5px; line-height: 1.4; white-space: nowrap; text-overflow: ellipsis; }
+.pw-row-meta { grid-area: meta; font-variant-numeric: tabular-nums; }
+.pw-row > .pw-pill,
+.pw-row > .pw-pill-spacer { grid-area: pill; }
+.pw-pill-spacer { width: 1px; }
+.pw-pill.ui-btn { white-space: nowrap; }
+
+/* Hovering a row answers in the motion language. */
+.pw-row-name,
+.pw-row .pw-icon { transition: transform 0.6s var(--pw-ease), opacity var(--motion-reveal); }
+html[data-motion='kinetic'] .pw-row:hover .pw-row-name { transform: translateX(6px); }
+html[data-motion='fluid'] .pw-row-name,
+html[data-motion='fluid'] .pw-row .pw-icon { transition-timing-function: var(--spring-bouncy, ease-out); transition-duration: var(--spring-bouncy-d, 0.6s); }
+html[data-motion='fluid'] .pw-row:hover .pw-icon { transform: scale(1.12) rotate(-4deg); }
+html[data-motion='fluid'] .pw-row:hover .pw-row-name { transform: translateX(4px); }
+html[data-motion='depth'] .pw-row .pw-icon { transition-timing-function: var(--spring-soft, ease-out); transition-duration: var(--spring-soft-d, 0.7s); }
+html[data-motion='depth'] .pw-index:hover .pw-row:not(:hover):not(.is-selected) { opacity: 0.55; }
+html[data-motion='depth'] .pw-row:hover .pw-icon { transform: perspective(300px) translateZ(18px); }
+
+/* ── Icon tiles and faces ───────────────────────────────────── */
+.pw-icon {
+  --app-color: var(--surface-strong);
+  position: relative;
+  width: 40px;
+  height: 40px;
+  border-radius: 23%;
+  overflow: hidden;
+}
+.pw-face {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: inherit;
+  background: var(--app-color, var(--surface-strong));
+  color: var(--text);
+}
+.is-craft > .pw-face,
+.is-craft .pw-face { color: #fff; }
+.pw-face-letter {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+.pw-face img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity var(--motion-reveal);
+}
+.pw-face.has-image img { opacity: 1; }
+.pw-face.has-image .pw-face-letter { visibility: hidden; }
+
+/* ── Manifest ───────────────────────────────────────────────── */
+.pw-manifest {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
   min-height: 0;
   overflow-y: auto;
-  padding: 0 0 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  transition: background var(--motion-feedback);
+  border-inline-start: 1px solid var(--pw-line);
 }
-.plugins-window > :not(.ui-large-title) { margin-inline: 18px; }
-.plugins-window.is-dragging {
-  background: var(--glass-hover);
-  outline: 1.5px dashed var(--text-secondary);
-  outline-offset: -8px;
-}
-.plugins-window > .ui-large-title { padding-top: 18px; padding-bottom: 4px; }
-
-/* Store-only controls: check for updates, install everything, auto-update. */
-.plugins-store-actions {
+.pw-manifest-top {
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+  gap: 10px;
+  min-height: 44px;
+  padding: 10px 20px 0;
 }
-.plugins-store-actions.hidden { display: none; }
-.plugins-store-auto-label {
-  margin-left: auto;
-  color: var(--muted);
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+.pw-manifest-back { display: none; }
+.pw-manifest-name { display: none; min-width: 0; overflow: hidden; font-size: 13px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.pw-manifest-body { display: flex; flex-direction: column; gap: 18px; padding: 8px 20px 28px; min-width: 0; }
+.pw-manifest-note { margin: 24px 0; color: var(--muted); font-size: 13px; }
+.pw-manifest-head { display: flex; flex-direction: column; gap: 6px; }
+.pw-manifest-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 600;
+  letter-spacing: -0.045em;
+  line-height: 1;
 }
+.pw-manifest-line { margin: 0; color: var(--text-secondary); font-size: 13px; line-height: 1.5; }
+.pw-manifest-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 10px; }
 
-/* ── Category chips ────────────────────────────────────────── */
-.plugins-categories-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-.plugins-categories-row.hidden { display: none; }
-.plugins-categories { display: flex; flex-wrap: wrap; gap: 4px; }
-.plugins-categories .ui-chip { border: 0; }
-
-/* ── Card grid: flat cells, no boxes, no lift ──────────────── */
-.plugins-store-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr));
-  gap: 6px 14px;
-}
-
-.plugin-card {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-  padding: 12px 0 14px;
-  border: 0;
-  border-top: 1px solid var(--plugins-line);
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-}
-.plugin-card.is-inactive .plugin-card-name { color: var(--text-secondary); }
-
-.plugin-card-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 6px;
-}
-/* Monochrome icon in a grey square tile (the Files thumbnail box). */
-.plugin-card-icon {
-  display: inline-flex;
-  width: 44px;
-  height: 44px;
-  align-items: center;
-  justify-content: center;
-  border: 0;
+.pw-progress {
+  --p: 0;
+  position: relative;
+  flex: 1 1 160px;
+  height: 34px;
   border-radius: var(--radius-sm, 10px);
-  background: var(--plugins-box);
-  color: var(--text);
+  overflow: hidden;
+  background: var(--pw-pill);
 }
-.plugin-card.is-inactive .plugin-card-icon { color: var(--text-secondary); }
-
-/* "Active" / "New": a mono label; the accent only as its small dot. */
-.plugin-card-live {
-  display: inline-flex;
+.pw-progress::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: calc(var(--p) * 1%);
+  background: var(--accent-soft);
+  transition: width var(--motion-reveal) var(--motion-ease);
+}
+.pw-progress-text {
+  position: relative;
+  display: flex;
   align-items: center;
-  gap: 6px;
-  color: var(--text-secondary);
+  height: 100%;
+  padding: 0 12px;
   font-family: var(--font-mono);
   font-size: 10.5px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
 }
-.plugin-card-live::before {
-  content: '';
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--accent);
-}
-.plugin-card-live.is-new::before { background: var(--muted); }
 
-.plugin-card-name {
-  margin: 0;
-  color: var(--text);
-  font-family: var(--font-body);
-  font-size: 14px;
-  font-weight: 500;
-  letter-spacing: -0.01em;
-}
-.plugin-card-desc {
-  margin: 0;
-  overflow: hidden;
-  color: var(--muted);
-  font-size: 12.5px;
-  line-height: 1.45;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.plugin-card-meta { display: block; }
-.plugin-card .plugin-card-actions {
+/* Mono key/value rows on hairlines — Settings' manifest. */
+.pw-kvs { display: flex; flex-direction: column; border-top: 1px solid var(--pw-line); }
+.pw-kv {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
   min-width: 0;
-  margin-top: 10px;
+  padding-block: 9px;
+  border-bottom: 1px solid var(--pw-line);
 }
-.plugin-card-actions > .ui-btn { flex: none; white-space: nowrap; }
-.plugin-card-actions.hidden,
-.plugin-card-confirm.hidden { display: none; }
-.plugin-card-actions .ui-btn--icon { flex: 0 0 auto; margin-left: auto; color: var(--muted); }
+.pw-kv-key { flex: none; color: var(--muted); font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; }
+.pw-kv-val { min-width: 0; overflow-wrap: break-word; font-size: 13px; font-weight: 500; text-align: end; }
+
+.pw-settings { display: flex; flex-direction: column; }
+.pw-setting {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 48px;
+  padding-block: 8px;
+  border-bottom: 1px solid var(--pw-line);
+}
+.pw-setting-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pw-setting-label { font-size: 13px; font-weight: 500; }
+.pw-setting-hint { color: var(--muted); font-size: 11.5px; }
+.pw-setting .ui-field { width: auto; max-width: 150px; }
+
+.pw-links { display: flex; flex-direction: column; }
+.pw-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-block: 10px;
+  border-bottom: 1px solid var(--pw-line);
+  color: var(--text);
+  font-size: 13px;
+  text-decoration: none;
+}
+.pw-link-arrow { color: var(--muted); transition: transform var(--motion-reveal) var(--motion-ease); }
+.pw-link:hover .pw-link-arrow { color: var(--text); transform: translate(2px, -2px); }
+
+.pw-remove { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.pw-remove-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.pw-remove-text { flex: 1 1 100%; color: var(--muted); font-size: 12px; line-height: 1.4; }
+.pw-remove > .ui-btn:hover:not(:disabled) { color: var(--error); background: var(--error-soft); }
+
+/* ── The object: the app as a slab with depth ──────────────────
+   Eight layers behind the face, each a step darker and further back, make
+   its edge; the sheen follows the pointer; the shadow sits on the floor. */
+.pw-object {
+  --app-color: var(--surface-strong);
+  --rx: -12deg;
+  --ry: 22deg;
+  --mx: 28%;
+  --my: 18%;
+  --depth: 3px;
+  position: relative;
+  width: min(176px, 62%);
+  aspect-ratio: 1;
+  margin: 18px auto 14px;
+  perspective: 900px;
+  touch-action: none;
+}
+.pw-object-float { position: absolute; inset: 0; transform-style: preserve-3d; }
+.pw-object-body {
+  position: absolute;
+  inset: 0;
+  border-radius: 23%;
+  transform-style: preserve-3d;
+  transform: rotateX(var(--rx)) rotateY(var(--ry));
+  transition: transform 0.9s var(--pw-ease);
+}
+.pw-object.is-tilting .pw-object-body { transition-duration: 0.12s; transition-timing-function: linear; }
+.pw-object-layer {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--app-color) calc(100% - var(--z) * 6%), #000);
+  transform: translateZ(calc(var(--z) * var(--depth) * -1));
+}
+.pw-object:not(.is-craft) .pw-object-layer {
+  background: color-mix(in srgb, var(--surface-strong) calc(100% - var(--z) * 5%), var(--text));
+}
+.pw-object .pw-face { transform: translateZ(1px); }
+.pw-object .pw-face-letter { font-size: 76px; }
+.pw-object-sheen {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(circle at var(--mx) var(--my), rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0) 58%);
+  mix-blend-mode: soft-light;
+  transform: translateZ(2px);
+  pointer-events: none;
+}
+.pw-object-shadow {
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  bottom: -16%;
+  height: 16%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--text) 28%, transparent), transparent);
+  filter: blur(6px);
+}
+
+/* The slab's idle life, per motion language. */
+html[data-motion='kinetic'] .pw-object-float { animation: pwTurn 9s var(--pw-ease) infinite alternate; }
+html[data-motion='fluid'] .pw-object-float { animation: pwBob 3.4s ease-in-out infinite alternate; }
+html[data-motion='fluid'] .pw-object-shadow { animation: pwShadow 3.4s ease-in-out infinite alternate; }
+html[data-motion='fluid'] .pw-object-body { transition-timing-function: var(--spring-bouncy, ease-out); transition-duration: var(--spring-bouncy-d, 0.7s); }
+html[data-motion='depth'] .pw-object { --depth: 4px; perspective: 600px; }
+html[data-motion='depth'] .pw-object-float { animation: pwOrbit 8s ease-in-out infinite alternate; }
+html[data-motion='depth'] .pw-object-shadow { animation: pwShadow 8s ease-in-out infinite alternate; }
+html[data-motion='depth'] .pw-object-body { transition-timing-function: var(--spring-soft, ease-out); transition-duration: var(--spring-soft-d, 0.9s); }
+
+@keyframes pwTurn {
+  from { transform: rotateY(-7deg); }
+  to { transform: rotateY(7deg); }
+}
+@keyframes pwBob {
+  from { transform: translateY(0) rotateZ(-1.5deg); }
+  to { transform: translateY(-10px) rotateZ(1.5deg); }
+}
+@keyframes pwOrbit {
+  from { transform: translateZ(-20px) rotateY(-12deg) rotateX(4deg); }
+  to { transform: translateZ(26px) rotateY(12deg) rotateX(-4deg); }
+}
+@keyframes pwShadow {
+  from { transform: scale(1); opacity: 1; }
+  to { transform: scale(0.82); opacity: 0.7; }
+}
+
+/* ── Activity ───────────────────────────────────────────────── */
+.pw-log { border-top: 1px solid var(--pw-line); font-family: var(--font-mono); font-size: 11px; line-height: 1.5; }
+.pw-log-line { padding: 7px 0; border-bottom: 1px solid var(--pw-line); color: var(--text-secondary); white-space: pre-wrap; word-break: break-word; }
+.pw-log-line.is-ok { color: var(--ok); }
+.pw-log-line.is-warn { color: var(--warn); }
+.pw-log-line.is-error { color: var(--error); }
+.pw-log-note { padding: 14px 0; color: var(--muted); font-family: var(--font-body); font-size: 12px; }
+.pw-empty { padding: 32px 0; border-top: 1px solid var(--pw-line); }
+
+/* Other windows (Mail) borrow the remove button's danger hover. */
 .plugin-card-remove:hover:not(:disabled) { color: var(--error); background: var(--error-soft); }
 
-/* The per-window mode: a compact grey select beside the pills. */
-.plugin-card-mode { flex: 0 1 auto; width: auto; max-width: 96px; }
-.plugin-card-mode .ui-select {
-  height: 28px;
-  min-height: 28px;
-  padding: 0 24px 0 10px;
-  border: 0;
-  border-radius: 999px;
-  background: var(--plugins-pill);
-  font-size: 12px;
-}
-.plugin-card-mode .ui-select:hover { background: var(--plugins-pill-hover); }
-
-/* ── Craft store cards ─────────────────────────────────────── */
-/* An app that is not installed yet has no local icon: its initial keeps the
-   tile readable without fetching anything from the network. */
-.store-card-letter {
-  font-family: var(--font-display);
-  font-size: 19px;
-  font-weight: 600;
-  color: var(--text-secondary);
-}
-.store-card-status {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: 12px;
-  line-height: 1.45;
-}
-.store-card-status.is-busy { color: var(--text); }
-.store-card-status.is-error { color: var(--error); }
-
-/* AI control (the app's MCP server): a compact switch on the app's card. */
-.plugin-card-mcp {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-top: 4px;
-}
-.plugin-card-mcp-label {
-  color: var(--muted);
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+/* ── Narrower windows: the manifest becomes a panel over the stage ── */
+@container plugin-window (max-width: 1080px) {
+  .pw-layout { grid-template-columns: var(--pw-rail) minmax(0, 1fr); }
+  .pw-manifest {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 3;
+    width: min(380px, 100%);
+    background: var(--bg-elevated, var(--surface));
+    -webkit-backdrop-filter: blur(var(--glass-blur-panel, 24px));
+    backdrop-filter: blur(var(--glass-blur-panel, 24px));
+    transform: translateX(100%);
+    visibility: hidden;
+    transition: transform var(--motion-connect, 0.28s) var(--pw-ease), visibility 0s linear var(--motion-connect, 0.28s);
+  }
+  html[data-motion='fluid'] .pw-manifest { transition-timing-function: var(--spring-snappy, ease-out), linear; }
+  html[data-motion='depth'] .pw-manifest { transition-timing-function: var(--spring-soft, ease-out), linear; }
+  .pw-layout[data-manifest-open] .pw-manifest { transform: none; visibility: visible; transition-delay: 0s; }
+  .pw-manifest-back { display: inline-flex; }
+  .pw-manifest-eyebrow { display: none; }
+  .pw-manifest-name { display: block; }
+  .pw-row.is-selected:not(:focus-visible) { background: transparent; border-radius: 0; border-bottom-color: var(--pw-line); }
 }
 
-/* ── Empty state: flat, no dashed box ──────────────────────── */
-.plugins-empty {
-  padding: 40px 24px;
-  border: 0;
-  border-top: 1px solid var(--plugins-line);
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.6;
-  text-align: center;
+/* Narrow: the rail becomes a numbered strip over the stage. */
+@container plugin-window (max-width: 760px) {
+  .pw-layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .pw-rail {
+    flex-direction: row;
+    padding: 8px 10px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    border-inline-end: 0;
+    border-bottom: 1px solid var(--pw-line);
+    scrollbar-width: none;
+  }
+  .pw-rail::-webkit-scrollbar { display: none; }
+  .pw-rail-head { display: none; }
+  .pw-rail-list { flex-direction: row; gap: 2px; }
+  .pw-rail-item { width: auto; flex: none; white-space: nowrap; }
+  .pw-manifest { width: 100%; }
+  .pw-chrome-status { display: none; }
 }
-.plugins-empty.hidden { display: none; }
 
-/* ── Activity (collapsible): a hairline section, mono lines ── */
-.plugins-activity-details {
-  border: 0;
-  border-top: 1px solid var(--plugins-line);
-  border-radius: 0;
-  background: transparent;
+/* Phone width: a compact index. */
+@container plugin-window (max-width: 560px) {
+  .pw-stage-body { padding: 20px 16px 32px; gap: 18px; }
+  .pw-row {
+    grid-template-columns: 40px minmax(0, 1fr) auto;
+    grid-template-areas: 'icon text pill' 'icon meta pill';
+    row-gap: 2px;
+    column-gap: 12px;
+    min-height: 64px;
+    padding: 12px 4px;
+  }
+  .pw-row-num { display: none; }
+  .pw-row-name { font-size: 18px; }
+  .pw-row-line { display: none; }
+  .pw-row-meta { overflow: hidden; text-overflow: ellipsis; }
+  .pw-fact-num { font-size: 32px; }
+  .pw-facts { gap: 8px 24px; }
+  .pw-facts-action { margin-left: 0; }
+  .pw-auto { margin-left: 0; width: 100%; justify-content: space-between; }
+  .pw-chrome-title,
+  .pw-chrome-spacer { display: none; }
+  .pw-search.ui-search { flex: 1 1 auto; min-width: 0; }
 }
-.plugins-activity-details summary {
-  display: flex;
-  align-items: center;
-  padding: 12px 0;
-  cursor: pointer;
-  list-style: none;
-  user-select: none;
-}
-.plugins-activity-details summary::-webkit-details-marker { display: none; }
-.plugins-activity-details summary:hover .ui-eyebrow { color: var(--text); }
-.plugins-activity {
-  max-height: 240px;
-  overflow-y: auto;
-  padding: 0 0 12px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  line-height: 1.9;
-}
-.plugins-activity-empty { color: var(--muted); font-family: var(--font-body); font-size: 12px; }
-.plugins-activity-line { color: var(--text-secondary); white-space: pre-wrap; word-break: break-word; }
-.plugins-activity-line.ok { color: var(--ok); }
-.plugins-activity-line.warn { color: var(--warn); }
-.plugins-activity-line.error { color: var(--error); }
 
-@container (max-width: 640px) {
-  .plugins-bar-title { display: none; }
-  .plugins-search.ui-search { flex-basis: 140px; }
-}
-@container (max-width: 520px) {
-  .plugins-window > :not(.ui-large-title) { margin-inline: 12px; }
-  .plugins-store-grid { grid-template-columns: 1fr; }
-  .plugins-toolbar .ui-btn .ui-btn-label { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .pw-object-float,
+  .pw-object-shadow { animation: none !important; }
+  .pw-object-body,
+  .pw-manifest,
+  .pw-row-name,
+  .pw-row .pw-icon { transition: none !important; }
 }
 
 /* ── Shell file window (filePicker.js) ─────────────────────────────────────
@@ -363,15 +608,4 @@
   color: var(--muted);
 }
 
-/* Inline destructive confirmation inside a plugin card: the card is the
-   dialog, so a one-line decision never opens a modal. */
-.plugin-card-confirm { align-items: center; gap: 8px; }
-.plugin-card-confirm-text {
-  flex: 1 1 120px;
-  min-width: 0;
-  font-size: 12px;
-  line-height: 1.4;
-  color: var(--muted);
-}
-.plugin-card-confirm .ui-btn { flex: 0 0 auto; }
 .file-picker-grid .ui-empty { grid-column: 1 / -1; }

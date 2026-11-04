@@ -635,6 +635,7 @@ pub fn build_router(state: AppState) -> Router {
         // Craft store: the Craft App Suite's web builds as web-app plugins.
         .route("/api/plugins/store", get(crate::plugins::store::store_list))
         .route("/api/plugins/store/refresh", post(crate::plugins::store::store_refresh))
+        .route("/api/plugins/store/icon", get(crate::plugins::store::store_icon))
         .route("/api/plugins/store/install", post(crate::plugins::store::store_install))
         .route("/api/plugins/store/mcp", post(crate::plugins::store::store_mcp))
         // Craft control-channel proxy: the page's side of a live app link.

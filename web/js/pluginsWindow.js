@@ -1,72 +1,121 @@
-import { element as el, chip as uiChip, largeTitle, listReveal, rollNumber, eyebrow } from '../ui/index.js';
 /**
- * pluginsWindow.js — the Plugins window (built-in desktop surface).
+ * pluginsWindow.js — the Plugins window.
  *
- * An app-store style view of the plugin collection, in the editorial window
- * language: the tabs, search and install control sit in the window bar; a
- * large title with a mono count opens the scrolling area (and hands over to
- * the bar as it scrolls); category chips; a grid of flat cards (a grey icon
- * tile, name, one-line description, mono meta, pill actions); and a
- * collapsible activity log on a hairline.
+ * In the editorial window language of Settings and the Installer — a
+ * numbered rail, a stage with a mono kicker over a large display title, and a
+ * live manifest of mono key/value rows on hairlines — with one object of its
+ * own: the selected app as a 3D slab in its brand colour, which tilts with the
+ * pointer and idles in the user's motion language.
  *
- * Its second tab is the **Craft store**: the Craft App Suite listed from the
- * core's catalog (`/api/plugins/store`), where each app's own web build is
- * installed as a web-app plugin and kept updated (`craftStore.js`).
+ *  - Rail: 01 Craft · 02 Installed · 03 Updates · 04 Activity, each with a
+ *    mono count.
+ *  - Stage: an index of apps — mono number, the name in display type, a
+ *    muted line, mono metadata and one arrow pill (Get / Update / Open). A
+ *    download fills the row's own hairline. The Craft catalog is the core's
+ *    (`/api/plugins/store`), which also finds new Craft apps on its own
+ *    (`src/plugins/craft_discovery.rs`). The search in the window bar covers
+ *    every app and plugin.
+ *  - Manifest: the selected app — the slab, its name, publisher and actions,
+ *    then VERSION / SIZE / PUBLISHER / STATUS rows, AI control, how its window
+ *    opens, links and removal.
  *
- * Installing/uninstalling is server-wide; activate/deactivate is per-user.
+ * As the window narrows the manifest becomes a panel over the stage (opened
+ * by picking an app, closed with its back button or Escape), then the rail
+ * becomes a numbered strip over the stage — a phone reads the same window.
+ *
+ * Motion follows Settings → Appearance → Motion (`motionStyle.js`): a section
+ * change cascades the stage in with `listReveal()`, a new selection brings the
+ * slab in with `cardEnter()` and the manifest rows with `listReveal()`, counts
+ * roll, and the slab's idle float, tilt easing and row hovers are per language
+ * in `css/plugins.css`.
+ *
+ * Installing/uninstalling is server-wide; turning a plugin on/off is per user.
  */
 import { apiFetch, getToken } from './api.js';
 import { refreshActivePlugins, refreshPluginCatalog } from './activePlugins.js';
 import {
+  element as el, chip as uiChip, listReveal, cardEnter, rollNumber, eyebrow,
   toast, button, iconButton, emptyState, searchBar, select, toggle, confirmDialog,
+  reducedMotion,
 } from '../ui/index.js';
 import { pluginIconEl } from './pluginIcon.js';
 import { pickFiles } from './files.js';
 import { getPluginLayout, setPluginLayout, getStoreAutoUpdate, setStoreAutoUpdate } from './preferences.js';
-import { loadStore, refreshStore, installCraftApp, setCraftMcp, craftAppBusy, storeSnapshot, storeWaitingForNetwork, storeLoadFailed } from './craftStore.js';
+import {
+  loadStore, refreshStore, installCraftApp, setCraftMcp, craftAppBusy, storeSnapshot,
+  storeWaitingForNetwork, storeLoadFailed,
+} from './craftStore.js';
 import { t } from './i18n.js';
 
 export const PLUGINS_WINDOW = 'plugins';
+
+const SECTIONS = ['craft', 'installed', 'updates', 'activity'];
 
 let tileEl = null;
 let refs = null;
 let cleanups = [];
 let plugins = [];
 let activeSet = new Set();
+let pluginsLoaded = false;
 let query = '';
 let category = 'all';
 let busy = false;
-/** 'installed' (the plugin list) or 'store' (the Craft store). */
-let tab = 'installed';
+let section = 'craft';
+/** The app in the manifest: `{ kind: 'craft', id }` or `{ kind: 'plugin', id }`. */
+let selected = null;
 let storePollTimer = null;
-/** Apps that were mid-install at the last store render. */
 let storeBusySeen = new Set();
-/** Cascade the next grid that renders with cards (a tab opened, first load). */
+/** Cascade the stage on the next render (a section opened, first load). */
 let revealNext = true;
-/** The window's large title (`largeTitle()`), and the last count it rolled. */
-let hero = null;
-let heroCount = null;
-
-
+/** The selection the manifest last animated in, so a repaint does not. */
+let shownKey = '';
+/** Store icons by app id: a promise of an object URL (or null). */
+const iconUrls = new Map();
 
 function on(target, event, handler, opts) {
   target?.addEventListener(event, handler, opts);
   cleanups.push(() => target?.removeEventListener(event, handler, opts));
 }
 
+const pad = (n) => String(n).padStart(2, '0');
+
 function niceName(p) {
   return p.name.charAt(0).toUpperCase() + p.name.slice(1);
 }
 
-/** What a user reads for a category; the stored value stays English. */
 function categoryLabel(cat) {
   return cat === 'Other' ? t('plugins.categoryOther', null, 'Other') : cat;
 }
 
-/** Cross-window signal: the tray, tiles and desktop all re-read the plugin set. */
+function categoryOf(p) {
+  return (p.category || '').trim() || 'Other';
+}
+
 function notifyPluginsChanged(opened) {
   localStorage.setItem('plugins.changed', String(Date.now()));
   window.dispatchEvent(new CustomEvent('plugins:changed', { detail: opened ? { opened } : undefined }));
+}
+
+function formatSize(bytes) {
+  if (!bytes) return '';
+  const mb = bytes / (1024 * 1024);
+  return `${mb.toFixed(mb < 10 ? 1 : 0)} MB`;
+}
+
+function storeApps() {
+  return storeSnapshot()?.apps || [];
+}
+
+function craftApp(id) {
+  return storeApps().find((app) => app.id === id) || null;
+}
+
+function needsUpdate(app) {
+  return !!app.installed_version && (app.update_available || app.mcp_pending);
+}
+
+function pendingUpdates() {
+  return storeApps().filter((a) => needsUpdate(a) || (a.installed_version && craftAppBusy(a)));
 }
 
 /* ── Data ───────────────────────────────────────────────────── */
@@ -79,34 +128,28 @@ async function loadPlugins(force = false) {
     ]);
     plugins = list || [];
     activeSet = new Set(active || []);
+    pluginsLoaded = true;
   } catch (e) {
     plugins = [];
     activeSet = new Set();
-    refs.grid.textContent = '';
-    refs.empty.classList.remove('hidden');
-    refs.empty.textContent = '';
-    refs.empty.appendChild(emptyState({
-      icon: 'ui/warning',
-      title: t('plugins.loadFailed', null, "Couldn't load plugins"),
-      body: e.message || t('plugins.unknownError', null, 'Unknown error'),
-    }));
-    return;
+    pluginsLoaded = false;
+    toast(e.message || t('plugins.loadFailed', null, "Couldn't load plugins"), { type: 'error' });
   }
-  render();
+  if (refs) render();
+}
+
+async function loadStoreAndRender() {
+  try { await loadStore(); } catch (_) { /* the stage shows the state */ }
+  if (refs) render();
 }
 
 async function onPluginAction(action, name) {
-  if (busy) return;
-  // Uninstall is confirmed inline in the card itself (see `inlineConfirm`):
-  // the action arrives here only after the user answered there.
   if (!refs || busy) return;
   busy = true;
-  setBusy(true);
-
+  refs.layout.classList.add('is-busy');
   const endpoint = action === 'uninstall' ? '/api/plugins/uninstall'
     : action === 'activate' ? '/api/plugins/activate'
-    : '/api/plugins/deactivate';
-
+      : '/api/plugins/deactivate';
   try {
     await apiFetch(endpoint, { method: 'POST', body: JSON.stringify({ name }) });
     toast(action === 'uninstall' ? t('plugins.removed', { name }, `Removed ${name}`)
@@ -117,261 +160,191 @@ async function onPluginAction(action, name) {
     toast(err.message || t('plugins.actionFailed', null, 'Action failed'), { type: 'error' });
   } finally {
     busy = false;
-    setBusy(false);
-    await refreshActivity();
+    refs?.layout.classList.remove('is-busy');
   }
 }
 
-function setBusy(value) {
-  refs?.grid.querySelectorAll('button').forEach((b) => { b.disabled = value; });
+/* ── One app, whatever it is ────────────────────────────────── */
+
+/**
+ * A row's worth of facts about a Craft app or a plugin, so the index and the
+ * manifest read both the same way.
+ */
+function describe(kind, id) {
+  if (kind === 'craft') {
+    const app = craftApp(id);
+    if (!app) return null;
+    return {
+      kind, id, app,
+      name: app.name,
+      line: app.tagline || '',
+      by: app.publisher || 'ArtCraft',
+      color: app.color || null,
+      version: app.installed_version || app.latest_version || '',
+      size: formatSize(app.asset_size),
+      installed: !!app.installed_version,
+      community: !!app.community,
+      fresh: !!app.discovered && !app.installed_version,
+    };
+  }
+  const p = plugins.find((x) => x.name === id);
+  if (!p) return null;
+  return {
+    kind, id, p,
+    name: niceName(p),
+    line: p.description || p.summary || '',
+    by: p.author || "PEAK'D!",
+    color: null,
+    version: p.version,
+    size: '',
+    installed: true,
+    active: activeSet.has(p.name),
+    category: categoryLabel(categoryOf(p)),
+  };
 }
 
-/* ── Rendering ──────────────────────────────────────────────── */
-
-function categoriesOf() {
-  const set = new Set();
-  for (const p of plugins) set.add((p.category || '').trim() || 'Other');
-  return [...set].sort((a, b) => a.localeCompare(b));
+/** What the row says on the right: state first, facts otherwise. */
+function metaOf(d) {
+  if (d.kind === 'craft') {
+    const { app } = d;
+    if (craftAppBusy(app)) {
+      return app.state === 'downloading'
+        ? t('plugins.storeDownloading', { percent: app.progress ?? 0 }, `Downloading ${app.progress ?? 0}%`)
+        : t('plugins.storeInstallingNow', null, 'Installing…');
+    }
+    if (app.state === 'failed') return t('plugins.installFailed', null, 'Install failed');
+    if (app.waiting_for_network) return t('plugins.storeWaitingForConnection', null, 'Waiting for connection');
+    if (needsUpdate(app) && app.latest_version) return `v${app.installed_version} → v${app.latest_version}`;
+    return [d.version && `v${d.version}`, d.size].filter(Boolean).join(' · ');
+  }
+  return [`v${d.version}`, d.category].join(' · ');
 }
 
-function filtered() {
-  const q = query.trim().toLowerCase();
-  return plugins.filter((p) => {
-    const cat = (p.category || '').trim() || 'Other';
-    if (category !== 'all' && cat !== category) return false;
-    if (!q) return true;
-    return [p.name, p.description, p.summary, cat]
-      .filter(Boolean)
-      .some((s) => String(s).toLowerCase().includes(q));
+/* ── Icons ──────────────────────────────────────────────────── */
+
+function storeIconUrl(id) {
+  if (!iconUrls.has(id)) {
+    const headers = {};
+    const token = getToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+    iconUrls.set(id, fetch(`/api/plugins/store/icon?id=${encodeURIComponent(id)}`, { headers })
+      .then((res) => (res.ok ? res.blob() : null))
+      .then((blob) => (blob ? URL.createObjectURL(blob) : null))
+      .catch(() => null));
+  }
+  return iconUrls.get(id);
+}
+
+/** The picture on an icon face: the Craft app's own icon over its initial, or
+ *  a plugin's monochrome icon. */
+function iconFace(d, size) {
+  const face = el('span', 'pw-face');
+  if (d.kind !== 'craft') {
+    face.appendChild(pluginIconEl(d.id, { size: Math.round(size * 0.44), fallback: 'ui/puzzle' }));
+    return face;
+  }
+  face.appendChild(el('span', 'pw-face-letter', d.name.charAt(0)));
+  void storeIconUrl(d.id).then((url) => {
+    if (!url) return;
+    const img = document.createElement('img');
+    img.alt = '';
+    img.decoding = 'async';
+    img.src = url;
+    img.addEventListener('load', () => face.classList.add('has-image'), { once: true });
+    face.appendChild(img);
   });
+  return face;
 }
 
-function renderCategories() {
-  refs.categories.textContent = '';
-  const cats = ['all', ...categoriesOf()];
-  for (const cat of cats) {
-    const chip = uiChip({ label: cat === 'all' ? t('plugins.categoryAll', null, 'All') : categoryLabel(cat), active: cat === category });
-    chip.type = 'button';
-    chip.dataset.category = cat;
-    chip.addEventListener('click', () => {
-      category = cat;
-      renderCategories();
-      render();
-    });
-    refs.categories.appendChild(chip);
-  }
+/** The flat icon of an index row. */
+function rowIcon(d) {
+  const tile = el('span', `pw-icon${d.kind === 'craft' ? ' is-craft' : ''}`);
+  if (d.color) tile.style.setProperty('--app-color', d.color);
+  tile.appendChild(iconFace(d, 40));
+  return tile;
 }
 
 /**
- * Inline confirmation for a destructive action, inside the card itself: the
- * action row gives way to one short line and two buttons. The card is already
- * the thing the decision is about, so a modal only adds distance.
+ * The manifest's object: the app's icon as a slab with depth — a stack of
+ * layers behind the face in a darker brand colour, a sheen that follows the
+ * pointer and a soft shadow under it. Pointer and finger tilt it.
  */
-function inlineConfirm(actions, { message, confirmLabel, onConfirm }) {
-  const row = el('div', 'plugin-card-actions plugin-card-confirm hidden');
-  const text = el('span', 'plugin-card-confirm-text', message);
-  const show = (on) => {
-    actions.classList.toggle('hidden', on);
-    row.classList.toggle('hidden', !on);
-    if (on) confirm.focus();
+function slab(d) {
+  const wrap = el('div', `pw-object${d.kind === 'craft' ? ' is-craft' : ''}`);
+  if (d.color) wrap.style.setProperty('--app-color', d.color);
+  wrap.setAttribute('aria-hidden', 'true');
+  const float = el('div', 'pw-object-float');
+  const body = el('div', 'pw-object-body');
+  for (let i = 8; i >= 1; i -= 1) {
+    const layer = el('span', 'pw-object-layer');
+    layer.style.setProperty('--z', String(i));
+    body.appendChild(layer);
+  }
+  body.appendChild(iconFace(d, 168));
+  body.appendChild(el('span', 'pw-object-sheen'));
+  float.appendChild(body);
+  wrap.append(el('span', 'pw-object-shadow'), float);
+
+  const tilt = (x, y) => {
+    wrap.style.setProperty('--rx', `${(-y * 22).toFixed(2)}deg`);
+    wrap.style.setProperty('--ry', `${(x * 26).toFixed(2)}deg`);
+    wrap.style.setProperty('--mx', `${(50 + x * 50).toFixed(1)}%`);
+    wrap.style.setProperty('--my', `${(50 + y * 50).toFixed(1)}%`);
   };
-  const cancel = button({
-    label: t('common.cancel', null, 'Cancel'),
-    variant: 'ghost',
-    size: 'sm',
-    onClick: () => show(false),
+  const rest = () => {
+    wrap.classList.remove('is-tilting');
+    ['--rx', '--ry', '--mx', '--my'].forEach((v) => wrap.style.removeProperty(v));
+  };
+  wrap.addEventListener('pointermove', (e) => {
+    if (reducedMotion()) return;
+    const r = wrap.getBoundingClientRect();
+    const x = Math.max(-1, Math.min(1, ((e.clientX - r.left) / r.width) * 2 - 1));
+    const y = Math.max(-1, Math.min(1, ((e.clientY - r.top) / r.height) * 2 - 1));
+    wrap.classList.add('is-tilting');
+    tilt(x, y);
   });
-  const confirm = button({
-    label: confirmLabel,
-    variant: 'danger',
-    size: 'sm',
-    onClick: () => {
-      show(false);
-      onConfirm();
-    },
-  });
-  row.append(text, cancel, confirm);
-  return { row, ask: () => show(true), reset: () => show(false) };
+  wrap.addEventListener('pointerleave', rest);
+  wrap.addEventListener('pointercancel', rest);
+  wrap.addEventListener('pointerup', (e) => { if (e.pointerType !== 'mouse') rest(); });
+  return wrap;
 }
 
-function pluginCard(p) {
-  const active = activeSet.has(p.name);
-  const card = el('article', 'plugin-card');
-  card.classList.toggle('is-inactive', !active);
-  card.dataset.plugin = p.name;
+/* ── Actions ────────────────────────────────────────────────── */
 
-  const head = el('div', 'plugin-card-head');
-  const iconWrap = el('span', 'plugin-card-icon');
-  iconWrap.appendChild(pluginIconEl(p.name, { size: 22, fallback: 'ui/puzzle' }));
-  const cat = (p.category || '').trim() || 'Other';
-  head.appendChild(iconWrap);
-  if (active) head.appendChild(el('span', 'plugin-card-live', t('plugins.activeBadge', null, 'Active')));
-
-  const name = el('h3', 'plugin-card-name');
-  name.textContent = niceName(p);
-  const desc = el('p', 'plugin-card-desc');
-  desc.textContent = p.description || p.summary || '';
-
-  const meta = el('div', 'plugin-card-meta ui-meta', [
-    `v${p.version}`,
-    t('plugins.apiLevel', { level: p.api_level }, `API ${p.api_level}`),
-    categoryLabel(cat),
-  ].join(' · '));
-
-  const actions = el('div', 'plugin-card-actions');
-  const removeConfirm = inlineConfirm(actions, {
-    message: t('plugins.uninstallConfirm', { name: niceName(p) },
-      `Remove plugin “${niceName(p)}”? Its saved data will be kept.`),
-    confirmLabel: t('plugins.remove', { name: niceName(p) }, `Remove ${niceName(p)}`),
-    onConfirm: () => void onPluginAction('uninstall', p.name),
+function arrowPill(label, onClick, { primary = false, disabled = false, size = 'sm' } = {}) {
+  return button({
+    label,
+    variant: primary ? 'primary' : 'ghost',
+    size,
+    arrow: true,
+    disabled,
+    className: 'pw-pill',
+    onClick: (e) => { e.stopPropagation(); onClick(); },
   });
-  if (active) {
-    if (p.surface || p.web_app) {
-      const openBtn = button({
-        label: t('plugins.open', null, 'Open'),
-        variant: 'primary',
-        size: 'sm',
-        arrow: true,
-        onClick: () => window.dispatchEvent(new CustomEvent('plugin:focus', { detail: { name: p.name } })),
-      });
-      actions.appendChild(openBtn);
+}
+
+/** The one action an app offers now; null while it is busy (the row says so). */
+function actionOf(d, opts = {}) {
+  if (d.kind === 'craft') {
+    const { app } = d;
+    if (craftAppBusy(app)) return null;
+    const waiting = app.waiting_for_network || (storeSnapshot()?.refreshing && !app.latest_version);
+    if (!app.installed_version) {
+      return arrowPill(t('plugins.get', null, 'Get'), () => void installFromStore(app.id, app.name),
+        { primary: true, disabled: waiting || !app.latest_version, ...opts });
     }
-    actions.appendChild(button({
-      label: t('ctx.deactivate'),
-      variant: 'ghost',
-      size: 'sm',
-      onClick: () => void onPluginAction('deactivate', p.name),
-    }));
-  } else {
-    actions.appendChild(button({
-      label: t('ctx.activate'),
-      variant: 'ghost',
-      size: 'sm',
-      onClick: () => void onPluginAction('activate', p.name),
-    }));
+    if (needsUpdate(app)) {
+      return arrowPill(t('plugins.storeUpdate', null, 'Update'), () => void installFromStore(app.id, app.name), { primary: true, ...opts });
+    }
+    return arrowPill(t('plugins.open', null, 'Open'), () => void openCraftApp(app), opts);
   }
-  const removeBtn = iconButton({
-    icon: 'ui/trash',
-    variant: 'ghost',
-    size: 'sm',
-    label: t('plugins.remove', { name: niceName(p) }, `Remove ${niceName(p)}`),
-    onClick: () => removeConfirm.ask(),
-  });
-  removeBtn.classList.add('plugin-card-remove');
-
-  const card_children = [head, name, desc, meta, actions, removeConfirm.row];
-
-  // Per-window mode for active plugins with a window (the keyboard is bottom
-  // chrome, so it has no window mode).
-  if (active && (p.surface || p.web_app) && p.name !== 'keyboard') {
-    const mode = select({
-      options: [
-        { value: 'tile', label: t('plugins.layoutTile', null, 'Tile') },
-        { value: 'full', label: t('ctx.fullscreen') },
-      ],
-      value: getPluginLayout(p.name),
-      onChange: (value) => {
-        setPluginLayout(p.name, value);
-        toast(value === 'full'
-          ? t('plugins.opensAsFull', { name: niceName(p) }, `${niceName(p)}: opens full screen`)
-          : t('plugins.opensAsTile', { name: niceName(p) }, `${niceName(p)}: opens as a tile`),
-        { type: 'info' });
-      },
-    });
-    mode.classList.add('plugin-card-mode');
-    mode.title = t('plugins.windowMode', null, 'Opens as');
-    mode.querySelector('select')?.setAttribute('aria-label', t('plugins.windowMode', null, 'Opens as'));
-    actions.appendChild(mode);
+  const { p } = d;
+  if (d.active && (p.surface || p.web_app)) {
+    return arrowPill(t('plugins.open', null, 'Open'),
+      () => window.dispatchEvent(new CustomEvent('plugin:focus', { detail: { name: p.name } })), opts);
   }
-  actions.appendChild(removeBtn);
-
-  card.append(...card_children);
-  return card;
-}
-
-/** The large title: the tab's name over a mono count that rolls when it changes. */
-function setHero(title, meta) {
-  if (!hero) return;
-  hero.setTitle(title);
-  if (refs?.barTitle) refs.barTitle.textContent = title;
-  hero.setMeta([meta]);
-  const count = meta ? meta.match(/^\d+/)?.[0] ?? null : null;
-  if (count !== null && count !== heroCount) {
-    heroCount = count;
-    const metaEl = hero.el.querySelector('.ui-meta');
-    if (metaEl) rollNumber(metaEl, { duration: 700 });
-  }
-}
-
-/** Cascade the cards in once per loaded list, not on every repaint. */
-function revealGrid() {
-  if (!revealNext || !refs?.grid.children.length) return;
-  revealNext = false;
-  void listReveal(refs.grid.children);
-}
-
-function render() {
-  const inStore = tab === 'store';
-  refs.categoriesRow.classList.toggle('hidden', inStore);
-  refs.installBtn.classList.toggle('hidden', inStore);
-  refs.storeActions.classList.toggle('hidden', !inStore);
-  if (inStore) renderStore();
-  else renderInstalled();
-}
-
-function renderInstalled() {
-  const list = filtered();
-  refs.grid.textContent = '';
-
-  setHero(t('hud.plugins', null, 'Plugins'), plugins.length
-    ? t('plugins.metaInstalled', { active: activeSet.size, total: plugins.length },
-      `${plugins.length} installed · ${activeSet.size} active`)
-    : '');
-
-  if (!plugins.length) {
-    refs.empty.classList.remove('hidden');
-    refs.empty.textContent = '';
-    refs.empty.appendChild(emptyState({
-      icon: 'ui/puzzle',
-      title: t('plugins.none', null, 'No plugins installed'),
-      body: t('plugins.noneBody', null,
-        "PEAK'D! is running in its bare form. Install a plugin to add apps and new skills for the assistant."),
-    }));
-    return;
-  }
-  if (!list.length) {
-    refs.empty.classList.remove('hidden');
-    refs.empty.textContent = '';
-    refs.empty.appendChild(emptyState({
-      icon: 'ui/search',
-      title: t('plugins.noMatch', null, 'No matching plugins'),
-      body: t('plugins.noMatchBody', null, 'Try a different search or category.'),
-    }));
-    return;
-  }
-
-  refs.empty.classList.add('hidden');
-  for (const p of list) refs.grid.appendChild(pluginCard(p));
-  revealGrid();
-}
-
-/* ── Craft store ────────────────────────────────────────────── */
-
-/** File sizes as a person reads them (the app builds are megabytes). */
-function formatSize(bytes) {
-  if (!bytes) return '';
-  const mb = bytes / (1024 * 1024);
-  return `${mb.toFixed(mb < 10 ? 1 : 0)} MB`;
-}
-
-/** The store card's icon: the installed app's own icon, or its initial. */
-function storeIcon(app) {
-  if (!app.installed_version) {
-    const disc = el('span', 'store-card-letter');
-    disc.textContent = (app.name || app.id).charAt(0);
-    return disc;
-  }
-  return pluginIconEl(app.id, { size: 26, fallback: 'ui/puzzle' });
+  if (!d.active) return arrowPill(t('ctx.activate', null, 'Turn on'), () => void onPluginAction('activate', p.name), { primary: true, ...opts });
+  return null;
 }
 
 async function openCraftApp(app) {
@@ -383,38 +356,29 @@ async function installFromStore(id, name) {
   try {
     await installCraftApp(id);
     toast(t('plugins.storeInstallingToast', { name }, `Installing ${name}…`));
-    scheduleStorePoll();
-    render();
+    await loadStoreAndRender();
   } catch (e) {
     toast(e.message || t('plugins.installFailed', null, 'Install failed'), { type: 'error' });
   }
 }
 
-/** Download and install every app that is missing, outdated — or installed
- *  without its AI control (the CLI installs with the app). */
-async function installAllFromStore() {
+async function installAllFromStore({ updatesOnly = false } = {}) {
   const catalogRefreshing = storeSnapshot()?.refreshing === true;
-  const apps = (storeSnapshot()?.apps || [])
+  const apps = storeApps()
     .filter((app) => !craftAppBusy(app) && !app.waiting_for_network
       && (!catalogRefreshing || app.latest_version)
-      && (!app.installed_version || app.update_available || app.mcp_pending));
+      && (updatesOnly ? needsUpdate(app) : (!app.installed_version || needsUpdate(app))));
   if (!apps.length) {
     toast(storeWaitingForNetwork()
       ? t('plugins.storeWaitingForConnection', null, 'Waiting for connection')
       : t('plugins.storeAllCurrent', null, 'Every Craft app is up to date'));
     return;
   }
-  // The app's AI control (its CLI) installs with the app, so the estimate has to
-  // include it whenever it will actually be downloaded.
-  const cliBytes = (app) => (app.mcp_available && (!app.mcp_installed || app.mcp_pending)
-    ? (app.mcp_size || 0)
-    : 0);
+  const cliBytes = (app) => (app.mcp_available && (!app.mcp_installed || app.mcp_pending) ? (app.mcp_size || 0) : 0);
   const bytes = apps.reduce((sum, app) => sum + (app.asset_size || 0) + cliBytes(app), 0);
   const size = bytes ? ` (~${formatSize(bytes)})` : '';
   if (!await confirmDialog(t('plugins.storeInstallAllConfirm', { count: apps.length, size },
-    `Install ${apps.length} apps${size}?`))) {
-    return;
-  }
+    `Install ${apps.length} apps${size}?`))) return;
   for (const app of apps) {
     try {
       await installCraftApp(app.id);
@@ -423,177 +387,15 @@ async function installAllFromStore() {
     }
   }
   toast(t('plugins.storeQueued', { count: apps.length }, `Installing ${apps.length} apps`));
-  scheduleStorePoll();
-  render();
-}
-
-function storeCard(app) {
-  const installed = !!app.installed_version;
-  const catalogRefreshing = storeSnapshot()?.refreshing === true;
-  // Before the first lookup answers, the version is simply not known yet: show
-  // "Connecting…" rather than "Version unknown" on a booting live image.
-  const waitingForVersion = app.waiting_for_network
-    || (catalogRefreshing && !app.latest_version);
-  const card = el('article', 'plugin-card store-card');
-  card.dataset.plugin = app.id;
-  card.classList.toggle('is-inactive', !installed);
-  const head = el('div', 'plugin-card-head');
-  const iconWrap = el('span', 'plugin-card-icon');
-  iconWrap.appendChild(storeIcon(app));
-  head.appendChild(iconWrap);
-  if (!installed) head.appendChild(el('span', 'plugin-card-live is-new', t('plugins.storeNew', null, 'New')));
-
-  const name = el('h3', 'plugin-card-name');
-  name.textContent = app.name;
-  const desc = el('p', 'plugin-card-desc');
-  desc.textContent = app.tagline || '';
-
-  const metaParts = [];
-  if (installed) metaParts.push(`v${app.installed_version}`);
-  if (app.latest_version && !(installed && app.latest_version === app.installed_version)) {
-    metaParts.push(installed ? `→ v${app.latest_version}` : `v${app.latest_version}`);
-  }
-  if (app.asset_size) metaParts.push(formatSize(app.asset_size));
-  if (installed) metaParts.push(t('plugins.storeInstalled', null, 'Installed'));
-  const meta = el('div', 'plugin-card-meta ui-meta', metaParts.join(' · '));
-
-  const status = el('p', 'store-card-status');
-  if (craftAppBusy(app)) {
-    status.classList.add('is-busy');
-    status.textContent = app.state === 'downloading'
-      ? t('plugins.storeDownloading', { percent: app.progress ?? 0 }, `Downloading ${app.progress ?? 0}%`)
-      : t('plugins.storeInstallingNow', null, 'Installing…');
-  } else if (app.state === 'failed') {
-    status.classList.add('is-error');
-    status.textContent = app.error || t('plugins.installFailed', null, 'Install failed');
-  } else if (app.waiting_for_network) {
-    // The catalog has not reached GitHub yet. This is a normal state on a live
-    // image that booted before its network; never show the raw lookup error.
-    status.textContent = t('plugins.storeWaitingForConnection', null, 'Waiting for connection');
-  } else if (catalogRefreshing && !app.latest_version) {
-    status.textContent = t('plugins.storeConnecting', null, 'Connecting…');
-  } else if (installed && app.update_available) {
-    status.textContent = t('plugins.storeUpdateReady', null, 'Update available');
-  } else if (installed && app.mcp_pending) {
-    // The app is installed but its AI control is not — the install finishes it.
-    status.textContent = t('plugins.storeAiControlPending', null, 'AI control: finishing install');
-  } else if (installed) {
-    status.textContent = t('plugins.storeUpToDate', null, 'Up to date');
-  } else if (app.error) {
-    status.textContent = app.error;
-  } else if (app.latest_version) {
-    status.textContent = t('plugins.storeVersion', { version: app.latest_version }, `Version ${app.latest_version}`);
-  } else {
-    status.textContent = t('plugins.storeUnknown', null, 'Version unknown');
-  }
-
-  const actions = el('div', 'plugin-card-actions');
-  const removeConfirm = inlineConfirm(actions, {
-    message: t('plugins.uninstallConfirm', { name: app.name },
-      `Remove plugin “${app.name}”? Its saved data will be kept.`),
-    confirmLabel: t('plugins.remove', { name: app.name }, `Remove ${app.name}`),
-    onConfirm: () => void onPluginAction('uninstall', app.id),
-  });
-  if (craftAppBusy(app)) {
-    // The status line already says what is happening; no action to take.
-  } else if (!installed) {
-    actions.appendChild(button({
-      label: t('plugins.storeInstall', null, 'Install'),
-      variant: 'primary',
-      size: 'sm',
-      arrow: true,
-      disabled: waitingForVersion,
-      onClick: () => void installFromStore(app.id, app.name),
-    }));
-  } else {
-    if (app.update_available || app.mcp_pending) {
-      actions.appendChild(button({
-        label: t('plugins.storeUpdate', null, 'Update'),
-        variant: 'primary',
-        size: 'sm',
-        arrow: true,
-        onClick: () => void installFromStore(app.id, app.name),
-      }));
-    }
-    const pending = app.update_available || app.mcp_pending;
-    actions.appendChild(button({
-      label: t('plugins.open', null, 'Open'),
-      variant: pending ? 'ghost' : 'primary',
-      size: 'sm',
-      arrow: !pending,
-      onClick: () => void openCraftApp(app),
-    }));
-  }
-  const removeBtn = iconButton({
-    icon: 'ui/trash',
-    variant: 'ghost',
-    size: 'sm',
-    label: t('plugins.remove', { name: app.name }, `Remove ${app.name}`),
-    onClick: () => removeConfirm.ask(),
-  });
-  removeBtn.classList.add('plugin-card-remove');
-  if (installed) actions.appendChild(removeBtn);
-
-  card.append(head, name, desc, meta, status);
-  if (app.mcp_available) card.appendChild(aiControlRow(app));
-  card.append(actions, removeConfirm.row);
-  return card;
-}
-
-/** On/off switch for an app's AI control (its MCP server). On by default: the
- *  app's install brings its CLI, so the switch is the *decision* (off means the
- *  CLI is removed and later installs/updates respect that), not whether a file
- *  happens to be on disk yet. Scoped by the core: the agent can drive every app
- *  whose window is open, and focus mode narrows that to the apps the user is
- *  focused on. */
-function aiControlRow(app) {
-  const row = el('div', 'plugin-card-mcp');
-  const label = el(
-    'span',
-    'plugin-card-mcp-label',
-    t('plugins.storeAiControl', null, 'AI control'),
-  );
-  const enabled = app.mcp_enabled !== false;
-  if (app.mcp_installed && app.mcp_version) {
-    label.title = t(
-      'plugins.storeAiControlVersion',
-      { version: app.mcp_version },
-      `AI control v${app.mcp_version}`,
-    );
-  } else if (enabled) {
-    label.title = t(
-      'plugins.storeAiControlIncluded',
-      null,
-      'Installs with the app',
-    );
-  }
-  const aiToggle = toggle({
-    checked: enabled,
-    onChange: (value) => void setCraftAiControl(app, value),
-  });
-  aiToggle.setAttribute(
-    'aria-label',
-    t('plugins.storeAiControlName', { name: app.name }, `AI control for ${app.name}`),
-  );
-  aiToggle.disabled = craftAppBusy(app);
-  row.append(label, aiToggle);
-  return row;
+  await loadStoreAndRender();
 }
 
 async function setCraftAiControl(app, enable) {
   if (enable && app.installed_version) {
     const size = app.mcp_size ? ` (~${formatSize(app.mcp_size)})` : '';
-    const confirmed = await confirmDialog(
-      t(
-        'plugins.storeAiControlConfirm',
-        { name: app.name, size },
-        `Give the AI control of ${app.name}${size}? It can drive the app while its window is open; focus mode narrows it to the apps you focus.`,
-      ),
-    );
-    if (!confirmed) {
-      render(); // put the switch back where it was
-      return;
-    }
+    const confirmed = await confirmDialog(t('plugins.storeAiControlConfirm', { name: app.name, size },
+      `Give the AI control of ${app.name}${size}? It can drive the app while its window is open; focus mode narrows it to the apps you focus.`));
+    if (!confirmed) { render(); return; }
   }
   try {
     await setCraftMcp(app.id, enable);
@@ -605,157 +407,588 @@ async function setCraftAiControl(app, enable) {
   } catch (e) {
     toast(e.message || t('plugins.installFailed', null, 'Install failed'), { type: 'error' });
   }
-  scheduleStorePoll();
-  render();
+  await loadStoreAndRender();
 }
 
-function renderStore() {
-  const data = storeSnapshot();
-  const apps = (data?.apps || []).filter((app) => {
-    const q = query.trim().toLowerCase();
-    if (!q) return true;
-    return [app.name, app.id, app.tagline].filter(Boolean)
-      .some((s) => String(s).toLowerCase().includes(q));
-  });
-  refs.grid.textContent = '';
-  const total = (data?.apps || []).length;
-  const waiting = storeWaitingForNetwork();
-  setHero(t('plugins.tabStore', null, 'Craft apps'), data
-    ? (data.waiting_for_network
-      ? t('plugins.storeMetaWaiting', { count: total }, `${total} apps · waiting for connection`)
-      : t('plugins.storeMetaApps', { count: total }, `${total} apps · updated automatically`))
-    : '');
+/* ── Rail ───────────────────────────────────────────────────── */
 
-  if (!data) {
-    const failed = storeLoadFailed();
-    refs.empty.classList.remove('hidden');
-    refs.empty.textContent = '';
-    refs.empty.appendChild(emptyState({
-      icon: waiting ? 'ui/network' : (failed ? 'ui/warning' : 'ui/download'),
-      title: waiting
-        ? t('plugins.storeWaitingForConnection', null, 'Waiting for connection')
-        : failed
-          ? t('plugins.storeUnavailable', null, 'Store unavailable')
-          : t('plugins.storeConnecting', null, 'Connecting…'),
-      body: !failed || waiting
-        ? t('plugins.storeConnectingBody', null,
-          'The app catalog will load on its own as soon as the network is ready.')
-        : t('plugins.storeUnavailableBody', null,
-          'The catalog could not be loaded. Check the connection and try again.'),
-    }));
-    return;
+function sectionLabel(id) {
+  return {
+    craft: t('plugins.tabStore', null, 'Craft apps'),
+    installed: t('plugins.tabInstalled', null, 'Installed'),
+    updates: t('plugins.tabUpdates', null, 'Updates'),
+    activity: t('plugins.installActivity', null, 'Install activity'),
+  }[id];
+}
+
+function sectionCount(id) {
+  if (id === 'craft') return storeApps().length || null;
+  if (id === 'installed') return plugins.length || null;
+  if (id === 'updates') return pendingUpdates().length || null;
+  return null;
+}
+
+function renderRail() {
+  for (const item of refs.railItems) {
+    const id = item.dataset.section;
+    const active = id === section && !query.trim();
+    item.classList.toggle('is-active', active);
+    item.setAttribute('aria-current', active ? 'page' : 'false');
+    const count = sectionCount(id);
+    const text = count === null ? '' : pad(count);
+    if (item.count.textContent !== text) {
+      item.count.textContent = text;
+      if (text) rollNumber(item.count, { duration: 600 });
+    }
+    item.classList.toggle('has-news', id === 'updates' && !!count);
   }
-  if (!apps.length) {
-    refs.empty.classList.remove('hidden');
-    refs.empty.textContent = '';
-    refs.empty.appendChild(emptyState({
+}
+
+/* ── Stage ──────────────────────────────────────────────────── */
+
+function stageHead(kicker, title, subtitle) {
+  const head = el('header', 'pw-stage-head');
+  head.append(eyebrow(kicker, 'pw-kicker'), el('h2', 'pw-title', title));
+  if (subtitle) head.appendChild(el('p', 'pw-subtitle', subtitle));
+  return head;
+}
+
+function indexRow(d, number) {
+  const r = el('div', 'pw-row');
+  r.dataset.key = `${d.kind}:${d.id}`;
+  r.tabIndex = 0;
+  r.setAttribute('role', 'button');
+  r.setAttribute('aria-label', d.name);
+  const key = `${d.kind}:${d.id}`;
+  const isSel = selected && `${selected.kind}:${selected.id}` === key;
+  r.classList.toggle('is-selected', !!isSel);
+  r.classList.toggle('is-dim', d.kind === 'plugin' && !d.active);
+  if (d.kind === 'craft' && craftAppBusy(d.app)) {
+    r.classList.add('is-busy');
+    r.style.setProperty('--p', String(d.app.state === 'downloading' ? (d.app.progress ?? 0) : 100));
+  }
+  if (d.kind === 'craft' && d.app.state === 'failed') r.classList.add('is-failed');
+
+  const num = el('span', 'pw-row-num', pad(number));
+  const text = el('div', 'pw-row-text');
+  const name = el('span', 'pw-row-name', d.name);
+  if (d.fresh) name.appendChild(el('span', 'pw-row-new', t('plugins.storeNew', null, 'New')));
+  if (d.community) name.appendChild(el('span', 'pw-row-new', t('plugins.community', null, 'Community')));
+  text.append(name);
+  if (d.line) text.appendChild(el('span', 'pw-row-line', d.line));
+  const meta = el('span', 'pw-row-meta', metaOf(d));
+  const action = actionOf(d) || el('span', 'pw-pill-spacer');
+  r.append(num, rowIcon(d), text, meta, action);
+  const pick = () => select_({ kind: d.kind, id: d.id }, { open: true });
+  r.addEventListener('click', pick);
+  r.addEventListener('keydown', (e) => {
+    if (e.target === r && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); pick(); }
+  });
+  return r;
+}
+
+function indexList(items) {
+  const list = el('div', 'pw-index');
+  list.setAttribute('role', 'list');
+  items.forEach((d, i) => list.appendChild(indexRow(d, i + 1)));
+  return list;
+}
+
+function stageEmpty(o) {
+  const box = el('div', 'pw-empty');
+  box.appendChild(emptyState(o));
+  return box;
+}
+
+function storeMissing() {
+  const waiting = storeWaitingForNetwork();
+  const failed = storeLoadFailed();
+  return stageEmpty({
+    icon: waiting ? 'ui/network' : (failed ? 'ui/warning' : 'ui/download'),
+    title: waiting
+      ? t('plugins.storeWaitingForConnection', null, 'Waiting for connection')
+      : failed ? t('plugins.storeUnavailable', null, 'Store unavailable') : t('plugins.storeConnecting', null, 'Connecting…'),
+    body: !failed || waiting
+      ? t('plugins.storeConnectingBody', null, 'The app catalog will load on its own as soon as the network is ready.')
+      : t('plugins.storeUnavailableBody', null, 'The catalog could not be loaded. Check the connection and try again.'),
+  });
+}
+
+function kicker(id) {
+  return `${pad(SECTIONS.indexOf(id) + 1)} / ${pad(SECTIONS.length)}`;
+}
+
+function renderStage() {
+  const stage = refs.stageBody;
+  stage.textContent = '';
+  const q = query.trim().toLowerCase();
+  if (q) {
+    const match = (...f) => f.filter(Boolean).some((s) => String(s).toLowerCase().includes(q));
+    const craftIds = new Set(storeApps().map((a) => a.id));
+    const items = [
+      ...storeApps().filter((a) => match(a.name, a.id, a.tagline, a.publisher)).map((a) => describe('craft', a.id)),
+      ...plugins.filter((p) => !craftIds.has(p.name) && match(p.name, p.description, p.summary, categoryOf(p)))
+        .map((p) => describe('plugin', p.name)),
+    ].filter(Boolean);
+    stage.appendChild(stageHead(t('plugins.searchResults', null, 'Results'), `“${query.trim()}”`,
+      t('plugins.searchCount', { count: items.length }, `${items.length} found`)));
+    stage.appendChild(items.length ? indexList(items) : stageEmpty({
       icon: 'ui/search',
       title: t('plugins.noMatch', null, 'No matching plugins'),
       body: t('plugins.noMatchBody', null, 'Try a different search or category.'),
     }));
     return;
   }
-  refs.empty.classList.add('hidden');
-  for (const app of apps) refs.grid.appendChild(storeCard(app));
-  revealGrid();
-  reportFinishedInstalls(data.apps || []);
+
+  if (section === 'craft') {
+    const data = storeSnapshot();
+    stage.appendChild(stageHead(kicker('craft'), t('plugins.tabStore', null, 'Craft apps'),
+      t('plugins.subtitleCraft', null, 'The Craft suite, each app in a window of its own — installed in one step, kept up to date, and open to the assistant if you want it.')));
+    if (!data) { stage.appendChild(storeMissing()); return; }
+    const apps = data.apps || [];
+    const missing = apps.filter((a) => !a.installed_version && !craftAppBusy(a) && a.latest_version);
+    const facts = el('div', 'pw-facts');
+    const fact = (n, label) => {
+      const f = el('div', 'pw-fact');
+      const num = el('span', 'pw-fact-num', pad(n));
+      f.append(num, eyebrow(label));
+      facts.appendChild(f);
+      if (revealNext) rollNumber(num, { duration: 900 });
+    };
+    fact(apps.length, t('plugins.factApps', null, 'Apps'));
+    fact(apps.filter((a) => a.installed_version).length, t('plugins.factInstalled', null, 'Installed'));
+    const fresh = apps.filter((a) => a.discovered).length;
+    if (fresh) fact(fresh, t('plugins.factNew', null, 'New'));
+    if (missing.length > 1) {
+      const all = arrowPill(t('plugins.getAll', null, 'Get all'), () => void installAllFromStore());
+      all.classList.add('pw-facts-action');
+      facts.appendChild(all);
+    }
+    stage.appendChild(facts);
+    // New apps first, then the suite in its own order.
+    const ordered = [...apps.filter((a) => a.discovered), ...apps.filter((a) => !a.discovered)];
+    stage.appendChild(indexList(ordered.map((a) => describe('craft', a.id)).filter(Boolean)));
+    return;
+  }
+
+  if (section === 'installed') {
+    stage.appendChild(stageHead(kicker('installed'), t('plugins.tabInstalled', null, 'Installed'),
+      t('plugins.metaInstalled', { active: activeSet.size, total: plugins.length },
+        `${plugins.length} installed · ${activeSet.size} active`)));
+    if (!pluginsLoaded) return;
+    if (!plugins.length) {
+      stage.appendChild(stageEmpty({
+        icon: 'ui/puzzle',
+        title: t('plugins.none', null, 'No plugins installed'),
+        body: t('plugins.noneBody', null, "PEAK'D! is running in its bare form. Install a plugin to add apps and new skills for the assistant."),
+      }));
+      return;
+    }
+    const cats = ['all', ...new Set(plugins.map(categoryOf).sort((a, b) => a.localeCompare(b)))];
+    const chips = el('div', 'pw-chips');
+    chips.setAttribute('role', 'toolbar');
+    chips.setAttribute('aria-label', t('plugins.categories', null, 'Plugin categories'));
+    for (const cat of cats) {
+      chips.appendChild(uiChip({
+        label: cat === 'all' ? t('plugins.categoryAll', null, 'All') : categoryLabel(cat),
+        active: cat === category,
+        onClick: () => { category = cat; revealNext = true; render(); },
+      }));
+    }
+    stage.appendChild(chips);
+    const list = plugins.filter((p) => category === 'all' || categoryOf(p) === category)
+      .map((p) => (craftApp(p.name) ? describe('craft', p.name) : describe('plugin', p.name)))
+      .filter(Boolean);
+    stage.appendChild(list.length ? indexList(list)
+      : stageEmpty({ icon: 'ui/search', title: t('plugins.noMatch', null, 'No matching plugins') }));
+    return;
+  }
+
+  if (section === 'updates') {
+    const pending = pendingUpdates();
+    stage.appendChild(stageHead(kicker('updates'), t('plugins.tabUpdates', null, 'Updates'),
+      pending.length
+        ? t('plugins.metaUpdates', { count: pending.length }, `${pending.length} to update`)
+        : t('plugins.allUpToDate', null, 'Everything is up to date')));
+    const controls = el('div', 'pw-controls');
+    if (pending.some((a) => !craftAppBusy(a))) {
+      controls.appendChild(arrowPill(t('plugins.updateAll', null, 'Update all'),
+        () => void installAllFromStore({ updatesOnly: true }), { primary: true }));
+    }
+    const check = button({ label: t('plugins.storeCheck', null, 'Check for updates'), icon: 'ui/refresh', variant: 'ghost', size: 'sm' });
+    check.addEventListener('click', async () => {
+      check.setLoading(true);
+      try { await refreshStore(); } catch (e) {
+        toast(storeWaitingForNetwork()
+          ? t('plugins.storeWaitingForConnection', null, 'Waiting for connection')
+          : (e.message || t('plugins.storeUnavailable', null, 'Store unavailable')), { type: 'error' });
+      } finally {
+        check.setLoading(false);
+        render();
+      }
+    });
+    controls.appendChild(check);
+    const auto = el('label', 'pw-auto');
+    auto.appendChild(eyebrow(t('plugins.storeAuto', null, 'Update automatically')));
+    const autoToggle = toggle({ checked: getStoreAutoUpdate(), onChange: (v) => setStoreAutoUpdate(v) });
+    autoToggle.setAttribute('aria-label', t('plugins.storeAuto', null, 'Update automatically'));
+    auto.appendChild(autoToggle);
+    controls.appendChild(auto);
+    stage.appendChild(controls);
+    if (!storeSnapshot()) { stage.appendChild(storeMissing()); return; }
+    stage.appendChild(pending.length ? indexList(pending.map((a) => describe('craft', a.id)).filter(Boolean)) : stageEmpty({
+      icon: 'ui/check',
+      title: t('plugins.allUpToDate', null, 'Everything is up to date'),
+      body: getStoreAutoUpdate()
+        ? t('plugins.allUpToDateAuto', null, 'New versions install on their own.')
+        : t('plugins.allUpToDateManual', null, 'New versions will show here.'),
+    }));
+    return;
+  }
+
+  // Activity: the install log as mono lines on hairlines.
+  stage.appendChild(stageHead(kicker('activity'), t('plugins.installActivity', null, 'Install activity'),
+    t('plugins.subtitleActivity', null, 'Every install, update and removal, newest last.')));
+  const log = el('div', 'pw-log');
+  log.appendChild(el('div', 'pw-log-note', t('plugins.activityLoading', null, 'Loading…')));
+  stage.appendChild(log);
+  void refreshActivity(log);
+}
+
+/* ── Manifest ───────────────────────────────────────────────── */
+
+function kv(label, value) {
+  if (value === null || value === undefined || value === '') return null;
+  const r = el('div', 'pw-kv');
+  r.append(el('span', 'pw-kv-key', label), el('span', 'pw-kv-val', String(value)));
+  return r;
+}
+
+function settingRow(label, control, hint = '') {
+  const r = el('div', 'pw-setting');
+  const text = el('div', 'pw-setting-text');
+  text.appendChild(el('span', 'pw-setting-label', label));
+  if (hint) text.appendChild(el('span', 'pw-setting-hint', hint));
+  r.append(text, control);
+  return r;
+}
+
+function windowMode(id, label) {
+  const mode = select({
+    options: [
+      { value: 'tile', label: t('plugins.layoutTile', null, 'Tile') },
+      { value: 'full', label: t('ctx.fullscreen', null, 'Full screen') },
+    ],
+    value: getPluginLayout(id),
+    onChange: (value) => {
+      setPluginLayout(id, value);
+      toast(value === 'full'
+        ? t('plugins.opensAsFull', { name: label }, `${label}: opens full screen`)
+        : t('plugins.opensAsTile', { name: label }, `${label}: opens as a tile`), { type: 'info' });
+    },
+  });
+  mode.querySelector('select')?.setAttribute('aria-label', t('plugins.windowMode', null, 'Opens as'));
+  return settingRow(t('plugins.windowMode', null, 'Opens as'), mode);
+}
+
+function removeControl(name, onConfirm) {
+  const wrap = el('div', 'pw-remove');
+  const ask = button({ label: t('plugins.remove', { name }, `Remove ${name}`), icon: 'ui/trash', variant: 'ghost', size: 'sm' });
+  const confirmRow = el('div', 'pw-remove-confirm hidden');
+  confirmRow.append(
+    el('span', 'pw-remove-text', t('plugins.uninstallConfirm', { name }, `Remove plugin “${name}”? Its saved data will be kept.`)),
+    button({
+      label: t('common.cancel', null, 'Cancel'), variant: 'ghost', size: 'sm',
+      onClick: () => { confirmRow.classList.add('hidden'); ask.classList.remove('hidden'); },
+    }),
+    button({ label: t('plugins.removeShort', null, 'Remove'), variant: 'danger', size: 'sm', onClick: onConfirm }),
+  );
+  ask.addEventListener('click', () => { ask.classList.add('hidden'); confirmRow.classList.remove('hidden'); });
+  wrap.append(ask, confirmRow);
+  return wrap;
+}
+
+function link(label, href) {
+  const a = document.createElement('a');
+  a.className = 'pw-link';
+  a.href = href;
+  a.target = '_blank';
+  a.rel = 'noopener noreferrer';
+  a.append(el('span', '', label), el('span', 'pw-link-arrow', '↗'));
+  return a;
+}
+
+/** The selection, or the first thing worth showing in this section. */
+function currentSelection() {
+  if (selected && describe(selected.kind, selected.id)) return selected;
+  if (section === 'installed') {
+    const first = plugins.filter((p) => category === 'all' || categoryOf(p) === category)[0];
+    return first ? { kind: craftApp(first.name) ? 'craft' : 'plugin', id: first.name } : null;
+  }
+  if (section === 'updates') {
+    const first = pendingUpdates()[0];
+    return first ? { kind: 'craft', id: first.id } : null;
+  }
+  const apps = storeApps();
+  const first = apps.find((a) => a.discovered && !a.installed_version)
+    || apps.find((a) => !a.installed_version) || apps[0];
+  return first ? { kind: 'craft', id: first.id } : null;
+}
+
+function renderManifest() {
+  const box = refs.manifestBody;
+  box.textContent = '';
+  const sel = currentSelection();
+  const d = sel && describe(sel.kind, sel.id);
+  if (!d) {
+    box.appendChild(el('p', 'pw-manifest-note', t('plugins.selectApp', null, 'Pick an app to see it here.')));
+    shownKey = '';
+    return;
+  }
+  const key = `${d.kind}:${d.id}`;
+  refs.manifestName.textContent = d.name;
+
+  const object = slab(d);
+  const head = el('div', 'pw-manifest-head');
+  head.append(
+    eyebrow(d.kind === 'craft' ? (d.fresh ? t('plugins.featuredNew', null, 'New in the store') : 'Craft') : d.category || '', 'pw-kicker'),
+    el('h3', 'pw-manifest-title', d.name),
+  );
+  if (d.line) head.appendChild(el('p', 'pw-manifest-line', d.line));
+  const actions = el('div', 'pw-manifest-actions');
+  const action = actionOf(d, { size: 'md' });
+  if (action) actions.appendChild(action);
+  if (d.kind === 'craft' && craftAppBusy(d.app)) {
+    const bar = el('div', 'pw-progress');
+    bar.style.setProperty('--p', String(d.app.state === 'downloading' ? (d.app.progress ?? 0) : 100));
+    bar.appendChild(el('span', 'pw-progress-text', metaOf(d)));
+    actions.appendChild(bar);
+  }
+  head.appendChild(actions);
+
+  const rows = el('div', 'pw-kvs');
+  const status = d.kind === 'craft'
+    ? (craftAppBusy(d.app) ? metaOf(d)
+      : d.app.state === 'failed' ? (d.app.error || t('plugins.installFailed', null, 'Install failed'))
+        : needsUpdate(d.app) ? t('plugins.storeUpdateReady', null, 'Update available')
+          : d.installed ? t('plugins.storeUpToDate', null, 'Up to date')
+            : t('plugins.statusNotInstalled', null, 'Not installed'))
+    : (d.active ? t('plugins.activeBadge', null, 'Active') : t('plugins.statusOff', null, 'Off'));
+  for (const r of [
+    kv(t('plugins.infoVersion', null, 'Version'), d.version && `v${d.version}`),
+    d.kind === 'craft' && needsUpdate(d.app) ? kv(t('plugins.infoLatest', null, 'Latest'), `v${d.app.latest_version}`) : null,
+    kv(t('plugins.infoSize', null, 'Size'), d.size),
+    kv(t('plugins.infoPublisher', null, 'Publisher'), d.by + (d.community ? ` · ${t('plugins.community', null, 'Community')}` : '')),
+    d.kind === 'plugin' ? kv(t('plugins.infoApi', null, 'API'), d.p.api_level) : null,
+    kv(t('plugins.infoStatus', null, 'Status'), status),
+  ]) if (r) rows.appendChild(r);
+
+  const settings = el('div', 'pw-settings');
+  if (d.kind === 'craft' && d.app.mcp_available) {
+    const app = d.app;
+    const ai = toggle({ checked: app.mcp_enabled !== false, onChange: (v) => void setCraftAiControl(app, v) });
+    ai.setAttribute('aria-label', t('plugins.storeAiControlName', { name: app.name }, `AI control for ${app.name}`));
+    ai.disabled = craftAppBusy(app);
+    settings.appendChild(settingRow(t('plugins.storeAiControl', null, 'AI control'), ai,
+      app.mcp_installed && app.mcp_version
+        ? t('plugins.storeAiControlVersion', { version: app.mcp_version }, `AI control v${app.mcp_version}`)
+        : t('plugins.storeAiControlIncluded', null, 'Installs with the app')));
+  }
+  if (d.kind === 'plugin') {
+    const sw = toggle({ checked: d.active, onChange: (v) => void onPluginAction(v ? 'activate' : 'deactivate', d.id) });
+    sw.setAttribute('aria-label', t('plugins.turnedOn', null, 'Turned on'));
+    settings.appendChild(settingRow(t('plugins.turnedOn', null, 'Turned on'), sw));
+  }
+  const hasWindow = d.kind === 'craft' ? d.installed : (d.p.surface || d.p.web_app) && d.id !== 'keyboard';
+  if (hasWindow && activeSet.has(d.id)) settings.appendChild(windowMode(d.id, d.name));
+
+  const links = el('div', 'pw-links');
+  if (d.kind === 'craft') {
+    if (d.app.website) links.appendChild(link(t('plugins.website', null, 'Website'), d.app.website));
+    if (d.app.repo) links.appendChild(link(t('plugins.source', null, 'Source code'), d.app.repo));
+  }
+
+  box.append(object, head, rows);
+  if (settings.childElementCount) box.appendChild(settings);
+  if (links.childElementCount) box.appendChild(links);
+  if (d.installed && !(d.kind === 'craft' && craftAppBusy(d.app))) {
+    box.appendChild(removeControl(d.name, () => {
+      selected = null;
+      void onPluginAction('uninstall', d.id);
+    }));
+  }
+
+  // A new selection arrives in the motion language; a repaint stays still.
+  if (key !== shownKey) {
+    shownKey = key;
+    void cardEnter(object);
+    void listReveal([head, ...box.children].filter((n) => n !== object));
+  }
+}
+
+/** Show an app in the manifest; on a narrow window, open it as a panel. */
+function select_(next, { open = false } = {}) {
+  selected = next;
+  if (open) refs.layout.dataset.manifestOpen = '1';
+  render();
+  if (open && refs.layout.dataset.manifestOpen) refs.manifest.scrollTop = 0;
+}
+
+function closeManifest() {
+  if (!refs?.layout.dataset.manifestOpen) return false;
+  delete refs.layout.dataset.manifestOpen;
+  return true;
+}
+
+/* ── Render ─────────────────────────────────────────────────── */
+
+/**
+ * What the page shows, minus the download percentages: when only those
+ * moved (the store is polled while something downloads), the rows and the
+ * manifest are patched in place instead of rebuilt — the slab keeps its
+ * tilt, hovers stay, nothing re-animates.
+ */
+function signature() {
+  return JSON.stringify([
+    section, query, category, selected,
+    storeSnapshot() ? storeApps().map((a) => [a.id, a.state, a.installed_version, a.latest_version,
+      a.update_available, a.mcp_pending, a.mcp_enabled, a.mcp_installed, a.waiting_for_network, a.error])
+      : storeLoadFailed(),
+    pluginsLoaded, plugins.map((p) => `${p.name}@${p.version}`), [...activeSet].sort(),
+    refs?.layout.dataset.manifestOpen || '',
+  ]);
+}
+let lastSignature = '';
+
+/** Patch the download progress where it is shown. */
+function patchProgress() {
+  for (const app of storeApps().filter(craftAppBusy)) {
+    const pct = String(app.state === 'downloading' ? (app.progress ?? 0) : 100);
+    const d = describe('craft', app.id);
+    refs.root.querySelectorAll(`.pw-row[data-key="craft:${CSS.escape(app.id)}"]`).forEach((r) => {
+      r.style.setProperty('--p', pct);
+      const meta = r.querySelector('.pw-row-meta');
+      if (meta && d) meta.textContent = metaOf(d);
+    });
+    if (shownKey === `craft:${app.id}`) {
+      const bar = refs.manifestBody.querySelector('.pw-progress');
+      bar?.style.setProperty('--p', pct);
+      const text = bar?.querySelector('.pw-progress-text');
+      if (text && d) text.textContent = metaOf(d);
+    }
+  }
+}
+
+function render() {
+  if (!refs) return;
+  const sig = signature();
+  if (sig === lastSignature) {
+    patchProgress();
+    scheduleStorePoll();
+    return;
+  }
+  lastSignature = sig;
+  renderRail();
+  renderStage();
+  renderManifest();
+  const pending = pendingUpdates().length;
+  refs.status.textContent = storeWaitingForNetwork()
+    ? t('plugins.storeWaitingForConnection', null, 'Waiting for connection')
+    : pending
+      ? t('plugins.metaUpdates', { count: pending }, `${pending} to update`)
+      : t('plugins.allUpToDate', null, 'Everything is up to date');
+  refs.statusDot.classList.toggle('is-news', !!pending);
+  refs.installBtn.classList.toggle('hidden', section !== 'installed');
+  if (revealNext) {
+    revealNext = false;
+    void listReveal([...refs.stageBody.querySelectorAll('.pw-stage-head > *, .pw-facts, .pw-chips, .pw-controls, .pw-row')]);
+  }
+  reportFinishedInstalls(storeApps());
   scheduleStorePoll();
 }
 
-/** Tell the other surfaces (tray, launcher, tiles) when an app landed. */
 function reportFinishedInstalls(apps) {
   const busyNow = new Set(apps.filter(craftAppBusy).map((app) => app.id));
   const finished = [...storeBusySeen].filter((id) => !busyNow.has(id));
   storeBusySeen = busyNow;
-  if (finished.some((id) => apps.find((app) => app.id === id)?.installed_version)) {
-    notifyPluginsChanged();
-  }
+  if (finished.some((id) => apps.find((app) => app.id === id)?.installed_version)) notifyPluginsChanged();
 }
 
-/** While something is downloading or the catalog is refreshing, keep polling. */
 function scheduleStorePoll() {
   if (storePollTimer) {
     clearTimeout(storePollTimer);
     storePollTimer = null;
   }
-  if (tab !== 'store' || !refs) return;
-  const data = storeSnapshot();
-  const busyNow = (data?.apps || []).some(craftAppBusy) || data?.refreshing;
-  if (!busyNow) return;
-  storePollTimer = setTimeout(async () => {
+  if (!refs) return;
+  if (!(storeApps().some(craftAppBusy) || storeSnapshot()?.refreshing)) return;
+  storePollTimer = setTimeout(() => {
     storePollTimer = null;
-    try { await loadStore(); } catch (_) { /* the status line reports it */ }
-    if (refs && tab === 'store') renderStore();
+    void loadStoreAndRender();
   }, 900);
 }
 
-/* ── Install ────────────────────────────────────────────────── */
+/* ── Install from a file, activity ──────────────────────────── */
 
 async function uploadArchive(file) {
-  if (busy || !file) return;
+  if (busy || !file || !refs) return;
   if (!/\.(zip|tar\.gz|tgz)$/i.test(file.name)) {
     toast(t('plugins.badArchive', null, 'File must be .zip or .tar.gz'), { type: 'error' });
     return;
   }
-  if (!refs || busy) return;
   busy = true;
-  setBusy(true);
-  refs.installBtn.setLoading(true);
   try {
     const form = new FormData();
     form.append('file', file);
     const res = await apiFetch('/api/plugins/install', { method: 'POST', body: form });
-    toast(t('plugins.installed', { name: res?.data?.installed || 'plugin' },
-      `Installed: ${res?.data?.installed || 'plugin'}`));
+    toast(t('plugins.installed', { name: res?.data?.installed || 'plugin' }, `Installed: ${res?.data?.installed || 'plugin'}`));
     notifyPluginsChanged(res?.data?.installed);
   } catch (e) {
     toast(e.message || t('plugins.installFailed', null, 'Install failed'), { type: 'error' });
   } finally {
     busy = false;
-    refs.installBtn.setLoading(false);
-    setBusy(false);
-    await refreshActivity();
   }
 }
 
-/* ── Activity log ───────────────────────────────────────────── */
-
-/** Replace the log body with one grey note (loading / empty / unavailable). */
-function activityNote(text) {
-  refs.activity.textContent = '';
-  refs.activity.appendChild(el('div', 'plugins-activity-empty', text));
-}
-
-async function refreshActivity() {
-  if (!refs.activity) return;
+async function refreshActivity(log) {
+  const note = (text) => { log.textContent = ''; log.appendChild(el('div', 'pw-log-note', text)); };
   try {
     const headers = {};
     const token = getToken();
     if (token) headers.Authorization = `Bearer ${token}`;
     const res = await fetch('/api/plugins/install.log', { headers });
-    if (!res.ok) {
-      activityNote(t('plugins.activityUnavailable', null, 'Activity unavailable.'));
-      return;
-    }
+    if (!res.ok) { note(t('plugins.activityUnavailable', null, 'Activity unavailable.')); return; }
     const text = (await res.text()).trim();
-    if (!text) {
-      activityNote(t('plugins.activityEmpty', null, 'No install events yet.'));
-      return;
-    }
-    const lines = text.split('\n').slice(-60);
-    refs.activity.textContent = '';
-    for (const line of lines) {
+    if (!text) { note(t('plugins.activityEmpty', null, 'No install events yet.')); return; }
+    log.textContent = '';
+    for (const line of text.split('\n').slice(-80)) {
       let cls = 'ok';
       if (/reject|failed|missing/i.test(line)) cls = 'error';
       else if (/deactivate|uninstall/i.test(line)) cls = 'warn';
-      refs.activity.appendChild(el('div', `plugins-activity-line ${cls}`, line));
+      log.appendChild(el('div', `pw-log-line is-${cls}`, line));
     }
   } catch (_) {
-    activityNote(t('plugins.activityUnavailable', null, 'Activity unavailable.'));
+    note(t('plugins.activityUnavailable', null, 'Activity unavailable.'));
   }
 }
 
 /* ── Surface ────────────────────────────────────────────────── */
+
+function setSection(next) {
+  if (!SECTIONS.includes(next)) return;
+  if (next !== section || query.trim()) revealNext = true;
+  section = next;
+  selected = null;
+  if (query.trim()) {
+    query = '';
+    const input = refs.search.querySelector('input');
+    if (input) input.value = '';
+  }
+  closeManifest();
+  refs.stage.scrollTop = 0;
+  render();
+  if (next === 'installed') void loadPlugins();
+  else if (next !== 'activity') void loadStoreAndRender();
+}
 
 function mountPlugins() {
   if (tileEl) return tileEl;
@@ -763,180 +996,111 @@ function mountPlugins() {
   tileEl = el('section', 'tile plugins-tile');
   tileEl.dataset.plugin = PLUGINS_WINDOW;
 
-  // The window bar (merged into the core title row by tiles.js): the two tabs,
-  // the title the large title hands over to, search and Install.
-  const bar = el('div', 'plugins-bar');
+  // The window bar (merged into the core title row): a mono window name, the
+  // search, install-from-a-file and one mono status — Settings' grammar.
+  const bar = el('div', 'pw-chrome');
   bar.dataset.windowBar = '';
-  const root = el('div', 'plugins-window');
-
-  // Two views share the window: the installed plugins, and the Craft store —
-  // the same card grid over the Craft App Suite's web builds.
-  const tabs = el('div', 'plugins-tabs');
-  tabs.setAttribute('role', 'tablist');
-  const tabInstalled = uiChip({
-    label: t('plugins.tabInstalled', null, 'Installed'),
-    active: tab === 'installed',
-    onClick: () => setTab('installed'),
-  });
-  const tabStore = uiChip({
-    label: t('plugins.tabStore', null, 'Craft apps'),
-    active: tab === 'store',
-    onClick: () => setTab('store'),
-  });
-  tabInstalled.dataset.tab = 'installed';
-  tabStore.dataset.tab = 'store';
-  tabs.append(tabInstalled, tabStore);
-
-  const toolbar = el('div', 'plugins-toolbar');
+  const barName = eyebrow(t('hud.plugins', null, 'Plugins'), 'pw-chrome-title');
+  const spacer = el('span', 'pw-chrome-spacer');
   const search = searchBar({
-    placeholder: t('plugins.search', null, 'Search plugins…'),
-    onInput: (value) => { query = value; render(); },
+    placeholder: t('plugins.searchStore', null, 'Search apps and plugins'),
+    onInput: (value) => { query = value; revealNext = true; selected = null; render(); },
   });
-  const installBtn = button({
-    label: t('plugins.install', null, 'Install'), icon: 'ui/upload', variant: 'ghost', size: 'sm',
-  });
+  search.classList.add('pw-search');
+  const installBtn = iconButton({ icon: 'ui/upload', variant: 'ghost', size: 'sm', label: t('plugins.installFromFile', null, 'Install from a file') });
   on(installBtn, 'click', async () => {
     const [file] = await pickFiles({ accept: '.zip,.tar.gz,.tgz,application/zip,application/gzip' });
     if (file) void uploadArchive(file);
   });
-  search.classList.add('plugins-search');
-  toolbar.append(search, installBtn);
-  const barTitle = el('span', 'plugins-bar-title');
-  barTitle.setAttribute('aria-hidden', 'true');
-  bar.append(tabs, barTitle, toolbar);
+  const statusWrap = el('span', 'pw-chrome-status');
+  const statusDot = el('span', 'pw-status-dot');
+  const status = eyebrow('', 'pw-status-text');
+  statusWrap.append(statusDot, status);
+  bar.append(barName, spacer, search, installBtn, statusWrap);
 
-  // Store-only controls. Auto-update is on by default: an installed app is a
-  // static site the store can replace safely.
-  const storeActions = el('div', 'plugins-store-actions hidden');
-  const checkBtn = button({
-    label: t('plugins.storeCheck', null, 'Check for updates'),
-    icon: 'ui/refresh', variant: 'ghost', size: 'sm',
+  // Rail: the numbered sections.
+  const rail = el('nav', 'pw-rail');
+  rail.setAttribute('aria-label', t('hud.plugins', null, 'Plugins'));
+  const railHead = el('div', 'pw-rail-head');
+  railHead.append(eyebrow("PEAK'D!"), el('h2', 'pw-rail-title', t('hud.plugins', null, 'Plugins')));
+  const railList = el('div', 'pw-rail-list');
+  const railItems = SECTIONS.map((id, i) => {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'pw-rail-item';
+    item.dataset.section = id;
+    item.append(el('span', 'pw-rail-num', pad(i + 1)), el('span', 'pw-rail-label', sectionLabel(id)));
+    const count = el('span', 'pw-rail-count');
+    item.appendChild(count);
+    item.count = count;
+    item.addEventListener('click', () => setSection(id));
+    railList.appendChild(item);
+    return item;
   });
-  on(checkBtn, 'click', async () => {
-    checkBtn.setLoading(true);
-    try {
-      await refreshStore();
-    } catch (e) {
-      toast(storeWaitingForNetwork()
-        ? t('plugins.storeWaitingForConnection', null, 'Waiting for connection')
-        : (e.message || t('plugins.storeUnavailable', null, 'Store unavailable')), { type: 'error' });
-    } finally {
-      checkBtn.setLoading(false);
-      if (refs && tab === 'store') render();
-    }
-  });
-  const installAllBtn = button({
-    label: t('plugins.storeInstallAll', null, 'Install all'),
-    icon: 'ui/download', variant: 'primary', size: 'sm',
-  });
-  on(installAllBtn, 'click', () => void installAllFromStore());
-  const autoLabel = el('span', 'plugins-store-auto-label',
-    t('plugins.storeAuto', null, 'Update automatically'));
-  const autoToggle = toggle({
-    checked: getStoreAutoUpdate(),
-    onChange: (value) => setStoreAutoUpdate(value),
-  });
-  autoToggle.setAttribute('aria-label', t('plugins.storeAuto', null, 'Update automatically'));
-  storeActions.append(checkBtn, installAllBtn, autoLabel, autoToggle);
+  rail.append(railHead, railList);
 
-  const metaRow = el('div', 'plugins-categories-row');
-  const categories = el('div', 'plugins-categories');
-  categories.setAttribute('role', 'toolbar');
-  categories.setAttribute('aria-label', t('plugins.categories', null, 'Plugin categories'));
-  metaRow.append(categories);
+  // Stage.
+  const stage = el('main', 'pw-stage');
+  const stageBody = el('div', 'pw-stage-body');
+  stage.appendChild(stageBody);
 
-  const grid = el('div', 'plugins-store-grid');
-  const empty = el('div', 'plugins-empty hidden');
+  // Manifest.
+  const manifest = el('aside', 'pw-manifest');
+  manifest.setAttribute('aria-label', t('plugins.atAGlance', null, 'At a glance'));
+  const manifestTop = el('div', 'pw-manifest-top');
+  const back = iconButton({ icon: 'ui/chevron-left', variant: 'ghost', size: 'sm', label: t('plugins.back', null, 'Back') });
+  back.classList.add('pw-manifest-back');
+  back.addEventListener('click', () => closeManifest());
+  const manifestName = el('span', 'pw-manifest-name');
+  manifestTop.append(back, eyebrow(t('plugins.atAGlance', null, 'At a glance'), 'pw-manifest-eyebrow'), manifestName);
+  const manifestBody = el('div', 'pw-manifest-body');
+  manifest.append(manifestTop, manifestBody);
 
-  const details = el('details', 'plugins-activity-details');
-  const summary = el('summary');
-  summary.appendChild(eyebrow(t('plugins.installActivity', null, 'Install activity')));
-  details.appendChild(summary);
-  const activity = el('div', 'plugins-activity');
-  activity.appendChild(
-    el('div', 'plugins-activity-empty', t('plugins.activityLoading', null, 'Loading…')),
-  );
-  details.appendChild(activity);
-  on(details, 'toggle', () => { if (details.open) void refreshActivity(); });
-
-  hero = largeTitle({ title: t('hud.plugins', null, 'Plugins'), scroller: root });
-  heroCount = null;
-  revealNext = true;
-  root.append(hero.el, storeActions, metaRow, grid, empty, details);
+  const layout = el('div', 'pw-layout');
+  layout.append(rail, stage, manifest);
+  const root = el('div', 'pw-window');
+  root.appendChild(layout);
   tileEl.append(bar, root);
-  cleanups.push(() => { hero?.dispose(); hero = null; });
 
   refs = {
-    grid, empty, categories, categoriesRow: metaRow, activity, installBtn, details,
-    tabInstalled, tabStore, storeActions, barTitle,
+    root, layout, stage, stageBody, manifest, manifestBody, manifestName, search, installBtn,
+    status, statusDot, railItems,
   };
 
   // Drag a plugin archive anywhere over the window to install it.
-  ['dragenter', 'dragover'].forEach((evt) => {
-    on(tileEl, evt, (e) => {
-      if (![...(e.dataTransfer?.types || [])].includes('Files')) return;
-      e.preventDefault();
-      e.stopPropagation();
-      root.classList.add('is-dragging');
-    });
-  });
-  ['dragleave', 'drop'].forEach((evt) => {
-    on(tileEl, evt, (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      root.classList.remove('is-dragging');
-    });
-  });
+  ['dragenter', 'dragover'].forEach((evt) => on(tileEl, evt, (e) => {
+    if (![...(e.dataTransfer?.types || [])].includes('Files')) return;
+    e.preventDefault();
+    e.stopPropagation();
+    root.classList.add('is-dragging');
+  }));
+  ['dragleave', 'drop'].forEach((evt) => on(tileEl, evt, (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    root.classList.remove('is-dragging');
+  }));
   on(tileEl, 'drop', (e) => {
     const f = e.dataTransfer?.files?.[0];
     if (f) void uploadArchive(f);
   });
-
-  on(window, 'plugins:changed', () => void refreshActiveTab(true));
-  // The store retries catalog reads in the background while the network is
-  // coming up; repaint as soon as one succeeds (or reports waiting).
-  on(window, 'craft-store:changed', () => {
-    if (refs && tab === 'store') render();
+  on(tileEl, 'keydown', (e) => {
+    if (e.key === 'Escape' && closeManifest()) { e.preventDefault(); e.stopPropagation(); }
   });
+
+  on(window, 'plugins:changed', () => { void loadPlugins(true); void loadStoreAndRender(); });
+  on(window, 'craft-store:changed', () => render());
   cleanups.push(() => {
     if (storePollTimer) clearTimeout(storePollTimer);
     storePollTimer = null;
   });
 
-  renderCategories();
-  if (tab === 'store') void setTab('store');
-  else void loadPlugins();
+  storeBusySeen = new Set(storeApps().filter(craftAppBusy).map((app) => app.id));
+  revealNext = true;
+  shownKey = '';
+  render();
+  void loadPlugins();
+  void loadStoreAndRender();
   return tileEl;
-}
-
-/** Switch between the installed list and the store. */
-function setTab(next) {
-  if (next !== tab) revealNext = true;
-  tab = next;
-  refs?.tabInstalled?.setActive(tab === 'installed');
-  refs?.tabStore?.setActive(tab === 'store');
-  if (tab === 'store') {
-    // Remember who was mid-install so completing one can announce it once.
-    storeBusySeen = new Set(
-      (storeSnapshot()?.apps || []).filter(craftAppBusy).map((app) => app.id),
-    );
-    render(); // paint the cached catalog immediately…
-    void loadStore()
-      .then(() => { if (refs && tab === 'store') render(); })
-      .catch(() => { if (refs && tab === 'store') render(); });
-  } else {
-    void loadPlugins();
-  }
-}
-
-/** Reload whatever the visible tab shows (a plugin landed or was removed). */
-async function refreshActiveTab(force = false) {
-  if (tab === 'store') {
-    try { await loadStore(); } catch (_) { /* the status line reports it */ }
-    if (refs && tab === 'store') render();
-    return;
-  }
-  await loadPlugins(force);
 }
 
 function unmountPlugins() {
@@ -947,6 +1111,8 @@ function unmountPlugins() {
   tileEl?.remove();
   tileEl = null;
   refs = null;
+  selected = null;
+  lastSignature = '';
 }
 
 export function getPluginsElement() {
@@ -959,7 +1125,7 @@ export function pluginsContextMenu() {
       type: 'item',
       label: t('plugins.refresh', null, 'Refresh'),
       icon: 'ui/refresh',
-      onClick: () => void refreshActiveTab(),
+      onClick: () => { void loadPlugins(true); void refreshStore().catch(() => {}).then(() => render()); },
     },
   ];
 }

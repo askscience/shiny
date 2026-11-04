@@ -22,5 +22,6 @@
   "plugin.terminal.ctx.copy": "Copiar",
   "plugin.terminal.ctx.paste": "Pegar",
   "plugin.terminal.ctx.clearScrollback": "Borrar el historial de desplazamiento",
-  "plugin.terminal.ctx.closeTab": "Cerrar la pestaña"
+  "plugin.terminal.ctx.closeTab": "Cerrar la pestaña",
+  "plugin.terminal.keys.label": "Teclas del terminal"
 }

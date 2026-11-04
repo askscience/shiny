@@ -32,6 +32,7 @@ use sha2::Digest;
 use crate::api::AppState;
 use crate::errors::AppError;
 use crate::models::Traveler;
+use crate::plugins::craft_discovery as discovery;
 use crate::plugins::installer::log_event;
 
 /// How long one app's release lookup stays fresh. GitHub's unauthenticated
@@ -65,6 +66,7 @@ const GITHUB_OWNER: &str = "storytold";
 // ── The catalog ─────────────────────────────────────────────────────────────
 
 /// One app in the Craft App Suite.
+#[derive(Debug, Clone, Copy)]
 pub struct CraftApp {
     /// Machine name: repository, release-asset stem and the plugin name the
     /// app is installed as.
@@ -75,6 +77,19 @@ pub struct CraftApp {
     pub tagline: &'static str,
     /// Older release-asset stems (PdfCraft shipped as PrintCraft until 0.2.1).
     pub former_ids: &'static [&'static str],
+    /// GitHub `owner/repo`, when it is not `storytold/<id>` (a community app).
+    pub repo: Option<&'static str>,
+    /// Who publishes it, as the store's byline shows it.
+    pub publisher: &'static str,
+    /// Maintained outside ArtCraft; the store labels it as such.
+    pub community: bool,
+    /// Brand colour (sRGB), for the store's icon tiles and banners — the
+    /// colour getartcraft.com and the ArtCraft launcher give the app.
+    pub color: [u8; 3],
+    /// Its website, when it is not a page on getartcraft.com.
+    pub site: Option<&'static str>,
+    /// Found by the store at run time (`discovery`), not part of [`SUITE`].
+    pub discovered: bool,
 }
 
 impl CraftApp {
@@ -83,38 +98,91 @@ impl CraftApp {
         std::iter::once(self.id).chain(self.former_ids.iter().copied())
     }
 
-    /// The app's page on getartcraft.com.
+    /// GitHub `owner/repo`.
+    pub fn repo(&self) -> String {
+        self.repo.map_or_else(|| format!("{GITHUB_OWNER}/{}", self.id), str::to_string)
+    }
+
+    /// The app's page: getartcraft.com for the suite, its own site (or its
+    /// repository) otherwise.
     pub fn website(&self) -> String {
-        format!("https://getartcraft.com/apps/{}", self.id)
+        match self.site {
+            Some(site) => site.to_string(),
+            None if self.discovered => format!("https://github.com/{}", self.repo()),
+            None => format!("https://getartcraft.com/apps/{}", self.id),
+        }
     }
 
+    /// A built-in or a discovered app.
     pub fn by_id(id: &str) -> Option<&'static CraftApp> {
-        SUITE.iter().find(|app| app.id == id)
+        SUITE
+            .iter()
+            .find(|app| app.id == id)
+            .or_else(|| discovery::find(id))
+    }
+
+    /// Every app the store knows: the suite, then what it discovered.
+    pub fn all() -> Vec<&'static CraftApp> {
+        SUITE.iter().chain(discovery::all()).collect()
     }
 }
 
-const fn app(id: &'static str, name: &'static str, tagline: &'static str) -> CraftApp {
-    CraftApp { id, name, tagline, former_ids: &[] }
+const fn app(id: &'static str, name: &'static str, tagline: &'static str, color: [u8; 3]) -> CraftApp {
+    CraftApp {
+        id,
+        name,
+        tagline,
+        former_ids: &[],
+        repo: None,
+        publisher: "ArtCraft",
+        community: false,
+        color,
+        site: None,
+        discovered: false,
+    }
 }
 
-/// The suite, in display order (matches getartcraft.com).
-pub const SUITE: [CraftApp; 13] = [
-    app("photocraft", "PhotoCraft", "Image editing"),
-    app("vectorcraft", "VectorCraft", "Vector illustration"),
-    app("filmcraft", "FilmCraft", "Video editing, color and sound"),
-    app("lightcraft", "LightCraft", "Photo library and raw development"),
+/// The suite, in display order (matches getartcraft.com and the ArtCraft
+/// launcher's catalog), then the community apps. Apps published after this
+/// list was written are found at run time (`discovery`).
+pub const SUITE: [CraftApp; 17] = [
+    app("photocraft", "PhotoCraft", "Image editing", [0x2f, 0x7b, 0xf5]),
+    app("vectorcraft", "VectorCraft", "Vector illustration", [0xe8, 0x57, 0x3f]),
+    app("filmcraft", "FilmCraft", "Video editing, color and sound", [0x8b, 0x5c, 0xf6]),
+    app("lightcraft", "LightCraft", "Photo library and raw development", [0xf2, 0xa5, 0x16]),
     CraftApp {
         former_ids: &["printcraft"],
-        ..app("pdfcraft", "PdfCraft", "Reading, organizing and protecting PDFs")
+        ..app("pdfcraft", "PdfCraft", "Reading, organizing and protecting PDFs", [0xe8, 0x20, 0x4f])
     },
-    app("effectcraft", "EffectCraft", "Motion graphics and visual effects"),
-    app("designcraft", "DesignCraft", "Page layout and publishing"),
-    app("figcraft", "FigCraft", "Interface design and prototyping"),
-    app("wordcraft", "WordCraft", "Writing and document design"),
-    app("soundcraft", "SoundCraft", "Recording, editing and mixing audio"),
-    app("deckcraft", "DeckCraft", "Presentations and slide shows"),
-    app("cadcraft", "CADCraft", "Computer-aided design and drafting"),
-    app("gridcraft", "GridCraft", "Spreadsheets and data"),
+    app("effectcraft", "EffectCraft", "Motion graphics and visual effects", [0xe0, 0x36, 0x8f]),
+    app("designcraft", "DesignCraft", "Page layout and publishing", [0x7b, 0xb5, 0x1c]),
+    app("figcraft", "FigCraft", "Interface design and prototyping", [0x02, 0xda, 0x96]),
+    app("wordcraft", "WordCraft", "Writing and document design", [0x3f, 0x5f, 0xe0]),
+    app("soundcraft", "SoundCraft", "Recording, editing and mixing audio", [0x1f, 0xa5, 0xc9]),
+    app("deckcraft", "DeckCraft", "Presentations and slide shows", [0xf0, 0x7a, 0x1e]),
+    app("cadcraft", "CADCraft", "Computer-aided design and drafting", [0x3e, 0xa6, 0xe8]),
+    app("gridcraft", "GridCraft", "Spreadsheets and data", [0x1f, 0x9d, 0x55]),
+    app("texturecraft", "TextureCraft", "3D texture painting", [0xc2, 0x67, 0x2b]),
+    CraftApp {
+        site: Some("https://github.com/storytold/materialcraft"),
+        ..app("materialcraft", "MaterialCraft", "Procedural material design", [0x17, 0x8a, 0x9c])
+    },
+    CraftApp {
+        site: Some("https://github.com/storytold/craft-anything"),
+        ..app(
+            "craft-anything",
+            "Craft Anything",
+            "Find out how any software works, then craft your own",
+            [0x4e, 0x7b, 0xfb],
+        )
+    },
+    CraftApp {
+        repo: Some("tangency-labs/solidcraft"),
+        publisher: "Tangency Labs",
+        community: true,
+        site: Some("https://solidcraft.io"),
+        ..app("solidcraft", "SolidCraft", "Parametric 3D CAD", [0x46, 0xa1, 0xfb])
+    },
 ];
 
 // ── Release resolution ──────────────────────────────────────────────────────
@@ -375,6 +443,13 @@ struct StoreInner {
     /// refreshes wait until then: a live image booting without a network must
     /// not ask for all thirteen apps on every UI poll.
     retry_after: parking_lot::Mutex<Option<Instant>>,
+    /// Where discovery remembers what it found (`.craft-store.json` in the
+    /// plugins directory); `None` keeps it in memory only (tests).
+    discovery_path: Option<PathBuf>,
+    discovery: parking_lot::Mutex<discovery::Saved>,
+    /// App icons for the store's cards, fetched once per process (`None`:
+    /// the app publishes none we could read).
+    icons: parking_lot::Mutex<HashMap<String, Option<Vec<u8>>>>,
 }
 
 impl Default for Store {
@@ -384,6 +459,22 @@ impl Default for Store {
 }
 
 impl Store {
+    /// The store, remembering discovered apps in `plugins_dir`. What earlier
+    /// runs discovered joins the catalog right away.
+    pub fn in_plugins_dir(plugins_dir: PathBuf) -> Self {
+        let path = plugins_dir.join(".craft-store.json");
+        let saved = discovery::Saved::load(&path);
+        for found in &saved.apps {
+            discovery::register(found);
+        }
+        let mut store = Self::new();
+        if let Some(inner) = Arc::get_mut(&mut store.inner) {
+            inner.discovery_path = Some(path);
+            *inner.discovery.get_mut() = saved;
+        }
+        store
+    }
+
     pub fn new() -> Self {
         let build = |timeout: Duration| {
             reqwest::Client::builder()
@@ -400,6 +491,9 @@ impl Store {
                 status: parking_lot::Mutex::new(HashMap::new()),
                 refreshing: AtomicBool::new(false),
                 retry_after: parking_lot::Mutex::new(None),
+                discovery_path: None,
+                discovery: parking_lot::Mutex::new(discovery::Saved::default()),
+                icons: parking_lot::Mutex::new(HashMap::new()),
             }),
         }
     }
@@ -428,8 +522,8 @@ impl Store {
                 Ok(_) => false,
             });
         let mut stale = false;
-        let apps: Vec<serde_json::Value> = SUITE
-            .iter()
+        let apps: Vec<serde_json::Value> = CraftApp::all()
+            .into_iter()
             .map(|app| {
                 let cached = self.inner.releases.lock().get(app.id).cloned();
                 let fresh = cached.as_ref().is_some_and(CachedRelease::fresh);
@@ -513,7 +607,11 @@ impl Store {
                     "name": app.name,
                     "tagline": app.tagline,
                     "website": app.website(),
-                    "repo": format!("https://github.com/{GITHUB_OWNER}/{}", app.id),
+                    "repo": format!("https://github.com/{}", app.repo()),
+                    "publisher": app.publisher,
+                    "community": app.community,
+                    "discovered": app.discovered,
+                    "color": format!("#{:02x}{:02x}{:02x}", app.color[0], app.color[1], app.color[2]),
                     "installed_version": installed_version,
                     "latest_version": latest,
                     "asset_size": asset_size,
@@ -580,7 +678,8 @@ impl Store {
         {
             return;
         }
-        for app in SUITE.iter() {
+        self.discover(force).await;
+        for app in CraftApp::all() {
             let cached = self.inner.releases.lock().get(app.id).cloned();
             if !force {
                 if let Some(entry) = &cached {
@@ -637,6 +736,117 @@ impl Store {
                 break;
             }
         }
+    }
+
+    /// Look for Craft apps the catalog does not know yet (see
+    /// `craft_discovery`): once a day, or on a forced refresh. Best effort —
+    /// offline, rate-limited or malformed sources simply find nothing.
+    async fn discover(&self, force: bool) {
+        let now = chrono::Utc::now().timestamp();
+        if !force && !self.inner.discovery.lock().due(now) {
+            return;
+        }
+        let mut reached = false;
+        let mut found: Vec<discovery::Found> = Vec::new();
+
+        // The ArtCraft release feed: apps with their latest release, in one call.
+        if let Ok(response) = self.inner.client.get(discovery::FEED_URL).send().await {
+            if response.status().is_success() {
+                if let Ok(feed) = response.json::<serde_json::Value>().await {
+                    reached = true;
+                    found.extend(discovery::from_feed(&feed));
+                }
+            }
+        }
+
+        // The account's repositories: probe the new ones for a web build.
+        let repos_url = format!(
+            "https://api.github.com/users/{}/repos?per_page=100&sort=pushed",
+            discovery::OWNER
+        );
+        let repos = match self
+            .inner
+            .client
+            .get(&repos_url)
+            .header("Accept", "application/vnd.github+json")
+            .send()
+            .await
+        {
+            Ok(response) if response.status().is_success() => {
+                response.json::<serde_json::Value>().await.ok()
+            }
+            _ => None,
+        };
+        if let Some(repos) = repos {
+            reached = true;
+            let candidates: Vec<_> = discovery::candidates(&repos)
+                .into_iter()
+                .filter(|c| !found.iter().any(|f| f.id == c.id))
+                .filter(|c| !self.inner.discovery.lock().recently_rejected(&c.id, now))
+                .take(discovery::PROBES_PER_PASS)
+                .collect();
+            for candidate in candidates {
+                let url = format!("https://api.github.com/repos/{}/releases/latest", candidate.repo);
+                let response = self
+                    .inner
+                    .client
+                    .get(&url)
+                    .header("Accept", "application/vnd.github+json")
+                    .send()
+                    .await;
+                let release = match response {
+                    Ok(response) if response.status().is_success() => {
+                        response.json::<GitHubRelease>().await.ok()
+                    }
+                    // No release at all: a real answer.
+                    Ok(response) if response.status() == reqwest::StatusCode::NOT_FOUND => None,
+                    // Rate-limited or offline: try this one on a later pass.
+                    _ => break,
+                };
+                let web = release.as_ref().is_some_and(|release| {
+                    discovery::has_web_build(&candidate.id, release.assets.iter().map(|a| a.name.as_str()))
+                });
+                if web {
+                    let (name, tagline) = discovery::describe(&candidate.id, &candidate.description);
+                    found.push(discovery::Found {
+                        color: discovery::color_for(&candidate.id),
+                        id: candidate.id,
+                        name,
+                        tagline,
+                        repo: candidate.repo,
+                        publisher: "ArtCraft".into(),
+                        community: false,
+                    });
+                } else {
+                    self.inner.discovery.lock().rejected.insert(candidate.id, now);
+                }
+            }
+        }
+
+        let mut saved = self.inner.discovery.lock();
+        for app in found {
+            if discovery::register(&app) {
+                tracing::info!("Craft store: discovered {} ({})", app.name, app.repo);
+                saved.apps.push(app);
+            }
+        }
+        if reached {
+            saved.checked_at = now;
+        }
+        if let Some(path) = &self.inner.discovery_path {
+            saved.save(path);
+        }
+    }
+
+    /// The store card's icon for `id` (PNG), fetched once per process.
+    pub async fn icon(&self, id: &str) -> Option<Vec<u8>> {
+        let app = CraftApp::by_id(id)?;
+        if let Some(cached) = self.inner.icons.lock().get(app.id) {
+            return cached.clone();
+        }
+        let icon = self.fetch_icon(app).await;
+        self.inner.icons.lock().insert(app.id.to_string(), icon.clone());
+        icon
     }
 
     /// The latest release of one app, fetching it when no fresh entry exists.
@@ -714,7 +924,7 @@ impl Store {
     }
 
     async fn fetch_latest(&self, app: &CraftApp, etag: Option<&str>) -> Result<Latest, String> {
-        let url = format!("https://api.github.com/repos/{GITHUB_OWNER}/{}/releases/latest", app.id);
+        let url = format!("https://api.github.com/repos/{}/releases/latest", app.repo());
         let mut request = self
             .inner
             .client
@@ -1106,20 +1316,29 @@ impl Store {
 
     /// The app's own icon, copied unmodified from its repository (best effort:
     /// no network, or no icon, must not fail an install).
+    /// The app's repository first, then the copy the ArtCraft launcher ships
+    /// for every app it lists (a community app keeps its icon elsewhere).
     async fn fetch_icon(&self, app: &CraftApp) -> Option<Vec<u8>> {
-        let url = format!(
-            "https://{ICON_HOST}/{GITHUB_OWNER}/{}/main/assets/app-icon/hicolor/128x128/apps/ai.storyteller.{}.png",
-            app.id, app.id
-        );
-        let response = self.inner.client.get(&url).send().await.ok()?;
-        if !response.status().is_success() {
-            return None;
+        let urls = [
+            format!(
+                "https://{ICON_HOST}/{}/main/assets/app-icon/hicolor/128x128/apps/ai.storyteller.{}.png",
+                app.repo(),
+                app.id
+            ),
+            format!("https://{ICON_HOST}/{GITHUB_OWNER}/craft-launcher/main/assets/app-icons/{}.png", app.id),
+        ];
+        for url in urls {
+            let Ok(response) = self.inner.client.get(&url).send().await else { continue };
+            if !response.status().is_success() {
+                continue;
+            }
+            let Ok(bytes) = response.bytes().await else { continue };
+            if bytes.len() > MAX_ICON_BYTES || !bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+                continue;
+            }
+            return Some(bytes.to_vec());
         }
-        let bytes = response.bytes().await.ok()?;
-        if bytes.len() > MAX_ICON_BYTES || !bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
-            return None;
-        }
-        Some(bytes.to_vec())
+        None
     }
 
     fn set_status(&self, id: &str, state: InstallState, progress: u8, error: Option<String>) {
@@ -1192,13 +1411,14 @@ fn manifest_toml(app: &CraftApp, release: &Release) -> String {
          kind = \"web\"\n\
          description = \"{tagline}\"\n\
          summary = \"{name} — the app's own web build, installed by the Craft store\"\n\
-         author = \"ArtCraft Team\"\n\
+         author = \"{publisher}\"\n\
          web_dir = \"web\"\n\
          category = \"Craft\"\n",
         id = escape(app.id),
         version = release.version,
         name = escape(app.name),
         tagline = escape(app.tagline),
+        publisher = escape(app.publisher),
     )
 }
 
@@ -1212,6 +1432,30 @@ pub async fn store_list(
     Extension(_traveler): Extension<Traveler>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     Ok(Json(json!({ "success": true, "data": state.store.snapshot(&state) })))
+}
+
+/// GET /api/plugins/store/icon?id=photocraft — the app's own icon (PNG), so
+/// the store can show it before the app is installed.
+pub async fn store_icon(
+    State(state): State<AppState>,
+    Extension(_traveler): Extension<Traveler>,
+    axum::extract::Query(query): axum::extract::Query<HashMap<String, String>>,
+) -> Result<axum::response::Response, AppError> {
+    use axum::response::IntoResponse;
+    let id = query.get("id").ok_or_else(|| AppError::BadRequest("id required".into()))?;
+    let bytes = state
+        .store
+        .icon(id)
+        .await
+        .ok_or_else(|| AppError::NotFound(format!("no icon for '{id}'")))?;
+    Ok((
+        [
+            (axum::http::header::CONTENT_TYPE, "image/png"),
+            (axum::http::header::CACHE_CONTROL, "private, max-age=86400"),
+        ],
+        bytes,
+    )
+        .into_response())
 }
 
 /// POST /api/plugins/store/refresh — re-check every app's latest release,
@@ -1310,14 +1554,16 @@ mod tests {
 
     #[test]
     fn suite_ids_are_unique_repo_stems() {
-        assert_eq!(SUITE.len(), 13);
+        assert_eq!(SUITE.len(), 17);
         let mut ids: Vec<_> = SUITE.iter().map(|app| app.id).collect();
         ids.sort_unstable();
         ids.dedup();
         assert_eq!(ids.len(), SUITE.len());
         for app in &SUITE {
-            assert_eq!(app.name.to_lowercase(), app.id);
-            assert!(app.website().ends_with(app.id));
+            assert_eq!(app.name.to_lowercase().replace(' ', "-"), app.id);
+            assert!(app.website().starts_with("https://"));
+            assert!(app.repo().ends_with(&format!("/{}", app.id)));
+            assert_eq!(app.community, app.repo.is_some(), "only community apps live elsewhere");
         }
     }
 

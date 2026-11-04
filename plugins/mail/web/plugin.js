@@ -1093,6 +1093,11 @@ function renderMessage(msg) {
   const delBtn = button({ icon: 'ui/trash', label: t('plugin.mail.reader.delete', null, 'Delete'), variant: 'ghost', size: 'sm', onClick: () => deleteCurrent(msg) });
   const closeBtn = toolButton('ui/close', t('plugin.mail.reader.close', null, 'Close message'), closeReader, { className: 'mail-reader-close' });
   actions.append(withArrow(replyBtn), fwdBtn, delBtn, closeBtn);
+  // Named for when a narrow reader shows them as icons only.
+  for (const b of [replyBtn, fwdBtn, delBtn]) {
+    const name = b.textContent.trim();
+    if (name && !b.title) { b.title = name; b.setAttribute('aria-label', name); }
+  }
   // On the window bar Reply and Close stay; the bar's own tools fold away
   // first, then Delete and Forward (`data-fold` lets the folding reach them).
   for (const b of [replyBtn, closeBtn]) b.dataset.keep = '';

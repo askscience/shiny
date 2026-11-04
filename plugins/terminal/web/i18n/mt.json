@@ -24,5 +24,6 @@
   "plugin.terminal.ctx.copy": "Ikkopja",
   "plugin.terminal.ctx.paste": "Ippejstja",
   "plugin.terminal.ctx.clearScrollback": "Ħassar l-istorja tal-iskrolljar",
-  "plugin.terminal.ctx.closeTab": "Agħlaq it-tab"
+  "plugin.terminal.ctx.closeTab": "Agħlaq it-tab",
+  "plugin.terminal.keys.label": "Tasti tat-terminal"
 }

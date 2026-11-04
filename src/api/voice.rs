@@ -146,7 +146,16 @@ pub async fn voice_status(
     let (stt_lang, supertonic_lang) = resolve_stt_lang(&lang, &map);
 
     let tar = models_dir(&state.config).join(format!("{}.tar.gz", stt_lang));
-    let vosk = if tar.exists() { "ready" } else { "missing" };
+    // A tiny archive is what an interrupted download or pack leaves behind
+    // (the smallest Vosk model is tens of MB): report it as missing so the
+    // client re-runs the download, which repairs it, instead of failing to
+    // load it on every start.
+    const MIN_VOSK_ARCHIVE_BYTES: u64 = 1024 * 1024;
+    let packed = fs::metadata(&tar)
+        .await
+        .map(|m| m.len() >= MIN_VOSK_ARCHIVE_BYTES)
+        .unwrap_or(false);
+    let vosk = if packed { "ready" } else { "missing" };
 
     let supertonic = if state.supertonic.is_available().await {
         "ready"

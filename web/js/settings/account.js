@@ -1,8 +1,8 @@
 import { apiFetch, getTraveler } from '../api.js';
 import { toast, button, input, toggleRow, select, revealRegion, disposeMotion, controlCard } from '../../ui/index.js';
-import { t, tp } from '../i18n.js';
+import { t } from '../i18n.js';
 import { saveKnownUser, renderAvatarEl, readAvatarFile } from '../userProfiles.js';
-import { getLockScreen, setLockScreen, LOCK_AFTER_CHOICES } from '../preferences.js';
+import { getLockScreen, setLockScreen, LOCK_IDLE_MIN, LOCK_IDLE_MAX } from '../preferences.js';
 import { el, field, heading } from './controls.js';
 
 /** Build the account section with resources owned by its current mount. */
@@ -86,14 +86,54 @@ export function createAccountSection({ on, cleanups, resources }) {
   function buildLock() {
     const lock = getLockScreen();
 
-    const after = select({
-      options: LOCK_AFTER_CHOICES.map((m) => ({
-        value: String(m),
-        label: tp('settings.lock.minutes', m, { count: m }, `${m} min`),
-      })),
-      onChange: (value) => setLockScreen({ after: Number(value) }),
+    // "Lock after": an amount and its unit — seconds, minutes, or never
+    // (the lock screen stays there on demand; nothing locks by itself).
+    const unitOf = (idle) => (!idle ? 'never' : (idle % 60 === 0 ? 'min' : 'sec'));
+    let unit = unitOf(lock.idle);
+    const amount = input({
+      type: 'number',
+      min: 1,
+      step: 1,
+      inputMode: 'numeric',
+      label: t('settings.lock.amount', null, 'Amount'),
+      className: 'settings-lock-amount',
     });
-    after.select.value = String(lock.after);
+    const showAmount = (idle) => {
+      amount.value = unit === 'min' ? String(idle / 60) : unit === 'sec' ? String(idle) : '';
+      amount.max = String(unit === 'min' ? LOCK_IDLE_MAX / 60 : LOCK_IDLE_MAX);
+      amount.min = String(unit === 'min' ? 1 : LOCK_IDLE_MIN);
+      amount.hidden = unit === 'never';
+    };
+    const commit = (seconds) => {
+      const idle = seconds <= 0 ? 0 : Math.round(Math.min(LOCK_IDLE_MAX, Math.max(LOCK_IDLE_MIN, seconds)));
+      setLockScreen({ idle });
+      showAmount(idle);
+    };
+    on(amount, 'change', () => {
+      const n = Math.max(1, Math.round(Number(amount.value) || 0));
+      commit(unit === 'min' ? n * 60 : n);
+    });
+
+    const unitSelect = select({
+      options: [
+        { value: 'sec', label: t('settings.lock.seconds', null, 'Seconds') },
+        { value: 'min', label: t('settings.lock.minutes', null, 'Minutes') },
+        { value: 'never', label: t('settings.lock.never', null, 'Never') },
+      ],
+      onChange: (value) => {
+        const current = getLockScreen().idle;
+        unit = value;
+        if (value === 'never') commit(0);
+        else if (value === 'min') commit(current ? Math.max(60, Math.round(current / 60) * 60) : 5 * 60);
+        else commit(current || 30);
+      },
+    });
+    unitSelect.select.value = unit;
+    unitSelect.select.setAttribute('aria-label', t('settings.lock.unit', null, 'Unit'));
+    showAmount(lock.idle);
+
+    const after = el('div', 'settings-lock-after');
+    after.append(amount, unitSelect);
 
     const password = toggleRow({
       label: t('settings.lock.password', null, 'Ask for the password'),

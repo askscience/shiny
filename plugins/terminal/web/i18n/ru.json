@@ -23,5 +23,6 @@
   "plugin.terminal.ctx.copy": "Копировать",
   "plugin.terminal.ctx.paste": "Вставить",
   "plugin.terminal.ctx.clearScrollback": "Очистить историю вывода",
-  "plugin.terminal.ctx.closeTab": "Закрыть вкладку"
+  "plugin.terminal.ctx.closeTab": "Закрыть вкладку",
+  "plugin.terminal.keys.label": "Клавиши терминала"
 }

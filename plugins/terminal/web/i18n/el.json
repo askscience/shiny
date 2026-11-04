@@ -21,5 +21,6 @@
   "plugin.terminal.ctx.copy": "Αντιγραφή",
   "plugin.terminal.ctx.paste": "Επικόλληση",
   "plugin.terminal.ctx.clearScrollback": "Εκκαθάριση ιστορικού κύλισης",
-  "plugin.terminal.ctx.closeTab": "Κλείσιμο καρτέλας"
+  "plugin.terminal.ctx.closeTab": "Κλείσιμο καρτέλας",
+  "plugin.terminal.keys.label": "Πλήκτρα τερματικού"
 }

@@ -437,8 +437,9 @@ Both isolate panics so one bad job cannot wedge the worker.
 | `POST` | `/api/plugins/window/closed` | Bearer | `{ "name": "..." }` — the shell closed a plugin window: stop its process now (graceful MCP lifecycle). Does **not** change `enabled`. |
 | `POST` | `/api/plugins/session/reset` | Bearer | Fresh-session boot (`session.remember` off): drop this user's session activations and stop every Craft MCP server. |
 | `GET` | `/api/plugins/install.log` | Bearer | Last 200 lines of the install log. |
-| `GET` | `/api/plugins/store` | Bearer | Craft App Suite catalog: installed/latest versions, install state and progress, per app `mcp_enabled` (the AI-control decision), `mcp_installed`, `mcp_pending`, and `waiting_for_network` (the GitHub lookup is waiting for connectivity; also present at catalog level). |
-| `POST` | `/api/plugins/store/refresh` | Bearer | Re-check every app's latest release (cached, ETag). Forces the connectivity retry window open. |
+| `GET` | `/api/plugins/store` | Bearer | Craft App Suite catalog — the built-in suite plus the apps discovery found — with `publisher`, `community`, `discovered`, `color` (brand colour, `#rrggbb`), `website`, `repo`, installed/latest versions, install state and progress, per app `mcp_enabled` (the AI-control decision), `mcp_installed`, `mcp_pending`, and `waiting_for_network` (the GitHub lookup is waiting for connectivity; also present at catalog level). |
+| `POST` | `/api/plugins/store/refresh` | Bearer | Re-check every app's latest release (cached, ETag) and run discovery now. Forces the connectivity retry window open. |
+| `GET` | `/api/plugins/store/icon?id=<app>` | Bearer | The app's own icon (PNG): from its repository, else the copy the ArtCraft launcher ships. Cached for the process; 404 when there is none. |
 | `POST` | `/api/plugins/store/install` | Bearer | `{ "id": "photocraft" }` — download, verify (SHA-256) and install one app's web build **and its command-line tool (AI control)**, in the background. |
 | `POST` | `/api/plugins/store/mcp` | Bearer | `{ "id": "photocraft", "enable": true }` — the AI-control switch: records the decision and installs/removes the app's CLI (its MCP server). On by default; off is remembered (`.craft-mcp/<id>/disabled`), so installs and updates respect it. |
 | `GET` | `/api/plugins/craft/control/events` | Bearer | SSE, the page's side of a live Craft app link (`?app=<id>`): each message is one control request the page runs through `window.<app>.request`. |
@@ -452,6 +453,19 @@ reports `waiting_for_network`, and the shell shows a waiting state and retries o
 its own — including immediately on the browser's `online` event. A live ISO that
 boots before its network is up therefore fills in the Craft apps as soon as the
 connection arrives, without showing a raw GitHub error.
+
+**New apps join on their own** (`src/plugins/craft_discovery.rs`). Once a day
+(and on a forced refresh) the store reads the ArtCraft launcher's release feed
+(`api.storyteller.ai/v1/craft_apps/release_info`, one request) and the
+`storytold` account's repositories (one request): an app it does not know whose
+latest release carries `<id>-web-<version>.zip` is added to the catalog —
+name and tagline from the feed or the repository description, publisher and a
+community flag from the owner. Repository candidates are probed at most six per
+pass, and one without a web build is not asked again for a week, so discovery
+stays far inside GitHub's unauthenticated limit. What it found is kept in
+`<plugins_dir>/.craft-store.json` and registered at startup, so an installed
+discovered app keeps its window and AI control across restarts. Its release is
+resolved, downloaded and verified exactly like a built-in app's.
 
 There is **no admin role** — any logged-in user can install/uninstall; see
 [Security](security.md).

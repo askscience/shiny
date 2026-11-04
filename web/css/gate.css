@@ -382,7 +382,10 @@ html[data-motion="fluid"] .gate .gate-row::after { transition: transform var(--s
   letter-spacing: 0.12em;
   text-transform: uppercase;
   pointer-events: none;
-  white-space: nowrap;
+  /* Long languages wrap between words, centred, inside the screen. */
+  width: max-content;
+  max-width: calc(100vw - 48px);
+  text-align: center;
 }
 .gate-hint[hidden] { display: none; }
 .gate-hint-icon { display: inline-flex; width: 20px; height: 20px; color: var(--accent); }

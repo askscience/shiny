@@ -992,10 +992,15 @@ html body.tile-dock-active #artifact-dock:not(:has(> #artifact-dock-step:not(.hi
   color: var(--muted);
 }
 .word-status-info { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.word-cluster--status { gap: 4px; }
-.word-state { white-space: nowrap; margin-right: 8px; display: inline-flex; align-items: center; gap: 7px; }
+/* The zoom keeps its room; a long save state (some languages) truncates. */
+.word-cluster--status { gap: 4px; min-width: 0; flex: 0 1 auto; }
+.word-state { min-width: 0; margin-right: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.word-cluster--status > .word-status-btn, .word-cluster--status > .word-zoom-label { flex: none; }
 .word-state::before {
   content: '';
+  display: inline-block;
+  vertical-align: middle;
+  margin: -2px 7px 0 0;
   width: 5px;
   height: 5px;
   border-radius: 50%;
@@ -1459,7 +1464,9 @@ html[data-window-background="0"] .tile-glow {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
+  /* A name longer than the cell breaks at a syllable, with a hyphen. */
+  hyphens: auto;
 }
 
 /* The station on air: an ink outline around its artwork, an ink number. */
@@ -3411,6 +3418,8 @@ textarea.impress-field-input { min-height: 56px; line-height: 1.5; }
 .mail-reader {
   display: none;
   flex-direction: column;
+  /* A narrow reader column folds its actions to icons (below). */
+  container: mail-reader / inline-size;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -3446,7 +3455,7 @@ textarea.impress-field-input { min-height: 56px; line-height: 1.5; }
 
 .mail-reader-subject {
   margin: 0;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
   color: var(--text);
   font-family: var(--font-display);
   font-size: clamp(1.4rem, 2.6cqi, 1.75rem);
@@ -3457,10 +3466,17 @@ textarea.impress-field-input { min-height: 56px; line-height: 1.5; }
 
 .mail-reader-sub {
   margin: 0;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
   color: var(--muted);
   font-size: 12.5px;
   line-height: 1.5;
+}
+
+/* A reader column too narrow for the labelled actions: icons, named by their
+   tooltip, on one row — instead of a stack of rows that a short window cuts. */
+@container mail-reader (max-width: 380px) {
+  .mail-reader-actions:not(.mail-reader-actions--bar) .ui-btn:has(> .ui-icon) > :is(span:not(.ui-icon, .ui-spinner), .ui-btn-arrow) { display: none; }
+  .mail-reader-actions:not(.mail-reader-actions--bar) .ui-btn:has(> .ui-icon) { min-width: 34px; padding-inline: 8px; justify-content: center; }
 }
 
 .mail-reader-actions {
@@ -3504,7 +3520,7 @@ textarea.impress-field-input { min-height: 56px; line-height: 1.5; }
 
 .mail-detail-val {
   min-width: 0;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
   color: var(--text-secondary);
   font-size: 12.5px;
 }
@@ -3533,7 +3549,7 @@ textarea.impress-field-input { min-height: 56px; line-height: 1.5; }
   font-size: 14.5px;
   line-height: 1.7;
   white-space: pre-wrap;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 .mail-attachments {
@@ -3738,7 +3754,7 @@ textarea.impress-field-input { min-height: 56px; line-height: 1.5; }
 .mail-form-status {
   flex: 1 1 160px;
   min-width: 0;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
   color: var(--muted);
   font-size: 11.5px;
   line-height: 1.45;
@@ -6907,7 +6923,7 @@ textarea.impress-field-input { min-height: 56px; line-height: 1.5; }
 .pdf-comment-swatch { grid-row: 1; width: 10px; height: 10px; margin-top: 3px; border-radius: 3px; background: var(--muted); }
 .pdf-comment-kind { font-weight: 600; color: var(--text); }
 .pdf-comment-text, .pdf-comment-reply, .pdf-comment-actions { grid-column: 2; }
-.pdf-comment-text { color: var(--text-secondary); white-space: pre-wrap; overflow-wrap: anywhere; }
+.pdf-comment-text { color: var(--text-secondary); white-space: pre-wrap; overflow-wrap: break-word; }
 .pdf-comment-text:empty { display: none; }
 .pdf-comment-reply {
   padding-left: 8px;

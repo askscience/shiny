@@ -90,7 +90,7 @@ impl AppState {
                 std::path::PathBuf::from(&config.yue2_models_dir),
                 config.yue2_engine.clone(),
             ),
-            store: crate::plugins::store::Store::new(),
+            store: crate::plugins::store::Store::in_plugins_dir(std::path::PathBuf::from(&config.plugins_dir)),
             craft_mcp: crate::plugins::craft_mcp::CraftMcp::new(),
             craft_control: crate::plugins::craft_control::CraftControl::new(),
             iroh: crate::services::iroh_remote::IrohRemote::new(),

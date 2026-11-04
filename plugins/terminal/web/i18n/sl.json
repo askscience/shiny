@@ -23,5 +23,6 @@
   "plugin.terminal.ctx.copy": "Kopiraj",
   "plugin.terminal.ctx.paste": "Prilepi",
   "plugin.terminal.ctx.clearScrollback": "Počisti zgodovino izpisa",
-  "plugin.terminal.ctx.closeTab": "Zapri zavihek"
+  "plugin.terminal.ctx.closeTab": "Zapri zavihek",
+  "plugin.terminal.keys.label": "Tipke terminala"
 }

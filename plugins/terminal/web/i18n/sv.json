@@ -21,5 +21,6 @@
   "plugin.terminal.ctx.copy": "Kopiera",
   "plugin.terminal.ctx.paste": "Klistra in",
   "plugin.terminal.ctx.clearScrollback": "Rensa rullningshistoriken",
-  "plugin.terminal.ctx.closeTab": "Stäng fliken"
+  "plugin.terminal.ctx.closeTab": "Stäng fliken",
+  "plugin.terminal.keys.label": "Terminaltangenter"
 }
