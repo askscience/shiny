@@ -22,6 +22,17 @@
   carousel on a desktop; let go past half-way, or flick, to switch.
   The line takes the assistant's colour while it is busy.
 - Phone: windows fill the screen from the status bar to the bottom bar.
+- Browser on a phone or in a narrow window: the toolbar is one row (back,
+  reload, the address, the menu) instead of the address over a scrolling row
+  of buttons; forward, home, bookmark, passwords, ad blocking, downloads and
+  incognito sit as a row of icons at the top of the browser menu. Its menus
+  and panels open under the toolbar instead of over it.
+- PDF on a phone or in a narrow window: the window bar folds into the shared
+  More menu like the other windows (it overflowed, because its tools sit in
+  clusters within clusters), and the Write view's formatting row folds the
+  same way instead of wrapping onto several lines. `compactToolbar` reaches
+  into boxes marked `data-fold`, folds plain buttons marked `data-foldable`,
+  and takes a `fold` selector for rows of non-library buttons.
 
 ## [0.1.5] - 2026-11-03
 

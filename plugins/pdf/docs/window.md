@@ -20,10 +20,19 @@ export default {
   tools — comment (C), text box (T), draw (D), shape (R), link (L) — and the
   Comments panel toggle; undo / redo; for documents, "PDF up to date / not
   updated" and **Update PDF**; the grey **New** pill (template picker).
+  In a window up to 700px or on a phone it is a compact toolbar
+  (`compactToolbar`): the Documents menu and the title keep the front and
+  New, history, the Comments toggle, the markup tools, zoom and the page
+  arrows fold — from the end — into the shared **More** menu (⋯). The
+  clusters carry `data-fold` so the folding reaches inside them; the zoom
+  readout is `data-foldable`; the page readout leaves with its arrows.
 - **Editor** (Write): formatting row (paragraph style, bold/italic/underline/
   strike, colour, highlight, alignment, lists, link, image, table + row/column
   tools, line, page break, page numbers 1/n, theme) over A4 paper with dashed
   guides where pages end. Autosaves; Ctrl+S saves, Ctrl+Enter breaks the page.
+  In a narrow window the row stays one line and its trailing tools fold into
+  the More menu, as Word's formatting row does
+  (`compactToolbar(toolbar, { fold: 'button.pdfed-btn' })`).
 - **Mode strip**: what a click does in the armed tool, its options, Done (Esc).
 - **Selection bar**: selecting text offers highlight / underline / strike /
   comment / link / copy.

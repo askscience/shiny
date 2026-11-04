@@ -1,7 +1,7 @@
 import {
   menuSurface, menuItem, confirmDialog, promptDialog, menuButton, toolbar, input as uiInput,
   toolButton, placePopover, controlButton, icon, button, emptyState, toast, spinner, setTileGlow,
-  glowFromDrawable, setIcon, listReveal, cardEnter, modal, segmented,
+  glowFromDrawable, setIcon, listReveal, cardEnter, modal, segmented, compactToolbar,
 } from '../../ui/index.js';
 
 /**
@@ -230,6 +230,9 @@ function setView(next) {
     if (!editor) {
       editor = createEditor(currentPdf, { onState: syncFreshness });
       editorToolbarSlot.replaceChildren(editor.toolbar);
+      // The formatting row folds like Word's: its trailing tools go to the
+      // shared "More" menu in a narrow window instead of wrapping.
+      compactToolbar(editor.toolbar, { fold: 'button.pdfed-btn' });
     }
     mainEl.hidden = true;
     editorToolbarSlot.hidden = false;
@@ -249,6 +252,7 @@ function setView(next) {
 }
 
 function closeEditor() {
+  editor?.toolbar.__compact?.destroy();
   editor?.destroy();
   editor = null;
   editorToolbarSlot?.replaceChildren();
@@ -1714,6 +1718,9 @@ export function mountPdfTile() {
   zoomLabelEl.type = 'button';
   zoomLabelEl.className = 'pdf-zoom-label';
   zoomLabelEl.title = t('plugin.pdf.toolbar.fitWidth', null, 'Fit to width (Ctrl+0)');
+  zoomLabelEl.setAttribute('aria-label', zoomLabelEl.title);
+  // Not a `.ui-btn`, but an action like the others: it may fold too.
+  zoomLabelEl.dataset.foldable = '';
   zoomLabelEl.addEventListener('click', fitWidth);
   const zoomIn = toolbarButton('ui/zoom-in', t('plugin.pdf.toolbar.zoomIn', null, 'Zoom in'), () => zoomBy(1));
 
@@ -1726,11 +1733,21 @@ export function mountPdfTile() {
   commentsBtn = toolbarButton('ui/message-circle', t('plugin.pdf.toolbar.comments', null, 'Comments panel'), () => togglePanel());
   commentsBtn.classList.add('pdf-tool--panel');
   commentsBtn.setAttribute('aria-pressed', 'false');
+  // Narrow windows and phones: the window bar is a compact toolbar
+  // (ui/compact.js). New, history, the comments panel, the modes, zoom and
+  // the page arrows fold into the shared "More" menu from the end, so the
+  // Documents menu and the title keep the front. `data-fold` lets the
+  // folding reach the clusters nested in this one.
+  const navTools = cluster('pdf-cluster--nav', prevBtn, pageLabelEl, nextBtn);
+  const zoomTools = cluster('pdf-cluster--zoom', zoomOut, zoomLabelEl, zoomIn);
+  navTools.dataset.fold = '';
+  zoomTools.dataset.fold = '';
   pdfTools = cluster('pdf-cluster--pdf',
-    cluster('pdf-cluster--nav', prevBtn, pageLabelEl, nextBtn),
-    cluster('pdf-cluster--zoom', zoomOut, zoomLabelEl, zoomIn),
+    navTools,
+    zoomTools,
     cluster('pdf-cluster--quiet pdf-cluster--modes', modeBtns.note, modeBtns.text, modeBtns.draw, modeBtns.shape, modeBtns.link),
     cluster('pdf-cluster--quiet', commentsBtn));
+  pdfTools.dataset.fold = '';
 
   undoBtn = toolbarButton('ui/undo', t('plugin.pdf.toolbar.undo', null, 'Undo'), () => void stepHistory(true));
   redoBtn = toolbarButton('ui/redo', t('plugin.pdf.toolbar.redo', null, 'Redo'), () => void stepHistory(false));
@@ -1743,6 +1760,7 @@ export function mountPdfTile() {
   exportBtn = button({ label: t('plugin.pdf.editor.export', null, 'Update PDF'), icon: 'ui/upload', iconSize: 14, size: 'sm', onClick: () => void exportCurrentDoc() });
   exportBtn.classList.add('pdf-export');
   writeTools = cluster('pdf-cluster--write', freshnessEl, exportBtn);
+  writeTools.dataset.fold = '';
   writeTools.classList.add('hidden');
 
   const newBtn = button({ label: t('plugin.pdf.toolbar.new', null, 'New'), icon: 'ui/plus', iconSize: 14, variant: 'ghost', size: 'sm', onClick: openNewDocument });

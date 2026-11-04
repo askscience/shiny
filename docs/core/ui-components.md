@@ -138,11 +138,17 @@ the same elements — into one shared "More" menu (⋯) at the end of the bar. N
 is removed and no bar scrolls sideways. Actions fold from the end of the bar
 backwards, so put the primary ones first; mark an action `data-keep` to pin it,
 and mark a bar `data-compact="off"` when its children are tabs rather than
-actions (the browser and terminal strips). A window applies the same helper to a
+actions (the browser and terminal strips). A group of buttons folds as its
+buttons; a box marked `data-fold` lets the folding reach inside it at any depth
+(PDF's clusters within clusters), and a plain button marked `data-foldable`
+folds like a `.ui-btn` (PDF's zoom readout). A row whose tools are not `.ui-btn`
+names them with `compactToolbar(row, { fold: '<selector>' })` (PDF's
+formatting row). A window applies the same helper to a
 secondary row it owns (`compactToolbar(row)`, as Word's formatting row does), and
 may move contextual actions onto its window bar while the bar is compact
 (`bar.__compact.isCompact()`, the `compact:change` event — Mail's message
-actions). Desktop-wide bars are untouched. Tab strips that opt out keep the
+actions). The Browser, whose window bar is its tab strip, keeps its address
+row to one line the same way and moves its page actions into its own menu. Desktop-wide bars are untouched. Tab strips that opt out keep the
 scrolling row below. Inputs and
 selects inside toolbars use compact widths instead of full-form width. Settings
 keeps its rail, stage and manifest while the window is wide, drops the manifest

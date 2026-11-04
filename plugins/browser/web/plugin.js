@@ -1,5 +1,5 @@
 import {
-  toolbar, controlButton, icon, iconButton, searchBar, themeMode, listReveal,
+  toolbar, controlButton, icon, iconButton, searchBar, themeMode, listReveal, COMPACT_MAX,
 } from '../../ui/index.js';
 /**
  * browser.js — the Browser plugin's window.
@@ -253,6 +253,14 @@ let incognitoBtn = null;
 let bookmarkBtn = null;
 let passwordsBtn = null;
 let menuBtn = null;
+let homeBtn = null;
+let barEl = null;
+/** The page actions' row at the top of the browser menu (compact only). */
+let menuActionsEl = null;
+/** The menu's own Passwords row, which the row's lock replaces while compact. */
+let menuPasswordsItem = null;
+let compactObserver = null;
+let browserCompact = false;
 let downloadsPanel = null;
 let downloadsListEl = null;
 let browserMenu = null;
@@ -831,7 +839,7 @@ function buildToolbar() {
     label: t('plugin.browser.toolbar.reload', null, 'Reload'),
     onClick: () => reload(),
   });
-  const homeBtn = iconButton({
+  homeBtn = iconButton({
     icon: 'ui/launcher',
     size: 'sm',
     label: t('plugin.browser.toolbar.home', null, 'Home'),
@@ -923,7 +931,50 @@ function buildToolbar() {
     backBtn, forwardBtn, reloadBtn, homeBtn, addressEl,
     bookmarkBtn, passwordsBtn, shieldBtn, downloadsBtn, incognitoBtn, menuBtn,
   );
+  barEl = bar;
   return bar;
+}
+
+/** The popovers hang under the bar, wherever the title row above put it. */
+function placePopovers() {
+  if (!tileEl || !barEl) return;
+  const barBottom = (barEl.offsetTop || 0) + (barEl.offsetHeight || 0);
+  if (barBottom > 0) tileEl.style?.setProperty?.('--browser-pop-top', `${barBottom}px`);
+}
+
+/** The page actions that leave the bar for the menu in a compact window. */
+function compactActions() {
+  return [forwardBtn, homeBtn, bookmarkBtn, passwordsBtn, shieldBtn, downloadsBtn, incognitoBtn].filter(Boolean);
+}
+
+/**
+ * Narrow windows and phones (the width every window bar goes compact at,
+ * ui/compact.js): the bar keeps back, reload, the address and the menu,
+ * and the rest — forward, home, bookmark, passwords, shield, downloads,
+ * incognito — move, as the same buttons, into a row of icons at the top of
+ * the browser menu. One menu, nothing lost, and the address keeps its room.
+ */
+function applyBrowserCompact() {
+  if (!tileEl || !barEl || !menuActionsEl) return;
+  placePopovers();
+  const phone = document.documentElement?.dataset?.phone === '1';
+  const width = tileEl.clientWidth || 0;
+  const on = phone || (width > 0 && width <= COMPACT_MAX);
+  if (on === browserCompact) return;
+  browserCompact = on;
+  barEl.classList.toggle('is-compact', on);
+  if (on) {
+    menuActionsEl.append(...compactActions());
+  } else {
+    barEl.insertBefore(forwardBtn, backBtn.nextSibling);
+    barEl.insertBefore(homeBtn, addressEl);
+    for (const btn of compactActions()) {
+      if (btn !== homeBtn && btn !== forwardBtn) barEl.insertBefore(btn, menuBtn);
+    }
+  }
+  menuActionsEl.hidden = !on;
+  if (menuPasswordsItem) menuPasswordsItem.hidden = on;
+  requestSync();
 }
 
 function buildViewport() {
@@ -1434,6 +1485,18 @@ function buildBrowserMenu() {
   menu.setAttribute('role', 'menu');
   menu.setAttribute('aria-label', t('plugin.browser.menu.title', null, 'Browser menu'));
 
+  // Filled with the bar's page actions while the window is compact.
+  menuActionsEl = document.createElement('div');
+  menuActionsEl.className = 'browser-menu-actions';
+  menuActionsEl.hidden = true;
+  // Going somewhere closes the menu; the toggles (shield, bookmark) keep it up
+  // so their new state shows, and the panels close it themselves.
+  menuActionsEl.addEventListener('click', (e) => {
+    const btn = e.target.closest('button');
+    if (btn && (btn === forwardBtn || btn === homeBtn || btn === incognitoBtn)) closeBrowserMenu();
+  });
+  menu.appendChild(menuActionsEl);
+
   const heading = document.createElement('div');
   heading.className = 'browser-popover-heading';
   heading.textContent = t('plugin.browser.menu.searchEngine', null, 'Search engine');
@@ -1478,10 +1541,10 @@ function buildBrowserMenu() {
       closeBrowserMenu();
       openBookmarksPanel();
     }),
-    menuItem('ui/lock', t('plugin.browser.passwords.title', null, 'Passwords'), () => {
+    (menuPasswordsItem = menuItem('ui/lock', t('plugin.browser.passwords.title', null, 'Passwords'), () => {
       closeBrowserMenu();
       void openPasswordsPanel();
-    }),
+    })),
     popoverSeparator(),
     menuItem('ui/settings', t('plugin.browser.menu.settings', null, 'Settings'), () => {
       closeBrowserMenu();
@@ -1546,6 +1609,8 @@ function closeBrowserMenu() {
 
 /** Close every popover this window owns. */
 function closeAllBrowserPanels() {
+  // Every panel opens through here: measure where it will hang first.
+  placePopovers();
   let changed = false;
   for (const el of browserPopovers()) {
     if (!el.classList.contains('hidden')) {
@@ -2874,6 +2939,12 @@ export function mountBrowserTile() {
   document.addEventListener('pointerdown', onBrowserPointerDown, true);
   document.addEventListener('keydown', onBrowserKeydown, true);
 
+  if (typeof ResizeObserver === 'function') {
+    compactObserver = new ResizeObserver(applyBrowserCompact);
+    compactObserver.observe(tileEl);
+  }
+  applyBrowserCompact();
+
   updateNavButtons();
   updateShield();
   startBoundsSync();
@@ -2900,6 +2971,13 @@ export function mountBrowserTile() {
 }
 
 export function unmountBrowserTile() {
+  compactObserver?.disconnect();
+  compactObserver = null;
+  browserCompact = false;
+  barEl = null;
+  homeBtn = null;
+  menuActionsEl = null;
+  menuPasswordsItem = null;
   stopBoundsSync();
   stopShieldPoll();
   window.removeEventListener('message', onFrameMessage);

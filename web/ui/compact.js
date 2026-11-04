@@ -14,10 +14,14 @@
  * `compactToolbar(bar)` is applied by the tile manager to every
  * `data-window-bar` (web/js/tiles.js) and by a window to any secondary row
  * it owns (Word's formatting row). What can move: a `.ui-btn` that is a
- * direct child of the bar or of a group (a child holding only buttons);
- * menu triggers (`.ui-menu-trigger`), anything `[data-keep]`, inputs,
- * selects and segmented controls stay. Actions move from the end of the bar
- * backwards, so the front of the bar keeps the primary ones.
+ * direct child of the bar or of a group (a child holding only buttons), and
+ * the foldable children of a box marked `[data-fold]`, at any depth (PDF's
+ * clusters inside clusters); menu triggers (`.ui-menu-trigger`), anything
+ * `[data-keep]`, inputs, selects and segmented controls stay. Actions move
+ * from the end of the bar backwards, so the front of the bar keeps the
+ * primary ones. A plain button marked `[data-foldable]` folds like a
+ * `.ui-btn` (PDF's zoom readout). `fold` widens what counts as a foldable action for a row
+ * whose tools are not `.ui-btn` (PDF's formatting row: `.pdfed-btn`).
  *
  * Returns `{ refresh, destroy }`. The bar carries `ui-compact-bar` always and
  * `is-compact` while compact, and dispatches `compact:change` on the switch.
@@ -39,15 +43,19 @@ function isPhone() {
   return document.documentElement.dataset.phone === '1';
 }
 
+/** A foldable action: a library button, or a plain one marked for it. */
+const FOLD = 'button.ui-btn, button[data-foldable]';
+
 /** The buttons that may move to the menu, in bar order. */
-function units(bar) {
-  const out = [];
-  for (const child of bar.children) {
+function units(box, fold, out = []) {
+  for (const child of box.children) {
     if (child.matches(SKIP) || child.hidden || child.classList.contains('hidden')) continue;
-    if (child.matches('button.ui-btn')) { out.push(child); continue; }
+    if (child.matches(fold)) { out.push(child); continue; }
+    // A box that opted in: its own children follow the same rules.
+    if (child.matches('[data-fold]')) { units(child, fold, out); continue; }
     // A group: a plain box holding nothing but buttons (a cluster).
     const kids = [...child.children];
-    if (kids.length && kids.every((k) => k.matches('button.ui-btn')) && !child.matches('[data-keep]')) {
+    if (kids.length && kids.every((k) => k.matches(fold))) {
       for (const k of kids) if (!k.matches(SKIP) && !k.hidden) out.push(k);
     }
   }
@@ -66,7 +74,7 @@ function nameIconButtons(bar) {
   }
 }
 
-export function compactToolbar(bar, { compactWhen = null } = {}) {
+export function compactToolbar(bar, { compactWhen = null, fold = FOLD } = {}) {
   if (!bar || bar.__compact) return bar?.__compact || null;
   bar.classList.add('ui-compact-bar');
 
@@ -138,11 +146,13 @@ export function compactToolbar(bar, { compactWhen = null } = {}) {
 
   function putBack(rec) {
     const { el, parent, next } = rec;
-    if (!parent.isConnected && parent !== bar) { el.remove(); return; }
+    if (!bar.contains(parent)) { el.remove(); return; }
     parent.insertBefore(el, next && next.parentNode === parent ? next : null);
-    if (parent !== bar && parent.dataset.compactEmpty) {
-      delete parent.dataset.compactEmpty;
-      setHidden(parent, false);
+    // The boxes emptied by taking it out show again.
+    for (let box = parent; box && box !== bar; box = box.parentNode) {
+      if (!box.dataset.compactEmpty) continue;
+      delete box.dataset.compactEmpty;
+      setHidden(box, false);
     }
   }
 
@@ -151,9 +161,12 @@ export function compactToolbar(bar, { compactWhen = null } = {}) {
     const rec = { el, parent, next: el.nextSibling };
     ensureMenu();
     list.prepend(el);
-    if (parent !== bar && ![...parent.children].some((c) => !c.hidden)) {
-      parent.dataset.compactEmpty = '1';
-      setHidden(parent, true);
+    // A box left with nothing showing steps out too, and so on upwards
+    // (a cluster inside a cluster).
+    for (let box = parent; box && box !== bar; box = box.parentNode) {
+      if ([...box.children].some((c) => !c.hidden && !c.classList.contains('hidden'))) break;
+      box.dataset.compactEmpty = '1';
+      setHidden(box, true);
     }
     moved.push(rec);
   }
@@ -190,7 +203,7 @@ export function compactToolbar(bar, { compactWhen = null } = {}) {
       if (!compact || !bar.clientWidth) return;
       if (!overflowing()) return;
       setHidden(more, false);
-      const candidates = units(bar);
+      const candidates = units(bar, fold);
       while (overflowing() && candidates.length) takeOut(candidates.pop());
       if (!moved.length) setHidden(more, true);
     } finally {

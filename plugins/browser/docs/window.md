@@ -320,6 +320,14 @@ address, close), plus New tab / New incognito tab.
 - In a narrow window (`@container plugin-window (max-width: 560px)`) the strip
   keeps only the active tab at full width next to the count, and every popover
   spans the window.
+- In a window up to 700px or on a phone (`applyBrowserCompact`, the width
+  every window bar goes compact at) the toolbar is one row — back, reload,
+  the address, the menu — and forward, home, bookmark, passwords, shield,
+  downloads and incognito move, as the same buttons, into a row of icons at
+  the top of the browser menu (`.browser-menu-actions`); the menu's own
+  Passwords row steps aside while the lock is there.
+- The popovers hang under the toolbar wherever the title row put it
+  (`--browser-pop-top`, measured on resize and before a panel opens).
 - On touch (`pointer: coarse`) tabs are 36 px tall and close buttons, rows and
   popover actions grow to finger size.
 
