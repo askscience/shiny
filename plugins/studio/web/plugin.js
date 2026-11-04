@@ -6144,6 +6144,8 @@ export function mountStudioTile() {
     onChange: setView,
   });
   viewSeg.classList.add('studio-seg', 'studio-views');
+  // Narrow windows and phones fold the view switch whole into More.
+  viewSeg.dataset.foldable = '';
   viewSeg.querySelectorAll('button').forEach((b, i) => {
     const [, iconName, key, fallback, hintKey, hint] = VIEWS[i];
     b.replaceChildren(icon(iconName, { size: 15 }));
@@ -6162,6 +6164,8 @@ export function mountStudioTile() {
     else launchScene(0);
   } });
   playBtn.classList.add('studio-transport', 'studio-transport--play');
+  // Play (which also stops) stays on a compact bar; the rest may fold.
+  playBtn.dataset.keep = '';
   playBtn.title = t('plugin.studio.toolbar.playHint', null, 'Play (Arranger) / Launch scene 1 (Launcher)');
   playBtn.setAttribute('aria-label', t('plugin.studio.toolbar.play', null, 'Play'));
 
@@ -6209,6 +6213,10 @@ export function mountStudioTile() {
     renderArranger();
   });
   const bpmLabel = h('span', 'studio-bpm-label', 'BPM');
+  // The tempo and its unit fold together, as "120 BPM", in a narrow window.
+  const bpmWrap = h('span', 'studio-bpm-wrap');
+  bpmWrap.dataset.foldable = '';
+  bpmWrap.append(bpmInput, bpmLabel);
 
   titleInput = uiInput();
   titleInput.type = 'text';
@@ -6284,7 +6292,7 @@ export function mountStudioTile() {
   // save dot. Every control keeps the shared 32px metrics.
   barEl.append(browserBtn, titleInput, viewSeg,
     h('span', 'studio-bar-sep'), stopBtn, playBtn, loopBtn, metroBtn,
-    beatDotEl, timeEl, bpmInput, bpmLabel, h('span', 'studio-bar-sep'), aiBtnEl, mixBtn, exportBtn, h('span', 'studio-bar-sep'), newBtn, projBtn, saveBtn, saveAsBtn, statusEl, saveDotEl);
+    beatDotEl, timeEl, bpmWrap, h('span', 'studio-bar-sep'), aiBtnEl, mixBtn, exportBtn, h('span', 'studio-bar-sep'), newBtn, projBtn, saveBtn, saveAsBtn, statusEl, saveDotEl);
   tileEl.appendChild(barEl);
 
   /* ── body: arranger + launcher side by side ── */

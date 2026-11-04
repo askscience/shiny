@@ -140,8 +140,11 @@ backwards, so put the primary ones first; mark an action `data-keep` to pin it,
 and mark a bar `data-compact="off"` when its children are tabs rather than
 actions (the browser and terminal strips). A group of buttons folds as its
 buttons; a box marked `data-fold` lets the folding reach inside it at any depth
-(PDF's clusters within clusters), and a plain button marked `data-foldable`
-folds like a `.ui-btn` (PDF's zoom readout). A row whose tools are not `.ui-btn`
+(PDF's clusters within clusters), and anything marked `data-foldable` folds
+whole, as it is: a plain button (PDF's zoom readout), a segmented switch (the
+Word, PDF and Studio views), a select (Impress's theme, Word's font and size)
+or a labelled field (Studio's tempo). The document title in a compact bar
+gives way down to 40px before anything else has to fold. A row whose tools are not `.ui-btn`
 names them with `compactToolbar(row, { fold: '<selector>' })` (PDF's
 formatting row). A window applies the same helper to a
 secondary row it owns (`compactToolbar(row)`, as Word's formatting row does), and

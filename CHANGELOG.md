@@ -33,6 +33,13 @@
   same way instead of wrapping onto several lines. `compactToolbar` reaches
   into boxes marked `data-fold`, folds plain buttons marked `data-foldable`,
   and takes a `fold` selector for rows of non-library buttons.
+- Phone check of every window bar: the document title in a compact bar now
+  gives way down to 40px, and controls that never folded can now fold
+  whole into More (`data-foldable`) — the view switches of Word, PDF and
+  Studio, Impress's theme, Word's font and size, Studio's tempo. Studio keeps
+  Play on the bar and drops its clock, beat and save dot while compact. With
+  a message open, Mail keeps Reply and Close on the bar and folds Forward and
+  Delete. Updates' bar is tabs, so it scrolls like the other tab strips.
 
 ## [0.1.5] - 2026-11-03
 

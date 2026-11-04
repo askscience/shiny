@@ -1495,7 +1495,8 @@ function buildBar() {
     onChange: (v) => setView(v),
   });
   viewSwitch.classList.add('word-view-switch');
-  viewSwitch.dataset.keep = '';
+  // A narrow window folds the switch whole into the More menu (ui/compact.js).
+  viewSwitch.dataset.foldable = '';
 
   const aiBtn = button({ label: t('plugin.word.ai.button', null, 'AI'), icon: 'ui/magic-wand', iconSize: 14, variant: 'ghost', size: 'sm', onClick: () => openAiMenu(aiBtn) });
   aiBtn.classList.add('word-ai');
@@ -1540,6 +1541,8 @@ function buildFormatRow() {
     onChange: (v) => styleSelection({ fontFamily: v ? `'${v}'` : '' }),
   });
   fontSelect.classList.add('word-select', 'word-select--font');
+  // On a phone the font and size pickers fold whole into More, after the tools.
+  fontSelect.dataset.foldable = '';
   fontSelect.select.setAttribute('aria-label', t('plugin.word.toolbar.font', null, 'Font'));
   fontSelect.select.title = t('plugin.word.toolbar.fontHint', null, 'Font — applies to the selection, or the paragraph at the caret');
   fontSelect.addEventListener('pointerdown', rememberSelection, true);
@@ -1558,6 +1561,7 @@ function buildFormatRow() {
     onChange: (v) => styleSelection({ fontSize: v ? `${v}pt` : '' }),
   });
   sizeSelect.classList.add('word-select', 'word-select--size');
+  sizeSelect.dataset.foldable = '';
   sizeSelect.select.setAttribute('aria-label', t('plugin.word.toolbar.size', null, 'Font size'));
   sizeSelect.addEventListener('pointerdown', rememberSelection, true);
 

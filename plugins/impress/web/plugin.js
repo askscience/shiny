@@ -941,6 +941,8 @@ export function mountImpressTile() {
 
   themeSelect = selectControl();
   themeSelect.classList.add('impress-theme');
+  // A narrow window folds the theme picker whole into the More menu.
+  themeSelect.dataset.foldable = '';
   themeSelect.title = t('plugin.impress.toolbar.theme', null, 'Theme');
   themeSelect.setAttribute('aria-label', t('plugin.impress.toolbar.theme', null, 'Theme'));
   for (const name of THEMES) {

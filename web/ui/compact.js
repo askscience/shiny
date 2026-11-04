@@ -19,8 +19,8 @@
  * clusters inside clusters); menu triggers (`.ui-menu-trigger`), anything
  * `[data-keep]`, inputs, selects and segmented controls stay. Actions move
  * from the end of the bar backwards, so the front of the bar keeps the
- * primary ones. A plain button marked `[data-foldable]` folds like a
- * `.ui-btn` (PDF's zoom readout). `fold` widens what counts as a foldable action for a row
+ * primary ones. Any element marked `[data-foldable]` folds whole, as it is
+ * (PDF's zoom readout, Word's view switch, Studio's tempo field). `fold` widens what counts as a foldable action for a row
  * whose tools are not `.ui-btn` (PDF's formatting row: `.pdfed-btn`).
  *
  * Returns `{ refresh, destroy }`. The bar carries `ui-compact-bar` always and
@@ -43,13 +43,18 @@ function isPhone() {
   return document.documentElement.dataset.phone === '1';
 }
 
-/** A foldable action: a library button, or a plain one marked for it. */
-const FOLD = 'button.ui-btn, button[data-foldable]';
+/** A foldable action: a library button (anything marked `data-foldable`
+ *  folds too, see `units`). */
+const FOLD = 'button.ui-btn';
 
 /** The buttons that may move to the menu, in bar order. */
 function units(box, fold, out = []) {
   for (const child of box.children) {
-    if (child.matches(SKIP) || child.hidden || child.classList.contains('hidden')) continue;
+    if (child.hidden || child.classList.contains('hidden')) continue;
+    // Marked by its window: folds whole, whatever it is (a segmented view
+    // switch, a labelled field).
+    if (child.matches('[data-foldable]') && !child.matches('[data-keep]')) { out.push(child); continue; }
+    if (child.matches(SKIP)) continue;
     if (child.matches(fold)) { out.push(child); continue; }
     // A box that opted in: its own children follow the same rules.
     if (child.matches('[data-fold]')) { units(child, fold, out); continue; }
@@ -121,7 +126,7 @@ export function compactToolbar(bar, { compactWhen = null, fold = FOLD } = {}) {
     if (!open) return;
     if (menu.contains(e.target) || more.contains(e.target)) return;
     // A menu opened from an overflowed trigger sits over this one.
-    if (e.target.closest('.ui-menu, .ui-hud-menu-popup, .ui-modal, .ui-sheet')) return;
+    if (e.target.closest('.ui-menu, .ui-hud-menu-popup, .ui-select-menu, .ui-modal, .ui-sheet')) return;
     closeMenu();
   }
 

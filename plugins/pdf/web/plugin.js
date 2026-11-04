@@ -1707,6 +1707,8 @@ export function mountPdfTile() {
     },
   });
   viewSwitch.classList.add('pdf-view-switch');
+  // A narrow window folds the switch whole into the More menu (ui/compact.js).
+  viewSwitch.dataset.foldable = '';
   viewSwitch.hidden = true;
 
   const prevBtn = toolbarButton('ui/chevron-left', t('plugin.pdf.toolbar.previousPage', null, 'Previous page'), () => gotoPage(-1));

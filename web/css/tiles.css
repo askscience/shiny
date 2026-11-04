@@ -4401,7 +4401,9 @@ textarea.impress-field-input { min-height: 56px; line-height: 1.5; }
 .studio-transport:hover { background: var(--studio-pill); }
 .studio-transport .ui-icon { width: 16px; height: 16px; }
 
-.studio-tile .studio-bpm {
+.studio-bpm-wrap { display: inline-flex; align-items: center; gap: 4px; flex: none; }
+.studio-tile .studio-bpm,
+.ui-overflow-list .studio-bpm {
   width: 52px;
   height: 28px;
   background: transparent;
@@ -4417,6 +4419,7 @@ textarea.impress-field-input { min-height: 56px; line-height: 1.5; }
   box-shadow: none;
   outline: none;
 }
+.ui-overflow-list .studio-bpm { --studio-line: color-mix(in srgb, var(--text) 20%, transparent); }
 .studio-tile .studio-bpm:focus { border-bottom-color: var(--text); }
 .studio-bpm-label {
   color: var(--muted);

@@ -189,6 +189,8 @@
 .ui-toolbar > .tile-bar-spacer { min-width: 0; }
 @container plugin-window (max-width: 700px) {
   .tile-header--merged > .ui-toolbar > .ui-input:is([type="text"],[type="search"]) { flex: 1 0 100px; }
+  /* A compact window bar: the document title gives way before the actions. */
+  .tile-header--merged > .ui-compact-bar.is-compact > .ui-input:is([type="text"],[type="search"]) { flex: 1 1 40px; min-width: 40px; }
 }
 @media (pointer: coarse) {
   .files-pathbar { height: auto; min-height: 44px; }
@@ -210,7 +212,7 @@
 .ui-compact-bar.is-compact .ui-btn:not(.ui-menu-trigger,.ui-btn--icon):has(> .ui-icon) { width: 34px; height: 34px; min-width: 34px; min-height: 34px; padding: 0; justify-content: center; border-radius: var(--radius-sm); }
 .ui-compact-bar.is-compact .ui-menu-trigger .ui-menu-trigger-label { display: none; }
 .ui-compact-bar.is-compact .ui-menu-trigger.ui-btn { padding: 0 6px; }
-.ui-compact-bar.is-compact :is(.mail-chrome-status, .mail-chrome-title, .calc-save-state, .impress-meta, .pdf-freshness, .word-state) { display: none; }
+.ui-compact-bar.is-compact :is(.mail-chrome-status, .mail-chrome-title, .calc-save-state, .impress-meta, .pdf-freshness, .word-state, .studio-status, .studio-time, .studio-beat, .studio-bar-sep, .studio-save-dot, .studio-menu-btn-chevron) { display: none; }
 .ui-compact-bar.is-compact .ui-segmented > button { padding: 4px 9px; font-size: 12px; }
 .ui-compact-bar.is-compact > input { flex: 1 1 60px; min-width: 60px; width: auto; }
 /* The window bar no longer needs to scroll once it folds; a bar that opted
@@ -235,6 +237,10 @@
 .ui-overflow-list > .ui-btn .ui-icon { color: var(--muted); }
 .ui-overflow-list > .ui-btn[aria-pressed="true"] { color: var(--accent); }
 .ui-overflow-list > .ui-btn:disabled { opacity: .5; }
+/* A control folded whole (`data-foldable`) keeps its own look, inset. */
+.ui-overflow-list > :is(.ui-segmented, .ui-input, .ui-select, .ui-select-wrap) { margin: 4px 8px; align-self: stretch; width: auto; }
+.ui-overflow-list > .studio-bpm-wrap { margin: 4px 12px; }
+.ui-overflow-list > .ui-segmented > button { flex: 1 1 0; }
 
 /* Word's formatting row: the selects shrink before the tools fold. */
 .word-format.is-compact .word-select--block { width: 96px; }
@@ -245,7 +251,6 @@
 /* PDF's window bar: once the page arrows have folded, the page readout goes
    with them; the zoom readout folds as "100%  Fit to width". */
 .ui-compact-bar.is-compact .pdf-cluster--nav:not(:has(> button)) { display: none; }
-.tile-header--merged > .ui-compact-bar.is-compact > .pdf-title { flex: 1 1 40px; min-width: 40px; }
 .ui-overflow-list > .pdf-zoom-label {
   display: flex; align-items: center; width: 100%; height: auto; min-height: 40px; padding: 8px 12px;
   justify-content: flex-start; gap: 10px; border-radius: var(--radius-sm); text-align: start;

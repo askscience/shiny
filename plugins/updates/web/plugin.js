@@ -132,6 +132,9 @@ function buildBar() {
   const bar = toolbar([], { className: 'updates-bar' });
   bar.dataset.windowBar = '';
   bar.setAttribute('role', 'tablist');
+  // Its chips are tabs, not actions: the bar scrolls rather than folding
+  // (the browser and terminal strips do the same, ui/compact.js).
+  bar.dataset.compact = 'off';
   bar.setAttribute('aria-label', t('plugin.updates.toolbar.sections', null, 'Sections'));
 
   for (const [id, label, key] of TABS) {
