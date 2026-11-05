@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-11-05
+
 ### Added
 
 - Lock screen, on the desktop and on a phone: the time set large, the date and
