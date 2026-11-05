@@ -9,9 +9,9 @@ its own login screen — and every app beyond the assistant is a **self-containe
 plugin** you can add or remove while it runs.
 
 <p align="center">
-  <a href="docs/screenshots/liteaura-tour.mp4"><img src="docs/screenshots/liteaura-tour.webp" alt="A 30-second tour: windows open in tiling, a document is typed, the layout switches to columns and free windows, the grid overview, the Ink theme and the lock screen" width="100%"></a>
+  <a href="docs/screenshots/liteaura-tour.mp4"><img src="docs/screenshots/liteaura-tour.webp" alt="The assistant at work: asked in the chat, it writes a three-day Lisbon itinerary in Word, adds the train to the calendar and builds the trip budget in a spreadsheet, opening each window; then the free-window layout, the overview and the Ink theme" width="100%"></a>
 </p>
-<p align="center"><sub>A 30-second tour (<a href="docs/screenshots/liteaura-tour.mp4">MP4</a>): tiling, columns and free windows, the overview, the switch from Dusk to Ink, the lock screen.</sub></p>
+<p align="center"><sub>Asked in the chat, the assistant writes the itinerary in Word, puts the train in the calendar and builds the budget in Calc, opening each window — then free windows, the overview and the Ink theme. Recorded with <code>gemma4:31b-cloud</code> through Ollama; the model's thinking time is sped up. <a href="docs/screenshots/liteaura-tour.mp4">MP4</a></sub></p>
 
 | Tiling · Dusk | Free windows · Ink |
 |---|---|

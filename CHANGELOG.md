@@ -31,9 +31,11 @@
 - README: LiteAura throughout (the core keeps its internal name `shiny`), the
   features as they are now — phone layout, lock screen, its own login screen,
   updates without a restart, the assistant Laura, 26 languages — and
-  a 30-second tour (animated WebP, with an MP4) and screenshots of the
-  tiling and free-window layouts and of the phone, in the Dusk and Ink
-  themes (`docs/screenshots/`).
+  a tour of the assistant at work — asked in the chat, it writes a document,
+  adds a calendar event and builds a spreadsheet, each in its window — then
+  the layouts and the Ink theme (animated WebP, with an MP4), and screenshots
+  of the tiling and free-window layouts and of the phone, in the Dusk and
+  Ink themes (`docs/screenshots/`).
 
 ### Removed
 
