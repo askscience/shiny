@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-11-05
+
 ### Added
 
 - The Debian package carries LiteAura's own login screen: the greeter, the
