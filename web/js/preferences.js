@@ -41,7 +41,7 @@ const TOUCHBAR_KEY = 'touchbar.enabled';
 const AI_ENABLED_KEY = 'ai.enabled';
 const UI_LOCALE_KEY = 'ui.locale';
 const STORE_AUTO_UPDATE_KEY = 'store.autoUpdate';
-const DEFAULT_AI_NAME = 'Peak';
+const DEFAULT_AI_NAME = 'Laura';
 
 function scopedKey(base) {
   const id = getTraveler()?.id;

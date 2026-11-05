@@ -27,6 +27,9 @@
 
 ### Changed
 
+- The assistant's default name is **Laura**: "Hey, Laura" wakes it on a new
+  account (`web/js/preferences.js`). A name chosen in Settings → Assistant
+  stays as it is.
 - The shell is now called **LiteAura** (the name PEAK'D! was taken): the
   crates (`crates/liteaura`, `liteaura-core`, `liteaura-mac`), the binary, the
   `LITEAURA_*` variables, the live-session scripts, the Debian packages and

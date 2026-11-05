@@ -302,7 +302,7 @@ engine chosen in Settings — see
 
 Matching (`web/js/voice.js`):
 
-- The assistant name comes from `getAiName()` (`ai.name`, default `Peak`).
+- The assistant name comes from `getAiName()` (`ai.name`, default `Laura`).
 - Text is normalised (lowercase, punctuation to spaces), then the name is
   matched with a per-token Levenshtein tolerance of 1 (2 for tokens ≥ 5 chars) —
   the small models regularly render an unusual name as a near-homophone

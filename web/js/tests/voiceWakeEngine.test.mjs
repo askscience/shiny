@@ -140,8 +140,8 @@ const recognition = await import('../voice/recognition.js');
 const { getAiName, setSttEngine, setWakeWord } = await import('../preferences.js');
 
 const name = getAiName();
-assert.equal(name, 'Peak', 'harness relies on the default assistant name');
-const WAKE_PHRASE = 'hey peak';
+assert.equal(name, 'Laura', 'harness relies on the default assistant name');
+const WAKE_PHRASE = 'hey laura';
 
 /* ── Driving a session ───────────────────────────────────────── */
 

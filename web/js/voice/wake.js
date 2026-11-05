@@ -33,7 +33,7 @@ function tokenMatches(got, want) {
 /**
  * Index just past a wake phrase ending at `tokens[s …]`, or null.
  * The name must be either the whole utterance, right after "hey", or right
- * after a clipped "hey" (tiny Whisper renders "Hey Peak" as "K. Beak").
+ * after a clipped "hey" (tiny Whisper rendered "Hey Peak", an earlier default, as "K. Beak").
  */
 function matchWakeName(tokens, nameTokens) {
   for (let s = 0; s + nameTokens.length <= tokens.length; s++) {
@@ -123,7 +123,7 @@ export function isStopPhrase(text) {
  * phrase, e.g. "hey <name>, turn on the lights" → "turn on the lights".
  *
  * Matching is fuzzy on the name on purpose: the tiny Whisper model regularly
- * renders an unusual assistant name as a near-homophone ("Peak" → "Beak"),
+ * renders an unusual assistant name as a near-homophone (an earlier default, "Peak", came back as "Beak"),
  * and a wake phrase that only matches perfectly is a wake phrase that never
  * fires. Returns `''` when the phrase was heard with nothing after it, and
  * `null` when the phrase is absent.

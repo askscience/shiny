@@ -2,8 +2,8 @@ import './helpers/i18n.mjs';
 import assert from 'node:assert/strict';
 import { extractAfterWake } from '../voice/wake.js';
 import { floatTo16BitPCM, acquireMicrophone } from '../voice/capture.js';
-assert.equal(extractAfterWake('hey peak open files', "Peak"), 'open files');
-assert.equal(extractAfterWake('hello unrelated sentence', "Peak"), null);
+assert.equal(extractAfterWake('hey laura open files', "Laura"), 'open files');
+assert.equal(extractAfterWake('hello unrelated sentence', "Laura"), null);
 assert.equal(extractAfterWake('hey shiny', 'Shiny'), '');
 assert.deepEqual([...floatTo16BitPCM(new Float32Array([-2, -1, 0, 1, 2]))], [-32768, -32768, 0, 32767, 32767]);
 
