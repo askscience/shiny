@@ -81,5 +81,9 @@
   "plugin.updates.pkg.done": "Instalēta",
   "plugin.updates.pkg.removing": "Noņem",
   "plugin.updates.pkg.removed": "Noņemta",
-  "plugin.updates.pkg.error": "Neizdevās"
+  "plugin.updates.pkg.error": "Neizdevās",
+  "plugin.updates.live.plugins": "Ielādēti no jauna bez restartēšanas: {names}",
+  "plugin.updates.live.overridden": "Nav atjaunināti, tiek izmantota jūsu pašu kopija: {names}",
+  "plugin.updates.live.server": "Serveris: pāriet uz jauno versiju, tiklīdz asistents ir dīkstāvē; lapa atkārtoti savienojas pati.",
+  "plugin.updates.live.shell": "Čaula: nākamajā ekrāna bloķēšanas reizē tiek palaista no jauna ar jauno versiju."
 }

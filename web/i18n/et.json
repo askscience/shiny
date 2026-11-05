@@ -1379,5 +1379,8 @@
   "plugins.statusNotInstalled": "Pole paigaldatud",
   "plugins.statusOff": "Väljas",
   "plugins.subtitleActivity": "Iga paigaldus, uuendus ja eemaldus, uusim viimasena.",
-  "plugins.subtitleCraft": "Craft'i komplekt, iga rakendus omaette aknas — paigaldub ühe sammuga, püsib ajakohasena ja on soovi korral ka assistendile kasutatav."
+  "plugins.subtitleCraft": "Craft'i komplekt, iga rakendus omaette aknas — paigaldub ühe sammuga, püsib ajakohasena ja on soovi korral ka assistendile kasutatav.",
+  "system.update.reconnecting": "Taasühendamine serveriga…",
+  "system.update.pluginsReloaded": "Uuendatud: {names}",
+  "system.update.reloading": "Liidese uuendamine…"
 }

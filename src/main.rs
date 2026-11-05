@@ -127,7 +127,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!("Server listening on http://{}", addr);
     tracing::info!("Web UI served from / (static files in {})", config.web_dir);
 
-    let listener = tokio::net::TcpListener::bind(&addr).await?;
+    // Started by a previous server swapping itself for this binary: take its
+    // socket instead of binding, so the port never closed (application::reexec).
+    let std_listener = match shiny::application::reexec::inherited_listener() {
+        Some(inherited) => {
+            tracing::info!("Continuing on the inherited listener (server swap)");
+            inherited
+        }
+        None => std::net::TcpListener::bind(&addr)?,
+    };
+    std_listener.set_nonblocking(true)?;
+    // A second handle to the same socket, kept for the next swap.
+    let swap_listener = std_listener.try_clone()?;
+    let listener = tokio::net::TcpListener::from_std(std_listener)?;
+    // Plugins replaced on disk are loaded again without a restart.
+    workers.track(shiny::application::plugin_watch::start(
+        state.clone(),
+        rebuild.clone(),
+    ));
+    let mut reexec_rx = state.reexec.subscribe();
+    let mut swap_requested = false;
     let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
     let server = axum::serve(listener, router_handle)
         .tcp_nodelay(true)
@@ -139,6 +158,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tokio::pin!(server);
     let result = tokio::select! {
         result = &mut server => result,
+        _ = wait_for_swap(&mut reexec_rx, &state) => {
+            swap_requested = true;
+            tracing::info!("Swapping to the new server binary: draining requests for up to 10 seconds");
+            state.agent_turns.cancel_all();
+            let _ = shutdown_tx.send(true);
+            match tokio::time::timeout(std::time::Duration::from_secs(10), &mut server).await {
+                Ok(result) => result,
+                Err(_) => {
+                    tracing::warn!("Request drain deadline reached; closing remaining streams");
+                    Ok(())
+                }
+            }
+        }
         _ = shiny::application::lifecycle::shutdown_signal() => {
             tracing::info!("Shutting down: draining requests for up to 10 seconds");
             state.agent_turns.cancel_all();
@@ -163,7 +195,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     result?;
 
+    if swap_requested {
+        // Only returns on failure; the new binary takes over this process.
+        let error = shiny::application::reexec::exec_with_listener(&swap_listener);
+        tracing::error!("Could not swap to the new server binary: {error}");
+        return Err(error.into());
+    }
+
     Ok(())
+}
+
+/// Resolves once a server swap was requested and no assistant turn is
+/// running (an answer half-way through would be cut). Waits at most ten
+/// minutes for the assistant, then goes ahead.
+async fn wait_for_swap(rx: &mut tokio::sync::watch::Receiver<bool>, state: &shiny::api::AppState) {
+    while !*rx.borrow_and_update() {
+        if rx.changed().await.is_err() {
+            std::future::pending::<()>().await;
+        }
+    }
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(600);
+    while state.agent_turns.running() > 0 && tokio::time::Instant::now() < deadline {
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+    }
 }
 
 fn spawn_diary_cron(

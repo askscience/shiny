@@ -81,5 +81,9 @@
   "plugin.updates.pkg.done": "Installato",
   "plugin.updates.pkg.removing": "Rimozione",
   "plugin.updates.pkg.removed": "Rimosso",
-  "plugin.updates.pkg.error": "Non riuscito"
+  "plugin.updates.pkg.error": "Non riuscito",
+  "plugin.updates.live.plugins": "Ricaricati senza riavvio: {names}",
+  "plugin.updates.live.overridden": "Non aggiornati, è in uso una tua copia: {names}",
+  "plugin.updates.live.server": "Server: passa alla nuova versione appena l'assistente è inattivo; la pagina si riconnette da sola.",
+  "plugin.updates.live.shell": "Shell: si riavvia con la nuova versione al prossimo blocco dello schermo."
 }

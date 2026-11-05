@@ -75,5 +75,9 @@
   "plugin.updates.pkg.done": "Инсталиран",
   "plugin.updates.pkg.removing": "Премахване",
   "plugin.updates.pkg.removed": "Премахнат",
-  "plugin.updates.pkg.error": "Неуспешно"
+  "plugin.updates.pkg.error": "Неуспешно",
+  "plugin.updates.live.plugins": "Заредени отново без рестарт: {names}",
+  "plugin.updates.live.overridden": "Не са обновени, използва се ваше собствено копие: {names}",
+  "plugin.updates.live.server": "Сървър: преминава към новата версия веднага щом асистентът е свободен; страницата се свързва отново сама.",
+  "plugin.updates.live.shell": "Обвивка: стартира отново с новата версия при следващото заключване на екрана."
 }

@@ -60,6 +60,13 @@ const SERVER_MODE_EXIT: i32 = 42;
 /// Exit status meaning "the user signed out".
 const LOGOUT_EXIT: i32 = 43;
 
+/// The page posts this when the lock screen comes up (and `liteaura:unlocked`
+/// when it goes). A shell whose binary was replaced by an update exits with
+/// [`RELAUNCH_EXIT`] right then: the session supervisor relaunches it at once,
+/// and behind the locked screen nobody sees the second it takes.
+const LOCKED_MESSAGE: &str = "liteaura:locked";
+const RELAUNCH_EXIT: i32 = 44;
+
 /// Set by the IPC handler; read once the Qt event loop returns.
 static EXIT_CODE: AtomicI32 = AtomicI32::new(0);
 
@@ -131,6 +138,7 @@ fn linux_main() -> i32 {
     // under the former name keeps its profile.
     liteaura_core::legacy::adopt_legacy_env();
     liteaura_core::legacy::migrate_legacy_dirs();
+    liteaura_core::binary::remember();
     let cfg = LiteAuraConfig::from_env_and_args();
 
     // Force Qt's own scale factor to 1 before Qt initialises: the interface
@@ -244,6 +252,13 @@ extern "C" fn on_ipc(_userdata: *mut c_void, body: *const c_char) {
             println!("liteaura: signing out");
             EXIT_CODE.store(LOGOUT_EXIT, Ordering::SeqCst);
             shim::quit();
+        }
+        LOCKED_MESSAGE => {
+            if liteaura_core::binary::replaced() {
+                println!("liteaura: a new version is installed; relaunching behind the lock screen");
+                EXIT_CODE.store(RELAUNCH_EXIT, Ordering::SeqCst);
+                shim::quit();
+            }
         }
         _ => {}
     }

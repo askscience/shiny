@@ -81,5 +81,9 @@
   "plugin.updates.pkg.done": "Instalirano",
   "plugin.updates.pkg.removing": "Uklanjanje",
   "plugin.updates.pkg.removed": "Uklonjeno",
-  "plugin.updates.pkg.error": "Nije uspjelo"
+  "plugin.updates.pkg.error": "Nije uspjelo",
+  "plugin.updates.live.plugins": "Ponovno učitano bez ponovnog pokretanja: {names}",
+  "plugin.updates.live.overridden": "Nije ažurirano, u upotrebi je vaša vlastita kopija: {names}",
+  "plugin.updates.live.server": "Poslužitelj: prelazi na novu verziju čim asistent bude neaktivan; stranica se sama ponovno povezuje.",
+  "plugin.updates.live.shell": "Ljuska: ponovno se pokreće s novom verzijom pri sljedećem zaključavanju zaslona."
 }

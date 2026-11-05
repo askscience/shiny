@@ -1379,5 +1379,8 @@
   "plugins.statusNotInstalled": "Not installed",
   "plugins.statusOff": "Off",
   "plugins.subtitleActivity": "Every install, update and removal, newest last.",
-  "plugins.subtitleCraft": "The Craft suite, each app in a window of its own — installed in one step, kept up to date, and open to the assistant if you want it."
+  "plugins.subtitleCraft": "The Craft suite, each app in a window of its own — installed in one step, kept up to date, and open to the assistant if you want it.",
+  "system.update.reconnecting": "Reconnecting to the server…",
+  "system.update.pluginsReloaded": "Updated: {names}",
+  "system.update.reloading": "Updating the interface…"
 }

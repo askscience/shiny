@@ -87,5 +87,9 @@
   "plugin.updates.pkg.done": "Nameščeno",
   "plugin.updates.pkg.removing": "Odstranjevanje",
   "plugin.updates.pkg.removed": "Odstranjeno",
-  "plugin.updates.pkg.error": "Ni uspelo"
+  "plugin.updates.pkg.error": "Ni uspelo",
+  "plugin.updates.live.plugins": "Znova naloženo brez ponovnega zagona: {names}",
+  "plugin.updates.live.overridden": "Ni posodobljeno, v uporabi je vaša lastna kopija: {names}",
+  "plugin.updates.live.server": "Strežnik: preklopi na novo različico, takoj ko je pomočnik nedejaven; stran se sama znova poveže.",
+  "plugin.updates.live.shell": "Lupina: ob naslednjem zaklepu zaslona se znova zažene z novo različico."
 }

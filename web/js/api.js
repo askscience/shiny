@@ -103,7 +103,15 @@ export async function apiRequest(path, options = {}) {
   if (typeof options.body === 'string' && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
-  let res = await fetch(`${API_BASE}${path}`, { ...requestOptions, headers });
+  let res;
+  try {
+    res = await fetch(`${API_BASE}${path}`, { ...requestOptions, headers });
+  } catch (err) {
+    // The server is away (an update swapping it, a crash): liveUpdate.js
+    // listens, says so once and polls until it answers again.
+    if (typeof CustomEvent === 'function') window.dispatchEvent?.(new CustomEvent('server:unreachable'));
+    throw err;
+  }
   if (res.status === 401 && authRedirect && await handleUnauthorized()) {
     // Release the first response body before issuing a replacement request.
     await res.body?.cancel();

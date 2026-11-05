@@ -1415,5 +1415,8 @@
   "plugins.statusNotInstalled": "Niezainstalowana",
   "plugins.statusOff": "Wyłączona",
   "plugins.subtitleActivity": "Każda instalacja, aktualizacja i usunięcie, najnowsze na końcu.",
-  "plugins.subtitleCraft": "Pakiet Craft, każda aplikacja we własnym oknie — instalowany w jednym kroku, stale aktualny i, jeśli chcesz, dostępny dla asystenta."
+  "plugins.subtitleCraft": "Pakiet Craft, każda aplikacja we własnym oknie — instalowany w jednym kroku, stale aktualny i, jeśli chcesz, dostępny dla asystenta.",
+  "system.update.reconnecting": "Ponowne łączenie z serwerem…",
+  "system.update.pluginsReloaded": "Zaktualizowano: {names}",
+  "system.update.reloading": "Aktualizowanie interfejsu…"
 }

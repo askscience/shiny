@@ -300,9 +300,51 @@ function readJson(key, fallback) {
   }
 }
 
+/* ── Update reload ──────────────────────────────────────────── */
+
+/**
+ * The page reloads itself once when the core web tree changed under it
+ * (`liveUpdate.js`). That is the same session going on, not a new sign-in, so
+ * the desktop comes back even with "remember" off: the arrangement is stashed
+ * in `sessionStorage` right before the reload and read exactly once after it.
+ */
+const UPDATE_RELOAD_KEY = 'shiny.updateReload';
+
+export function stashDesktopForReload(snapshot) {
+  try {
+    sessionStorage.setItem(UPDATE_RELOAD_KEY, JSON.stringify(snapshot || {}));
+  } catch (_) { /* private mode: the reload starts clean */ }
+}
+
+function updateReloadSnapshot() {
+  try {
+    const raw = sessionStorage.getItem(UPDATE_RELOAD_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+/** True while the page is booting after an update reload. */
+export function isUpdateReload() {
+  return updateReloadSnapshot() !== null;
+}
+
+/** The boot is done: the next load is an ordinary one. */
+export function finishUpdateReload() {
+  try {
+    sessionStorage.removeItem(UPDATE_RELOAD_KEY);
+  } catch (_) { /* nothing stashed */ }
+}
+
 /** Ordered workspace list: [{ id, windows: [pluginName] }]. */
 export function getWorkspaces() {
-  if (!getRemember()) return null; // fresh mode: never restore saved windows
+  if (!getRemember()) {
+    // Fresh mode never restores saved windows — except across an update
+    // reload, which continues the session the user already had.
+    const stashed = updateReloadSnapshot()?.workspaces;
+    return Array.isArray(stashed) ? stashed : null;
+  }
   const ws = readJson(scopedKey(DESKTOP_WORKSPACES_KEY), null);
   return Array.isArray(ws) ? ws : null;
 }
@@ -315,7 +357,10 @@ export function setWorkspaces(workspaces) {
 }
 
 export function getActiveWorkspaceId() {
-  if (!getRemember()) return null;
+  if (!getRemember()) {
+    const stashed = updateReloadSnapshot();
+    return stashed?.workspaces?.[stashed.active]?.id || null;
+  }
   return localStorage.getItem(scopedKey(DESKTOP_ACTIVE_KEY)) || null;
 }
 

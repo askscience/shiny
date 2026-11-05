@@ -1415,5 +1415,8 @@
   "plugins.statusNotInstalled": "Nenainstalováno",
   "plugins.statusOff": "Vypnuto",
   "plugins.subtitleActivity": "Každá instalace, aktualizace a odebrání, nejnovější na konci.",
-  "plugins.subtitleCraft": "Sada Craft, každá aplikace ve vlastním okně — nainstalovaná jedním krokem, stále aktuální a na přání dostupná i asistentovi."
+  "plugins.subtitleCraft": "Sada Craft, každá aplikace ve vlastním okně — nainstalovaná jedním krokem, stále aktuální a na přání dostupná i asistentovi.",
+  "system.update.reconnecting": "Obnovuje se připojení k serveru…",
+  "system.update.pluginsReloaded": "Aktualizováno: {names}",
+  "system.update.reloading": "Aktualizuje se rozhraní…"
 }

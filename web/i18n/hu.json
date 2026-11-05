@@ -1379,5 +1379,8 @@
   "plugins.statusNotInstalled": "Nincs telepítve",
   "plugins.statusOff": "Kikapcsolva",
   "plugins.subtitleActivity": "Minden telepítés, frissítés és eltávolítás, a legújabb a végén.",
-  "plugins.subtitleCraft": "A Craft csomag, minden app a saját ablakában — egy lépésben települ, naprakész marad, és ha kívánja, az asszisztens is használhatja."
+  "plugins.subtitleCraft": "A Craft csomag, minden app a saját ablakában — egy lépésben települ, naprakész marad, és ha kívánja, az asszisztens is használhatja.",
+  "system.update.reconnecting": "Újracsatlakozás a kiszolgálóhoz…",
+  "system.update.pluginsReloaded": "Frissítve: {names}",
+  "system.update.reloading": "A felület frissítése…"
 }

@@ -87,5 +87,9 @@
   "plugin.updates.pkg.done": "Nainstalováno",
   "plugin.updates.pkg.removing": "Odebírání",
   "plugin.updates.pkg.removed": "Odebráno",
-  "plugin.updates.pkg.error": "Selhalo"
+  "plugin.updates.pkg.error": "Selhalo",
+  "plugin.updates.live.plugins": "Znovu načteno bez restartu: {names}",
+  "plugin.updates.live.overridden": "Neaktualizováno, používá se vaše vlastní kopie: {names}",
+  "plugin.updates.live.server": "Server: přejde na novou verzi, jakmile bude asistent nečinný; stránka se sama znovu připojí.",
+  "plugin.updates.live.shell": "Shell: při příštím zamknutí obrazovky se spustí znovu s novou verzí."
 }

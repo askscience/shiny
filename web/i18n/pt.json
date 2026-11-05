@@ -1397,5 +1397,8 @@
   "plugins.statusNotInstalled": "Não instalado",
   "plugins.statusOff": "Desativado",
   "plugins.subtitleActivity": "Cada instalação, atualização e remoção, as mais recentes por último.",
-  "plugins.subtitleCraft": "A suíte Craft, cada app em sua própria janela — instalada em um passo, sempre atualizada e, se você quiser, aberta ao assistente."
+  "plugins.subtitleCraft": "A suíte Craft, cada app em sua própria janela — instalada em um passo, sempre atualizada e, se você quiser, aberta ao assistente.",
+  "system.update.reconnecting": "A religar ao servidor…",
+  "system.update.pluginsReloaded": "Atualizados: {names}",
+  "system.update.reloading": "A atualizar a interface…"
 }

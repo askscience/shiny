@@ -81,5 +81,9 @@
   "plugin.updates.pkg.done": "Instalado",
   "plugin.updates.pkg.removing": "Eliminando",
   "plugin.updates.pkg.removed": "Eliminado",
-  "plugin.updates.pkg.error": "Error"
+  "plugin.updates.pkg.error": "Error",
+  "plugin.updates.live.plugins": "Recargados sin reiniciar: {names}",
+  "plugin.updates.live.overridden": "No actualizados, se usa una copia tuya: {names}",
+  "plugin.updates.live.server": "Servidor: cambia a la nueva versión en cuanto el asistente esté inactivo; la página se reconecta sola.",
+  "plugin.updates.live.shell": "Shell: se relanza con la nueva versión la próxima vez que se bloquee la pantalla."
 }

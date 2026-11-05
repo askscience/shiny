@@ -75,5 +75,9 @@
   "plugin.updates.pkg.done": "Installerat",
   "plugin.updates.pkg.removing": "Tar bort",
   "plugin.updates.pkg.removed": "Borttaget",
-  "plugin.updates.pkg.error": "Misslyckades"
+  "plugin.updates.pkg.error": "Misslyckades",
+  "plugin.updates.live.plugins": "Laddade om utan omstart: {names}",
+  "plugin.updates.live.overridden": "Inte uppdaterade, din egen kopia används: {names}",
+  "plugin.updates.live.server": "Server: byter till den nya versionen så snart assistenten är ledig; sidan återansluter av sig själv.",
+  "plugin.updates.live.shell": "Skal: startar om med den nya versionen nästa gång skärmen låses."
 }

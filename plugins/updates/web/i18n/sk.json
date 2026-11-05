@@ -87,5 +87,9 @@
   "plugin.updates.pkg.done": "Nainštalované",
   "plugin.updates.pkg.removing": "Odstraňuje sa",
   "plugin.updates.pkg.removed": "Odstránené",
-  "plugin.updates.pkg.error": "Zlyhalo"
+  "plugin.updates.pkg.error": "Zlyhalo",
+  "plugin.updates.live.plugins": "Znova načítané bez reštartu: {names}",
+  "plugin.updates.live.overridden": "Neaktualizované, používa sa vaša vlastná kópia: {names}",
+  "plugin.updates.live.server": "Server: prejde na novú verziu, len čo bude asistent nečinný; stránka sa sama znova pripojí.",
+  "plugin.updates.live.shell": "Shell: pri ďalšom zamknutí obrazovky sa spustí znova s novou verziou."
 }

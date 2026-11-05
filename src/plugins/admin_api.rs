@@ -18,6 +18,9 @@ use crate::models::Traveler;
 struct PluginListEntry {
     name: String,
     version: String,
+    /// Fingerprint of the plugin's files as loaded: the page reloads a window's
+    /// module when it changes, whether or not `version` moved.
+    digest: String,
     api_level: u32,
     description: Option<String>,
     enabled: bool,
@@ -91,6 +94,7 @@ pub async fn list(
             PluginListEntry {
                 category,
                 capabilities: state.plugins.capabilities_for(&m.name),
+                digest: state.plugins.live_digest(&m.name).map(|d| d.all).unwrap_or_default(),
                 name: m.name,
                 version: m.version.to_string(),
                 api_level: m.api_level,
@@ -153,6 +157,21 @@ pub async fn install(
     }).await.map_err(|error| AppError::Internal(format!("Plugin installation task failed: {error}")))??;
 
     Ok(Json(json!({ "success": true, "data": { "installed": name } })))
+}
+
+/// POST /api/plugins/rescan — load again every plugin whose code changed on
+/// disk, and load the ones that appeared. The reply says which.
+pub async fn rescan(
+    State(state): State<AppState>,
+    Extension(_traveler): Extension<Traveler>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let report = state.plugins.rescan(state.plugin_ctx()).await;
+    if report.changed() {
+        if let Some(rebuild) = &state.router_rebuild {
+            rebuild();
+        }
+    }
+    Ok(Json(json!({ "success": true, "data": report })))
 }
 
 /// POST /api/plugins/uninstall  body  {"name":"hello"}  — removes the plugin

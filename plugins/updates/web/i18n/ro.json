@@ -81,5 +81,9 @@
   "plugin.updates.pkg.done": "Instalat",
   "plugin.updates.pkg.removing": "Se elimină",
   "plugin.updates.pkg.removed": "Eliminat",
-  "plugin.updates.pkg.error": "Eșuat"
+  "plugin.updates.pkg.error": "Eșuat",
+  "plugin.updates.live.plugins": "Reîncărcate fără repornire: {names}",
+  "plugin.updates.live.overridden": "Neactualizate, se folosește propria ta copie: {names}",
+  "plugin.updates.live.server": "Server: trece la noua versiune de îndată ce asistentul este inactiv; pagina se reconectează singură.",
+  "plugin.updates.live.shell": "Shell: repornește cu noua versiune la următoarea blocare a ecranului."
 }

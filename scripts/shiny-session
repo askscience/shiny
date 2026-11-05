@@ -234,6 +234,13 @@ while true; do
             echo "shiny-session: signed out" >&2
             exit 0
         fi
+        if [ "$code" -eq 44 ]; then
+            # The shell's binary was updated: it stepped aside behind the lock
+            # screen and comes straight back in the new version.
+            log "relaunching the kiosk in its new version"
+            crashes=0
+            continue
+        fi
         if [ "$code" -ge 128 ]; then
             # Signal death (139 = SIGSEGV, 134 = SIGABRT): a crash.
             now=$(date +%s)

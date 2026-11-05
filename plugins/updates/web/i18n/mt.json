@@ -93,5 +93,9 @@
   "plugin.updates.pkg.done": "Installat",
   "plugin.updates.pkg.removing": "Qed jitneħħa",
   "plugin.updates.pkg.removed": "Imneħħi",
-  "plugin.updates.pkg.error": "Falla"
+  "plugin.updates.pkg.error": "Falla",
+  "plugin.updates.live.plugins": "Mgħobbija mill-ġdid mingħajr restart: {names}",
+  "plugin.updates.live.overridden": "Mhux aġġornati, qed tintuża kopja tiegħek: {names}",
+  "plugin.updates.live.server": "Server: jaqleb għall-verżjoni l-ġdida hekk kif l-assistent ikun wieqaf; il-paġna terġa' tikkonnettja waħedha.",
+  "plugin.updates.live.shell": "Shell: jerġa' jitnieda bil-verżjoni l-ġdida d-darba li jmiss li l-iskrin jiġi msakkar."
 }

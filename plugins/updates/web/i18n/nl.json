@@ -75,5 +75,9 @@
   "plugin.updates.pkg.done": "Geïnstalleerd",
   "plugin.updates.pkg.removing": "Verwijderen",
   "plugin.updates.pkg.removed": "Verwijderd",
-  "plugin.updates.pkg.error": "Mislukt"
+  "plugin.updates.pkg.error": "Mislukt",
+  "plugin.updates.live.plugins": "Opnieuw geladen zonder herstart: {names}",
+  "plugin.updates.live.overridden": "Niet bijgewerkt, je eigen kopie is in gebruik: {names}",
+  "plugin.updates.live.server": "Server: schakelt over naar de nieuwe versie zodra de assistent niets doet; de pagina verbindt zichzelf opnieuw.",
+  "plugin.updates.live.shell": "Shell: start opnieuw met de nieuwe versie wanneer het scherm de volgende keer wordt vergrendeld."
 }

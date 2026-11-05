@@ -180,7 +180,7 @@ The full documentation lives in **[`docs/`](docs/README.md)**:
 | Area | Start here |
 |---|---|
 | Orientation | [Getting started](docs/getting-started.md) · [Architecture](docs/architecture.md) · [Configuration](docs/configuration.md) |
-| Core | [Agent](docs/core/agent.md) · [Chat](docs/core/chat.md) · [Voice](docs/core/voice.md) · [Desktop](docs/core/desktop.md) · [Web UI](docs/core/web-ui.md) · [Themes & icons](docs/core/themes-icons.md) · [Data & auth](docs/core/data-and-auth.md) · [Travel](docs/core/travel.md) |
+| Core | [Agent](docs/core/agent.md) · [Chat](docs/core/chat.md) · [Voice](docs/core/voice.md) · [Desktop](docs/core/desktop.md) · [Web UI](docs/core/web-ui.md) · [Themes & icons](docs/core/themes-icons.md) · [Data & auth](docs/core/data-and-auth.md) · [Travel](docs/core/travel.md) · [Live update](docs/core/live-update.md) |
 | Host | [Overview](docs/host/README.md) · [Audio](docs/host/audio.md) · [Bluetooth](docs/host/bluetooth.md) · [Battery & power](docs/host/battery-power.md) · [Network](docs/host/network.md) · [Display & input](docs/host/display-input.md) |
 | API | [Index](docs/api/README.md) · [Auth](docs/api/auth.md) · [Chat & agent](docs/api/chat-agent.md) · [Voice](docs/api/voice.md) · [Host](docs/api/host.md) · [Travel](docs/api/travel.md) |
 | Deployment | [Overview](docs/deployment/README.md) · [Sidecars](docs/deployment/sidecars.md) · [Multi-user Linux](docs/deployment/multi-user-linux.md) · [Remote access](docs/deployment/remote-access.md) · [Kiosk shell](docs/deployment/kiosk-shell.md) · [T2 Mac](docs/deployment/t2-mac.md) |

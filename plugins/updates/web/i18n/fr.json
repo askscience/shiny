@@ -81,5 +81,9 @@
   "plugin.updates.pkg.done": "Installé",
   "plugin.updates.pkg.removing": "Suppression",
   "plugin.updates.pkg.removed": "Supprimé",
-  "plugin.updates.pkg.error": "Échec"
+  "plugin.updates.pkg.error": "Échec",
+  "plugin.updates.live.plugins": "Rechargés sans redémarrage : {names}",
+  "plugin.updates.live.overridden": "Non mis à jour, votre propre copie est utilisée : {names}",
+  "plugin.updates.live.server": "Serveur : passe à la nouvelle version dès que l'assistant est inactif ; la page se reconnecte d'elle-même.",
+  "plugin.updates.live.shell": "Shell : il se relance avec la nouvelle version au prochain verrouillage de l'écran."
 }

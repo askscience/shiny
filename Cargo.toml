@@ -38,7 +38,7 @@ edition = "2021"
 
 [package]
 name = "shiny"
-version = "0.1.2"
+version.workspace = true
 edition = "2021"
 
 [dependencies]

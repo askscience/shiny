@@ -1379,5 +1379,8 @@
   "plugins.statusNotInstalled": "Ei asennettu",
   "plugins.statusOff": "Pois",
   "plugins.subtitleActivity": "Jokainen asennus, päivitys ja poisto, uusin viimeisenä.",
-  "plugins.subtitleCraft": "Craft-sarja, jokainen sovellus omassa ikkunassaan — asennetaan yhdellä kertaa, pidetään ajan tasalla ja halutessasi myös avustajan käytössä."
+  "plugins.subtitleCraft": "Craft-sarja, jokainen sovellus omassa ikkunassaan — asennetaan yhdellä kertaa, pidetään ajan tasalla ja halutessasi myös avustajan käytössä.",
+  "system.update.reconnecting": "Yhdistetään palvelimeen uudelleen…",
+  "system.update.pluginsReloaded": "Päivitetty: {names}",
+  "system.update.reloading": "Päivitetään käyttöliittymää…"
 }

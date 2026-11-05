@@ -75,5 +75,9 @@
   "plugin.updates.pkg.done": "Installed",
   "plugin.updates.pkg.removing": "Removing",
   "plugin.updates.pkg.removed": "Removed",
-  "plugin.updates.pkg.error": "Failed"
+  "plugin.updates.pkg.error": "Failed",
+  "plugin.updates.live.plugins": "Loaded again without a restart: {names}",
+  "plugin.updates.live.overridden": "Not updated, your own copy is in use: {names}",
+  "plugin.updates.live.server": "Server: switching to the new version as soon as the assistant is idle; the page reconnects on its own.",
+  "plugin.updates.live.shell": "Shell: it relaunches with the new version the next time the screen is locked."
 }

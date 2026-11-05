@@ -159,6 +159,12 @@ impl TurnRegistry {
 
     /// Mark a turn as done (called once its result has been persisted). The
     /// entry is kept briefly so a late stop is still recognised.
+    /// Turns still running: the server is swapped for a new binary only at zero.
+    pub fn running(&self) -> usize {
+        let map = self.inner.lock().unwrap();
+        map.values().filter(|e| e.state == State::Running).count()
+    }
+
     pub fn finish(&self, turn_id: &str) {
         let mut map = self.inner.lock().unwrap();
         if let Some(entry) = map.get_mut(turn_id) {

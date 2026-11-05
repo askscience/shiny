@@ -1415,5 +1415,8 @@
   "plugins.statusNotInstalled": "Neįdiegta",
   "plugins.statusOff": "Išjungta",
   "plugins.subtitleActivity": "Kiekvienas diegimas, naujinimas ir pašalinimas, naujausi paskutiniai.",
-  "plugins.subtitleCraft": "Craft rinkinys, kiekviena programa savo lange — įdiegiama vienu žingsniu, nuolat atnaujinama ir, jei norite, prieinama asistentui."
+  "plugins.subtitleCraft": "Craft rinkinys, kiekviena programa savo lange — įdiegiama vienu žingsniu, nuolat atnaujinama ir, jei norite, prieinama asistentui.",
+  "system.update.reconnecting": "Iš naujo jungiamasi prie serverio…",
+  "system.update.pluginsReloaded": "Atnaujinta: {names}",
+  "system.update.reloading": "Atnaujinama sąsaja…"
 }

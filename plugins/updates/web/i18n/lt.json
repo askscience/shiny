@@ -87,5 +87,9 @@
   "plugin.updates.pkg.done": "Įdiegta",
   "plugin.updates.pkg.removing": "Šalinama",
   "plugin.updates.pkg.removed": "Pašalinta",
-  "plugin.updates.pkg.error": "Nepavyko"
+  "plugin.updates.pkg.error": "Nepavyko",
+  "plugin.updates.live.plugins": "Įkelta iš naujo be paleidimo iš naujo: {names}",
+  "plugin.updates.live.overridden": "Neatnaujinta, naudojama jūsų pačių kopija: {names}",
+  "plugin.updates.live.server": "Serveris: pereina prie naujos versijos, kai tik asistentas neužimtas; puslapis prisijungia iš naujo pats.",
+  "plugin.updates.live.shell": "Apvalkalas: paleidžiamas iš naujo su nauja versija kitą kartą užrakinus ekraną."
 }

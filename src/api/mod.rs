@@ -28,6 +28,7 @@ pub mod touchbar;
 pub mod keyboard_backlight;
 pub mod screen_brightness;
 pub mod remote;
+pub mod system;
 mod sse;
 
 use axum::http::{header, HeaderValue, StatusCode};
@@ -231,6 +232,8 @@ pub struct AppState {
     pub tailscale: crate::services::tailscale::TailscaleService,
     /// Loopback-only session token for the local kiosk / server-mode window.
     pub session: crate::auth::SessionAuth,
+    /// The request to swap the server for its new binary (`api::system`).
+    pub reexec: Arc<crate::application::reexec::ReexecSignal>,
     /// Admin-supplied router-rebuild trigger (set by `main.rs` once the live
     /// router swap is wired up).
     pub router_rebuild: Option<Arc<dyn Fn() + Send + Sync>>,
@@ -632,6 +635,11 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/plugins/session/reset", post(crate::plugins::admin_api::reset_session))
         .route("/api/plugins/window/closed", post(crate::plugins::admin_api::window_closed))
         .route("/api/plugins/install.log", get(crate::plugins::admin_api::install_log))
+        // Plugins changed on disk (a package upgrade, a copied build): load them again.
+        .route("/api/plugins/rescan", post(crate::plugins::admin_api::rescan))
+        // What runs, for the page to notice an update; the swap to a new binary.
+        .route("/api/system/version", get(system::version))
+        .route("/api/system/reexec", post(system::reexec))
         // Craft store: the Craft App Suite's web builds as web-app plugins.
         .route("/api/plugins/store", get(crate::plugins::store::store_list))
         .route("/api/plugins/store/refresh", post(crate::plugins::store::store_refresh))

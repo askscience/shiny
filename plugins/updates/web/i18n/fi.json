@@ -75,5 +75,9 @@
   "plugin.updates.pkg.done": "Asennettu",
   "plugin.updates.pkg.removing": "Poistetaan",
   "plugin.updates.pkg.removed": "Poistettu",
-  "plugin.updates.pkg.error": "Epäonnistui"
+  "plugin.updates.pkg.error": "Epäonnistui",
+  "plugin.updates.live.plugins": "Ladattu uudelleen ilman uudelleenkäynnistystä: {names}",
+  "plugin.updates.live.overridden": "Ei päivitetty, oma kopiosi on käytössä: {names}",
+  "plugin.updates.live.server": "Palvelin: vaihtaa uuteen versioon heti, kun avustaja on toimeton; sivu yhdistää itse uudelleen.",
+  "plugin.updates.live.shell": "Kuori: käynnistyy uudelleen uudella versiolla, kun näyttö seuraavan kerran lukitaan."
 }

@@ -75,5 +75,9 @@
   "plugin.updates.pkg.done": "Paigaldatud",
   "plugin.updates.pkg.removing": "Eemaldamine",
   "plugin.updates.pkg.removed": "Eemaldatud",
-  "plugin.updates.pkg.error": "Ebaõnnestus"
+  "plugin.updates.pkg.error": "Ebaõnnestus",
+  "plugin.updates.live.plugins": "Laaditi uuesti ilma taaskäivituseta: {names}",
+  "plugin.updates.live.overridden": "Ei uuendatud, kasutusel on sinu enda koopia: {names}",
+  "plugin.updates.live.server": "Server: läheb uuele versioonile üle kohe, kui abiline on jõude; leht ühendub ise uuesti.",
+  "plugin.updates.live.shell": "Kest: käivitub uue versiooniga uuesti ekraani järgmisel lukustamisel."
 }

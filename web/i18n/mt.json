@@ -1433,5 +1433,8 @@
   "plugins.statusNotInstalled": "Mhux installata",
   "plugins.statusOff": "Mitfi",
   "plugins.subtitleActivity": "Kull installazzjoni, aġġornament u tneħħija, l-aktar ġodda fl-aħħar.",
-  "plugins.subtitleCraft": "Is-suite Craft, kull app fit-tieqa tagħha — tinstalla f'pass wieħed, tibqa' aġġornata, u miftuħa għall-assistent jekk trid."
+  "plugins.subtitleCraft": "Is-suite Craft, kull app fit-tieqa tagħha — tinstalla f'pass wieħed, tibqa' aġġornata, u miftuħa għall-assistent jekk trid.",
+  "system.update.reconnecting": "Qed jerġa' jikkonnettja mas-server…",
+  "system.update.pluginsReloaded": "Aġġornati: {names}",
+  "system.update.reloading": "Qed tiġi aġġornata l-interfaċċa…"
 }

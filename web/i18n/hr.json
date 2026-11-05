@@ -1397,5 +1397,8 @@
   "plugins.statusNotInstalled": "Nije instalirana",
   "plugins.statusOff": "Isključena",
   "plugins.subtitleActivity": "Svaka instalacija, ažuriranje i uklanjanje, najnovije na kraju.",
-  "plugins.subtitleCraft": "Paket Craft, svaka aplikacija u vlastitom prozoru — instalira se u jednom koraku, ostaje ažurna i, ako želite, dostupna je i asistentu."
+  "plugins.subtitleCraft": "Paket Craft, svaka aplikacija u vlastitom prozoru — instalira se u jednom koraku, ostaje ažurna i, ako želite, dostupna je i asistentu.",
+  "system.update.reconnecting": "Ponovno povezivanje s poslužiteljem…",
+  "system.update.pluginsReloaded": "Ažurirano: {names}",
+  "system.update.reloading": "Ažuriranje sučelja…"
 }

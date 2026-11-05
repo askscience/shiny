@@ -1,5 +1,6 @@
 //! Plugin system: tool registry, plugin loader, hot-reloadable router merge.
 
+pub mod digest;
 pub mod manager;
 pub mod registry;
 pub mod loader;

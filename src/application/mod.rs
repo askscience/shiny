@@ -3,6 +3,8 @@
 //! tests use the same factory; startup owns all side effects explicitly.
 pub mod lifecycle;
 pub mod logging;
+pub mod plugin_watch;
+pub mod reexec;
 pub mod router;
 pub mod sidecars;
 pub mod voice_watchdog;
@@ -98,6 +100,7 @@ impl AppState {
             iroh: crate::services::iroh_remote::IrohRemote::new(),
             tailscale: crate::services::tailscale::TailscaleService::new(config.server_port),
             session: Default::default(),
+            reexec: Arc::new(crate::application::reexec::ReexecSignal::new()),
             router_rebuild: None,
             config,
         }

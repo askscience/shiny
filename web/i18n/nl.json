@@ -1379,5 +1379,8 @@
   "plugins.statusNotInstalled": "Niet geïnstalleerd",
   "plugins.statusOff": "Uit",
   "plugins.subtitleActivity": "Elke installatie, update en verwijdering, nieuwste onderaan.",
-  "plugins.subtitleCraft": "De Craft-suite, elke app in een eigen venster — in één stap geïnstalleerd, up-to-date gehouden en desgewenst open voor de assistent."
+  "plugins.subtitleCraft": "De Craft-suite, elke app in een eigen venster — in één stap geïnstalleerd, up-to-date gehouden en desgewenst open voor de assistent.",
+  "system.update.reconnecting": "Opnieuw verbinden met de server…",
+  "system.update.pluginsReloaded": "Bijgewerkt: {names}",
+  "system.update.reloading": "De interface wordt bijgewerkt…"
 }

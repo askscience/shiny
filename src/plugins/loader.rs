@@ -31,6 +31,8 @@ pub struct LoadedPlugin {
     pub ctx: Arc<PluginCtx>,
     library: Option<Library>,
     pub install_dir: PathBuf,
+    /// Fingerprint of the files this load came from (see `digest.rs`).
+    pub digest: crate::plugins::digest::PluginDigest,
 }
 
 unsafe impl Send for LoadedPlugin {}
@@ -262,6 +264,20 @@ impl Loader {
             .unwrap_or_default()
     }
 
+    /// Fingerprint of the files a loaded plugin came from.
+    pub fn digest_for(&self, name: &str) -> Option<crate::plugins::digest::PluginDigest> {
+        self.loaded.read().iter()
+            .find(|p| p.manifest.name == name)
+            .map(|p| p.digest.clone())
+    }
+
+    /// The directory a loaded plugin was loaded from.
+    pub fn install_dir_of(&self, name: &str) -> Option<PathBuf> {
+        self.loaded.read().iter()
+            .find(|p| p.manifest.name == name)
+            .map(|p| p.install_dir.clone())
+    }
+
     pub fn has(&self, name: &str) -> bool {
         self.loaded.read().iter().any(|p| p.manifest.name == name)
     }
@@ -437,6 +453,7 @@ impl Loader {
             ctx: ctx.clone(),
             library,
             install_dir: install_dir.to_path_buf(),
+            digest: crate::plugins::digest::PluginDigest::of(install_dir),
         };
 
         // Be sure to unload any prior version of the same plugin name. The

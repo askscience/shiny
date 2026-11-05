@@ -103,7 +103,7 @@ Only plugins whose session-active set includes them **and** whose catalog entry
 has `surface: true` are loaded. `refreshCatalog()`:
 
 1. calls `refreshActivePlugins()` (`web/js/activePlugins.js`) for the session set;
-2. fetches `/api/plugins` for the catalog (description/category/version/surface);
+2. fetches `/api/plugins` for the catalog (description/category/version/digest/surface);
 3. dynamically imports each wanted surface, stores the module, calls
    `wireEvents()`;
 4. unmounts and forgets surfaces that are no longer wanted;

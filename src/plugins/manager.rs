@@ -3,7 +3,7 @@
 //! state lives in the SQLite pool; the only thing kept in memory is the
 //! per-plugin contributions + a manager reference for the dispatcher.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 use parking_lot::RwLock;
@@ -37,6 +37,39 @@ pub struct PluginManagerInner {
     pub system_plugins_dir: Option<PathBuf>,
     /// Shared SQLite pool used for the per-user activation state.
     pub pool: sqlx::SqlitePool,
+    /// One rescan at a time: two overlapping reloads of the same plugin would
+    /// race on its routes and tools.
+    pub rescan_lock: tokio::sync::Mutex<()>,
+    /// Live digests served to the page, kept for a moment (`live_digest`).
+    pub digest_cache: parking_lot::Mutex<std::collections::HashMap<String, (std::time::Instant, crate::plugins::digest::PluginDigest)>>,
+}
+
+/// What one plugin directory on disk looks like to the rescan.
+#[derive(Debug, Clone)]
+pub struct DiskPlugin {
+    pub dir: PathBuf,
+    pub digest: crate::plugins::digest::PluginDigest,
+    /// A user copy shadows a system plugin of the same name.
+    pub overrides_system: bool,
+}
+
+/// Outcome of a rescan: what was reloaded, what appeared, what failed.
+#[derive(Debug, Default, Clone, serde::Serialize)]
+pub struct RescanReport {
+    /// Plugins whose code changed on disk and were loaded again.
+    pub updated: Vec<String>,
+    /// Plugins that were not loaded before.
+    pub added: Vec<String>,
+    /// Plugins whose reload failed, with the reason; the previous load stays.
+    pub failed: Vec<(String, String)>,
+    /// Plugins a user copy shadows: a system update does not reach them.
+    pub overridden: Vec<String>,
+}
+
+impl RescanReport {
+    pub fn changed(&self) -> bool {
+        !self.updated.is_empty() || !self.added.is_empty()
+    }
 }
 
 #[derive(Clone)]
@@ -62,6 +95,8 @@ impl PluginManager {
                 plugins_dir,
                 system_plugins_dir,
                 pool,
+                rescan_lock: tokio::sync::Mutex::new(()),
+                digest_cache: parking_lot::Mutex::new(std::collections::HashMap::new()),
             }),
         }
     }
@@ -347,6 +382,124 @@ impl PluginManager {
                 ),
             }
         }
+    }
+
+    /// Every plugin directory on disk, by name, the user directory winning over
+    /// the system baseline exactly as `discover_and_install` resolves it.
+    pub fn disk_plugins(&self) -> BTreeMap<String, DiskPlugin> {
+        let mut out: BTreeMap<String, DiskPlugin> = BTreeMap::new();
+        let mut roots: Vec<(PathBuf, bool)> = Vec::new();
+        if let Some(system) = &self.inner.system_plugins_dir {
+            if system != &self.inner.plugins_dir {
+                roots.push((system.clone(), true));
+            }
+        }
+        roots.push((self.inner.plugins_dir.clone(), false));
+        for (root, is_system) in roots {
+            let Ok(entries) = std::fs::read_dir(&root) else { continue };
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if !path.is_dir() {
+                    continue;
+                }
+                let dir_name = entry.file_name().to_string_lossy().to_lowercase();
+                if dir_name.ends_with(".bak") || dir_name.starts_with('.') || dir_name.starts_with("_staging") {
+                    continue;
+                }
+                let manifest = path.join("plugin.toml");
+                if !manifest.is_file() {
+                    continue;
+                }
+                // The directory name is the plugin name for every supported
+                // install; the manifest is read again by the loader anyway.
+                let name = entry.file_name().to_string_lossy().into_owned();
+                let overrides_system = !is_system && out.contains_key(&name);
+                out.insert(name, DiskPlugin {
+                    dir: path,
+                    digest: crate::plugins::digest::PluginDigest::of(&entry.path()),
+                    overrides_system,
+                });
+            }
+        }
+        out
+    }
+
+    /// Fingerprint of the files a loaded plugin came from.
+    pub fn digest_for(&self, name: &str) -> Option<crate::plugins::digest::PluginDigest> {
+        self.inner.loader.digest_for(name)
+    }
+
+    /// The fingerprint the page compares: the loaded code plus the web tree
+    /// **as it is on disk now**. Web files are served from disk, so an edited
+    /// stylesheet or a package's new `plugin.js` must move this digest without
+    /// any reload on the server. Cached for three seconds per plugin, since
+    /// every open page asks regularly.
+    pub fn live_digest(&self, name: &str) -> Option<crate::plugins::digest::PluginDigest> {
+        const KEEP: std::time::Duration = std::time::Duration::from_secs(3);
+        if let Some((at, digest)) = self.inner.digest_cache.lock().get(name) {
+            if at.elapsed() < KEEP {
+                return Some(digest.clone());
+            }
+        }
+        let loaded = self.digest_for(name)?;
+        let dir = self.inner.loader.install_dir_of(name)?;
+        let web = crate::plugins::digest::tree_digest(&dir.join("web"), &|_| true);
+        let digest = crate::plugins::digest::PluginDigest::combine(loaded.code, web);
+        self.inner
+            .digest_cache
+            .lock()
+            .insert(name.to_string(), (std::time::Instant::now(), digest.clone()));
+        Some(digest)
+    }
+
+    /// Live fingerprints of every loaded plugin, for the page to compare.
+    pub fn loaded_digests(&self) -> BTreeMap<String, String> {
+        self.list()
+            .into_iter()
+            .filter_map(|m| self.live_digest(&m.name).map(|d| (m.name, d.all)))
+            .collect()
+    }
+
+    /// Load again every plugin whose **code** changed on disk since it was
+    /// loaded, and load plugins that appeared. A plugin whose web files alone
+    /// changed is not reloaded: the page picks those up through the digest in
+    /// the catalog. Plugins removed from disk stay loaded until a restart.
+    ///
+    /// This is what makes a package upgrade or a developer's `cp` take effect
+    /// without restarting the server: the old library is retired (never
+    /// unmapped, see the loader), its tools and routes are replaced, and the
+    /// caller rebuilds the router.
+    pub async fn rescan(&self, base_ctx: Arc<PluginCtx>) -> RescanReport {
+        let _serial = self.inner.rescan_lock.lock().await;
+        let mut report = RescanReport::default();
+        for (name, disk) in self.disk_plugins() {
+            if disk.overrides_system {
+                report.overridden.push(name.clone());
+            }
+            let loaded = self.digest_for(&name);
+            let (fresh, same_dir) = match (&loaded, self.inner.loader.install_dir_of(&name)) {
+                (Some(digest), Some(dir)) => (digest.code == disk.digest.code, dir == disk.dir),
+                _ => (false, false),
+            };
+            if fresh && same_dir {
+                continue;
+            }
+            match self.install_dir_static(&disk.dir, base_ctx.clone()).await {
+                Ok(_) if loaded.is_some() => {
+                    tracing::info!("plugin {name}: loaded the new version from {}", disk.dir.display());
+                    report.updated.push(name);
+                }
+                Ok(_) => {
+                    tracing::info!("plugin {name}: loaded from {}", disk.dir.display());
+                    report.added.push(name);
+                }
+                Err(error) => {
+                    tracing::warn!("plugin {name}: could not load the new version: {error}");
+                    report.failed.push((name, error.to_string()));
+                }
+            }
+        }
+        report
     }
 
     /// Where a plugin's files live: the writable per-user directory when it

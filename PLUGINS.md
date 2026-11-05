@@ -390,6 +390,20 @@ Response on success:
 
 The new tools are surfaced by the agent on the **next** `/api/agent` call automatically — no restart needed for tool/skills/persona changes. HTTP routes contributed via `RouteSpec` go through an `ArcSwap<Router>` rebuild callback that `AppState::router_rebuild` triggers; the implementation of the live router swap is the hot-reload step that wraps each request to observe the current router snapshot.
 
+Files that change **on disk** are loaded again the same way, without an
+install call: a package upgrade, the Craft store or a developer's `cp` of a
+rebuilt library. The server fingerprints every plugin directory
+(`src/plugins/digest.rs`: path, size and mtime of `plugin.toml`, the cdylib,
+`migrations/`, `skills/` for the *code* digest; `web/` for the *web* digest).
+`POST /api/plugins/rescan` compares the code digests with the loaded ones and
+re-registers what differs (the old library is retired, never unmapped);
+`application::plugin_watch` runs the same comparison every `PLUGIN_WATCH_SECS`
+(10; `0` turns it off) and only acts once a plugin's fingerprint has stopped
+changing, so a copy in progress is never loaded half way. A web-only change
+reloads nothing on the server: the page sees the combined `digest` move in
+`GET /api/plugins` and reloads that window's module (see
+[docs/core/live-update.md](docs/core/live-update.md)).
+
 ### Roll-back
 
 If a prior install of the same plugin name exists, it is renamed to `<name>.bak` before the new copy becomes live. To roll back:
@@ -728,7 +742,7 @@ Bearer (any logged-in user). Returns installed plugins, each with the caller's o
       "name": "hello", "version": "0.1.0", "api_level": 1,
       "description": "Demo plugin...", "summary": "...", "enabled": true,
       "surface": true, "web_app": false, "hud": false, "category": "Demo",
-      "capabilities": []
+      "capabilities": [], "digest": "3f1c9a0b7e2d4c61"
     }
   ]
 }
@@ -736,7 +750,19 @@ Bearer (any logged-in user). Returns installed plugins, each with the caller's o
 
 `surface` is true when the plugin ships a `web/plugin.js` window module;
 `web_app` is true for a `kind = "web"` plugin, whose window the shell mounts as
-an iframe over `/plugins/<name>/` instead.
+an iframe over `/plugins/<name>/` instead. `digest` fingerprints the plugin's
+files as loaded; the shell puts it in the module URL (`plugin.js?v=<digest>`),
+so a window loads new code after an update even when `version` did not move.
+
+### `POST /api/plugins/rescan`
+
+Bearer (any logged-in user). Loads again every plugin whose code changed on
+disk since it was loaded, loads the ones that appeared, and rebuilds the
+router. Reply: `{"updated": [...], "added": [...], "failed": [[name, reason]],
+"overridden": [...]}` — `overridden` lists plugins a copy in the user's
+directory shadows, which a system (package) update therefore does not reach.
+The Updates window calls this after a successful upgrade; the plugin watcher
+does the same on its own.
 
 ### `POST /api/plugins/install`
 
@@ -1174,7 +1200,15 @@ export default {
 
 `mount()` returns a `section.tile <name>-tile` element carrying
 `data-plugin="<name>"`; core tiles it, applies focus/fullscreen, and calls
-`unmount()` on window close, deactivation or uninstall. Window styles live in
+`unmount()` on window close, deactivation or uninstall.
+
+Two optional members let a window survive an **update of its own plugin**
+while it is on screen (`docs/core/live-update.md`): `saveState()` returns a
+JSON-friendly value (the open document, the scroll position, a draft) and
+`restoreState(state)` takes it back after the new module mounted. With both
+present the shell rebuilds a visible window in place as soon as the plugin's
+files change; without them the window keeps running the old code until it is
+closed and reopened, so nothing the user is looking at disappears. Window styles live in
 core's `web/css/tiles.css`
 keyed by the plugin's class prefix (`word-*`, `calc-*`, `studio-*`, …) —
 plugins build DOM with shared controls. Optional plugin stylesheets arrange

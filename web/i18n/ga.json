@@ -1433,5 +1433,8 @@
   "plugins.statusNotInstalled": "Gan suiteáil",
   "plugins.statusOff": "As",
   "plugins.subtitleActivity": "Gach suiteáil, nuashonrú agus baint, an ceann is nuaí ar deireadh.",
-  "plugins.subtitleCraft": "Sraith Craft, gach aip ina fuinneog féin — suiteáilte in aon chéim amháin, coinnithe cothrom le dáta, agus oscailte don chúntóir más mian leat."
+  "plugins.subtitleCraft": "Sraith Craft, gach aip ina fuinneog féin — suiteáilte in aon chéim amháin, coinnithe cothrom le dáta, agus oscailte don chúntóir más mian leat.",
+  "system.update.reconnecting": "Ag athcheangal leis an bhfreastalaí…",
+  "system.update.pluginsReloaded": "Nuashonraithe: {names}",
+  "system.update.reloading": "An comhéadan á nuashonrú…"
 }

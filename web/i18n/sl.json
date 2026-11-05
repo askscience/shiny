@@ -1415,5 +1415,8 @@
   "plugins.statusNotInstalled": "Ni nameščeno",
   "plugins.statusOff": "Izklopljeno",
   "plugins.subtitleActivity": "Vse namestitve, posodobitve in odstranitve, najnovejše na koncu.",
-  "plugins.subtitleCraft": "Zbirka Craft, vsaka aplikacija v svojem oknu — nameščena v enem koraku, vedno posodobljena in po želji dostopna pomočniku."
+  "plugins.subtitleCraft": "Zbirka Craft, vsaka aplikacija v svojem oknu — nameščena v enem koraku, vedno posodobljena in po želji dostopna pomočniku.",
+  "system.update.reconnecting": "Ponovno povezovanje s strežnikom…",
+  "system.update.pluginsReloaded": "Posodobljeno: {names}",
+  "system.update.reloading": "Posodabljanje vmesnika…"
 }

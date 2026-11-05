@@ -1415,5 +1415,8 @@
   "plugins.statusNotInstalled": "Не встановлено",
   "plugins.statusOff": "Вимкнено",
   "plugins.subtitleActivity": "Усі встановлення, оновлення й видалення, нові внизу.",
-  "plugins.subtitleCraft": "Набір Craft, кожен застосунок у власному вікні — встановлюється за один крок, оновлюється сам і, якщо хочете, доступний асистентові."
+  "plugins.subtitleCraft": "Набір Craft, кожен застосунок у власному вікні — встановлюється за один крок, оновлюється сам і, якщо хочете, доступний асистентові.",
+  "system.update.reconnecting": "Повторне підключення до сервера…",
+  "system.update.pluginsReloaded": "Оновлено: {names}",
+  "system.update.reloading": "Оновлення інтерфейсу…"
 }

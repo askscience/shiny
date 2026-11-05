@@ -87,5 +87,9 @@
   "plugin.updates.pkg.done": "Установлен",
   "plugin.updates.pkg.removing": "Удаление",
   "plugin.updates.pkg.removed": "Удалён",
-  "plugin.updates.pkg.error": "Ошибка"
+  "plugin.updates.pkg.error": "Ошибка",
+  "plugin.updates.live.plugins": "Загружены заново без перезапуска: {names}",
+  "plugin.updates.live.overridden": "Не обновлены, используется ваша собственная копия: {names}",
+  "plugin.updates.live.server": "Сервер: переходит на новую версию, как только ассистент освободится; страница переподключится сама.",
+  "plugin.updates.live.shell": "Оболочка: перезапустится с новой версией при следующей блокировке экрана."
 }

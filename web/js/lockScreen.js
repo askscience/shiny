@@ -195,6 +195,8 @@ export function lockNow() {
   chrome = gateChrome(refs.aside);
   root.focus({ preventScroll: true });
   window.dispatchEvent(new CustomEvent('lock:change', { detail: { locked: true } }));
+  // The kiosk shell waits for a locked screen to relaunch for its own update.
+  window.ipc?.postMessage?.('liteaura:locked');
 
   const app = document.getElementById('app');
   void gateEnter(root).then(() => {
@@ -224,6 +226,7 @@ function unlock({ fromY = 0, animate = true } = {}) {
     busy = false;
     lastActivity = Date.now();
     window.dispatchEvent(new CustomEvent('lock:change', { detail: { locked: false } }));
+    window.ipc?.postMessage?.('liteaura:unlocked');
   };
   if (animate) void gateExit(root, { fromY }).then(finish);
   else finish();

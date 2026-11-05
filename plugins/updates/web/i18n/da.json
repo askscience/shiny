@@ -75,5 +75,9 @@
   "plugin.updates.pkg.done": "Installeret",
   "plugin.updates.pkg.removing": "Fjerner",
   "plugin.updates.pkg.removed": "Fjernet",
-  "plugin.updates.pkg.error": "Mislykkedes"
+  "plugin.updates.pkg.error": "Mislykkedes",
+  "plugin.updates.live.plugins": "Genindlæst uden genstart: {names}",
+  "plugin.updates.live.overridden": "Ikke opdateret, din egen kopi er i brug: {names}",
+  "plugin.updates.live.server": "Server: skifter til den nye version, så snart assistenten er ledig; siden forbinder selv igen.",
+  "plugin.updates.live.shell": "Shell: genstarter med den nye version, næste gang skærmen låses."
 }

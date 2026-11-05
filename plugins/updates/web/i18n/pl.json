@@ -87,5 +87,9 @@
   "plugin.updates.pkg.done": "Zainstalowano",
   "plugin.updates.pkg.removing": "Usuwanie",
   "plugin.updates.pkg.removed": "Usunięto",
-  "plugin.updates.pkg.error": "Niepowodzenie"
+  "plugin.updates.pkg.error": "Niepowodzenie",
+  "plugin.updates.live.plugins": "Wczytane ponownie bez restartu: {names}",
+  "plugin.updates.live.overridden": "Niezaktualizowane, używana jest twoja własna kopia: {names}",
+  "plugin.updates.live.server": "Serwer: przełącza się na nową wersję, gdy tylko asystent będzie bezczynny; strona sama połączy się ponownie.",
+  "plugin.updates.live.shell": "Powłoka: uruchomi się ponownie w nowej wersji przy następnym zablokowaniu ekranu."
 }

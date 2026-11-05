@@ -75,5 +75,9 @@
   "plugin.updates.pkg.done": "Εγκαταστάθηκε",
   "plugin.updates.pkg.removing": "Αφαίρεση",
   "plugin.updates.pkg.removed": "Αφαιρέθηκε",
-  "plugin.updates.pkg.error": "Απέτυχε"
+  "plugin.updates.pkg.error": "Απέτυχε",
+  "plugin.updates.live.plugins": "Φορτώθηκαν ξανά χωρίς επανεκκίνηση: {names}",
+  "plugin.updates.live.overridden": "Δεν ενημερώθηκαν, χρησιμοποιείται δικό σας αντίγραφο: {names}",
+  "plugin.updates.live.server": "Διακομιστής: περνά στη νέα έκδοση μόλις ο βοηθός είναι αδρανής· η σελίδα επανασυνδέεται μόνη της.",
+  "plugin.updates.live.shell": "Κέλυφος: ξεκινά ξανά με τη νέα έκδοση την επόμενη φορά που θα κλειδωθεί η οθόνη."
 }

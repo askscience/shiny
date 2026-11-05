@@ -1379,5 +1379,8 @@
   "plugins.statusNotInstalled": "Inte installerat",
   "plugins.statusOff": "Av",
   "plugins.subtitleActivity": "Varje installation, uppdatering och borttagning, nyaste sist.",
-  "plugins.subtitleCraft": "Craft-sviten, varje app i ett eget fönster — installerad i ett steg, hålls uppdaterad och öppen för assistenten om du vill."
+  "plugins.subtitleCraft": "Craft-sviten, varje app i ett eget fönster — installerad i ett steg, hålls uppdaterad och öppen för assistenten om du vill.",
+  "system.update.reconnecting": "Återansluter till servern…",
+  "system.update.pluginsReloaded": "Uppdaterade: {names}",
+  "system.update.reloading": "Uppdaterar gränssnittet…"
 }

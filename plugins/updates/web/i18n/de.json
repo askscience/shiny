@@ -75,5 +75,9 @@
   "plugin.updates.pkg.done": "Installiert",
   "plugin.updates.pkg.removing": "Wird entfernt",
   "plugin.updates.pkg.removed": "Entfernt",
-  "plugin.updates.pkg.error": "Fehlgeschlagen"
+  "plugin.updates.pkg.error": "Fehlgeschlagen",
+  "plugin.updates.live.plugins": "Ohne Neustart neu geladen: {names}",
+  "plugin.updates.live.overridden": "Nicht aktualisiert, deine eigene Kopie ist in Gebrauch: {names}",
+  "plugin.updates.live.server": "Server: wechselt zur neuen Version, sobald der Assistent untätig ist; die Seite verbindet sich von selbst neu.",
+  "plugin.updates.live.shell": "Shell: startet beim nächsten Sperren des Bildschirms mit der neuen Version neu."
 }

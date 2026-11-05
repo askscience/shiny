@@ -93,5 +93,9 @@
   "plugin.updates.pkg.done": "Suiteáilte",
   "plugin.updates.pkg.removing": "Á bhaint",
   "plugin.updates.pkg.removed": "Bainte",
-  "plugin.updates.pkg.error": "Theip air"
+  "plugin.updates.pkg.error": "Theip air",
+  "plugin.updates.live.plugins": "Athluchtaithe gan atosú: {names}",
+  "plugin.updates.live.overridden": "Gan nuashonrú, tá do chóip féin in úsáid: {names}",
+  "plugin.updates.live.server": "Freastalaí: aistríonn sé chuig an leagan nua a luaithe a bhíonn an cúntóir díomhaoin; athcheanglaíonn an leathanach uaidh féin.",
+  "plugin.updates.live.shell": "Blaosc: atosaíonn sí leis an leagan nua an chéad uair eile a ghlasáiltear an scáileán."
 }

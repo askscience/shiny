@@ -2,6 +2,26 @@
 
 ## [Unreleased]
 
+### Added
+
+- Updates take effect without a restart. The server fingerprints every
+  plugin directory and loads again the ones whose code changed on disk —
+  after a package upgrade, a Craft store install or a copied build — on
+  `POST /api/plugins/rescan` and on its own every ten seconds
+  (`src/plugins/digest.rs`, `application::plugin_watch`). When its own package
+  was upgraded, the server swaps itself for the new binary in the same
+  process, handing the listening socket over, once the assistant is idle
+  (`POST /api/system/reexec`, `application::reexec`): the port never closes.
+  The page follows (`web/js/liveUpdate.js`): it reads `/api/system/version`
+  every twenty seconds and after any lost connection, reloads a changed
+  plugin's window module (in place when the window can carry its state,
+  `saveState()`/`restoreState()`), and reloads itself once when the core web
+  tree changed, restoring every window — also with "Remember my workspace"
+  off. The Updates window does all this after a successful upgrade and says
+  what happened. The kiosk shell, the one piece that needs a relaunch, does it
+  behind the next locked screen (exit code 44). See
+  `docs/core/live-update.md`.
+
 ## [0.1.6] - 2026-11-05
 
 ### Added

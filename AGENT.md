@@ -26,7 +26,7 @@ and an optional web surface.
 | [PLUGINS.md](PLUGINS.md) | The plugin system end to end: traits, installer, worked example |
 | [docs/plugins/](docs/plugins/) | `authoring.md`, `reference.md`, `migrations.md`, `runtime-abi.md`, `security.md`, `architecture.md`, `troubleshooting.md` |
 | [API_DOCS.md](API_DOCS.md) + [docs/api/](docs/api/) | HTTP API conventions and every endpoint group |
-| [docs/core/](docs/core/) | Subsystem docs: `web-ui.md`, `i18n.md`, `voice.md`, `agent.md`, `chat.md`, `desktop.md`, `themes-icons.md`, `data-and-auth.md`, `travel.md`, `clipboard.md` |
+| [docs/core/](docs/core/) | Subsystem docs: `web-ui.md`, `i18n.md`, `voice.md`, `agent.md`, `chat.md`, `desktop.md`, `themes-icons.md`, `data-and-auth.md`, `travel.md`, `clipboard.md`, `live-update.md` |
 | [docs/host/](docs/host/) | Audio, network, Bluetooth, battery, power panels |
 | [docs/deployment/](docs/deployment/) | Kiosk shell, sidecars, server mode, greeter |
 | [docs/reference/](docs/reference/) | `crate-map.md`, `env-vars.md`, `glossary.md` |

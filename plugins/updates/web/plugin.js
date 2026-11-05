@@ -686,6 +686,48 @@ function finishJob(success, error) {
   revealHistory = true;
   render();
   void loadStatus(true);
+  if (success) void followUp();
+}
+
+/**
+ * After a successful upgrade nothing has to restart for it to show: the
+ * server loads the plugins whose files changed, and — when its own package
+ * was among the upgrades — swaps itself for the new binary once the
+ * assistant is idle (the page reconnects on its own, `liveUpdate.js`). The
+ * kiosk shell is the one piece that waits: it relaunches behind the next
+ * locked screen. Each step is written to the job log.
+ */
+async function followUp() {
+  const upgraded = (jobProgress?.packages || []).filter((p) => p.state === 'done').map((p) => p.name);
+  try {
+    const report = (await apiFetch('/api/plugins/rescan', { method: 'POST', authRedirect: false }))?.data || {};
+    const names = [...(report.updated || []), ...(report.added || [])];
+    if (names.length) {
+      appendLog([t('plugin.updates.live.plugins', { names: names.join(', ') }, `Loaded again without a restart: ${names.join(', ')}`)]);
+    }
+    if (report.overridden?.length) {
+      const names = report.overridden.join(', ');
+      appendLog([t('plugin.updates.live.overridden', { names }, `Not updated, your own copy is in use: ${names}`)]);
+    }
+    for (const [name, error] of report.failed || []) appendLog([`!! ${name}: ${error}`]);
+  } catch (err) {
+    appendLog([`!! ${err.message}`]);
+  }
+  let version = null;
+  try {
+    version = (await apiFetch('/api/system/version', { authRedirect: false }))?.data || null;
+  } catch (_) { /* an older server: nothing to swap */ }
+  const serverPackage = upgraded.some((name) => name === 'liteaura' || name === 'peakd');
+  if (!serverPackage && !version?.binaryReplaced) return;
+  try {
+    await apiFetch('/api/system/reexec', { method: 'POST', authRedirect: false });
+    appendLog([
+      t('plugin.updates.live.server', null, 'Server: switching to the new version as soon as the assistant is idle; the page reconnects on its own.'),
+      t('plugin.updates.live.shell', null, 'Shell: it relaunches with the new version the next time the screen is locked.'),
+    ]);
+  } catch (err) {
+    appendLog([`!! ${err.message}`]);
+  }
 }
 
 /* ── password prompt ────────────────────────────────────────── */

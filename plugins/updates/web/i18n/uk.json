@@ -87,5 +87,9 @@
   "plugin.updates.pkg.done": "Встановлено",
   "plugin.updates.pkg.removing": "Вилучення",
   "plugin.updates.pkg.removed": "Вилучено",
-  "plugin.updates.pkg.error": "Помилка"
+  "plugin.updates.pkg.error": "Помилка",
+  "plugin.updates.live.plugins": "Завантажено знову без перезапуску: {names}",
+  "plugin.updates.live.overridden": "Не оновлено, використовується ваша власна копія: {names}",
+  "plugin.updates.live.server": "Сервер: переходить на нову версію, щойно асистент звільниться; сторінка перепідключиться сама.",
+  "plugin.updates.live.shell": "Оболонка: перезапуститься з новою версією під час наступного блокування екрана."
 }

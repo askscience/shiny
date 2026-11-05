@@ -14,6 +14,7 @@ import {
   wireToastEvents, wireNotificationEvents, toast, hydrateIcons, reveal,
 } from '../ui/index.js';
 import { refreshActivePlugins, resetSessionPlugins } from './activePlugins.js';
+import { initLiveUpdate } from './liveUpdate.js';
 import { initArtifactDock } from './artifacts.js';
 import { initInsightCards } from './insights/insightCards.js';
 import { initHudClock, initHudTrips } from './hudLeft.js';
@@ -49,7 +50,7 @@ import { initChatHistory } from './chatHistory.js';
 import { initThinkToggle } from './thinkToggle.js';
 import { initTouchBar } from './touchbar.js';
 import { reloadUserSession } from './session.js';
-import { loadUserPreferences, getRemember, getWakeWord, isAiEnabled } from './preferences.js';
+import { loadUserPreferences, getRemember, getWakeWord, isAiEnabled, isUpdateReload, finishUpdateReload } from './preferences.js';
 import { initI18n, t } from './i18n.js';
 import { initBackground } from './background.js';
 import { initSpokenReply } from './spokenReply.js';
@@ -146,8 +147,10 @@ async function boot() {
  *  remember" really means an empty desktop with every plugin closed. */
 async function beginSession() {
   await loadUserPreferences();
-  if (!getRemember()) await resetSessionPlugins();
+  // An update reload continues this session: its plugins stay active.
+  if (!getRemember() && !isUpdateReload()) await resetSessionPlugins();
   await initApp();
+  finishUpdateReload();
 }
 
 async function initApp() {
@@ -173,6 +176,7 @@ async function initApp() {
   initHudPower(); // top-bar power menu (reboot / power off / suspend, logind)
   initHudPlugins(); // plugin icon tray in the top bar — works with zero plugins
   initPluginHud(); // optional per-plugin top-bar chips (loaded when installed)
+  initLiveUpdate(); // follow the server through an update (plugins, web, swap)
   initCraftStore(); // Craft store: keeps the installed Craft apps updated
   // A Craft app saves through the browser APIs inside its iframe: the shell
   // reports the path so the desktop can say where the file went and refresh the

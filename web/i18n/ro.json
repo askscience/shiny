@@ -1397,5 +1397,8 @@
   "plugins.statusNotInstalled": "Neinstalată",
   "plugins.statusOff": "Dezactivată",
   "plugins.subtitleActivity": "Fiecare instalare, actualizare și eliminare, cele mai noi la final.",
-  "plugins.subtitleCraft": "Suita Craft, fiecare aplicație în propria fereastră — instalată dintr-un pas, ținută la zi și deschisă asistentului dacă vrei."
+  "plugins.subtitleCraft": "Suita Craft, fiecare aplicație în propria fereastră — instalată dintr-un pas, ținută la zi și deschisă asistentului dacă vrei.",
+  "system.update.reconnecting": "Reconectare la server…",
+  "system.update.pluginsReloaded": "Actualizate: {names}",
+  "system.update.reloading": "Se actualizează interfața…"
 }

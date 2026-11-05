@@ -75,5 +75,9 @@
   "plugin.updates.pkg.done": "Telepítve",
   "plugin.updates.pkg.removing": "Eltávolítás",
   "plugin.updates.pkg.removed": "Eltávolítva",
-  "plugin.updates.pkg.error": "Sikertelen"
+  "plugin.updates.pkg.error": "Sikertelen",
+  "plugin.updates.live.plugins": "Újratöltve újraindítás nélkül: {names}",
+  "plugin.updates.live.overridden": "Nincs frissítve, a saját másolatod van használatban: {names}",
+  "plugin.updates.live.server": "Kiszolgáló: az új verzióra vált, amint az asszisztens tétlen; az oldal magától újracsatlakozik.",
+  "plugin.updates.live.shell": "Héj: a képernyő következő zárolásakor újraindul az új verzióval."
 }

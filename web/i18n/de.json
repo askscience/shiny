@@ -1379,5 +1379,8 @@
   "plugins.statusNotInstalled": "Nicht installiert",
   "plugins.statusOff": "Aus",
   "plugins.subtitleActivity": "Jede Installation, Aktualisierung und Entfernung, die neueste zuletzt.",
-  "plugins.subtitleCraft": "Die Craft-Suite, jede App in einem eigenen Fenster — in einem Schritt installiert, aktuell gehalten und auf Wunsch für den Assistenten zugänglich."
+  "plugins.subtitleCraft": "Die Craft-Suite, jede App in einem eigenen Fenster — in einem Schritt installiert, aktuell gehalten und auf Wunsch für den Assistenten zugänglich.",
+  "system.update.reconnecting": "Verbindung zum Server wird wiederhergestellt…",
+  "system.update.pluginsReloaded": "Aktualisiert: {names}",
+  "system.update.reloading": "Die Oberfläche wird aktualisiert…"
 }
