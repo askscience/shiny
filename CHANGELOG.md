@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.1.9] - 2026-11-05
+
 ### Fixed
 
 - The package depends on the QML modules the shell loads (QtQuick, its
