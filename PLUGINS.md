@@ -391,8 +391,12 @@ Response on success:
 The new tools are surfaced by the agent on the **next** `/api/agent` call automatically — no restart needed for tool/skills/persona changes. HTTP routes contributed via `RouteSpec` go through an `ArcSwap<Router>` rebuild callback that `AppState::router_rebuild` triggers; the implementation of the live router swap is the hot-reload step that wraps each request to observe the current router snapshot.
 
 Files that change **on disk** are loaded again the same way, without an
-install call: a package upgrade, the Craft store or a developer's `cp` of a
-rebuilt library. The server fingerprints every plugin directory
+install call: a package upgrade, the Craft store or
+`scripts/install-plugin-dev.sh`. All of them write a **new** file and rename
+it into place, and that is a requirement, not a habit: the server maps the
+loaded cdylib, so rewriting that same file (`cp new.so old.so`) changes code
+under a running process and crashes it — at the latest at shutdown. Copy to a
+temporary name in the same directory and `mv` it over the old one. The server fingerprints every plugin directory
 (`src/plugins/digest.rs`: path, size and mtime of `plugin.toml`, the cdylib,
 `migrations/`, `skills/` for the *code* digest; `web/` for the *web* digest).
 `POST /api/plugins/rescan` compares the code digests with the loaded ones and

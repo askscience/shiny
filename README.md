@@ -288,8 +288,12 @@ cargo check                        # compile check
 Plugin development: [docs/plugins/authoring.md](docs/plugins/authoring.md).
 Editing a plugin window? The app serves the **installed** copy
 (`data/plugins/<name>/web/`, or the account's `~/.local/share/shiny/plugins/`),
-not `plugins/<name>/web/`. Copy your changes there: the server reloads a
-changed plugin within ten seconds and open windows pick it up, no restart.
+not `plugins/<name>/web/`. Web files can simply be copied there; a rebuilt
+library goes in with `scripts/install-plugin-dev.sh <name>`, which writes a
+new file and renames it over the old one. The server reloads a changed plugin
+within ten seconds and open windows pick it up, no restart. Never `cp` a
+`.so` over the one that is loaded: the running server maps that file, and
+rewriting it in place crashes the server (segmentation fault).
 
 ---
 

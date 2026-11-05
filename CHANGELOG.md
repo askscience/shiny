@@ -17,6 +17,10 @@
   in 2024.
 - When a plugin's tool succeeds but its window is closed, the model is told
   so, with the call that opens it, instead of claiming the result is on screen.
+- The docs no longer suggest copying a rebuilt plugin library over the
+  installed one: rewriting a loaded `.so` in place crashes the server
+  (reproduced, exit 139 at shutdown). Libraries are replaced by writing a new
+  file and renaming it, as `scripts/install-plugin-dev.sh` does.
 - Calendar events accept the shapes models send: `summary`, `name` or
   `subject` for the title, and `start`/`end` as ISO date-times
   (`2026-11-20T08:15:00`); times with seconds are accepted too. Calc answers

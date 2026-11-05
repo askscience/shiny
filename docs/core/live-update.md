@@ -68,6 +68,12 @@ is idle, that the shell relaunches at the next lock.
 
 ## Limits
 
+- A plugin library must be **replaced, not rewritten**: write the new file
+  under another name and rename it into place (dpkg, the plugin installer and
+  `scripts/install-plugin-dev.sh` all do). `cp new.so old.so` rewrites the
+  file the server has mapped and crashes it (reproduced: segmentation fault on
+  the next shutdown).
+
 - A plugin with background work must stop it in `on_unload`, or two copies run
   after a reload (the loader keeps the old library mapped).
 - The loader keeps at most 100 retired libraries per process; past that a
