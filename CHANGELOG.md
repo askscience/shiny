@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-11-05
+
 ### Added
 
 - Updates take effect without a restart. The server fingerprints every
