@@ -2,7 +2,7 @@
 name = "shiny-filter-core"
 version = "0.1.0"
 edition = "2021"
-description = "The light adblock-rust engine shared by the shiny server and the peakd kiosk shell (no HTTP client, no runtime)"
+description = "The light adblock-rust engine shared by the shiny server and the liteaura kiosk shell (no HTTP client, no runtime)"
 
 [dependencies]
 # Brave's native adblock-rust engine (MPL-2.0). `single-thread` is off so the

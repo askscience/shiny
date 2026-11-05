@@ -1,6 +1,6 @@
 #!/bin/sh
-# Let the peakd kiosk read the internal trackpad's multi-touch stream, so it
-# can recognise three-finger swipes itself (crates/peakd/src/gestures.rs).
+# Let the liteaura kiosk read the internal trackpad's multi-touch stream, so it
+# can recognise three-finger swipes itself (crates/liteaura/src/gestures.rs).
 #
 # The kiosk runs as an unprivileged user, and /dev/input/event* is root:input.
 # Reading it needs an ACL, which systemd-logind grants to the user of the
@@ -13,10 +13,10 @@
 # pointer and two-finger scrolling keep working exactly as before.
 set -eu
 
-RULE=/etc/udev/rules.d/70-peakd-touchpad.rules
+RULE=/etc/udev/rules.d/70-liteaura-touchpad.rules
 
 cat > "$RULE" <<'EOF'
-# peakd: give the active seat session read access to the internal trackpad's
+# liteaura: give the active seat session read access to the internal trackpad's
 # evdev node. The shell watches it for three-finger swipes without grabbing it,
 # so X keeps the pointer. Managed by scripts/install-touchpad-gestures.sh.
 ACTION=="add|change", KERNEL=="event*", SUBSYSTEM=="input", ENV{ID_INPUT_TOUCHPAD}=="1", TAG+="uaccess"
@@ -26,4 +26,4 @@ udevadm control --reload-rules
 udevadm trigger --subsystem-match=input
 
 echo "installed $RULE"
-echo "restart the kiosk to pick it up:  sudo systemctl restart peakd.service"
+echo "restart the kiosk to pick it up:  sudo systemctl restart liteaura.service"

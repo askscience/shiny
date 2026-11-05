@@ -82,7 +82,7 @@
 .ui-icon img.is-monochrome { filter: grayscale(1); }
 .ui-icon--missing { border-radius: 50%; }
 
-/* App brand icon — the PEAK'D! mark (/favicon.svg) painted as a mask,
+/* App brand icon — the LiteAura mark (/favicon.svg) painted as a mask,
    so it inherits the surrounding text colour and needs no background plate.
    Size it from the outside; the default is one line tall. */
 .app-icon {

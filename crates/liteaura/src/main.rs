@@ -1,0 +1,696 @@
+//! `liteaura` — the LiteAura kiosk shell on Qt 6 + QtWebEngine.
+//!
+//! The app stays the website it is; this binary is the engine host that
+//! replaces WebKitGTK. Rust owns the policy:
+//! config, the Browser plugin's command protocol and queues, interface scale,
+//! trackpad gestures and exit semantics. Qt lives behind `shim.rs`.
+//!
+//! Layout:
+//! * [`config`] — launch flags/environment.
+//! * [`browse`] — the `liteaura:view:*` protocol, queues and the view state
+//!   machine; [`host`] binds it to the Qt page views.
+//! * [`display`] — interface scale files and the DPI-derived `auto` choice.
+//! * [`gestures`] — evdev three-finger swipes.
+//! * [`shim`] — the C ABI in `shim/liteaura_qt.h`.
+//! * [`youtube`] — the document-start scriptlet for YouTube's video ads, which
+//!   a filter list cannot reach.
+
+mod bench;
+mod browse;
+mod config;
+mod display;
+mod downloads;
+mod filter;
+mod gestures;
+mod host;
+mod i18n;
+mod shim;
+mod youtube;
+
+use std::ffi::{c_char, c_void, CStr};
+use std::net::{TcpStream, ToSocketAddrs};
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
+use std::sync::OnceLock;
+use std::time::{Duration, Instant, SystemTime};
+
+use parking_lot::Mutex;
+
+use browse::{ViewBus, Views};
+use config::LiteAuraConfig;
+use host::QtHost;
+
+/// The IPC message the page sends when the user asks to leave the kiosk.
+const EXIT_MESSAGE: &str = "liteaura:exit";
+
+/// The page posts this when the user turns on Server mode. The shell exits
+/// with [`SERVER_MODE_EXIT`] so the session supervisor can relaunch into the
+/// server-mode window instead of ending the session.
+const SERVER_MODE_MESSAGE: &str = "liteaura:server-mode";
+
+/// The page posts this when the user logs out. The shell exits with
+/// [`LOGOUT_EXIT`] so the session supervisor ends the session cleanly and the
+/// machine returns to its login screen (the greeter), instead of leaving the
+/// seat on the app's own sign-in overlay.
+const LOGOUT_MESSAGE: &str = "liteaura:logout";
+
+/// Exit status meaning "switch to server mode".
+const SERVER_MODE_EXIT: i32 = 42;
+
+/// Exit status meaning "the user signed out".
+const LOGOUT_EXIT: i32 = 43;
+
+/// Set by the IPC handler; read once the Qt event loop returns.
+static EXIT_CODE: AtomicI32 = AtomicI32::new(0);
+
+/// Leaving the kiosk: Cmd+Q and Alt+Q.
+///
+/// On Linux Chromium delivers the Super/Command modifier to the DOM (unlike
+/// WebKitGTK, which stripped it before the page could see it), so this single
+/// script works on every platform the Qt shell runs on. `event.code` rather
+/// than `event.key`: with Alt held on ISO layouts the key *is* `œ`, while the
+/// physical key is still Q. Capture phase, so a page's own handler cannot
+/// swallow the way out first. Injected into every page and future page.
+const EXIT_SHORTCUT_JS: &str = r#"(function () {
+  if (window.__liteauraExitShortcut) return;
+  window.__liteauraExitShortcut = true;
+  window.addEventListener('keydown', function (event) {
+    if (event.code !== 'KeyQ' && String(event.key).toLowerCase() !== 'q') return;
+    if (!(event.metaKey || event.altKey)) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    try {
+      window.ipc.postMessage('liteaura:exit');
+    } catch (err) {
+      // No IPC bridge (a plain page in a test, say): nothing to report to.
+    }
+  }, true);
+})();"#;
+
+static BUS: OnceLock<ViewBus> = OnceLock::new();
+static VIEWS: OnceLock<Mutex<Views<QtHost>>> = OnceLock::new();
+static GESTURES: OnceLock<gestures::GestureBridge> = OnceLock::new();
+static DISPLAY: OnceLock<Mutex<DisplayState>> = OnceLock::new();
+static BENCH: OnceLock<Mutex<bench::BenchState>> = OnceLock::new();
+static START_URL: OnceLock<String> = OnceLock::new();
+/// The boot URL: the app origin with the single-use auto-login token. Usable
+/// only until that token has been redeemed once.
+static BOOT_URL: OnceLock<String> = OnceLock::new();
+/// Set once the app's first load finished, i.e. the boot token is spent.
+static BOOT_TOKEN_SPENT: AtomicBool = AtomicBool::new(false);
+
+/// Interface-scale state, polled on the pump (a stat every 100 ms).
+struct DisplayState {
+    choice_path: PathBuf,
+    runtime_path: PathBuf,
+    /// `--scale`, applied at startup; a later change to the choice file wins,
+    /// exactly like the GTK shell.
+    override_choice: Option<display::Choice>,
+    /// The panel-derived factor `auto` resolves to.
+    auto: f64,
+    /// What was applied; `None` until the first tick.
+    applied: Option<f64>,
+    last_mtime: Option<SystemTime>,
+    info: Option<(f64, i32, i32)>,
+}
+
+fn main() {
+    #[cfg(target_os = "linux")]
+    std::process::exit(linux_main());
+
+    #[cfg(not(target_os = "linux"))]
+    {
+        eprintln!("liteaura is Linux-only; macOS keeps the wry/WKWebView shell");
+        std::process::exit(1);
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn linux_main() -> i32 {
+    // Before anything reads or creates the data directories: an install made
+    // under the former name keeps its profile.
+    liteaura_core::legacy::adopt_legacy_env();
+    liteaura_core::legacy::migrate_legacy_dirs();
+    let cfg = LiteAuraConfig::from_env_and_args();
+
+    // Force Qt's own scale factor to 1 before Qt initialises: the interface
+    // scale is the app's page zoom (display.rs), exactly as with WebKitGTK.
+    // Without this, a HiDPI panel would scale twice.
+    std::env::set_var("QT_SCALE_FACTOR", "1");
+    std::env::set_var("QT_AUTO_SCREEN_SCALE_FACTOR", "0");
+
+    if cfg.devtools {
+        // QtWebEngine's devtools live in Chromium; expose them on loopback.
+        std::env::set_var("QTWEBENGINE_REMOTE_DEBUGGING", "127.0.0.1:9222");
+        println!("liteaura: devtools on http://127.0.0.1:9222");
+    }
+
+    match run(cfg) {
+        Ok(code) => code,
+        Err(err) => {
+            eprintln!("liteaura: {err}");
+            1
+        }
+    }
+}
+
+/// One IPC message from any page. Browser-view commands go to the queue;
+/// everything else is the exit contract or a shell command from the app view.
+extern "C" fn on_ipc(_userdata: *mut c_void, body: *const c_char) {
+    let body = unsafe { CStr::from_ptr(body) }.to_string_lossy().into_owned();
+    if let Some(bus) = BUS.get() {
+        if bus.handle_ipc(&body) {
+            // Apply the view command now, not on the next 100 ms pump tick. A
+            // `setBounds` during a window drag has to land in the same frame as
+            // the DOM write, otherwise the native Browser page trails its own
+            // window frame by up to a tick.
+            pump_views();
+            return;
+        }
+    }
+    // Settings/commands from the app view (the IPC bridge rejects these from
+    // child browsing views, so this is trusted).
+    if let Some(raw) = body.strip_prefix("liteaura:settings:") {
+        if let Ok(value) = serde_json::from_str::<serde_json::Value>(raw) {
+            if let Some(on) = value.get("adblock").and_then(|v| v.as_bool()) {
+                filter::set_enabled(on);
+                shim::set_filter_scripts(on);
+            }
+            if let Some(dir) = value.get("downloadsDir").and_then(|v| v.as_str()) {
+                downloads::set_dir(dir);
+            }
+            // The app's theme, so pages' `prefers-color-scheme` matches it.
+            if let Some(scheme) = value.get("colorScheme").and_then(|v| v.as_str()) {
+                shim::set_color_scheme(scheme);
+            }
+            push_shield();
+        }
+        return;
+    }
+    // The document editor asks for an exact PDF of its pages (Chromium print).
+    if let Some(raw) = body.strip_prefix("liteaura:print:") {
+        if let Ok(value) = serde_json::from_str::<serde_json::Value>(raw) {
+            let id = value.get("id").and_then(|v| v.as_str()).unwrap_or_default();
+            let html = value.get("html").and_then(|v| v.as_str()).unwrap_or_default();
+            let options = value.get("options").cloned().unwrap_or(serde_json::Value::Null);
+            if !id.is_empty() && !html.is_empty() {
+                // A NUL cannot cross the C ABI (and would panic `cs`): drop it.
+                let id: String = id.chars().filter(|c| *c != '\0').collect();
+                let html: String = html.chars().filter(|c| *c != '\0').collect();
+                shim::print_html(&id, &html, &options.to_string());
+            }
+        }
+        return;
+    }
+    if let Some(raw) = body.strip_prefix("liteaura:filter:") {
+        if let Ok(value) = serde_json::from_str::<serde_json::Value>(raw) {
+            if let Some(on) = value.get("enabled").and_then(|v| v.as_bool()) {
+                filter::set_enabled(on);
+                shim::set_filter_scripts(on);
+            }
+        }
+        push_shield();
+        return;
+    }
+    if body == "liteaura:shield:query" {
+        push_shield();
+        return;
+    }
+    if body == "liteaura:downloads:list" {
+        downloads::push_list();
+        return;
+    }
+    if let Some(raw) = body.strip_prefix("liteaura:download:") {
+        if let Ok(value) = serde_json::from_str::<serde_json::Value>(raw) {
+            let id = value.get("id").and_then(|v| v.as_str()).unwrap_or_default();
+            let action = value.get("action").and_then(|v| v.as_str()).unwrap_or_default();
+            if !id.is_empty() && !action.is_empty() {
+                downloads::action(id, action);
+            }
+        }
+        return;
+    }
+    match body.as_str() {
+        EXIT_MESSAGE => {
+            println!("liteaura: leaving the kiosk");
+            EXIT_CODE.store(0, Ordering::SeqCst);
+            shim::quit();
+        }
+        SERVER_MODE_MESSAGE => {
+            EXIT_CODE.store(SERVER_MODE_EXIT, Ordering::SeqCst);
+            shim::quit();
+        }
+        LOGOUT_MESSAGE => {
+            println!("liteaura: signing out");
+            EXIT_CODE.store(LOGOUT_EXIT, Ordering::SeqCst);
+            shim::quit();
+        }
+        _ => {}
+    }
+}
+
+/// Report the shield state to the app view (`window.__liteauraShield`).
+fn push_shield() {
+    let (enabled, blocked, rules) = filter::stats();
+    let payload = serde_json::json!({ "enabled": enabled, "blocked": blocked, "rules": rules });
+    let script = format!("window.__liteauraShield && window.__liteauraShield({payload})");
+    shim::main_run_js(&script, 0);
+}
+
+/// Ad-filter verdict for the Qt request interceptor. Runs on QtWebEngine's IO
+/// thread, so it only touches the filter's own thread-safe state.
+extern "C" fn on_filter(
+    _userdata: *mut c_void,
+    url: *const c_char,
+    first_party: *const c_char,
+    resource_type: i32,
+    method: *const c_char,
+) -> i32 {
+    let url = unsafe { CStr::from_ptr(url) }.to_string_lossy();
+    let first_party = unsafe { CStr::from_ptr(first_party) }.to_string_lossy();
+    let method = unsafe { CStr::from_ptr(method) }.to_string_lossy();
+    i32::from(filter::is_blocked(&url, &first_party, resource_type, &method))
+}
+
+/// Per-host User-Agent override for the interceptor (the Google sign-in fix).
+extern "C" fn on_ua(_userdata: *mut c_void, host: *const c_char) -> *const c_char {
+    let host = unsafe { CStr::from_ptr(host) }.to_string_lossy();
+    match filter::user_agent_override(&host) {
+        Some(ua) => {
+            static UA: OnceLock<std::ffi::CString> = OnceLock::new();
+            UA.get_or_init(|| std::ffi::CString::new(ua).expect("UA has no NUL"))
+                .as_ptr()
+        }
+        None => std::ptr::null(),
+    }
+}
+
+/// One download lifecycle event from the Qt shim.
+extern "C" fn on_download(
+    _userdata: *mut c_void,
+    id: *const c_char,
+    kind: *const c_char,
+    payload: *const c_char,
+) {
+    let id = unsafe { CStr::from_ptr(id) }.to_string_lossy();
+    let kind = unsafe { CStr::from_ptr(kind) }.to_string_lossy();
+    let payload = unsafe { CStr::from_ptr(payload) }.to_string_lossy();
+    downloads::on_event(&id, &kind, &payload);
+}
+
+/// A copy made inside a Browser-plugin page (the app DOM never sees it).
+///
+/// The app's clipboard service is the only consumer: it records the text in
+/// the shared history through `window.__shinyClipboardCapture`, defined by
+/// `web/js/clipboard.js`.
+extern "C" fn on_clipboard(_userdata: *mut c_void, kind: *const c_char, text: *const c_char) {
+    let kind = unsafe { CStr::from_ptr(kind) }.to_string_lossy();
+    if kind != "copy" {
+        return;
+    }
+    let text = unsafe { CStr::from_ptr(text) }.to_string_lossy();
+    if text.is_empty() {
+        return;
+    }
+    // `Value::String(...).to_string()` JSON-encodes (quotes + escapes), so
+    // arbitrary page text cannot break out of the injected script.
+    let payload = serde_json::Value::String(text.into_owned()).to_string();
+    shim::main_run_js(
+        &format!("window.__shinyClipboardCapture && window.__shinyClipboardCapture({payload})"),
+        0,
+    );
+}
+
+/// View lifecycle from the shim. Events are queued; the pump reports them to
+/// the plugin with `window.__liteauraViewEvent`.
+extern "C" fn on_view(_userdata: *mut c_void, id: *const c_char, kind: *const c_char, payload: *const c_char) {
+    let id = unsafe { CStr::from_ptr(id) }.to_string_lossy().into_owned();
+    let kind = unsafe { CStr::from_ptr(kind) }.to_string_lossy().into_owned();
+    let payload = unsafe { CStr::from_ptr(payload) }.to_string_lossy().into_owned();
+
+    // The top-level window's move is the benchmark's drag signal.
+    if id == "window" && kind == "move" {
+        if let Some(bench) = BENCH.get() {
+            bench.lock().observe_window_move();
+        }
+        return;
+    }
+
+    let Some(bus) = BUS.get() else { return };
+    match kind.as_str() {
+        "load" | "title" | "url" | "new-window" | "page-js" => {
+            if kind == "load"
+                && id == "main"
+                && payload == "finished"
+                && !BOOT_TOKEN_SPENT.swap(true, Ordering::SeqCst)
+            {
+                println!("liteaura: app loaded (boot token spent)");
+            }
+            bus.push_event(ViewBus::view_event(&id, &kind, &payload));
+        }
+        "crashed" => {
+            eprintln!("liteaura: view {id} crashed ({payload})");
+            if id == "main" {
+                // The app's own renderer died: bring it back rather than leaving a
+                // dead white window in the kiosk. The single-use boot link only
+                // works once, so after that the reload leans on the durable
+                // `shiny_token` cookie the profile keeps on disk.
+                let url = if BOOT_TOKEN_SPENT.load(Ordering::SeqCst) {
+                    START_URL.get().cloned()
+                } else {
+                    BOOT_URL.get().cloned().or_else(|| START_URL.get().cloned())
+                };
+                if let Some(url) = url {
+                    println!("liteaura: reloading the app view after the crash");
+                    shim::main_load(&url);
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+/// The shell's pump (Qt timer, ~100 ms; ~16 ms while a trackpad gesture is
+/// live): drain view commands/events, dispatch gestures, apply scale changes.
+extern "C" fn on_pump(_userdata: *mut c_void) {
+    pump_views();
+    if let Some(bridge) = GESTURES.get() {
+        // One evaluation per tick: the bridge already coalesced the updates.
+        let script: String = bridge
+            .drain()
+            .iter()
+            .map(gestures::dispatch_script)
+            .chain(bridge.drain_pinch().iter().map(gestures::pinch_script))
+            .collect();
+        if !script.is_empty() {
+            shim::main_run_js(&script, 0);
+        }
+    }
+    display_tick();
+    bench_tick();
+}
+
+/// Called on the gesture reader thread when a swipe goes live or idle: pump at
+/// frame rate while the fingers move, and deliver the begin/end at once rather
+/// than on the next tick.
+fn gesture_waker(live: bool) {
+    shim::pump_rate(if live { 16 } else { 100 }, true);
+}
+
+/// Drain the browser-view command and event queues. Called on the pump and,
+/// for commands, immediately from `on_ipc` so a moving native view keeps up.
+fn pump_views() {
+    if let Some(views) = VIEWS.get() {
+        views.lock().pump(|script| shim::main_run_js(script, 0));
+    }
+}
+
+/// The benchmark's schedule, advanced on the pump.
+fn bench_tick() {
+    let Some(lock) = BENCH.get() else { return };
+    let mut state = lock.lock();
+    let Some(step) = state.tick() else { return };
+    match step {
+        bench::Step::Inject => {
+            shim::main_run_js(bench::BENCH_JS, 0);
+            if state.drag_tile() {
+                shim::main_run_js(bench::DRAG_TILE_JS, 0);
+                println!("benchmark: dragging a plugin window");
+            }
+            println!("benchmark: measuring...");
+        }
+        bench::Step::Collect => {
+            if state.drag_tile() {
+                shim::main_run_js(
+                    "window.__liteauraTileDragStop && window.__liteauraTileDragStop()",
+                    0,
+                );
+            }
+            shim::main_run_js(
+                "JSON.stringify(window.__liteauraBenchReport ? window.__liteauraBenchReport() : null)",
+                1,
+            );
+        }
+    }
+}
+
+/// Results of `run_js`: callback id 1 is the benchmark report.
+extern "C" fn on_js(_userdata: *mut c_void, id: i32, value: *const c_char) {
+    if id != 1 {
+        return;
+    }
+    let raw = unsafe { CStr::from_ptr(value) }.to_string_lossy().into_owned();
+    if let Some(bench) = BENCH.get() {
+        bench.lock().finish(&raw);
+    }
+    shim::quit();
+}
+
+fn display_tick() {
+    let Some(lock) = DISPLAY.get() else { return };
+    let mut state = lock.lock();
+
+    let mtime = display::modified(&state.choice_path);
+    let changed = mtime != state.last_mtime;
+    state.last_mtime = mtime;
+    if !changed && state.applied.is_some() {
+        return;
+    }
+
+    let resolved = if state.applied.is_none() {
+        // First application: `--scale` wins over the stored choice.
+        state
+            .override_choice
+            .unwrap_or_else(|| display::read_choice(&state.choice_path))
+            .resolve(state.auto)
+    } else {
+        display::read_choice(&state.choice_path).resolve(state.auto)
+    };
+    if state.applied == Some(resolved) {
+        return;
+    }
+    shim::main_zoom(resolved);
+    display::write_runtime(&state.runtime_path, resolved, state.info);
+    state.applied = Some(resolved);
+    println!("liteaura: interface scale {:.0}%", resolved * 100.0);
+}
+
+/// Wait until a loopback start URL actually accepts connections.
+///
+/// The app is served by `shiny.service`, which loads every installed plugin
+/// before it starts listening (several seconds on a cold boot). `After=` only
+/// orders the units, not readiness, so liteaura can start first — and a
+/// `connection refused` page is never retried by the webview, which is exactly
+/// how the kiosk ended up white. Non-loopback URLs are not waited for.
+fn wait_for_loopback_origin(url: &str, timeout: Duration) {
+    let Some((host, port)) = loopback_endpoint(url) else {
+        return;
+    };
+    let Ok(mut addrs) = (host.as_str(), port).to_socket_addrs() else {
+        return;
+    };
+    let Some(addr) = addrs.next() else {
+        return;
+    };
+
+    let deadline = Instant::now() + timeout;
+    let mut announced = false;
+    loop {
+        if TcpStream::connect_timeout(&addr, Duration::from_millis(250)).is_ok() {
+            return;
+        }
+        if !announced {
+            println!("liteaura: waiting for the app at {addr}");
+            announced = true;
+        }
+        if Instant::now() >= deadline {
+            eprintln!(
+                "liteaura: the app at {addr} did not answer within {timeout:?}; opening anyway"
+            );
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(200));
+    }
+}
+
+/// `(host, port)` when the URL points at loopback, `None` otherwise.
+fn loopback_endpoint(url: &str) -> Option<(String, u16)> {
+    let authority = url.split_once("://")?.1;
+    let authority = authority.split(['/', '?', '#']).next()?;
+    let (host, port) = match authority.rsplit_once(':') {
+        Some((host, port)) => (host, port.parse().ok()?),
+        None => (authority, 80),
+    };
+    let host = host.trim_start_matches('[').trim_end_matches(']');
+    let loopback = host == "localhost" || host == "127.0.0.1" || host == "::1";
+    loopback.then(|| (host.to_string(), port))
+}
+
+/// URL for the shell's initial navigation. With a `SHINY_BOOT_TOKEN` from the
+/// session launcher this is the single-use auto-login URL; the token never
+/// appears in argv (world-readable) or in the startup log.
+fn boot_url(origin: &str, token: Option<&str>) -> String {
+    match token.map(str::trim).filter(|t| !t.is_empty()) {
+        Some(token) => {
+            let base = origin.trim_end_matches('/');
+            format!("{base}/api/auth/session?token={token}")
+        }
+        None => origin.to_string(),
+    }
+}
+
+/// When `--iroh <ticket>` is set, start a local proxy that tunnels to the
+/// remote server and point the shell at it. Refuse without the feature.
+#[cfg(feature = "iroh")]
+fn resolve_iroh(mut cfg: LiteAuraConfig) -> Result<LiteAuraConfig, String> {
+    let Some(ticket) = cfg.iroh.clone() else {
+        return Ok(cfg);
+    };
+    let listen: std::net::SocketAddr = "127.0.0.1:0".parse().expect("valid loopback");
+    let addr = shiny_iroh_client::spawn(&ticket, listen)
+        .map_err(|e| format!("could not start the Iroh proxy: {e}"))?;
+    let origin = format!("http://{addr}");
+    println!("liteaura: iroh proxy on {origin}");
+    cfg.start_url = format!("{origin}/");
+    cfg.app_origin = origin;
+    cfg.app_mode = true;
+    Ok(cfg)
+}
+
+#[cfg(not(feature = "iroh"))]
+fn resolve_iroh(cfg: LiteAuraConfig) -> Result<LiteAuraConfig, String> {
+    if cfg.iroh.is_some() {
+        return Err("this liteaura build has no Iroh support (rebuild with --features iroh)".into());
+    }
+    Ok(cfg)
+}
+
+fn run(mut cfg: LiteAuraConfig) -> Result<i32, String> {
+    cfg = resolve_iroh(cfg)?;
+
+    wait_for_loopback_origin(&cfg.start_url, Duration::from_secs(30));
+
+    // The only navigation that carries the single-use auto-login token. It is
+    // built here, never logged, and never placed in argv.
+    let nav_url = boot_url(&cfg.start_url, cfg.boot_token.as_deref());
+    BOOT_URL.set(nav_url.clone()).ok();
+
+    println!("liteaura: opening {}", cfg.start_url);
+    println!(
+        "liteaura: app origin {}, app mode {}",
+        cfg.app_origin,
+        if cfg.app_mode { "on" } else { "off" }
+    );
+    if let Some(benchmark) = cfg.benchmark.clone() {
+        bench::announce(&benchmark);
+        BENCH
+            .set(Mutex::new(bench::BenchState::new(
+                benchmark,
+                cfg.benchmark_drag_tile,
+            )))
+            .ok();
+    }
+
+    // The profile lives beside the shell's other state.
+    let profile_dir = format!("{}/qtwebengine", cfg.data_dir);
+
+    START_URL.set(cfg.start_url.clone()).ok();
+    let bus = ViewBus::new();
+    BUS.set(bus.clone()).ok();
+    VIEWS
+        .set(Mutex::new(Views::new(bus, QtHost)))
+        .ok();
+    GESTURES.set(gestures::spawn(gesture_waker)).ok();
+
+    let dpi = shim::screen_dpi();
+    let (width, height) = shim::screen_size();
+    if cfg.app_mode && !cfg.size_explicit && width > 0 && height > 0 {
+        cfg.width = f64::from(width);
+        cfg.height = f64::from(height);
+    }
+    let auto = display::auto_scale(dpi);
+    DISPLAY
+        .set(Mutex::new(DisplayState {
+            choice_path: cfg.display_file.clone(),
+            runtime_path: cfg.display_runtime_file.clone(),
+            override_choice: cfg.scale_override.map(display::Choice::Factor),
+            auto,
+            applied: None,
+            last_mtime: None,
+            info: (dpi > 0.0).then_some((dpi, width, height)),
+        }))
+        .ok();
+
+    shim::inject_script("liteaura:exit", EXIT_SHORTCUT_JS);
+    // YouTube's video ads are scriptlet territory (see `youtube.rs`); the
+    // script is registered like any other, and the shield decides whether a
+    // view's collection actually carries it.
+    shim::inject_script(youtube::SCRIPT_NAME, youtube::YOUTUBE_ADS_JS);
+    shim::set_window(&cfg.window_title, cfg.width, cfg.height);
+    shim::set_fullscreen(cfg.app_mode && !cfg.size_explicit);
+    // The Qt side's own strings (file dialogs, name filters) in the session's
+    // language — the web UI follows the user's `ui.locale` preference instead.
+    shim::set_strings(&i18n::shell_strings(&cfg.lang));
+
+    // In-process ad filtering + the Google sign-in UA override. The engine is
+    // compiled by the server; loading it never fails the shell (it just browses
+    // unfiltered if the cache is absent).
+    filter::install(std::path::Path::new(&cfg.adfilter_dir));
+    // Deliberately before `liteaura_qt_run`: the app view builds its script
+    // collection while the QML completes, so the shield state has to be known
+    // by then (it is what keeps `liteaura:youtube` out when blocking is off).
+    shim::set_filter_scripts(filter::stats().0);
+    shim::set_filter_cb(on_filter);
+    shim::set_ua_cb(on_ua);
+    shim::set_download_cb(on_download);
+    // Copies made inside Browser pages (a separate web view) are invisible to
+    // the app; report them so the clipboard history can record them.
+    shim::set_clipboard_cb(on_clipboard);
+
+    let url = std::ffi::CString::new(nav_url).expect("URLs carry no NUL");
+    let data_dir =
+        std::ffi::CString::new(profile_dir.clone()).expect("paths carry no NUL");
+    let rc = unsafe {
+        shim::liteaura_qt_run(
+            url.as_ptr(),
+            data_dir.as_ptr(),
+            0,
+            on_ipc,
+            on_view,
+            on_pump,
+            on_js,
+            std::ptr::null_mut(),
+        )
+    };
+
+    let code = EXIT_CODE.load(Ordering::SeqCst);
+    Ok(if code != 0 { code } else { rc })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::loopback_endpoint;
+
+    #[test]
+    fn loopback_detection() {
+        assert_eq!(
+            loopback_endpoint("http://127.0.0.1:8080"),
+            Some(("127.0.0.1".to_string(), 8080))
+        );
+        assert_eq!(
+            loopback_endpoint("http://localhost:8080/x?y#z"),
+            Some(("localhost".to_string(), 8080))
+        );
+        assert_eq!(
+            loopback_endpoint("http://[::1]:8080/"),
+            Some(("::1".to_string(), 8080))
+        );
+        assert_eq!(
+            loopback_endpoint("http://127.0.0.1/"),
+            Some(("127.0.0.1".to_string(), 80))
+        );
+        assert_eq!(loopback_endpoint("https://example.com/a"), None);
+        assert_eq!(loopback_endpoint("https://example.com:8443/a"), None);
+        assert_eq!(loopback_endpoint("about:blank"), None);
+    }
+}

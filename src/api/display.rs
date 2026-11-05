@@ -5,7 +5,7 @@
 //! it is accepted only from the local machine (loopback) — the same rule the
 //! network and audio panels use.
 //!
-//! The value is persisted for the shell (`peakd`) to pick up; this server does
+//! The value is persisted for the shell (`liteaura`) to pick up; this server does
 //! not touch WebKit.
 
 use std::net::SocketAddr;

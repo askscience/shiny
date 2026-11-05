@@ -7,6 +7,8 @@ use tracing_subscriber::EnvFilter;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenvy::dotenv().ok();
+    // A system installed under the former name `peakd` still sets `PEAKD_*`.
+    liteaura_core::legacy::adopt_legacy_env();
 
     let config = Config::from_env();
     config.validate()?;

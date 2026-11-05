@@ -1,7 +1,7 @@
 //! Shiny **server mode** window.
 //!
 //! When the user turns on Server mode, the kiosk closes and this small,
-//! peakd-themed window takes the seat. It shows the Iroh link (hidden behind a
+//! liteaura-themed window takes the seat. It shows the Iroh link (hidden behind a
 //! Reveal button, with Copy and a QR code), the live connection status, and the
 //! controls: Allow Terminal, Autostart, and Stop.
 //!

@@ -29,15 +29,15 @@ for arg in "$@"; do
   esac
 done
 
-APP_NAME="Peakd"
-BUNDLE_ID="com.askscience.peakd"
-BIN="target/${PROFILE}/peakd-mac"
+APP_NAME="LiteAura"
+BUNDLE_ID="com.askscience.liteaura"
+BIN="target/${PROFILE}/liteaura-mac"
 
-echo "==> building peakd-mac (${PROFILE})"
+echo "==> building liteaura-mac (${PROFILE})"
 if [ "$PROFILE" = "release" ]; then
-  cargo build --release -p peakd-mac
+  cargo build --release -p liteaura-mac
 else
-  cargo build -p peakd-mac
+  cargo build -p liteaura-mac
 fi
 
 if [ ! -x "$BIN" ]; then
@@ -64,7 +64,7 @@ case "$(uname -s)" in
     <key>CFBundleName</key>
     <string>${APP_NAME}</string>
     <key>CFBundleDisplayName</key>
-    <string>PEAK'D!</string>
+    <string>LiteAura</string>
     <key>CFBundleExecutable</key>
     <string>${APP_NAME}</string>
     <key>CFBundleIdentifier</key>
@@ -81,9 +81,9 @@ case "$(uname -s)" in
     <true/>
     <!-- Required for navigator.mediaDevices.getUserMedia (voice input). -->
     <key>NSMicrophoneUsageDescription</key>
-    <string>PEAK'D! uses the microphone so you can talk to your assistant.</string>
+    <string>LiteAura uses the microphone so you can talk to your assistant.</string>
     <key>NSCameraUsageDescription</key>
-    <string>PEAK'D! uses the camera only if you enable video capture.</string>
+    <string>LiteAura uses the camera only if you enable video capture.</string>
     <!-- The app talks to its own server on loopback. -->
     <key>NSAppTransportSecurity</key>
     <dict>
@@ -114,14 +114,14 @@ PLIST
     # No bundle format to build. A .desktop entry is what makes the app
     # launchable from a menu and gives it a stable name; permissions for
     # microphone/camera are handled by the portal at runtime, not a manifest.
-    DESKTOP="dist/peakd.desktop"
+    DESKTOP="dist/liteaura.desktop"
     echo "==> writing $DESKTOP"
     mkdir -p dist
     cat > "$DESKTOP" <<DESK
 [Desktop Entry]
 Type=Application
-Name=PEAK'D!
-Comment=Peak'd desktop browser
+Name=LiteAura
+Comment=LiteAura desktop browser
 Exec=$(pwd)/${BIN}
 Terminal=false
 Categories=Network;WebBrowser;

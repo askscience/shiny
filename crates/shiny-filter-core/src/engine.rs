@@ -3,7 +3,7 @@
 //! This is a thin, deliberate wrapper around `adblock::Engine` (Brave's
 //! adblock-rust). It is the *light* half of the old `shiny-filter::engine`:
 //! everything that needs no network client and no async runtime. The server
-//! downloads and compiles the lists (`shiny_filter::load`); the `peakd` kiosk
+//! downloads and compiles the lists (`shiny_filter::load`); the `liteaura` kiosk
 //! shell restores the compiled engine from the shared cache and checks requests
 //! in-process. Keeping this crate free of `wreq`/BoringSSL is what lets the
 //! shell link the engine without dragging a TLS stack and a tokio runtime in.

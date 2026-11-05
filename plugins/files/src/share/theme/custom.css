@@ -1,4 +1,4 @@
-/* PEAK'D! — the page a share link opens.
+/* LiteAura — the page a share link opens.
  *
  * Written into Gokapi's `custom/` folder by `share/theme.rs` before every
  * start and loaded after Gokapi's Bootstrap CSS on its public pages
@@ -7,7 +7,7 @@
  * #filename, #errordiv, the password form): their ids and handlers stay
  * Gokapi's, so download and in-browser decryption keep working.
  *
- * Motion follows PEAK'D!'s "kinetic" language (web/ui/motionStyle.js):
+ * Motion follows LiteAura's "kinetic" language (web/ui/motionStyle.js):
  * a curtain lifts on a cinematic ease, letters rise from their line, the file
  * name decodes, the size rolls up, rows are wiped in. The mark's glitch is
  * the boot splash's (web/css/boot.css). Monochrome: white accent on dark,
@@ -128,8 +128,8 @@ html.pk-built body > div.d-flex {
   width: min(62vw, 74vh); aspect-ratio: 1186 / 1706;
   translate: 0 -50%;
   background: var(--pk-fg);
-  -webkit-mask: url('peakd-logo.svg') center / contain no-repeat;
-  mask: url('peakd-logo.svg') center / contain no-repeat;
+  -webkit-mask: url('liteaura-logo.svg') center / contain no-repeat;
+  mask: url('liteaura-logo.svg') center / contain no-repeat;
   opacity: 0;
   transition: opacity 1.4s ease 0.6s;
   will-change: transform;
@@ -149,12 +149,12 @@ html.pk-built body > div.d-flex {
 }
 .pk-meta-top { font-family: var(--pk-mono); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--pk-fg-2); text-align: right; }
 
-/* The PEAK'D! mark with the boot splash's glitch. */
+/* The LiteAura mark with the boot splash's glitch. */
 .pk-logo { position: relative; width: 22px; height: 32px; isolation: isolate; animation: pk-jitter 2.8s steps(1, end) infinite; }
 .pk-logo i {
   position: absolute; inset: 0;
-  -webkit-mask: url('peakd-logo.svg') center / contain no-repeat;
-  mask: url('peakd-logo.svg') center / contain no-repeat;
+  -webkit-mask: url('liteaura-logo.svg') center / contain no-repeat;
+  mask: url('liteaura-logo.svg') center / contain no-repeat;
 }
 .pk-logo .b { background: var(--pk-fg); animation: pk-base 2.8s steps(1, end) infinite; z-index: 2; }
 .pk-logo .r { background: var(--pk-fg-2); transform: translateX(-1px); animation: pk-r 3.1s steps(1, end) infinite; }

@@ -43,7 +43,7 @@ const API_PERMISSIONS: i64 = 1 | 2 | 4 | 16;
 const API_KEY_LEN: usize = 30;
 const PUBLIC_ID_LEN: usize = 35;
 /// Name Gokapi shows in page titles and link previews (`og:title`).
-pub const PUBLIC_NAME: &str = "PEAK'D!";
+pub const PUBLIC_NAME: &str = "LiteAura";
 /// Funnel allows 443, 8443 and 10000; 443 is taken by Shiny's own Funnel.
 pub const FUNNEL_PORT: u16 = 8443;
 
@@ -350,7 +350,7 @@ pub async fn stop_server() {
 
 fn spawn_server() -> Result<tokio::process::Child, String> {
     let bin = server_bin().ok_or("Gokapi is not installed")?;
-    // Gokapi reads custom/ only at start: refresh the PEAK'D! theme first. A
+    // Gokapi reads custom/ only at start: refresh the LiteAura theme first. A
     // failure only costs the look, never the links.
     if let Err(e) = super::theme::write_theme() {
         eprintln!("[files] could not write the share theme: {e}");

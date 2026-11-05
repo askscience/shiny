@@ -2,7 +2,7 @@
  * gestureTransition.js — interactive transitions driven by a progress value.
  *
  * The trackpad reports a swipe as begin → update(progress) → end(progress,
- * velocity) (crates/peakd/src/gestures.rs). A surface that follows the
+ * velocity) (crates/liteaura/src/gestures.rs). A surface that follows the
  * fingers (the overview, the launcher, the workspace slide) renders one
  * progress value, 0 = where it started and 1 = the committed state; on
  * release this module decides whether it completes or springs back and

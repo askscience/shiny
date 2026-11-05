@@ -1,0 +1,442 @@
+//! Launch configuration for the LiteAura kiosk shell (`liteaura`).
+//!
+//! Everything is overridable so the shell can be pointed at a development
+//! server, a benchmark target, or a bare external URL without a rebuild.
+
+use std::env;
+use std::path::PathBuf;
+
+/// Default origin of the LiteAura app this browser exists to serve.
+pub const DEFAULT_APP_ORIGIN: &str = "http://127.0.0.1:8080";
+
+#[derive(Clone, Debug)]
+pub struct LiteAuraConfig {
+    /// What the first tab opens. Defaults to the LiteAura app origin.
+    pub start_url: String,
+    /// Origin treated as "the app": the origin the in-app plugin windows are
+    /// part of.
+    pub app_origin: String,
+    /// App mode: no address bar, no chrome — a kiosk window for LiteAura itself.
+    pub app_mode: bool,
+    pub window_title: String,
+    /// Interface language for the shell's own strings (file dialogs, name
+    /// filters): `--lang`, else `LITEAURA_LANG`, else `LC_ALL`/`LC_MESSAGES`/`LANG`,
+    /// else English. The web UI follows the per-user `ui.locale` preference.
+    pub lang: String,
+    pub width: f64,
+    pub height: f64,
+    /// True when `--size` supplied an explicit window geometry.
+    pub size_explicit: bool,
+    /// Open with devtools (Chromium's remote debugging on loopback).
+    pub devtools: bool,
+    /// Where the QtWebEngine profile lives (cookies, cache). Relative paths
+    /// resolve against the process working directory.
+    pub data_dir: String,
+    /// Where the server's compiled ad-filter cache lives (`engine.dat` +
+    /// `engine.json`). `LITEAURA_ADFILTER_DIR` / `--adfilter-dir`.
+    pub adfilter_dir: String,
+    /// Where Settings stores the interface-scale choice (`"auto"` or a factor).
+    /// The shell reads it at launch and watches it for changes.
+    pub display_file: PathBuf,
+    /// Where the shell records the scale it applied (read by the server so
+    /// Settings can show the resolved value).
+    pub display_runtime_file: PathBuf,
+    /// Explicit scale override (flag/env). Wins over the choice file at
+    /// startup; `None` means "use whatever Settings stored".
+    pub scale_override: Option<f64>,
+    /// Drag a plugin window during the benchmark instead of asking the user to
+    /// move the OS window.
+    pub benchmark_drag_tile: bool,
+    /// Run the in-app frame benchmark instead of a normal session.
+    ///
+    /// Off by default and compiled into an `Option`, so a normal launch carries
+    /// no measurement code on the hot path.
+    pub benchmark: Option<Benchmark>,
+    /// Dial a remote Shiny server over Iroh instead of the local app origin.
+    /// `--iroh <ticket>` / `LITEAURA_IROH`.
+    pub iroh: Option<String>,
+    /// Single-use loopback auto-login token, passed via `SHINY_BOOT_TOKEN` so it
+    /// never appears in argv (which is world-readable via /proc).
+    pub boot_token: Option<String>,
+}
+
+/// Sensible defaults, so `--benchmark-seconds 5` works on its own and in any
+/// argument order.
+fn default_benchmark() -> Benchmark {
+    Benchmark {
+        seconds: 10,
+        settle_seconds: 12,
+        output: None,
+    }
+}
+
+/// How to run the in-app frame benchmark.
+#[derive(Clone, Debug)]
+pub struct Benchmark {
+    /// Seconds to measure for, once the app has settled.
+    pub seconds: u64,
+    /// Seconds to wait for the app to boot before measuring. The orb, the tiles
+    /// and the map all initialise asynchronously, so measuring immediately would
+    /// report the startup burst as if it were steady state.
+    pub settle_seconds: u64,
+    /// Write the JSON report here as well as printing it.
+    pub output: Option<String>,
+}
+
+impl LiteAuraConfig {
+    pub fn from_env_and_args() -> Self {
+        let app_origin =
+            env::var("LITEAURA_APP_ORIGIN").unwrap_or_else(|_| DEFAULT_APP_ORIGIN.to_string());
+
+        let mut cfg = LiteAuraConfig {
+            start_url: app_origin.clone(),
+            app_origin,
+            app_mode: false,
+            window_title: "LiteAura".into(),
+            lang: default_lang(),
+            width: 1280.0,
+            height: 860.0,
+            size_explicit: false,
+            devtools: env_flag("LITEAURA_DEVTOOLS"),
+            data_dir: env::var("LITEAURA_DATA_DIR")
+                .ok()
+                .filter(|v| !v.trim().is_empty())
+                .unwrap_or_else(default_data_dir),
+            adfilter_dir: env::var("LITEAURA_ADFILTER_DIR")
+                .ok()
+                .filter(|v| !v.trim().is_empty())
+                .unwrap_or_else(default_adfilter_dir),
+            display_file: env_path("LITEAURA_DISPLAY_FILE")
+                .unwrap_or_else(|| xdg_dir("XDG_CONFIG_HOME", ".config").join("display.json")),
+            display_runtime_file: env_path("LITEAURA_DISPLAY_RUNTIME_FILE")
+                .unwrap_or_else(|| xdg_dir("XDG_CACHE_HOME", ".cache").join("display.json")),
+            scale_override: env::var("LITEAURA_UI_SCALE")
+                .ok()
+                .and_then(|raw| raw.trim().parse::<f64>().ok())
+                .filter(|factor| factor.is_finite() && *factor >= 1.0 && *factor <= 3.0),
+            benchmark_drag_tile: false,
+            benchmark: None,
+            iroh: env::var("LITEAURA_IROH")
+                .ok()
+                .filter(|v| !v.trim().is_empty()),
+            boot_token: env::var("SHINY_BOOT_TOKEN")
+                .ok()
+                .map(|v| v.trim().to_string())
+                .filter(|v| !v.is_empty()),
+        };
+
+        let args: Vec<String> = env::args().skip(1).collect();
+        let mut i = 0;
+        while i < args.len() {
+            match args[i].as_str() {
+                "--url" | "-u" => {
+                    if let Some(v) = args.get(i + 1) {
+                        cfg.start_url = normalize_url(v);
+                        i += 1;
+                    }
+                }
+                "--app-mode" | "--app" => cfg.app_mode = true,
+                "--benchmark-drag-tile" => {
+                    // Implies --benchmark: there is nothing to drag without it.
+                    cfg.benchmark_drag_tile = true;
+                    cfg.benchmark.get_or_insert_with(default_benchmark);
+                }
+                "--benchmark" => {
+                    // The benchmark makes the app measure *itself*, in the
+                    // window that is actually on screen. That is the whole
+                    // point: a separate measurement window never becomes
+                    // visible, and the engine throttles `requestAnimationFrame`
+                    // to a near stop in a hidden page.
+                    cfg.benchmark = Some(default_benchmark());
+                }
+                "--benchmark-seconds" => {
+                    // Consume the value unconditionally. Guarding this on
+                    // `cfg.benchmark` being set already meant the value fell
+                    // through to the bare-argument branch below and was taken
+                    // as the URL to open — which is what actually happened the
+                    // first time these flags were used.
+                    if let Some(v) = args.get(i + 1) {
+                        if let Some(n) = v.parse().ok() {
+                            cfg.benchmark.get_or_insert_with(default_benchmark).seconds = n;
+                        }
+                        i += 1;
+                    }
+                }
+                "--benchmark-settle" => {
+                    // See the note on --benchmark-seconds: consume unconditionally.
+                    if let Some(v) = args.get(i + 1) {
+                        if let Some(n) = v.parse().ok() {
+                            cfg.benchmark.get_or_insert_with(default_benchmark).settle_seconds = n;
+                        }
+                        i += 1;
+                    }
+                }
+                "--benchmark-output" => {
+                    // See the note on --benchmark-seconds: consume unconditionally.
+                    if let Some(v) = args.get(i + 1) {
+                        cfg.benchmark.get_or_insert_with(default_benchmark).output =
+                            Some(v.clone());
+                        i += 1;
+                    }
+                }
+                "--scale" => {
+                    // UI page zoom, e.g. `--scale 1.5`. Overrides the file for
+                    // this launch (useful for testing on a specific panel).
+                    if let Some(v) = args.get(i + 1) {
+                        cfg.scale_override = v
+                            .parse::<f64>()
+                            .ok()
+                            .filter(|factor| factor.is_finite() && *factor >= 1.0 && *factor <= 3.0);
+                        i += 1;
+                    }
+                }
+                "--data-dir" => {
+                    if let Some(v) = args.get(i + 1) {
+                        cfg.data_dir = v.clone();
+                        i += 1;
+                    }
+                }
+                "--adfilter-dir" => {
+                    if let Some(v) = args.get(i + 1) {
+                        cfg.adfilter_dir = v.clone();
+                        i += 1;
+                    }
+                }
+                "--devtools" => cfg.devtools = true,
+                "--iroh" | "--ticket" => {
+                    if let Some(v) = args.get(i + 1) {
+                        cfg.iroh = Some(v.clone());
+                        i += 1;
+                    }
+                }
+                "--title" => {
+                    if let Some(v) = args.get(i + 1) {
+                        cfg.window_title = v.clone();
+                        i += 1;
+                    }
+                }
+                "--lang" => {
+                    if let Some(v) = args.get(i + 1) {
+                        cfg.lang = v.trim().to_string();
+                        i += 1;
+                    }
+                }
+                "--size" => {
+                    if let Some(v) = args.get(i + 1) {
+                        if let Some((w, h)) = v.split_once('x') {
+                            if let (Ok(w), Ok(h)) = (w.parse(), h.parse()) {
+                                cfg.width = w;
+                                cfg.height = h;
+                                cfg.size_explicit = true;
+                            }
+                        }
+                        i += 1;
+                    }
+                }
+                "--help" | "-h" => {
+                    print_help();
+                    std::process::exit(0);
+                }
+                other => {
+                    // A bare argument is the URL to open, or an Iroh link when
+                    // it carries one of the schemes `shiny-iroh-proto` knows.
+                    // The server mints `shiny-iroh://…`, so accept that (and the
+                    // `shiny://` / `iroh://` aliases) here too: otherwise a link
+                    // pasted from Remote settings, or handed over by the OS, is
+                    // mistaken for a page URL and silently fails to dial.
+                    if is_iroh_link(other) {
+                        cfg.iroh = Some(other.to_string());
+                    } else if !other.starts_with('-') {
+                        cfg.start_url = normalize_url(other);
+                    }
+                }
+            }
+            i += 1;
+        }
+
+        cfg
+    }
+}
+
+/// The shell's language for its own strings: `LITEAURA_LANG`, else the session
+/// locale (`LC_ALL` → `LC_MESSAGES` → `LANG`), else English. `en_US.UTF-8`
+/// becomes `en-us`; resolution to a shipped catalogue happens in `i18n.rs`.
+fn default_lang() -> String {
+    for key in ["LITEAURA_LANG", "LC_ALL", "LC_MESSAGES", "LANG"] {
+        let Ok(value) = env::var(key) else { continue };
+        let value = value.trim();
+        // POSIX: an empty value means "unset", and C/POSIX mean English.
+        if value.is_empty() || value == "C" || value == "POSIX" {
+            continue;
+        }
+        let code = value.split('.').next().unwrap_or(value);
+        let code = code.split('@').next().unwrap_or(code);
+        return code.replace('_', "-").to_lowercase();
+    }
+    "en".to_string()
+}
+
+/// Where the QtWebEngine profile lives when `LITEAURA_DATA_DIR` is unset.
+///
+/// Anchored to the executable rather than the working directory, because a
+/// macOS `.app` launches with `/` as its cwd — a relative default would try to
+/// write at the filesystem root (and fail). Resolving against the binary works
+/// the same on Linux.
+fn default_data_dir() -> String {
+    if let Ok(exe) = std::env::current_exe() {
+        // target/<profile>/liteaura -> the repo root is two levels up.
+        if let Some(root) = exe.parent().and_then(|p| p.parent()).and_then(|p| p.parent()) {
+            let candidate = root.join("data").join("liteaura");
+            // Only adopt it when it is plausibly the project root: a bundled
+            // app should still read the repo's cache during development, but a
+            // relocated binary must not create directories beside itself.
+            if root.join("Cargo.toml").is_file() {
+                return candidate.to_string_lossy().into_owned();
+            }
+        }
+    }
+    "data/liteaura".to_string()
+}
+
+/// Where the server's compiled ad-filter cache lives when `LITEAURA_ADFILTER_DIR`
+/// is unset.
+///
+/// The per-user data dir (`$XDG_DATA_HOME/shiny/adfilter`, defaulting to
+/// `~/.local/share/...`) — the same path the server's `ADFILTER_DIR` resolves
+/// to, so the shell restores the engine the server compiled. Nothing here is
+/// tied to a particular user name.
+fn default_adfilter_dir() -> String {
+    if let Some(data) = std::env::var_os("XDG_DATA_HOME").filter(|v| !v.is_empty()) {
+        return PathBuf::from(data)
+            .join("shiny")
+            .join("adfilter")
+            .to_string_lossy()
+            .into_owned();
+    }
+    if let Some(home) = std::env::var_os("HOME").filter(|v| !v.is_empty()) {
+        return PathBuf::from(home)
+            .join(".local")
+            .join("share")
+            .join("shiny")
+            .join("adfilter")
+            .to_string_lossy()
+            .into_owned();
+    }
+    "data/adfilter".to_string()
+}
+
+/// Does a bare argument carry an Iroh link scheme?
+///
+/// The server mints `shiny-iroh://…`; `shiny://` and `iroh://` are accepted
+/// aliases (see `shiny-iroh-proto`). Matching the scheme here keeps a copied
+/// link out of the "open this page" path.
+fn is_iroh_link(arg: &str) -> bool {
+    let arg = arg.trim();
+    arg.starts_with("shiny-iroh://") || arg.starts_with("shiny://") || arg.starts_with("iroh://")
+}
+
+/// Give a bare host the scheme it obviously meant.
+///
+/// `https://` for the open web, `http://` for loopback: a local dev server has
+/// no certificate, and most public sites now answer a plain-HTTP request with a
+/// CDN error page rather than a redirect.
+pub fn normalize_url(input: &str) -> String {
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
+        return DEFAULT_APP_ORIGIN.to_string();
+    }
+    if trimmed.contains("://") || trimmed.starts_with("about:") {
+        return trimmed.to_string();
+    }
+    let host = trimmed.split(['/', ':']).next().unwrap_or(trimmed);
+    let is_local = host == "localhost" || host == "127.0.0.1" || host == "[::1]";
+    if is_local {
+        format!("http://{trimmed}")
+    } else {
+        format!("https://{trimmed}")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bare_host_defaults_by_locality() {
+        assert_eq!(normalize_url("example.com"), "https://example.com");
+        assert_eq!(normalize_url("localhost:8080"), "http://localhost:8080");
+        assert_eq!(normalize_url("127.0.0.1:8080/x"), "http://127.0.0.1:8080/x");
+        assert_eq!(
+            normalize_url("http://example.com/a"),
+            "http://example.com/a"
+        );
+        assert_eq!(normalize_url(""), DEFAULT_APP_ORIGIN);
+    }
+
+    #[test]
+    fn iroh_link_schemes_are_recognised() {
+        // The server mints `shiny-iroh://`; older/aliased schemes still count.
+        assert!(is_iroh_link("shiny-iroh://AbCdEf"));
+        assert!(is_iroh_link("shiny://AbCdEf"));
+        assert!(is_iroh_link("iroh://AbCdEf"));
+        assert!(!is_iroh_link("https://example.com"));
+        assert!(!is_iroh_link("example.com"));
+    }
+}
+
+fn env_flag(key: &str) -> bool {
+    matches!(
+        env::var(key).unwrap_or_default().to_ascii_lowercase().as_str(),
+        "1" | "true" | "yes" | "on"
+    )
+}
+
+/// An environment variable naming a file, ignoring an empty value.
+fn env_path(key: &str) -> Option<PathBuf> {
+    env::var_os(key)
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+}
+
+/// `<xdg>/liteaura/`, falling back to `<HOME>/<fallback>/liteaura/`.
+fn xdg_dir(xdg: &str, fallback: &str) -> PathBuf {
+    let root = env::var_os(xdg)
+        .map(PathBuf::from)
+        .or_else(|| env::var_os("HOME").map(|home| PathBuf::from(home).join(fallback)))
+        .unwrap_or_else(|| PathBuf::from(fallback));
+    root.join("liteaura")
+}
+
+fn print_help() {
+    println!(
+        "liteaura — the LiteAura kiosk shell on Qt 6 + QtWebEngine
+
+USAGE:
+    liteaura [URL] [OPTIONS]
+
+OPTIONS:
+    -u, --url <URL>      Page to open (default {DEFAULT_APP_ORIGIN})
+        --app-mode       Chrome-less kiosk window for the LiteAura app
+        --iroh <LINK>    Dial a remote Shiny server over Iroh (the shiny-iroh:// link from Remote settings)
+        --devtools       Expose Chromium devtools on 127.0.0.1:9222
+        --data-dir <DIR> QtWebEngine profile location (default data/liteaura)
+        --scale <F>      Interface scale (page zoom), 1.0–3.0; overrides Settings
+        --benchmark      Measure this app's own frame timing, then exit
+        --benchmark-seconds <N>  Measurement window (default 10)
+        --benchmark-settle <N>   Seconds to wait for the app to boot (default 12)
+        --benchmark-output <P>   Also write the JSON report to P
+        --title <TITLE>  Window title
+        --lang <CODE>    Interface language for the shell's own strings
+                         (default: $LC_ALL/$LC_MESSAGES/$LANG)
+        --size <WxH>     Window size (app mode defaults to the monitor)
+    -h, --help           Show this help
+
+ENVIRONMENT:
+    LITEAURA_LANG               Interface language for the shell's own strings
+    LITEAURA_APP_ORIGIN         Origin of the LiteAura app (default {DEFAULT_APP_ORIGIN})
+    LITEAURA_IROH       Iroh ticket to dial instead of the local app origin
+    LITEAURA_DATA_DIR   QtWebEngine profile location
+    LITEAURA_DEVTOOLS   Set to 1 to expose devtools
+    LITEAURA_UI_SCALE   Interface scale override"
+    );
+}

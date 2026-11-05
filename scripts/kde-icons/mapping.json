@@ -1,5 +1,5 @@
 {
-  "_comment": "PEAK'D! icon curation map. `src` is relative to the dark source root (assets/iconsets/Slot-Beauty-Dark-Icons-V-3/). `dst` is relative to web/ui/icons/. `color: true` keeps original fills (no currentColor rewrite) and is applied per-theme; `themes` restricts the destination to those themes. `light_src` is relative to the light source root (assets/iconsets/Slot-Beauty-Light-Icons/).",
+  "_comment": "LiteAura icon curation map. `src` is relative to the dark source root (assets/iconsets/Slot-Beauty-Dark-Icons-V-3/). `dst` is relative to web/ui/icons/. `color: true` keeps original fills (no currentColor rewrite) and is applied per-theme; `themes` restricts the destination to those themes. `light_src` is relative to the light source root (assets/iconsets/Slot-Beauty-Light-Icons/).",
 
   "hud": [
     { "name": "wifi-0",       "dst": "hud/wifi-0.svg",       "src": "panel/24/network-wireless-signal-none-symbolic.svg" },

@@ -3,7 +3,7 @@
 `plugins/browser/web/plugin.js` is the Browser window. Core builds the `.tile`
 and the plugin mounts a `section.tile.browser-tile` inside it. The chrome is
 HTML; the **page** is a web view **item in the shell's own scene**
-(`crates/peakd`), driven from here over `window.ipc`. The one thing rendered
+(`crates/liteaura`), driven from here over `window.ipc`. The one thing rendered
 locally is the home surface: a sandboxed `srcdoc` iframe holding the
 bookmarks grid (favicon + name) and the related-news shelf.
 
@@ -75,7 +75,7 @@ Attaches, once:
 | `message` (on `window`) | `onFrameMessage` — the home surface's `browser:open-card` / `browser:open-bookmark` / `browser:refresh-news` |
 | `theme:change` | `pushSettings` — keeps pages' `prefers-color-scheme` in step with the app theme |
 
-Note `window.__peakdViewEvent` is defined at **module scope**, not inside
+Note `window.__liteauraViewEvent` is defined at **module scope**, not inside
 `wireBrowserEvents`, because the shell may call it before `wireEvents` runs (a
 navigation can finish while the window is still mounting).
 
@@ -98,23 +98,23 @@ The Browser is one of the surfaces the central clipboard service
   the top-bar history.
 - A pick in the Clipboard menu with this window focused dispatches
   `clipboard:paste`; `onClipboardPaste` forwards it to the shell as a
-  `peakd:view:` `paste` command, which sets the system clipboard and triggers
+  `liteaura:view:` `paste` command, which sets the system clipboard and triggers
   the engine's Paste action on the active tab.
 - "Paste and go" reads the clipboard via `readClipboardText()` and navigates.
 
 ## Shield and ad blocking
 
-The toolbar shield toggles the shell's filter (`peakd:filter:`) and persists the
+The toolbar shield toggles the shell's filter (`liteaura:filter:`) and persists the
 choice (`POST /api/browser/settings`). Two things make the on/off state visible:
 
 - Half the filter is a **document-start scriptlet** (the YouTube ad-skip, see
-  `crates/peakd/src/youtube.rs`), and a view only picks up the new script
+  `crates/liteaura/src/youtube.rs`), and a view only picks up the new script
   collection when a document is created — so `toggleShield()` reloads the active
-  tab's page (`peakd:view:` `reload`) right after telling the shell. Flipping the
+  tab's page (`liteaura:view:` `reload`) right after telling the shell. Flipping the
   shield shows or hides ads on the page in front of the user, not only on the
   next visit.
-- The shell pushes `window.__peakdShield` only when something changes, so the
-  window polls `peakd:shield:query` every `SHIELD_POLL_MS` (3 s) while it is
+- The shell pushes `window.__liteauraShield` only when something changes, so the
+  window polls `liteaura:shield:query` every `SHIELD_POLL_MS` (3 s) while it is
   mounted. That keeps the button's "N blocked" count live — the visible proof
   the filter is working on a page that looks the same either way.
 
@@ -199,9 +199,9 @@ re-pushes (and reloads the open page) when that save lands.
 
 | Global | Payload | Purpose |
 |---|---|---|
-| `window.__peakdViewEvent(event)` | `{ id, type, ... }` | Per-tab `title`, `url`, `load` (`phase: started/finished`), `new-window`, `context-menu` (`menu` = `{x,y,linkUrl,editable,selection}`), `page-js` (`token`, `result` — the answer to `runJs`); and non-tab `download` events (`applyDownload`) |
-| `window.__peakdShield(state)` | `{ enabled, blocked, rules }` | Updates the shield button title / `browserSettings` |
-| `window.__peakdDownloads(list)` | `Download[]` | Replaces the live downloads list (answer to `peakd:downloads:list`) |
+| `window.__liteauraViewEvent(event)` | `{ id, type, ... }` | Per-tab `title`, `url`, `load` (`phase: started/finished`), `new-window`, `context-menu` (`menu` = `{x,y,linkUrl,editable,selection}`), `page-js` (`token`, `result` — the answer to `runJs`); and non-tab `download` events (`applyDownload`) |
+| `window.__liteauraShield(state)` | `{ enabled, blocked, rules }` | Updates the shield button title / `browserSettings` |
+| `window.__liteauraDownloads(list)` | `Download[]` | Replaces the live downloads list (answer to `liteaura:downloads:list`) |
 
 ### Dispatches / posts
 
@@ -213,19 +213,19 @@ re-pushes (and reloads the open page) when that save lands.
 ## IPC bridge (`window.ipc.postMessage`)
 
 `nativeAvailable` is true only when `window.ipc.postMessage` exists. Helpers:
-`nativeSend` (prefixed `peakd:view:`), `shellSend` (prefixed non-view JSON),
+`nativeSend` (prefixed `liteaura:view:`), `shellSend` (prefixed non-view JSON),
 `shellRaw` (raw string).
 
 | Prefix | Payload | Purpose |
 |---|---|---|
-| `peakd:view:` | `{ op, id, … }` | Native child-webview commands |
-| `peakd:settings:` | `{ adblock, downloadsDir, colorScheme }` | Shell settings. `colorScheme: "dark"` turns on the engine's dark mode for every page view (`settings.forceDarkMode`, bound to `shell.darkPages`): pages report `prefers-color-scheme: dark`, so sites with a dark style use it and the rest are darkened. Re-sent on `theme:change` / `appearance:change`. |
-| `peakd:filter:` | `{ enabled }` | Live shield toggle |
-| `peakd:download:` | `{ id, action }` | `pause`/`resume`/`cancel`/`remove`/`clear` |
-| `peakd:downloads:list` | raw (no JSON) | Ask the shell to push its live list via `window.__peakdDownloads` |
-| `peakd:shield:query` | raw (no JSON) | Ask the shell to push the shield state via `window.__peakdShield` (polled while mounted, see Shield and ad blocking) |
+| `liteaura:view:` | `{ op, id, … }` | Native child-webview commands |
+| `liteaura:settings:` | `{ adblock, downloadsDir, colorScheme }` | Shell settings. `colorScheme: "dark"` turns on the engine's dark mode for every page view (`settings.forceDarkMode`, bound to `shell.darkPages`): pages report `prefers-color-scheme: dark`, so sites with a dark style use it and the rest are darkened. Re-sent on `theme:change` / `appearance:change`. |
+| `liteaura:filter:` | `{ enabled }` | Live shield toggle |
+| `liteaura:download:` | `{ id, action }` | `pause`/`resume`/`cancel`/`remove`/`clear` |
+| `liteaura:downloads:list` | raw (no JSON) | Ask the shell to push its live list via `window.__liteauraDownloads` |
+| `liteaura:shield:query` | raw (no JSON) | Ask the shell to push the shield state via `window.__liteauraShield` (polled while mounted, see Shield and ad blocking) |
 
-`peakd:view:` ops (parsed by `crates/peakd/src/browse.rs` `Command::parse`):
+`liteaura:view:` ops (parsed by `crates/liteaura/src/browse.rs` `Command::parse`):
 `open` (`url`, `rect`, `visible`, `incognito`), `navigate`, `setBounds`,
 `setVisible`, `setMask` (`holes`), `back`, `forward`, `reload`, `close`,
 `focus`, `paste` (`text`), `action` (`verb` — one engine action on the page's
@@ -301,7 +301,7 @@ hidden page only where `recommendedState` (and `recentlyAudible`) say it may, so
 a background tab that is playing audio in the "keep alive" sense — a YouTube tab
 you switched away from, a window left in another workspace — keeps playing
 exactly like a background tab in a normal browser. Idle hidden pages are still
-frozen (see `kPageQml` in `crates/peakd/shim/peakd.cpp`).
+frozen (see `kPageQml` in `crates/liteaura/shim/liteaura.cpp`).
 
 `requestSync()` coalesces bursts into one sync per animation frame;
 `startBoundsSync()` adds a 1 s fallback interval, a `ResizeObserver` on the
@@ -347,7 +347,7 @@ reaches the page only through two callbacks this window passes in:
   sign-in), `nofield`, `origin`. A filled page gets the keyboard (`focus`).
 - `readPage()` → `readScript()`: what the user typed, for "Save from page".
 
-`runPageJs` sends a `peakd:view:` `runJs` with a fresh token and resolves on the
+`runPageJs` sends a `liteaura:view:` `runJs` with a fresh token and resolves on the
 matching `page-js` view event (4 s timeout, `''` on none).
 
 Views: locked (login-password prompt; first use creates the vault; after a
@@ -363,7 +363,7 @@ platform menu. The shell forwards the request as a `context-menu` view event
 (`{x, y, linkUrl, editable, selection}`; the position is local to the page item,
 so the plugin adds the frame origin and divides by `dpr`), and the plugin opens
 core's `openContextMenu()` at the cursor. The `.ctx-menu` mask hole keeps it
-visible and clickable (see above). Entries map back to `peakd:view:` commands:
+visible and clickable (see above). Entries map back to `liteaura:view:` commands:
 `back` / `forward` / `reload`, Copy Link Address through the clipboard service
 (so it lands in the top-bar history), and the edit verbs — Cut / Copy / Paste /
 SelectAll — via the generic `action` op. Below them comes the same window
@@ -398,7 +398,7 @@ it raced with.
   `nativeAvailable` is false and `loadNative`/`showHome` degrade (the smoke test
   stubs `window.ipc` to exercise the contract).
 - **The downloads panel merges two sources**: the persisted
-  `/api/browser/downloads` rows and live `window.__peakdViewEvent` events, by
+  `/api/browser/downloads` rows and live `window.__liteauraViewEvent` events, by
   `id`. Clearing the panel must delete finished rows server-side too.
 - **CSS files are not auto-injected**; `ensureStylesheet()` is mandatory in
   `mount`.
@@ -407,12 +407,12 @@ it raced with.
 
 `plugins/browser/web/plugin.smoke.mjs` runs the real module against a DOM shim
 and asserts: mount/exports, the toolbar controls, settings push, one sandboxed
-home tab with news, navigation POST + `peakd:view: open`, `setBounds`/`setMask`,
-the shield (state + `peakd:filter:` + persistence), incognito tabs, downloads
+home tab with news, navigation POST + `liteaura:view: open`, `setBounds`/`setMask`,
+the shield (state + `liteaura:filter:` + persistence), incognito tabs, downloads
 events + badge + panel mask hole, a core occluder (the chat-panel case) punching
 and clearing its hole, drag hide/restore, tab close, AI `artifact:saved`
 navigation, the clipboard contract (context-menu entries,
-`clipboard:paste` → `peakd:view: paste`, picks for other windows ignored), the tab
+`clipboard:paste` → `liteaura:view: paste`, picks for other windows ignored), the tab
 switcher, and the password manager's wiring (`runJs` bound to the page origin, the
 `page-js` answer, focus after a fill). `web/passwords.test.mjs` covers the page
 scripts themselves.
@@ -425,5 +425,5 @@ node --experimental-vm-modules plugins/browser/web/plugin.smoke.mjs
 
 - [`README.md`](README.md) · [`architecture.md`](architecture.md) · [`tools.md`](tools.md) · [`routes.md`](routes.md)
 - [`../../../web/js/nativeOccluders.js`](../../../web/js/nativeOccluders.js) — the core surfaces that punch through a page.
-- [`../../../crates/peakd/src/browse.rs`](../../../crates/peakd/src/browse.rs) — the IPC contract.
+- [`../../../crates/liteaura/src/browse.rs`](../../../crates/liteaura/src/browse.rs) — the IPC contract.
 - [`../../../docs/core/desktop.md`](../../../docs/core/desktop.md) — tile/window host.

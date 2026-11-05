@@ -306,7 +306,7 @@ Matching (`web/js/voice.js`):
 - Text is normalised (lowercase, punctuation to spaces), then the name is
   matched with a per-token Levenshtein tolerance of 1 (2 for tokens ≥ 5 chars) —
   the small models regularly render an unusual name as a near-homophone
-  ("Peak'd" → "Beak").
+  ("LiteAura" → "Beak").
 - The name may be the whole utterance, or follow "hey", or follow a clipped
   one/two-letter "hey".
 - `extractAfterWake()` returns the request after the phrase, `''` when the

@@ -272,7 +272,7 @@ function syncHistory() {
   if (!isPhone()) return;
   if (!isHome() && !heldEntry) {
     heldEntry = true;
-    history.pushState({ peakdWindow: true }, '');
+    history.pushState({ liteauraWindow: true }, '');
   } else if (isHome() && heldEntry) {
     // Home by any other way: give the entry back, so Back at home leaves.
     heldEntry = false;

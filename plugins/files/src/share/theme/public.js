@@ -1,4 +1,4 @@
-/* PEAK'D! — the page a share link opens (see custom.css for the design notes).
+/* LiteAura — the page a share link opens (see custom.css for the design notes).
  *
  * Gokapi renders its stock page; this script builds `.pk` on top and moves
  * Gokapi's working nodes into it, keeping their ids and handlers:
@@ -40,8 +40,8 @@
       noKeySub: 'This file is encrypted and the link is incomplete. Ask the sender for the full link.',
       badKeyTitle: ['Wrong', 'key.'],
       badKeySub: 'This file is encrypted with a different key. Ask the sender for the right link.',
-      marquee: ['Shared securely', 'No account needed', 'PEAK’D!'],
-      sharedVia: 'Shared via PEAK’D!',
+      marquee: ['Shared securely', 'No account needed', 'LiteAura'],
+      sharedVia: 'Shared via LiteAura',
     },
     it: {
       transfer: 'Trasferimento file',
@@ -67,8 +67,8 @@
       noKeySub: 'Il file è cifrato e il link è incompleto. Chiedi a chi te l’ha inviato il link completo.',
       badKeyTitle: ['Chiave', 'errata.'],
       badKeySub: 'Il file è cifrato con un’altra chiave. Chiedi a chi te l’ha inviato il link giusto.',
-      marquee: ['Condiviso in modo sicuro', 'Nessun account richiesto', 'PEAK’D!'],
-      sharedVia: 'Condiviso con PEAK’D!',
+      marquee: ['Condiviso in modo sicuro', 'Nessun account richiesto', 'LiteAura'],
+      sharedVia: 'Condiviso con LiteAura',
     },
   };
   var S = STR[lang] || STR.en;
@@ -264,7 +264,7 @@
     var top = el('header', 'pk-top');
     var brand = el('span', 'pk-brand');
     brand.appendChild(logo());
-    brand.appendChild(el('span', 'pk-brand-word', 'PEAK’D!'));
+    brand.appendChild(el('span', 'pk-brand-word', 'LiteAura'));
     var metaTop = el('div', 'pk-meta-top');
     var date = new Date().toLocaleDateString(lang === 'it' ? 'it-IT' : undefined, { day: '2-digit', month: 'short', year: 'numeric' });
     metaTop.appendChild(el('span', 'pk-hide-sm', S.transfer + ' — '));
@@ -383,7 +383,7 @@
     document.body.appendChild(grain);
     document.body.appendChild(curtain);
     root.classList.add('pk-built');
-    document.title = 'PEAK’D!' + (filenameValue && filenameValue.textContent ? ' — ' + filenameValue.textContent : '');
+    document.title = 'LiteAura' + (filenameValue && filenameValue.textContent ? ' — ' + filenameValue.textContent : '');
 
     var revealed = false;
     function reveal() {

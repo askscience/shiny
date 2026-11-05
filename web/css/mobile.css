@@ -2,7 +2,7 @@
    Phone layout — `html[data-mobile="1"]` (preferences.js → applyImmersive,
    from viewport.js's MOBILE_QUERY).
 
-   A phone reads PEAK'D! like a mobile OS: the top bar is a status bar flush
+   A phone reads LiteAura like a mobile OS: the top bar is a status bar flush
    with the top edge (time, weather, one control button), the host's status
    chips and the bar's actions live in the control centre that drops from that
    button (js/controlCenter.js), and the voice bar rides the phone's bar at

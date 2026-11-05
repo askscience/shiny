@@ -1,4 +1,4 @@
-//! Privileged installer helper for the live PEAK'D! session.
+//! Privileged installer helper for the live LiteAura session.
 //!
 //! The plugin talks to this process over a Unix socket. This build implements
 //! read-only probing, plan validation and a **dry-run** apply; the destructive

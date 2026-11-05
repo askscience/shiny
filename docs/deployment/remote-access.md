@@ -39,13 +39,13 @@ Build with the feature:
 
 ```bash
 cargo build --release --features iroh          # server
-cargo build --release -p peakd --features iroh # shell (or shiny-iroh-client)
+cargo build --release -p liteaura --features iroh # shell (or shiny-iroh-client)
 ```
 
 - **Turn it on:** Settings → **Remote** → *Server*. The link changes on every
   start/stop. In the kiosk, turning it on hands the screen to the **server-mode
   window** (link + controls); the kiosk returns when you press *Stop server*.
-- **Connect:** `peakd --iroh <link>` (built with `--features iroh`); the
+- **Connect:** `liteaura --iroh <link>` (built with `--features iroh`); the
   `shiny-iroh://` scheme is recognised. For a plain browser, run
   `shiny-iroh-client --ticket <link> --listen 127.0.0.1:8080` and open
   `http://127.0.0.1:8080`. Log in with your password; remote clients use the
@@ -78,7 +78,7 @@ endpoint. Iroh needs outbound UDP and TCP 443 to its relays and
 `remote.enabled` is persisted per user; `AppState::autostart_remote` turns the
 endpoint on at startup when set. The server writes `on`/`off` to
 `$XDG_RUNTIME_DIR/shiny-remote.state`; [`scripts/shiny-session`](../../scripts/shiny-session)
-reads it to choose between the kiosk and the server-mode window. `peakd` exits
+reads it to choose between the kiosk and the server-mode window. `liteaura` exits
 `42` when the user turns server mode on, and the supervisor swaps to the
 server-mode window; when that exits 0 (Stop), the state flips and the kiosk
 returns.

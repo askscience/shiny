@@ -6,7 +6,7 @@
 //! `getpwnam_r`/`getpwuid_r`/`getpwent`; no password material is ever touched.
 //!
 //! Linux-only by construction: on other platforms (the workspace also builds
-//! `peakd` on macOS) every lookup returns `None`, so callers keep the virtual
+//! `liteaura` on macOS) every lookup returns `None`, so callers keep the virtual
 //! `.shiny/home/<id>` behaviour.
 
 use serde::Serialize;

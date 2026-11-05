@@ -7,7 +7,7 @@ precedence. Core values are parsed in
 the kiosk shell and the auth helper.
 
 **Legend:** ✓ = read by the server core; L = sidecar launcher; K = kiosk shell
-(`peakd`/`peakd-mac`); A = `shiny-auth` helper; G = greeter session launcher
+(`liteaura`/`liteaura-mac`); A = `shiny-auth` helper; G = greeter session launcher
 (`scripts/shiny-greeter`).
 
 ---
@@ -115,21 +115,21 @@ the kiosk shell and the auth helper.
 Iroh itself is a build feature (`--features iroh`); Tailscale uses the
 `tailscale` CLI. See [remote access](../deployment/remote-access.md).
 
-## Kiosk shell (`peakd` / `peakd-mac`)
+## Kiosk shell (`liteaura` / `liteaura-mac`)
 
 | Variable | Default | Read by | Meaning |
 |---|---|---|---|
-| `PEAKD_APP_ORIGIN` | `http://127.0.0.1:8080` | K | URL of the local server. |
-| `PEAKD_ADFILTER_DIR` | `$XDG_DATA_HOME/shiny/adfilter` | K | Shared compiled ad-filter cache. |
-| `PEAKD_DATA_DIR` | `~/.local/share/shiny/peakd` (sessions) | K | Webview data dir (per-user profile). |
-| `PEAKD_DISPLAY_FILE` | — | K | Interface-scale config file. |
-| `PEAKD_DISPLAY_RUNTIME_FILE` | — | K | Runtime display state. |
-| `PEAKD_UI_SCALE` | — | K | Explicit interface scale. |
-| `PEAKD_TOUCHPAD` | — | K | Touchpad device for gestures. |
-| `PEAKD_IROH` | — | K | Iroh link to connect to. |
-| `PEAKD_PROXY` | — | K | Upstream proxy override. |
-| `PEAKD_TOUCHBAR` (`=0`) | — | K (mac) | Disable the Touch Bar. |
-| `PEAKD_BIN` | — | K shell script | Path to the shell binary. |
+| `LITEAURA_APP_ORIGIN` | `http://127.0.0.1:8080` | K | URL of the local server. |
+| `LITEAURA_ADFILTER_DIR` | `$XDG_DATA_HOME/shiny/adfilter` | K | Shared compiled ad-filter cache. |
+| `LITEAURA_DATA_DIR` | `~/.local/share/shiny/liteaura` (sessions) | K | Webview data dir (per-user profile). |
+| `LITEAURA_DISPLAY_FILE` | — | K | Interface-scale config file. |
+| `LITEAURA_DISPLAY_RUNTIME_FILE` | — | K | Runtime display state. |
+| `LITEAURA_UI_SCALE` | — | K | Explicit interface scale. |
+| `LITEAURA_TOUCHPAD` | — | K | Touchpad device for gestures. |
+| `LITEAURA_IROH` | — | K | Iroh link to connect to. |
+| `LITEAURA_PROXY` | — | K | Upstream proxy override. |
+| `LITEAURA_TOUCHBAR` (`=0`) | — | K (mac) | Disable the Touch Bar. |
+| `LITEAURA_BIN` | — | K shell script | Path to the shell binary. |
 | `PULSE_SERVER` | — | K | Pulse server override (usually unset). |
 | `PROBE_DEBUG` | — | K | Verbose probing. |
 | `HOME` / `XDG_DATA_HOME` | — | K | Standard dirs. |

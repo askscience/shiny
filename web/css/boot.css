@@ -1,5 +1,5 @@
 /* ─────────────────────────────────────────────────────────────
-   Boot splash — the PEAK'D! mark, shown while the app starts.
+   Boot splash — the LiteAura mark, shown while the app starts.
 
    index.html paints #boot-screen before any module runs; js/bootScreen.js
    fades it out once the app shell (or the sign-in screen) is ready.

@@ -29,7 +29,7 @@ const surfaces = new Map();
 
 /**
  * The host context a web-app plugin may adapt to: the interface language and
- * the theme chosen inside PEAK'D — not the OS language or the browser's own
+ * the theme chosen inside LiteAura — not the OS language or the browser's own
  * color scheme. A framed app cannot read either through `navigator.language`:
  * that follows the OS, and an iframe has no access to the shell's prefs.
  *

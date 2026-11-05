@@ -19,7 +19,7 @@
 #
 # Installed to /usr/local/bin/shiny-wait-drm.sh by
 # scripts/install-kiosk-greeter.sh (it supersedes the older, unversioned
-# /usr/local/bin/peakd-wait-drm.sh).
+# /usr/local/bin/liteaura-wait-drm.sh).
 set -u
 
 /usr/bin/udevadm settle --timeout=15 2>/dev/null || true

@@ -11,7 +11,7 @@
 -- file therefore runs once. The plugin *also* repairs the column itself in
 -- `src/settings.rs::ensure_schema` (guarded by a `pragma_table_info` check),
 -- which is what covers an install that applied this file before the
--- search-engine setting shipped — the same split used for `peakd_history.query`
+-- search-engine setting shipped — the same split used for `liteaura_history.query`
 -- in 002.
 --
 -- The default is `duckduckgo`. A self-hosted `SEARXNG_URL` still overrides any

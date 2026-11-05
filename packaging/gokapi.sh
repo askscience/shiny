@@ -1,8 +1,8 @@
-# Gokapi release bundled with the peakd package (sourced by scripts/build-deb.sh).
+# Gokapi release bundled with the liteaura package (sourced by scripts/build-deb.sh).
 #
 # Gokapi (https://github.com/Forceu/Gokapi) is AGPL-3.0. The package ships the
 # unmodified upstream binaries in /usr/libexec/shiny/gokapi/, its license and a
-# NOTICE in /usr/share/doc/peakd/gokapi/, and the Corresponding Source next to
+# NOTICE in /usr/share/doc/liteaura/gokapi/, and the Corresponding Source next to
 # the .deb on the same GitHub Release (AGPL-3.0 §6(d)).
 #
 # The two binaries come from different upstream commits, read from their

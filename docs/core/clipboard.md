@@ -30,9 +30,9 @@ support in the surfaces that cannot use the DOM's own clipboard
   passwords): the text reaches the OS clipboard but never the history or the
   paste mirror, and the `copy` event the fallback path raises is ignored.
 - **Browser pages**: the page is a native child view, so its Ctrl/Cmd+C never
-  reaches the app DOM. The Qt shell's clipboard filter (`crates/peakd/shim/peakd.cpp`)
+  reaches the app DOM. The Qt shell's clipboard filter (`crates/liteaura/shim/liteaura.cpp`)
   runs the engine's Copy action for a focused child view and reports the
-  selection back through the new `peakd_clipboard_cb`; Rust forwards it with
+  selection back through the new `liteaura_clipboard_cb`; Rust forwards it with
   `window.__shinyClipboardCapture(text)` (`web/js/clipboard.js` defines it).
 - **Pastes are not history entries** — they only refresh the in-memory mirror
   that `readClipboardText()` falls back to when the async read is refused.
@@ -55,7 +55,7 @@ The menu is also the paste route for surfaces the keyboard can reach but the
 DOM cannot: picking an entry dispatches `clipboard:paste`
 (`{ text, focused }`, focused = the desktop's focused window) and the Terminal
 and Browser surfaces consume it — the Browser forwards it to the shell as a
-`peakd:view:` `paste` command, which sets the system clipboard and runs the
+`liteaura:view:` `paste` command, which sets the system clipboard and runs the
 engine's Paste action on the active tab.
 
 ## Plugin surfaces
@@ -77,16 +77,16 @@ Events on `window`: `clipboard:changed` (the history changed) and
 
 - `node web/js/tests/clipboardShared.test.mjs` — the pure rules.
 - `node --experimental-vm-modules plugins/browser/web/plugin.smoke.mjs` — the
-  browser window's clipboard contract (menu entries, `peakd:view: paste`).
-- `cargo test -p peakd` — the view protocol, including parsing `paste`.
+  browser window's clipboard contract (menu entries, `liteaura:view: paste`).
+- `cargo test -p liteaura` — the view protocol, including parsing `paste`.
 
-The Qt shell part needs a real shell build: `cargo build -p peakd` (Linux) and
+The Qt shell part needs a real shell build: `cargo build -p liteaura` (Linux) and
 a kiosk relaunch. Plugin web files are served from `data/plugins/<name>/web/`,
 so copy or reinstall after editing the plugin sources.
 
 ## Out of scope
 
-- macOS Browser-page capture (`crates/peakd-mac` needs its own injected
+- macOS Browser-page capture (`crates/liteaura-mac` needs its own injected
   capture script + IPC allow-list; the app/terminal side is platform-neutral).
 - Image/file clipboard entries, and syncing the history to remote clients.
 - Capturing OS-wide clipboard changes (`QClipboard::dataChanged`): history

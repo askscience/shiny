@@ -88,7 +88,7 @@ sudo scripts/install-greeter.sh         # LightDM + the Noir greeter (optional s
 - [`/usr/local/bin/shiny-session`](../../scripts/shiny-session) writes the
   per-user `SERVER_PORT`, starts the user's server and the speech sidecars,
   waits for the server to answer, auto-logs-in the kiosk with the loopback
-  session token, then runs matchbox + `peakd`. It is started by
+  session token, then runs matchbox + `liteaura`. It is started by
   `shiny-kiosk@<user>.service` in the greeter install (or by the DM's session
   entry). Quitting the shell (`Alt`+`Q`) or the app's **Log out** (exit 43)
   ends the session cleanly and the login screen comes back. When Server mode is
@@ -106,7 +106,7 @@ sudo scripts/install-greeter.sh         # LightDM + the Noir greeter (optional s
   them out of the picker. The greeter is exempt — starting somebody else's
   session is its entire job.
 - `install-kiosk-greeter.sh` and `install-greeter.sh` both take the old
-  single-user `shiny.service` / `peakd.service` units off the seat; all scripts
+  single-user `shiny.service` / `liteaura.service` units off the seat; all scripts
   have `--uninstall`.
 
 ---
@@ -124,10 +124,10 @@ file, so a copy recovered from a log or a browser history entry is already dead.
 Rotation replaces the secret rather than forbidding further redemptions, so a
 kiosk relaunched inside the same server process (a Server-mode round trip, a
 restarted shell) bootstraps with the replacement token.
-`scripts/shiny-session` passes it to `peakd` through the `SHINY_BOOT_TOKEN`
+`scripts/shiny-session` passes it to `liteaura` through the `SHINY_BOOT_TOKEN`
 environment variable (never argv, which `/proc/<pid>/cmdline` exposes
 world-readable); the shell appends it to the initial navigation URL itself. The
-launcher re-reads the file before **every** `peakd` launch, so it never hands
+launcher re-reads the file before **every** `liteaura` launch, so it never hands
 over a token that was already spent.
 
 Because the shell navigates to that URL, a bootstrap that cannot be honoured

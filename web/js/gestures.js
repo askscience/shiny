@@ -1,9 +1,9 @@
 /**
- * gestures.js — trackpad gestures from the peakd shell.
+ * gestures.js — trackpad gestures from the liteaura shell.
  *
  * WebKitGTK delivers no multi-touch pad gestures to the page, so the native
  * Linux shell recognises three-finger swipes from the trackpad's evdev stream
- * (crates/peakd/src/gestures.rs) and dispatches `trackpad:gesture`. This
+ * (crates/liteaura/src/gestures.rs) and dispatches `trackpad:gesture`. This
  * module is the whole web-side vocabulary:
  *
  *   swipe left  → next workspace

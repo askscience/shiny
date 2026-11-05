@@ -1,29 +1,29 @@
 #!/usr/bin/env bash
-# Build the MVP PEAK'D! package and archive keyring package.
+# Build the MVP LiteAura package and archive keyring package.
 # Rootless: dpkg-deb --root-owner-group sets root ownership in the archive.
 set -euo pipefail
 
 REPO=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-BUILD=${PEAKD_DEB_BUILD:-$HOME/peakd-iso/deb}
-VERSION=${PEAKD_VERSION:-0.1.2}
+BUILD=${LITEAURA_DEB_BUILD:-$HOME/liteaura-iso/deb}
+VERSION=${LITEAURA_VERSION:-0.1.2}
 OUT="$BUILD/out"
-PKG="$BUILD/peakd"
-KEYRING="$BUILD/peakd-archive-keyring"
-KEYRING_FILE=${PEAKD_KEYRING:-$REPO/packaging/peakd-archive.gpg}
+PKG="$BUILD/liteaura"
+KEYRING="$BUILD/liteaura-archive-keyring"
+KEYRING_FILE=${LITEAURA_KEYRING:-$REPO/packaging/liteaura-archive.gpg}
 
 die() { echo "error: $*" >&2; exit 1; }
-[ -x "$REPO/target/release/peakd" ] || die "target/release/peakd missing"
+[ -x "$REPO/target/release/liteaura" ] || die "target/release/liteaura missing"
 [ -x "$REPO/target/release/shiny" ] || die "target/release/shiny missing"
 mkdir -p "$OUT"
-rm -f "$OUT"/peakd_*.deb "$OUT"/peakd-archive-keyring_*.deb "$OUT"/gokapi-*-source.tar.gz "$OUT"/SHA256SUMS
+rm -f "$OUT"/liteaura_*.deb "$OUT"/peakd_*.deb "$OUT"/liteaura-archive-keyring_*.deb "$OUT"/gokapi-*-source.tar.gz "$OUT"/SHA256SUMS
 
 rm -rf "$PKG"
 mkdir -p "$PKG/DEBIAN" \
     "$PKG/usr/bin" "$PKG/usr/libexec/shiny" "$PKG/usr/lib/shiny/plugins" \
     "$PKG/usr/share/shiny/web" "$PKG/usr/share/shiny/backgrounds" \
-    "$PKG/usr/share/doc/peakd"
+    "$PKG/usr/share/doc/liteaura"
 
-install -m 0755 "$REPO/target/release/peakd" "$PKG/usr/bin/peakd"
+install -m 0755 "$REPO/target/release/liteaura" "$PKG/usr/bin/liteaura"
 install -m 0755 "$REPO/target/release/shiny" "$PKG/usr/bin/shiny"
 install -m 0755 "$REPO/target/release/shiny-installer-helper" "$PKG/usr/libexec/shiny/shiny-installer-helper"
 for bin in shiny-auth shiny-server-mode; do
@@ -59,7 +59,7 @@ done
 # same GitHub Release (AGPL-3.0 §6(d)); see packaging/gokapi.sh.
 # shellcheck source=../packaging/gokapi.sh
 . "$REPO/packaging/gokapi.sh"
-CACHE=${PEAKD_DOWNLOAD_CACHE:-$BUILD/cache}
+CACHE=${LITEAURA_DOWNLOAD_CACHE:-$BUILD/cache}
 mkdir -p "$CACHE"
 fetch() { # url sha256 dest
     local url=$1 sum=$2 dest=$3
@@ -85,7 +85,7 @@ fetch "$GOKAPI_SERVER_SRC_URL" "$GOKAPI_SERVER_SRC_SHA256" "$CACHE/$GOKAPI_SRC"
 fetch "$GOKAPI_CLI_SRC_URL" "$GOKAPI_CLI_SRC_SHA256" "$CACHE/$GOKAPI_CLI_SRC"
 
 GOKAPI_BIN_DIR="$PKG/usr/libexec/shiny/gokapi"
-GOKAPI_DOC_DIR="$PKG/usr/share/doc/peakd/gokapi"
+GOKAPI_DOC_DIR="$PKG/usr/share/doc/liteaura/gokapi"
 install -d "$GOKAPI_BIN_DIR" "$GOKAPI_DOC_DIR"
 unzip_one "$CACHE/$GOKAPI_SERVER_ZIP" gokapi "$GOKAPI_BIN_DIR/gokapi"
 unzip_one "$CACHE/$GOKAPI_CLI_ZIP" gokapi-cli "$GOKAPI_BIN_DIR/gokapi-cli"
@@ -119,10 +119,10 @@ Go module dependencies are pinned by go.sum in each archive.
 NOTICE
 cp -a "$CACHE/$GOKAPI_SRC" "$CACHE/$GOKAPI_CLI_SRC" "$OUT/"
 
-cat > "$PKG/usr/share/doc/peakd/README.md" <<'EOF'
-# PEAK'D!
+cat > "$PKG/usr/share/doc/liteaura/README.md" <<'EOF'
+# LiteAura
 
-Application payload for PEAK'D! (`peakd` shell plus the `shiny` server and
+Application payload for LiteAura (`liteaura` shell plus the `shiny` server and
 plugins). The package intentionally contains no user database, API endpoints,
 model weights, Tailscale state or live-only installer configuration.
 
@@ -130,16 +130,18 @@ Third-party: Gokapi (AGPL-3.0) for Files link sharing; see gokapi/NOTICE.
 EOF
 
 cat > "$PKG/DEBIAN/control" <<EOF
-Package: peakd
+Package: liteaura
 Version: $VERSION
+Replaces: peakd (<< $VERSION~)
+Breaks: peakd (<< $VERSION~)
 Section: misc
 Priority: optional
 Architecture: amd64
-Maintainer: PEAK'D! <noreply@localhost>
+Maintainer: LiteAura <noreply@localhost>
 Depends: libc6, libgcc-s1, libstdc++6, libsqlite3-0, libbz2-1.0, libgtk-3-0t64, libqt6core6t64, libqt6gui6, libqt6widgets6, libqt6quick6, libqt6quickwidgets6, libqt6webenginecore6, libqt6webenginecore6-bin, libqt6webenginequick6, libqt6webengine6-data, libqt6webchannel6, libqt6webchannelquick6, libqt6network6, libqt6qml6, libqt6qmlmodels6, libqt6qmlworkerscript6, libqt6quickcontrols2-6, libqt6quicktemplates2-6, libqt6opengl6, libqt6positioning6, libqt6positioning6-plugins, libqt6svg6, libnss3, libnspr4, libasound2t64, libx11-6, libxcomposite1, libxdamage1, libxext6, libxfixes3, libxrandr2, libxtst6, libdbus-1-3, libfontconfig1, libfreetype6, libexpat1, libpng16-16t64, libwebp7, libwebpdemux2, libharfbuzz0b, libdrm2, libxkbcommon0, libxcb1, libsnappy1v5, libminizip1t64, libgbm1, libevent-2.1-7t64, libopus0, libjpeg62-turbo, libzstd1, zlib1g, fonts-roboto-unhinted, ca-certificates, curl, parted, e2fsprogs, dosfstools, python3-venv
 Recommends: lightdm, matchbox-window-manager, xinit
-Description: PEAK'D! AI desktop shell and server
- The PEAK'D! kiosk shell, the Shiny local server, the baseline plugins and the
+Description: LiteAura AI desktop shell and server
+ The LiteAura kiosk shell, the Shiny local server, the baseline plugins and the
  live installer plugin/helper. This package contains no user data or models.
 EOF
 
@@ -161,26 +163,54 @@ if grep -RIlE 'BEGIN (RSA|OPENSSH|EC) PRIVATE KEY|sk-[A-Za-z0-9]{20,}' "$PKG" >/
     die "possible private key or API token in package"
 fi
 
-dpkg-deb --root-owner-group --build "$PKG" "$OUT/peakd_${VERSION}_amd64.deb" >/dev/null
+dpkg-deb --root-owner-group --build "$PKG" "$OUT/liteaura_${VERSION}_amd64.deb" >/dev/null
 
 rm -rf "$KEYRING"
-mkdir -p "$KEYRING/DEBIAN" "$KEYRING/usr/share/keyrings" "$KEYRING/usr/share/doc/peakd-archive-keyring"
+mkdir -p "$KEYRING/DEBIAN" "$KEYRING/usr/share/keyrings" "$KEYRING/usr/share/doc/liteaura-archive-keyring"
 [ -f "$KEYRING_FILE" ] || die "missing public keyring: $KEYRING_FILE"
-install -m 0644 "$KEYRING_FILE" "$KEYRING/usr/share/keyrings/peakd-archive.gpg"
+install -m 0644 "$KEYRING_FILE" "$KEYRING/usr/share/keyrings/liteaura-archive.gpg"
 cat > "$KEYRING/DEBIAN/control" <<EOF
-Package: peakd-archive-keyring
+Package: liteaura-archive-keyring
 Version: $VERSION
+Replaces: peakd-archive-keyring (<< $VERSION~)
+Breaks: peakd-archive-keyring (<< $VERSION~)
 Section: misc
 Priority: optional
 Architecture: all
-Maintainer: PEAK'D! <noreply@localhost>
-Description: PEAK'D! APT archive signing key
- Public keyring for the PEAK'D! APT repository.
+Maintainer: LiteAura <noreply@localhost>
+Description: LiteAura APT archive signing key
+ Public keyring for the LiteAura APT repository.
 EOF
-cat > "$KEYRING/usr/share/doc/peakd-archive-keyring/README" <<'EOF'
-Public keyring for the PEAK'D! APT repository. The private key is never shipped.
+cat > "$KEYRING/usr/share/doc/liteaura-archive-keyring/README" <<'EOF'
+Public keyring for the LiteAura APT repository. The private key is never shipped.
 EOF
-dpkg-deb --root-owner-group --build "$KEYRING" "$OUT/peakd-archive-keyring_${VERSION}_all.deb" >/dev/null
+dpkg-deb --root-owner-group --build "$KEYRING" "$OUT/liteaura-archive-keyring_${VERSION}_all.deb" >/dev/null
+
+# Transitional package for systems installed when the shell was `peakd`.
+# Their session script and LightDM config still start /usr/bin/peakd, and
+# their apt sources still trust the peakd keyring path, so both names keep
+# working: `peakd` pulls in `liteaura` and links the old names to the new ones.
+LEGACY="$BUILD/peakd-transitional"
+rm -rf "$LEGACY"
+mkdir -p "$LEGACY/DEBIAN" "$LEGACY/usr/bin" "$LEGACY/usr/share/keyrings"
+ln -s liteaura "$LEGACY/usr/bin/peakd"
+ln -s liteaura-archive.gpg "$LEGACY/usr/share/keyrings/peakd-archive.gpg"
+cat > "$LEGACY/DEBIAN/control" <<EOF
+Package: peakd
+Version: $VERSION
+Section: oldlibs
+Priority: optional
+Architecture: all
+Maintainer: LiteAura <noreply@localhost>
+Depends: liteaura (>= $VERSION), liteaura-archive-keyring (>= $VERSION)
+Replaces: peakd-archive-keyring (<< $VERSION~)
+Breaks: peakd-archive-keyring (<< $VERSION~)
+Description: transitional package for LiteAura
+ The shell formerly called peakd is now LiteAura. This package installs
+ liteaura and keeps the old command and keyring names working. It can be
+ removed once nothing starts /usr/bin/peakd.
+EOF
+dpkg-deb --root-owner-group --build "$LEGACY" "$OUT/peakd_${VERSION}_all.deb" >/dev/null
 
 ( cd "$OUT" && sha256sum *.deb gokapi-*-source.tar.gz > SHA256SUMS )
 ls -lh "$OUT"/*.deb "$OUT"/gokapi-*-source.tar.gz "$OUT/SHA256SUMS"

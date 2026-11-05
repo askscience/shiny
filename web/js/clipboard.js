@@ -18,7 +18,7 @@
  *     `readClipboardText()` when the async read is refused (the terminal's
  *     Ctrl+V path).
  *   • Browser-plugin pages render in a native child view, so their Ctrl/Cmd+C
- *     never reaches this DOM. The Qt shell (crates/peakd) reports those copies
+ *     never reaches this DOM. The Qt shell (crates/liteaura) reports those copies
  *     through `window.__shinyClipboardCapture`, defined here.
  *
  * Window events:
@@ -96,7 +96,7 @@ export async function copyText(text, { source = 'app', sensitive = false } = {})
  * Read the current clipboard text, or null when nothing is available.
  *
  * `navigator.clipboard.readText()` needs a permission the kiosk shell grants
- * to the app origin (crates/peakd); where it is unavailable the last text
+ * to the app origin (crates/liteaura); where it is unavailable the last text
  * seen by this service is used instead, so paste still works for anything the
  * user copied inside the app.
  */
@@ -211,6 +211,6 @@ export function installClipboard() {
   document.addEventListener('paste', onPaste, true);
 
   // The shell runs JS on the app view when Ctrl/Cmd+C copied a selection
-  // inside a Browser-plugin page (crates/peakd, `on_clipboard`).
+  // inside a Browser-plugin page (crates/liteaura, `on_clipboard`).
   window.__shinyClipboardCapture = (text) => recordCopy(text, 'browser');
 }

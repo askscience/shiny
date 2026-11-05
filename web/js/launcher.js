@@ -28,7 +28,7 @@
  * a cascade is a pure function of the finger position. The motion language
  * (`html[data-motion]`) decides how things arrive (css/launcher.css).
  *
- * The gesture is recognised natively (crates/peakd/src/gestures.rs) and mapped
+ * The gesture is recognised natively (crates/liteaura/src/gestures.rs) and mapped
  * by gestures.js; Escape, an upward swipe and a click on the frosted desktop
  * all dismiss. Typing searches; arrows + Enter pick.
  */

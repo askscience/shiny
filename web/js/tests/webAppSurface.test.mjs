@@ -192,7 +192,7 @@ check('no sandbox attribute: a same-origin app keeps its storage',
   frame.getAttribute('sandbox') === null);
 check('the iframe lives inside the tile', tile.children.includes(frame));
 
-/* ── Host context: the PEAK'D language and theme ─────────────── */
+/* ── Host context: the LiteAura language and theme ─────────────── */
 
 check('the frame boots with the active theme mode',
   frame.style.colorScheme === 'dark', frame.style.colorScheme);

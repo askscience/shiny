@@ -1,7 +1,7 @@
 # Browser plugin — architecture
 
 This document maps every module in `plugins/browser/src/` and the data flows
-that connect them, the shell (`crates/peakd`) and the shared filter crates.
+that connect them, the shell (`crates/liteaura`) and the shared filter crates.
 
 ## The core/plugin/shell split
 
@@ -11,7 +11,7 @@ the usual plugin/core pair.
 | Layer | Owns |
 |---|---|
 | `browser` plugin (server) | Sessions, history, settings, bookmarks, downloads, news profile, link previews, the **server half** of ad filtering |
-| `peakd` shell (kiosk) | The page items in its own Qt Quick scene that render the page; the **per-request** ad-block interceptor; the actual downloads; `window.__peakdViewEvent` / `__peakdShield` / `__peakdDownloads` callbacks |
+| `liteaura` shell (kiosk) | The page items in its own Qt Quick scene that render the page; the **per-request** ad-block interceptor; the actual downloads; `window.__liteauraViewEvent` / `__liteauraShield` / `__liteauraDownloads` callbacks |
 | `browser` plugin (window JS) | The chrome: tab strip, toolbar, address bar, popovers and the sandboxed home shelf; drives the shell over IPC |
 
 The plugin does **not** proxy pages. An earlier design rewrote the origin
@@ -91,9 +91,9 @@ window.navigateTo(input)
          else: { session, url }
   <- apiFetch resolves
 window.loadNative(tab, url)
-  -> IPC "peakd:view:" { op: "open", id, url, rect, visible, incognito }
+  -> IPC "liteaura:view:" { op: "open", id, url, rect, visible, incognito }
 shell positions the page item in its scene and pushes back
-window.__peakdViewEvent({ id, type: "url"|"title"|"load"|"new-window"|"page-js" })
+window.__liteauraViewEvent({ id, type: "url"|"title"|"load"|"new-window"|"page-js" })
   recordLocation / recordVisit / tab title / new tab / page-script answer
 ```
 
@@ -156,7 +156,7 @@ on_load -> filter::ensure_loaded(ctx)
 GET  /api/browser/filter          -> { enabled, rules }
 POST /api/browser/filter/refresh  -> shiny_filter::engine::load (re-fetch) -> { rules }
 
-shell side: peakd restores the same cache and blocks per-request in-process
+shell side: liteaura restores the same cache and blocks per-request in-process
 ```
 
 The lists are EasyList + EasyPrivacy plus this module's own YouTube rules
@@ -171,19 +171,19 @@ read path is best-effort filtering through the shared client.
 YouTube's **video** ads are not reachable from a filter list at all — the ad and
 the video are served from the same `googlevideo.com/videoplayback` shape. That
 half is a document-start script the *shell* injects into every frame
-(`crates/peakd/js/youtube-ads.js`, registered as `peakd:youtube`, see
-`crates/peakd/src/youtube.rs`): it renames the ad keys out of the player's
+(`crates/liteaura/js/youtube-ads.js`, registered as `liteaura:youtube`, see
+`crates/liteaura/src/youtube.rs`): it renames the ad keys out of the player's
 responses and gets a running ad out of the way. It ships with the shell rather
 than the server, is self-gating on youtube.com (which is also what covers the
 YouTube plugin's `youtube.com/embed` player), and the window's shield toggle
-drops it from every view's script collection (`peakd:settings` /
-`peakd:filter` → `peakd_qt_set_filter_scripts`).
+drops it from every view's script collection (`liteaura:settings` /
+`liteaura:filter` → `liteaura_qt_set_filter_scripts`).
 
 ### 5. Downloads
 
 ```
 shell finishes/starts a download
-  -> window.__peakdViewEvent({ type: "download", kind, download })
+  -> window.__liteauraViewEvent({ type: "download", kind, download })
 window.applyDownload(event)
   -> merge into local list, render
   -> POST /api/browser/downloads/event { id, url, host, file, path, mime, total, received, state, ... }
@@ -224,7 +224,7 @@ first unlock (no vault)
 fill on a page
   window -> GET passwords?url=<page>      (entries for this origin, no passwords)
   click   -> POST passwords/reveal { id }
-          -> peakd:view: runJs fillScript(origin, user, pass)
+          -> liteaura:view: runJs fillScript(origin, user, pass)
   page    -> `location.origin === origin` checked inside the page, then fills
           <- page-js { token, result: ok | user | nofield | origin }
 ```
@@ -268,4 +268,4 @@ copies live in one process. Therefore:
 
 - [`README.md`](README.md) · [`tools.md`](tools.md) · [`routes.md`](routes.md) · [`window.md`](window.md)
 - [`../../../docs/plugins/architecture.md`](../../../docs/plugins/architecture.md)
-- [`../../../crates/peakd/src/browse.rs`](../../../crates/peakd/src/browse.rs)
+- [`../../../crates/liteaura/src/browse.rs`](../../../crates/liteaura/src/browse.rs)

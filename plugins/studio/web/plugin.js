@@ -2476,7 +2476,7 @@ function onArrWheel(e) {
       delivers it) — onArrWheel;
    2. WebKit `gesturestart/gesturechange` (scale);
    3. two touch pointers (touchscreens) via Pointer Events;
-   4. a shell-sent `trackpad:pinch` event { phase, scale } (the PEAK'D kiosk
+   4. a shell-sent `trackpad:pinch` event { phase, scale } (the LiteAura kiosk
       runs Qt on X11, where touchpad pinches never reach the page);
    5. last resort: visualViewport scale changes. */
 let arrPointer = { x: null, inside: false };

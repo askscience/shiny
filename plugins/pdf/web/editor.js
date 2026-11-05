@@ -4,8 +4,8 @@
  * The document is HTML (kept to `sanitize.js`'s vocabulary) styled by
  * `doc-themes.js`. The paper has the printer's page width and margins, so
  * line breaks match; dashed guides show where pages end. Export hands the
- * same HTML and stylesheet to the shell (peakd prints it with Chromium:
- * `peakd:print:` → `window.__peakdPrinted`), then uploads the PDF. Without the
+ * same HTML and stylesheet to the shell (liteaura prints it with Chromium:
+ * `liteaura:print:` → `window.__liteauraPrinted`), then uploads the PDF. Without the
  * shell (a plain browser) export falls back to the browser's print dialog.
  */
 
@@ -57,14 +57,14 @@ function onPrinted(result) {
   }
 }
 
-/** Is the PEAK'D shell's print bridge there? */
+/** Is the LiteAura shell's print bridge there? */
 export function canShellPrint() {
-  return typeof window !== 'undefined' && !!window.ipc && typeof window.ipc.postMessage === 'function' && !!window.__peakdCaps?.print;
+  return typeof window !== 'undefined' && !!window.ipc && typeof window.ipc.postMessage === 'function' && !!window.__liteauraCaps?.print;
 }
 
 /** Print HTML to PDF through the shell; resolves with the bytes. */
 function shellPrint(html) {
-  window.__peakdPrinted = onPrinted;
+  window.__liteauraPrinted = onPrinted;
   return new Promise((resolve, reject) => {
     const id = `p${Date.now()}${Math.random().toString(36).slice(2, 8)}`;
     // An older shell ignores the message: give up and let the caller fall back.
@@ -73,7 +73,7 @@ function shellPrint(html) {
       reject(Object.assign(new Error('no-shell-print'), { code: 'no-shell-print' }));
     }, 45000);
     pending.set(id, { resolve, reject, timer });
-    window.ipc.postMessage(`peakd:print:${JSON.stringify({ id, html, options: { size: PAGE.size, margins: PAGE.margins } })}`);
+    window.ipc.postMessage(`liteaura:print:${JSON.stringify({ id, html, options: { size: PAGE.size, margins: PAGE.margins } })}`);
   });
 }
 

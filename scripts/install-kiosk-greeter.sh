@@ -37,7 +37,7 @@
 #
 # Overridable: SHINY_USER (default: detected — SHINY_USER, else SUDO_USER,
 # else the repo's owner), SHINY_GREETER_USER (default
-# shiny-greeter), SHINY_REPO, SHINY_BIN, PEAKD_BIN, REMOVE_LIGHTDM (default 1),
+# shiny-greeter), SHINY_REPO, SHINY_BIN, LITEAURA_BIN, REMOVE_LIGHTDM (default 1),
 # SKIP_BUILD=1 to install the binaries already built, SHINY_FIX_HOME_PERMS=0 to
 # make a non-traversable home directory a hard error instead of an automatic
 # `chmod o+x` (the greeter account must be able to reach the repo — see §1b).
@@ -54,7 +54,7 @@ SHINY_REPO=${SHINY_REPO:-$REPO_DIR}
 REMOVE_LIGHTDM=${REMOVE_LIGHTDM:-1}
 
 SHINY_BIN=${SHINY_BIN:-}
-PEAKD_BIN=${PEAKD_BIN:-}
+LITEAURA_BIN=${LITEAURA_BIN:-}
 
 GREETER_UNIT=/etc/systemd/system/shiny-greeter.service
 KIOSK_UNIT=/etc/systemd/system/shiny-kiosk@.service
@@ -64,7 +64,7 @@ GREETER_BIN=/usr/local/bin/shiny-greeter
 GREETER_START_BIN=/usr/local/bin/shiny-greeter-start
 WAIT_DRM_BIN=/usr/local/bin/shiny-wait-drm.sh
 SEAT_STOP_BIN=/usr/local/bin/shiny-seat-stop.sh
-LEGACY_UNITS="/etc/systemd/system/peakd.service /etc/systemd/system/peakd.service.d /etc/systemd/system/shiny.service /etc/systemd/system/shiny.service.bak /etc/systemd/system/shiny.service.d"
+LEGACY_UNITS="/etc/systemd/system/liteaura.service /etc/systemd/system/liteaura.service.d /etc/systemd/system/shiny.service /etc/systemd/system/shiny.service.bak /etc/systemd/system/shiny.service.d"
 AUTH_DROPIN=/etc/systemd/system/shiny-auth.service.d/50-greeter.conf
 
 usage() {
@@ -131,9 +131,9 @@ if [ "${SKIP_BUILD:-0}" != "1" ]; then
         echo "Building shiny-auth (release)…"
         build_as_user "--release -p shiny-auth"
     fi
-    if [ ! -x "$SHINY_REPO/target/debug/peakd" ] && [ ! -x /usr/local/bin/peakd ]; then
-        echo "Building peakd…"
-        build_as_user "-p peakd"
+    if [ ! -x "$SHINY_REPO/target/debug/liteaura" ] && [ ! -x /usr/local/bin/liteaura ]; then
+        echo "Building liteaura…"
+        build_as_user "-p liteaura"
     fi
 fi
 
@@ -144,15 +144,15 @@ if [ -z "$SHINY_BIN" ]; then
         if [ -x "$candidate" ]; then SHINY_BIN=$candidate; break; fi
     done
 fi
-if [ -z "$PEAKD_BIN" ]; then
-    for candidate in "$SHINY_REPO/target/release/peakd" "$SHINY_REPO/target/debug/peakd" /usr/local/bin/peakd /usr/bin/peakd; do
-        if [ -x "$candidate" ]; then PEAKD_BIN=$candidate; break; fi
+if [ -z "$LITEAURA_BIN" ]; then
+    for candidate in "$SHINY_REPO/target/release/liteaura" "$SHINY_REPO/target/debug/liteaura" /usr/local/bin/liteaura /usr/bin/liteaura; do
+        if [ -x "$candidate" ]; then LITEAURA_BIN=$candidate; break; fi
     done
 fi
-if [ -z "$SHINY_BIN" ] || [ -z "$PEAKD_BIN" ]; then
-    echo "error: could not find the shiny and/or peakd binary." >&2
-    echo "       Build them (cargo build --release -p shiny -p peakd) or set" >&2
-    echo "       SHINY_BIN=… PEAKD_BIN=… and re-run." >&2
+if [ -z "$SHINY_BIN" ] || [ -z "$LITEAURA_BIN" ]; then
+    echo "error: could not find the shiny and/or liteaura binary." >&2
+    echo "       Build them (cargo build --release -p shiny -p liteaura) or set" >&2
+    echo "       SHINY_BIN=… LITEAURA_BIN=… and re-run." >&2
     exit 1
 fi
 
@@ -161,7 +161,7 @@ echo "  user       : $SHINY_USER ($SHINY_HOME)"
 echo "  greeter    : $GREETER_USER ($GREETER_HOME)"
 echo "  repo       : $SHINY_REPO"
 echo "  shiny bin  : $SHINY_BIN"
-echo "  peakd      : $PEAKD_BIN"
+echo "  liteaura      : $LITEAURA_BIN"
 
 # ── 1. Backup of what this replaces ─────────────────────────────────────────
 BACKUP=/var/backups/shiny-kiosk-greeter-$(date +%Y%m%d-%H%M%S).tar.gz
@@ -172,8 +172,8 @@ tar -czf "$BACKUP" -C / \
     etc/systemd/system/shiny.service \
     etc/systemd/system/shiny.service.bak \
     etc/systemd/system/shiny.service.d \
-    etc/systemd/system/peakd.service \
-    etc/systemd/system/peakd.service.d \
+    etc/systemd/system/liteaura.service \
+    etc/systemd/system/liteaura.service.d \
     2>/dev/null || true
 echo "  backup     : $BACKUP"
 
@@ -185,7 +185,7 @@ echo "  backup     : $BACKUP"
 # exactly how this fails, and it fails *after* install, at the seat.
 # Verify as the greeter user, before anything is installed.
 if ! runuser -u "$GREETER_USER" -- test -x "$SHINY_BIN" 2>/dev/null ||
-   ! runuser -u "$GREETER_USER" -- test -x "$PEAKD_BIN" 2>/dev/null ||
+   ! runuser -u "$GREETER_USER" -- test -x "$LITEAURA_BIN" 2>/dev/null ||
    ! runuser -u "$GREETER_USER" -- test -r "$SHINY_REPO/web/index.html" 2>/dev/null; then
     # Name the ancestor that actually blocks the walk. Top-down: once a
     # directory is blocked, every level below it is unresolvable, so a
@@ -224,7 +224,7 @@ if ! runuser -u "$GREETER_USER" -- test -x "$SHINY_BIN" 2>/dev/null ||
         fi
     else
         echo "error: $GREETER_USER cannot reach the repo at $SHINY_REPO." >&2
-        echo "       Check the permissions on $SHINY_BIN and $PEAKD_BIN." >&2
+        echo "       Check the permissions on $SHINY_BIN and $LITEAURA_BIN." >&2
         exit 1
     fi
 fi
@@ -254,7 +254,7 @@ else
 fi
 
 echo "Installing the per-user session (install-linux-session.sh)…"
-SHINY_REPO="$SHINY_REPO" SHINY_BIN="$SHINY_BIN" PEAKD_BIN="$PEAKD_BIN" \
+SHINY_REPO="$SHINY_REPO" SHINY_BIN="$SHINY_BIN" LITEAURA_BIN="$LITEAURA_BIN" \
     "$REPO_DIR/scripts/install-linux-session.sh"
 
 # ── 3. Launchers ────────────────────────────────────────────────────────────
@@ -262,7 +262,7 @@ install -m 0755 "$REPO_DIR/scripts/shiny-wait-drm.sh" "$WAIT_DRM_BIN"
 install -m 0755 "$REPO_DIR/scripts/shiny-seat-stop.sh" "$SEAT_STOP_BIN"
 sed -e "s|@SHINY_REPO@|$SHINY_REPO|g" \
     -e "s|@SHINY_BIN@|$SHINY_BIN|g" \
-    -e "s|@PEAKD_BIN@|$PEAKD_BIN|g" \
+    -e "s|@LITEAURA_BIN@|$LITEAURA_BIN|g" \
     "$REPO_DIR/scripts/shiny-greeter" > "$GREETER_BIN"
 chmod 0755 "$GREETER_BIN"
 install -m 0755 "$REPO_DIR/scripts/shiny-greeter-start" "$GREETER_START_BIN"
@@ -370,7 +370,7 @@ PAMName=login
 # NO Environment=HOME= here on purpose. The old `Environment=HOME=%h` looked
 # right but %h is not expanded in Environment= for this unit type: the session
 # started with HOME=/root instead of the account's own home, so every
-# $HOME-relative path in the launcher (/root/.config/shiny, the per-user peakd
+# $HOME-relative path in the launcher (/root/.config/shiny, the per-user liteaura
 # profile, the ADFilter cache) resolved somewhere the account cannot write.
 # shiny-session then died before its first log line — silently, because xinit
 # swallows the client's stderr — and the handover bounced straight back to the
@@ -429,11 +429,11 @@ EOF
 # They are the pre-greeter way to run the kiosk (xinit as one fixed user) and
 # would fight this install for tty1 if anything re-enabled them.
 systemctl disable --now shiny.service 2>/dev/null || true
-systemctl disable --now peakd.service 2>/dev/null || true
+systemctl disable --now liteaura.service 2>/dev/null || true
 for path in $LEGACY_UNITS; do
     rm -rf "$path"
 done
-rm -f /usr/local/bin/peakd-kiosk.sh /usr/local/bin/peakd-wait-drm.sh
+rm -f /usr/local/bin/liteaura-kiosk.sh /usr/local/bin/liteaura-wait-drm.sh
 
 # ── 6. LightDM off the seat ─────────────────────────────────────────────────
 LIGHTDM_REMOVED=0
@@ -454,16 +454,16 @@ if [ "$REMOVE_LIGHTDM" = "1" ] && command -v lightdm >/dev/null 2>&1; then
 fi
 
 # ── 7. Move the shared QtWebEngine profile into the user's own data dir ─────
-# The per-user session now uses $HOME/.local/share/shiny/peakd (see
+# The per-user session now uses $HOME/.local/share/shiny/liteaura (see
 # scripts/shiny-session); the old shared profile under the repo held this
 # user's cookies and logins, so move it rather than start them signed out.
-SRC_PROFILE="$SHINY_REPO/data/peakd/qtwebengine"
-DST_PROFILE="$SHINY_HOME/.local/share/shiny/peakd/qtwebengine"
+SRC_PROFILE="$SHINY_REPO/data/liteaura/qtwebengine"
+DST_PROFILE="$SHINY_HOME/.local/share/shiny/liteaura/qtwebengine"
 if [ -d "$SRC_PROFILE" ] && [ ! -e "$DST_PROFILE" ]; then
     echo "Moving the QtWebEngine profile to $DST_PROFILE…"
-    install -d -o "$SHINY_USER" -g "$SHINY_USER" "$SHINY_HOME/.local/share/shiny/peakd"
+    install -d -o "$SHINY_USER" -g "$SHINY_USER" "$SHINY_HOME/.local/share/shiny/liteaura"
     mv "$SRC_PROFILE" "$DST_PROFILE" 2>/dev/null || cp -a "$SRC_PROFILE" "$DST_PROFILE"
-    chown -R "$SHINY_USER":"$SHINY_USER" "$SHINY_HOME/.local/share/shiny/peakd"
+    chown -R "$SHINY_USER":"$SHINY_USER" "$SHINY_HOME/.local/share/shiny/liteaura"
 fi
 
 # ── 8. Put the greeter on the seat ──────────────────────────────────────────

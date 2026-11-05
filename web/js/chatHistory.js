@@ -60,7 +60,7 @@ function renderList() {
   if (!conversations.length) {
     list.appendChild(emptyState({
       title: t('chat.noChatsYet', null, 'No chats yet'),
-      body: t('chat.historyEmptyBody', null, "Your conversations with PEAK'D! will appear here."),
+      body: t('chat.historyEmptyBody', null, "Your conversations with LiteAura will appear here."),
     }));
     panel.body.appendChild(list);
     return;
@@ -166,7 +166,7 @@ async function openMessages(c) {
       } catch (_) { /* keep the raw content */ }
     }
     const bubble = h('div', `chat-history-bubble chat-history-bubble--${isUser ? 'user' : 'assistant'}`);
-    const role = isUser ? t('chat.you', null, 'You') : "PEAK'D!";
+    const role = isUser ? t('chat.you', null, 'You') : "LiteAura";
     bubble.appendChild(h('div', 'chat-history-bubble-role', role));
     bubble.appendChild(h('div', 'chat-history-bubble-text', text));
     msgs.appendChild(bubble);

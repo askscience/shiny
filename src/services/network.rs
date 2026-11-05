@@ -14,7 +14,7 @@
 //! `/api/network/events` relays the broadcast as SSE.
 //!
 //! The crate is Linux-only, so the service compiles to an inert stub
-//! elsewhere — the workspace also builds on macOS for the `peakd` shell.
+//! elsewhere — the workspace also builds on macOS for the `liteaura` shell.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;

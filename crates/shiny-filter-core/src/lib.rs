@@ -4,7 +4,7 @@
 //! serde/parking_lot/tracing): parsing filter lists, the compiled-engine cache
 //! format, per-request verdicts and cosmetic selectors. It deliberately carries
 //! **no HTTP client and no async runtime**, so it can be linked into both the
-//! server (`shiny`) and the kiosk shell (`peakd`) without dragging in
+//! server (`shiny`) and the kiosk shell (`liteaura`) without dragging in
 //! `wreq`/BoringSSL or tokio.
 //!
 //! The server (`crates/shiny-filter`) owns the network half: fetching the lists

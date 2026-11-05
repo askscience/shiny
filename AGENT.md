@@ -1,4 +1,4 @@
-# AGENT.md — orientation for AI agents working on Shiny / PEAK'D!
+# AGENT.md — orientation for AI agents working on Shiny / LiteAura
 
 This file is for AI coding agents. It maps the repository: where the documentation
 is, where the code is, how to build and test, and the rules that are easy to break
@@ -7,10 +7,10 @@ from a cold start. Read [docs/README.md](docs/README.md) for the human index and
 
 ## What this is, in one paragraph
 
-Shiny (shipped as **PEAK'D!**) is a local-first desktop assistant/OS shell: a Rust
+Shiny (shipped as **LiteAura**) is a local-first desktop assistant/OS shell: a Rust
 core process (`src/`, axum + SQLite) that serves a **no-build vanilla ES-module web
 UI** (`web/`) over loopback HTTP, plus native kiosk shells that render that UI in a
-webview (`crates/peakd` Qt6 on Linux, `crates/peakd-mac` wry/WKWebView at the same
+webview (`crates/liteaura` Qt6 on Linux, `crates/liteaura-mac` wry/WKWebView at the same
 origin, `crates/shiny-server-mode` a small GTK window). **Everything beyond the voice
 bar + chat assistant is a plugin** (`plugins/<name>/`): a Rust cdylib loaded at
 runtime via `dlopen` that contributes agent tools, HTTP routes, migrations, skills
@@ -50,7 +50,7 @@ and an optional web surface.
 | `web/js/tests/` | Node-based frontend tests (plain `node file.mjs`, no framework) |
 | `plugins/<name>/` | A plugin: `plugin.toml`, `Cargo.toml`, `src/` (Plugin + Tool impls), `web/` (plugin.js/css/hud.js/i18n), `migrations/`, `skills/` (prompt skills), `docs/`, `web/icon.svg` |
 | `crates/shiny-plugin-sdk/` | The public plugin ABI: `Plugin`/`Tool` traits, contexts, routes, crons, migrations |
-| `crates/peakd/`, `crates/peakd-mac/`, `crates/shiny-server-mode/` | Native shells (kiosk on Linux / macOS / the server-mode GTK window) |
+| `crates/liteaura/`, `crates/liteaura-mac/`, `crates/shiny-server-mode/` | Native shells (kiosk on Linux / macOS / the server-mode GTK window) |
 | `scripts/` | Installers and session scripts (distro setup, sidecars, Touch Bar, T2 hardware) |
 | `data/` | Runtime state: `data/traveler.db`, **installed plugin copies** under `data/plugins/<name>/` (gitignored) |
 | `voice/`, `greeter/`, `benchmarks/`, `vendor/` | Sidecars/models, greeter assets, benchmark scaffolding (gitignored), patched vendored crates |
@@ -60,14 +60,14 @@ and an optional web surface.
 ```bash
 cargo run                         # server on http://localhost:8080 (serves web/)
 cargo build --release             # server + all workspace members (incl. plugin cdylibs)
-cargo build -p peakd              # kiosk shell (Linux; needs Qt6 WebEngine dev packages)
-cargo build -p peakd-mac          # macOS shell
+cargo build -p liteaura              # kiosk shell (Linux; needs Qt6 WebEngine dev packages)
+cargo build -p liteaura-mac          # macOS shell
 cargo build -p shiny-server-mode  # server-mode GTK window
 
 # Tests (same commands CI runs)
 scripts/test-web.sh                                    # frontend
 scripts/test-rust.sh                                   # explicit plugin fixtures + Rust tests
-cargo clippy --workspace --exclude peakd --exclude peakd-mac --all-targets
+cargo clippy --workspace --exclude liteaura --exclude liteaura-mac --all-targets
 ```
 
 Heavy builds: run them in the background — this session may be running *inside* the

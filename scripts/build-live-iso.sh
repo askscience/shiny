@@ -1,22 +1,22 @@
 #!/usr/bin/env bash
-# Build the PEAK'D! live installer ISO without root.
+# Build the LiteAura live installer ISO without root.
 #
 # The base is the official Debian 13 XFCE live image. We remaster its squashfs,
-# add PEAK'D!, Qt6, the installer helper and the T2 kernel/userspace setup, then
+# add LiteAura, Qt6, the installer helper and the T2 kernel/userspace setup, then
 # rebuild the bootable image with GRUB. Nothing on the host is installed and no
 # running service is touched.
 set -euo pipefail
 
 REPO=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-BUILD=${PEAKD_ISO_BUILD:-$HOME/peakd-iso}
-BASE_ISO=${PEAKD_BASE_ISO:-$BUILD/base.iso}
-OUTDIR=${PEAKD_ISO_OUT:-$BUILD/out}
-ISO_NAME=peakd-live-t2-amd64.iso
-LIVE_URL=${PEAKD_LIVE_URL:-https://cdimage.debian.org/debian-cd/current-live/amd64/iso-hybrid/debian-live-13.7.0-amd64-xfce.iso}
+BUILD=${LITEAURA_ISO_BUILD:-$HOME/liteaura-iso}
+BASE_ISO=${LITEAURA_BASE_ISO:-$BUILD/base.iso}
+OUTDIR=${LITEAURA_ISO_OUT:-$BUILD/out}
+ISO_NAME=liteaura-live-t2-amd64.iso
+LIVE_URL=${LITEAURA_LIVE_URL:-https://cdimage.debian.org/debian-cd/current-live/amd64/iso-hybrid/debian-live-13.7.0-amd64-xfce.iso}
 T2_KVER=${T2_KVER:-$(uname -r)}
-PKG_VERSION=${PEAKD_VERSION:-0.1.2}
-DEB_BUILD=${PEAKD_DEB_BUILD:-$BUILD/deb}
-APT_KEYRING=${PEAKD_KEYRING:-$REPO/packaging/peakd-archive.gpg}
+PKG_VERSION=${LITEAURA_VERSION:-0.1.2}
+DEB_BUILD=${LITEAURA_DEB_BUILD:-$BUILD/deb}
+APT_KEYRING=${LITEAURA_KEYRING:-$REPO/packaging/liteaura-archive.gpg}
 APT_URL=https://askscience.github.io/shiny/apt
 
 TOOLS="$BUILD/tools"
@@ -112,12 +112,12 @@ copy_missing_libs() {
 }
 
 stage_app() {
-    log "staging PEAK'D! application"
+    log "staging LiteAura application"
     install -d "$ROOTFS/usr/bin" "$ROOTFS/usr/libexec/shiny" "$ROOTFS/usr/lib/shiny/plugins" \
         "$ROOTFS/usr/share/shiny/web" "$ROOTFS/usr/share/shiny/backgrounds" \
         "$ROOTFS/usr/share/shiny/iconsets" "$ROOTFS/var/lib/shiny" "$ROOTFS/var/log/shiny"
     install -m 0755 "$REPO/target/release/shiny" "$ROOTFS/usr/bin/shiny"
-    install -m 0755 "$REPO/target/release/peakd" "$ROOTFS/usr/bin/peakd"
+    install -m 0755 "$REPO/target/release/liteaura" "$ROOTFS/usr/bin/liteaura"
     install -m 0755 "$REPO/target/release/shiny-installer-helper" "$ROOTFS/usr/libexec/shiny/shiny-installer-helper"
     if [ -x /usr/bin/matchbox-window-manager ]; then
         install -m 0755 /usr/bin/matchbox-window-manager "$ROOTFS/usr/bin/matchbox-window-manager"
@@ -150,7 +150,7 @@ stage_app() {
     fi
 
     copy_missing_libs "$ROOTFS/usr/bin/shiny"
-    copy_missing_libs "$ROOTFS/usr/bin/peakd"
+    copy_missing_libs "$ROOTFS/usr/bin/liteaura"
     copy_missing_libs "$ROOTFS/usr/libexec/shiny/shiny-installer-helper"
     local so
     for so in "$ROOTFS"/usr/lib/shiny/plugins/*/*.so; do
@@ -159,7 +159,7 @@ stage_app() {
 }
 
 seed_live_account() {
-    log "seeding the live PEAK'D! account database"
+    log "seeding the live LiteAura account database"
     local seed="$BUILD/seed" db="$BUILD/seed/db/shiny.db" pid i
     rm -rf "$seed"
     mkdir -p "$seed/home" "$seed/run" "$seed/plugins" "$seed/db"
@@ -188,20 +188,20 @@ seed_live_account() {
 }
 
 build_packages() {
-    log "building the peakd deb"
-    (cd "$REPO" && PEAKD_DEB_BUILD="$DEB_BUILD" PEAKD_KEYRING="$APT_KEYRING" \
-        PEAKD_VERSION="$PKG_VERSION" ./scripts/build-deb.sh)
+    log "building the liteaura deb"
+    (cd "$REPO" && LITEAURA_DEB_BUILD="$DEB_BUILD" LITEAURA_KEYRING="$APT_KEYRING" \
+        LITEAURA_VERSION="$PKG_VERSION" ./scripts/build-deb.sh)
 }
 
 stage_package() {
-    log "installing the peakd package payload into the live rootfs"
+    log "installing the liteaura package payload into the live rootfs"
     build_packages
-    local deb="$DEB_BUILD/out/peakd_${PKG_VERSION}_amd64.deb"
-    local keydeb="$DEB_BUILD/out/peakd-archive-keyring_${PKG_VERSION}_all.deb"
+    local deb="$DEB_BUILD/out/liteaura_${PKG_VERSION}_amd64.deb"
+    local keydeb="$DEB_BUILD/out/liteaura-archive-keyring_${PKG_VERSION}_all.deb"
     [ -f "$deb" ] || die "missing $deb"
     [ -f "$keydeb" ] || die "missing $keydeb"
 
-    rm -rf "$ROOTFS/usr/bin/shiny" "$ROOTFS/usr/bin/peakd" \
+    rm -rf "$ROOTFS/usr/bin/shiny" "$ROOTFS/usr/bin/liteaura" \
         "$ROOTFS/usr/bin/shiny-auth" "$ROOTFS/usr/bin/shiny-server-mode" \
         "$ROOTFS/usr/libexec/shiny" "$ROOTFS/usr/lib/shiny/plugins" \
         "$ROOTFS/usr/share/shiny/web" "$ROOTFS/usr/share/shiny/iconsets" \
@@ -211,14 +211,14 @@ stage_package() {
 
     install -d "$ROOTFS/etc/apt/sources.list.d" "$ROOTFS/var/lib/shiny" "$ROOTFS/var/log/shiny" \
         "$ROOTFS/usr/share/fonts/truetype"
-    rm -rf "$ROOTFS/opt/peakd/repo" "$ROOTFS/etc/apt/preferences.d/90-peakd.pref"
-    install -m 0644 "$APT_KEYRING" "$ROOTFS/usr/share/keyrings/peakd-archive.gpg"
-    cat > "$ROOTFS/etc/apt/sources.list.d/peakd.sources" <<EOF
+    rm -rf "$ROOTFS/opt/liteaura/repo" "$ROOTFS/etc/apt/preferences.d/90-liteaura.pref"
+    install -m 0644 "$APT_KEYRING" "$ROOTFS/usr/share/keyrings/liteaura-archive.gpg"
+    cat > "$ROOTFS/etc/apt/sources.list.d/liteaura.sources" <<EOF
 Types: deb
 URIs: $APT_URL/
-Suites: peakd
+Suites: liteaura
 Components: main
-Signed-By: /usr/share/keyrings/peakd-archive.gpg
+Signed-By: /usr/share/keyrings/liteaura-archive.gpg
 EOF
     if [ -d /usr/share/fonts/truetype/roboto ]; then
         cp -a /usr/share/fonts/truetype/roboto "$ROOTFS/usr/share/fonts/truetype/"
@@ -232,8 +232,8 @@ dpkg_in_root() {
 }
 
 register_payload() {
-    log "registering peakd in the image dpkg database"
-    local reg="$ROOTFS/tmp/peakd-register"
+    log "registering liteaura in the image dpkg database"
+    local reg="$ROOTFS/tmp/liteaura-register"
     local dlog="$BUILD/dpkg-register.log"
     local pkg
     rm -rf "$reg"
@@ -251,30 +251,30 @@ register_payload() {
         fi
         cp "$DEBS/${pkg}_"*.deb "$target/"
     done
-    cp "$DEB_BUILD/out/peakd_${PKG_VERSION}_amd64.deb" \
-        "$DEB_BUILD/out/peakd-archive-keyring_${PKG_VERSION}_all.deb" "$reg/main/"
+    cp "$DEB_BUILD/out/liteaura_${PKG_VERSION}_amd64.deb" \
+        "$DEB_BUILD/out/liteaura-archive-keyring_${PKG_VERSION}_all.deb" "$reg/main/"
 
     : >"$dlog"
-    dpkg_in_root 'dpkg -i /tmp/peakd-register/first/*.deb' >>"$dlog" 2>&1 || {
+    dpkg_in_root 'dpkg -i /tmp/liteaura-register/first/*.deb' >>"$dlog" 2>&1 || {
         tail -30 "$dlog" >&2
-        die "could not register the peakd dependencies"
+        die "could not register the liteaura dependencies"
     }
-    dpkg_in_root 'dpkg -i /tmp/peakd-register/deps/*.deb' >>"$dlog" 2>&1 || {
+    dpkg_in_root 'dpkg -i /tmp/liteaura-register/deps/*.deb' >>"$dlog" 2>&1 || {
         tail -30 "$dlog" >&2
-        die "could not register the peakd dependencies"
+        die "could not register the liteaura dependencies"
     }
-    dpkg_in_root 'dpkg -i /tmp/peakd-register/main/*.deb' >>"$dlog" 2>&1 || {
+    dpkg_in_root 'dpkg -i /tmp/liteaura-register/main/*.deb' >>"$dlog" 2>&1 || {
         tail -30 "$dlog" >&2
-        die "could not register peakd"
+        die "could not register liteaura"
     }
     rm -rf "$reg"
 
     local status
     status=$(unshare -Ur /usr/sbin/chroot "$ROOTFS" /usr/bin/env \
         PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
-        dpkg-query -W -f='${Status}' peakd 2>/dev/null || true)
+        dpkg-query -W -f='${Status}' liteaura 2>/dev/null || true)
     [ "$status" = "install ok installed" ] \
-        || die "peakd is not registered in the image (status: ${status:-missing})"
+        || die "liteaura is not registered in the image (status: ${status:-missing})"
 }
 
 stage_qt() {
@@ -463,8 +463,8 @@ EOF
 stage_overlay() {
     log "staging live session and installer helper"
     cp -a "$REPO/scripts/live/overlay/." "$ROOTFS/"
-    chmod 0755 "$ROOTFS/usr/local/bin/peakd-live-session" \
-        "$ROOTFS/usr/local/bin/peakd-collect-logs" \
+    chmod 0755 "$ROOTFS/usr/local/bin/liteaura-live-session" \
+        "$ROOTFS/usr/local/bin/liteaura-collect-logs" \
         "$ROOTFS/usr/local/lib/shiny/t2-live-setup.sh" \
         "$ROOTFS/usr/local/lib/shiny/seed-live-account.sh"
     install -d "$ROOTFS/etc/systemd/system/multi-user.target.wants"
@@ -472,11 +472,11 @@ stage_overlay() {
         "$ROOTFS/etc/systemd/system/multi-user.target.wants/shiny-installer-helper.service"
     ln -sf /etc/systemd/system/shiny-t2-live-setup.service \
         "$ROOTFS/etc/systemd/system/multi-user.target.wants/shiny-t2-live-setup.service"
-    ln -sf /etc/systemd/system/peakd-collect-logs.service \
-        "$ROOTFS/etc/systemd/system/multi-user.target.wants/peakd-collect-logs.service"
+    ln -sf /etc/systemd/system/liteaura-collect-logs.service \
+        "$ROOTFS/etc/systemd/system/multi-user.target.wants/liteaura-collect-logs.service"
     ln -sf /etc/systemd/system/shiny-live-seed.service \
         "$ROOTFS/etc/systemd/system/multi-user.target.wants/shiny-live-seed.service"
-    # peakd-live-session starts Ollama as the live user with a valid HOME.
+    # liteaura-live-session starts Ollama as the live user with a valid HOME.
     # The system unit has no HOME and would restart forever in the live image.
     rm -f "$ROOTFS/etc/systemd/system/multi-user.target.wants/ollama.service" \
         "$ROOTFS/etc/systemd/system/graphical.target.wants/ollama.service"
@@ -519,9 +519,9 @@ stage_overlay() {
         [ -e "$so" ] && copy_missing_libs "$so"
     done
 
-    # The live session is the PEAK'D! kiosk, not an XFCE desktop session.
-    rm -f "$ROOTFS/etc/xdg/autostart/peakd-live.desktop"
-    find "$ROOTFS/usr/share/xsessions" -maxdepth 1 -type f ! -name peakd.desktop -delete 2>/dev/null || true
+    # The live session is the LiteAura kiosk, not an XFCE desktop session.
+    rm -f "$ROOTFS/etc/xdg/autostart/liteaura-live.desktop"
+    find "$ROOTFS/usr/share/xsessions" -maxdepth 1 -type f ! -name liteaura.desktop -delete 2>/dev/null || true
 
     # The live image must not expose the stock Calamares/d-i installer.
     find "$ROOTFS/usr" "$ROOTFS/etc" "$ROOTFS/var" -iname '*calamares*' \
@@ -617,7 +617,7 @@ build_iso() {
   "base_iso": "$BASE_ISO",
   "base_url": "$LIVE_URL",
   "t2_kernel": "$T2_KVER",
-  "package": "peakd $PKG_VERSION amd64",
+  "package": "liteaura $PKG_VERSION amd64",
   "apt_repo": "$APT_URL",
   "built_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
   "note": "rootless UEFI remaster; package payload; real install engine enabled"

@@ -417,7 +417,7 @@ export async function logout() {
   // session supervisor hands the seat back to the greeter). A plain browser
   // has no IPC bridge and keeps the in-app login screen.
   if (window.ipc?.postMessage) {
-    window.ipc.postMessage('peakd:logout');
+    window.ipc.postMessage('liteaura:logout');
     return;
   }
   appEl?.classList.add('hidden');

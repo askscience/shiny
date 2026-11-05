@@ -2,7 +2,7 @@
 //!
 //! The window's chrome (tab strip, toolbar, address bar, news home) is HTML
 //! served by this plugin. The page itself is rendered by the shell in a native
-//! child webview — `crates/peakd`'s `browse` module — at the page's real
+//! child webview — `crates/liteaura`'s `browse` module — at the page's real
 //! origin, which is what lets anti-bot challenges (Cloudflare) pass. This
 //! plugin owns the window's sessions, its history and the news shelf; it no
 //! longer runs a filtering proxy.
@@ -104,7 +104,7 @@ impl Plugin for BrowserPlugin {
     /// across the `dlopen` boundary the process then aborts (PLUGINS.md §15).
     /// `history::ensure_schema` is synchronous, so no bridge is needed.
     async fn on_load(&self, ctx: Arc<PluginCtx>) {
-        // Repair a `peakd_history` created before the profile's `query` column
+        // Repair a `liteaura_history` created before the profile's `query` column
         // existed. A migration cannot do this idempotently (SQLite has no
         // conditional DDL), and the code that needs the column cannot function
         // without it — see `history::ensure_schema`.

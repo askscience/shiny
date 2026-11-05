@@ -1,5 +1,5 @@
 [workspace]
-members = [".", "crates/shiny-plugin-sdk", "crates/shiny-osm", "crates/peakd-core", "crates/shiny-filter", "crates/shiny-filter-core", "crates/shiny-installer-protocol", "crates/shiny-installer-helper", "crates/peakd", "crates/peakd-mac", "crates/shiny-auth", "crates/shiny-iroh-client", "crates/shiny-iroh-proto", "crates/shiny-server-mode", "plugins/traveler", "plugins/hello", "plugins/radio", "plugins/word", "plugins/keyboard", "plugins/youtube", "plugins/calc", "plugins/impress", "plugins/mail", "plugins/calendar", "plugins/calculator", "plugins/image", "plugins/studio", "plugins/pdf", "plugins/browser", "plugins/files", "plugins/terminal", "plugins/updates", "plugins/installer"]
+members = [".", "crates/shiny-plugin-sdk", "crates/shiny-osm", "crates/liteaura-core", "crates/shiny-filter", "crates/shiny-filter-core", "crates/shiny-installer-protocol", "crates/shiny-installer-helper", "crates/liteaura", "crates/liteaura-mac", "crates/shiny-auth", "crates/shiny-iroh-client", "crates/shiny-iroh-proto", "crates/shiny-server-mode", "plugins/traveler", "plugins/hello", "plugins/radio", "plugins/word", "plugins/keyboard", "plugins/youtube", "plugins/calc", "plugins/impress", "plugins/mail", "plugins/calendar", "plugins/calculator", "plugins/image", "plugins/studio", "plugins/pdf", "plugins/browser", "plugins/files", "plugins/terminal", "plugins/updates", "plugins/installer"]
 resolver = "2"
 
 # Vendored libsqlite3-sys, patched to link the SYSTEM SQLite (one shared
@@ -42,6 +42,7 @@ version = "0.1.2"
 edition = "2021"
 
 [dependencies]
+liteaura-core = { path = "crates/liteaura-core" }
 axum = { version = "0.7", features = ["macros", "multipart"] }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
@@ -85,7 +86,7 @@ qrcode = { version = "0.14.1", default-features = false, features = ["svg"] }
 
 # NetworkManager over the system D-Bus — the host's Wi-Fi/network state for
 # the top-bar panel (src/services/network.rs). Linux-only on purpose: the
-# workspace also builds on macOS for the `peakd` native shell, where the
+# workspace also builds on macOS for the `liteaura` native shell, where the
 # service compiles to a stub.
 [target.'cfg(target_os = "linux")'.dependencies]
 nmrs = "3.5"

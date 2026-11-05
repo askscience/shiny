@@ -1,5 +1,5 @@
 [Unit]
-Description=PEAK'D! live account seed
+Description=LiteAura live account seed
 ConditionPathExists=/run/live/medium
 After=live-config.service
 Before=display-manager.service

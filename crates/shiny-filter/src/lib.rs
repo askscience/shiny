@@ -7,7 +7,7 @@
 //!   related-news shelf and link previews use its classifier
 //!   (`src/filter.rs`, `src/fetch.rs`, `src/news.rs`, `src/preview.rs`). The
 //!   compiled engine is written to a shared cache.
-//! * **the kiosk shells** (`crates/peakd` on Linux) render the open web in
+//! * **the kiosk shells** (`crates/liteaura` on Linux) render the open web in
 //!   native child web views at the page's true origin — no proxy in the page
 //!   path — and block requests **in-process** with a
 //!   `QWebEngineUrlRequestInterceptor` that queries [`shiny_filter_core`]

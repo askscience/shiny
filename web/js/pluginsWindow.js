@@ -193,7 +193,7 @@ function describe(kind, id) {
     kind, id, p,
     name: niceName(p),
     line: p.description || p.summary || '',
-    by: p.author || "PEAK'D!",
+    by: p.author || "LiteAura",
     color: null,
     version: p.version,
     size: '',
@@ -580,7 +580,7 @@ function renderStage() {
       stage.appendChild(stageEmpty({
         icon: 'ui/puzzle',
         title: t('plugins.none', null, 'No plugins installed'),
-        body: t('plugins.noneBody', null, "PEAK'D! is running in its bare form. Install a plugin to add apps and new skills for the assistant."),
+        body: t('plugins.noneBody', null, "LiteAura is running in its bare form. Install a plugin to add apps and new skills for the assistant."),
       }));
       return;
     }
@@ -1022,7 +1022,7 @@ function mountPlugins() {
   const rail = el('nav', 'pw-rail');
   rail.setAttribute('aria-label', t('hud.plugins', null, 'Plugins'));
   const railHead = el('div', 'pw-rail-head');
-  railHead.append(eyebrow("PEAK'D!"), el('h2', 'pw-rail-title', t('hud.plugins', null, 'Plugins')));
+  railHead.append(eyebrow("LiteAura"), el('h2', 'pw-rail-title', t('hud.plugins', null, 'Plugins')));
   const railList = el('div', 'pw-rail-list');
   const railItems = SECTIONS.map((id, i) => {
     const item = document.createElement('button');

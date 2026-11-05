@@ -1,21 +1,21 @@
-//! Host display scale — the interface scale the kiosk shell (`peakd`) applies
+//! Host display scale — the interface scale the kiosk shell (`liteaura`) applies
 //! to the webview as page zoom.
 //!
 //! This is deliberately a *host* setting, not a per-user preference: the scale
 //! belongs to the panel, and the shell has to know it before anyone signs in
 //! (the login screen is rendered at the same scale). It is also the only way
-//! the shell and the app can agree — `peakd` cannot read the database, and the
+//! the shell and the app can agree — `liteaura` cannot read the database, and the
 //! server cannot call into WebKit.
 //!
 //! Two small JSON files are the bridge:
 //!
-//! * `~/.config/peakd/display.json` — the **choice** (`"auto"` or a factor),
-//!   written here when Settings changes it and read by `peakd`.
-//! * `~/.cache/peakd/display.json` — the **resolved** value `peakd` actually
+//! * `~/.config/liteaura/display.json` — the **choice** (`"auto"` or a factor),
+//!   written here when Settings changes it and read by `liteaura`.
+//! * `~/.cache/liteaura/display.json` — the **resolved** value `liteaura` actually
 //!   applied (plus the panel DPI it used), so Settings can show "Auto (~200%)"
 //!   instead of guessing.
 //!
-//! Paths are overridable with `PEAKD_DISPLAY_FILE` / `PEAKD_DISPLAY_RUNTIME_FILE`
+//! Paths are overridable with `LITEAURA_DISPLAY_FILE` / `LITEAURA_DISPLAY_RUNTIME_FILE`
 //! so a bundled install can keep the shell and the server pointed at the same
 //! place; both sides resolve them identically.
 
@@ -138,26 +138,33 @@ fn write_json(path: &PathBuf, value: &Value) -> Result<(), String> {
 }
 
 fn config_file() -> PathBuf {
-    if let Some(p) = std::env::var_os("PEAKD_DISPLAY_FILE") {
+    if let Some(p) = std::env::var_os("LITEAURA_DISPLAY_FILE") {
         return PathBuf::from(p);
     }
     base_dir("XDG_CONFIG_HOME", ".config").join("display.json")
 }
 
 fn runtime_file() -> PathBuf {
-    if let Some(p) = std::env::var_os("PEAKD_DISPLAY_RUNTIME_FILE") {
+    if let Some(p) = std::env::var_os("LITEAURA_DISPLAY_RUNTIME_FILE") {
         return PathBuf::from(p);
     }
     base_dir("XDG_CACHE_HOME", ".cache").join("display.json")
 }
 
-/// `<config|cache>/peakd/`.
+/// `<config|cache>/liteaura/`.
 fn base_dir(xdg: &str, fallback: &str) -> PathBuf {
     let root = std::env::var_os(xdg)
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(fallback)))
         .unwrap_or_else(|| PathBuf::from(fallback));
-    root.join("peakd")
+    let dir = root.join("liteaura");
+    // The shell's former name. The server can start before the shell, so it
+    // moves the folder itself rather than creating an empty new one first.
+    let legacy = root.join("peakd");
+    if legacy.is_dir() && !dir.exists() {
+        let _ = std::fs::rename(&legacy, &dir);
+    }
+    dir
 }
 
 #[cfg(test)]

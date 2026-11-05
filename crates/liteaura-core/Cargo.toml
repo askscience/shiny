@@ -1,0 +1,9 @@
+[package]
+name = "liteaura-core"
+version = "0.1.0"
+edition = "2021"
+description = "Display-scale state and legacy-directory migration shared by the Linux and macOS LiteAura shells"
+publish = false
+
+[dependencies]
+serde_json = "1"

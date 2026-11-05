@@ -16,7 +16,7 @@ import {
 /**
  * word.js — the Word plugin's window: a page-faithful word processor.
  *
- * Layout (peakd's editorial office pattern, like the PDF window):
+ * Layout (liteaura's editorial office pattern, like the PDF window):
  *   window bar  — document menu, editable title, undo/redo, Page | Preview,
  *                 AI, Design, Export, New
  *   format row  — paragraph style, font, size, emphasis, colours, alignment,

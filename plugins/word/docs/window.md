@@ -1,6 +1,6 @@
 # Word — window (`web/plugin.js`, `web/page.js`)
 
-The Word window is a page-faithful word processor in peakd's office pattern
+The Word window is a page-faithful word processor in liteaura's office pattern
 (the same as the PDF window): a flat bar merged with the window controls, one
 quiet formatting row, white paper on the bare window, and a mono status line
 at the bottom. It is built only from the shared library (`web/ui/index.js`:

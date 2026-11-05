@@ -187,7 +187,7 @@ export function gateChrome(host) {
   brand.setAttribute('data-gate-in', '');
   const logo = el('span', 'app-icon gate-brand-logo');
   logo.setAttribute('aria-hidden', 'true');
-  brand.append(logo, el('span', 'gate-brand-name', "PEAK'D!"));
+  brand.append(logo, el('span', 'gate-brand-name', "LiteAura"));
 
   const clock = el('div', 'gate-clock');
   const dateEl = el('p', 'gate-date');

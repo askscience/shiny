@@ -63,7 +63,7 @@ def _download(filename: str) -> None:
     # A partial file from a previous attempt is kept only while it matches what
     # was already written; restarting is simpler and HF supports ranged resume
     # only via the CLI, so a clean fetch is the honest behaviour here.
-    req = urllib.request.Request(_url(filename), headers={"User-Agent": "peakd-voice/1.0"})
+    req = urllib.request.Request(_url(filename), headers={"User-Agent": "liteaura-voice/1.0"})
     with urllib.request.urlopen(req) as resp, open(tmp, "wb") as out:
         shutil.copyfileobj(resp, out, length=1024 * 1024)
     tmp.replace(dest)

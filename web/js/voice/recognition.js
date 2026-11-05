@@ -557,7 +557,7 @@ async function postWhisperChunk(pcm, isFinal, session) {
   const params = new URLSearchParams({ session, lang: voiceLang, model: whisperModel });
   if (isFinal) params.set('final', 'true');
   // Wake mode biases the decoder with the wake phrase: without it the tiny
-  // model turns an unusual assistant name into a homophone ("Peak'd"→"Beak"),
+  // model turns an unusual assistant name into a homophone ("Peak"→"Beak"),
   // and the wake word stops firing.
   if (listenMode === 'wake') params.set('prompt', `Hey ${getAiName()}`);
   // A zero-length body is still a valid flush: the sidecar decodes the whole

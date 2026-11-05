@@ -3,7 +3,7 @@
 //! A session is a *view* concern, not durable state: the window creates one per
 //! tab and reports its URL so the tab strip can be listed. Nothing here touches
 //! the network or the filter engine; the page is rendered by a native child
-//! webview owned by the shell (`crates/peakd`'s `browse` module).
+//! webview owned by the shell (`crates/liteaura`'s `browse` module).
 
 use std::sync::{Arc, OnceLock};
 

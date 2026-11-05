@@ -17,7 +17,7 @@ A running Shiny install is a small constellation of processes:
 | Process | Language | Role | Source |
 |---|---|---|---|
 | `shiny` | Rust (axum) | The server: HTTP + SSE API, auth, agent loop, static web UI, plugin host, host panels. | [`src/main.rs`](../src/main.rs) |
-| `peakd` / `peakd-mac` | Rust + Qt WebEngine | The kiosk shell: a native window that renders the web UI, owns child browser web views, reads trackpad gestures, installs the macOS Touch Bar. | [`crates/peakd`](../crates/peakd), [`crates/peakd-mac`](../crates/peakd-mac) |
+| `liteaura` / `liteaura-mac` | Rust + Qt WebEngine | The kiosk shell: a native window that renders the web UI, owns child browser web views, reads trackpad gestures, installs the macOS Touch Bar. | [`crates/liteaura`](../crates/liteaura), [`crates/liteaura-mac`](../crates/liteaura-mac) |
 | `supertonic` sidecar | Python (FastAPI) | Text-to-speech (`supertonic[serve]`). | [`voice/supertonic_server.py`](../voice/supertonic_server.py) |
 | `faster-whisper` sidecar | Python (FastAPI) | Streaming speech-to-text. | [`voice/whisper_server.py`](../voice/whisper_server.py) |
 | Qwen3-TTS sidecar | native (`qwentts.cpp`) | Optional high-quality TTS. | [`voice/start_qwen_tts.sh`](../voice/start_qwen_tts.sh) |
@@ -58,8 +58,8 @@ shiny/
 │   ├── shiny-plugin-sdk/          # the plugin API (traits, types, codecs, clients)
 │   ├── shiny-filter/              # in-process ad/tracker filtering engine (browser)
 │   ├── shiny-filter-core/         # shared filter-list parsing/classify logic
-│   ├── peakd/                     # Linux kiosk shell (Qt 6 + QtWebEngine)
-│   ├── peakd-mac/                 # macOS shell (WKWebView + NSTouchBar)
+│   ├── liteaura/                     # Linux kiosk shell (Qt 6 + QtWebEngine)
+│   ├── liteaura-mac/                 # macOS shell (WKWebView + NSTouchBar)
 │   ├── shiny-auth/                # root PAM verify helper
 │   ├── shiny-iroh-client/         # local proxy for remote access
 │   ├── shiny-iroh-proto/          # shared Iroh protocol types

@@ -62,7 +62,7 @@ and `target_triple`/`signature` = `None`.
 | Context line | Enables `browser_open` / `browser_search` / `browser_read` and mentions the bookmark + news home surface |
 | Agent tools | `browser_open`, `browser_search`, `browser_read` (bridged via `tools::bridged`) |
 | REST routes | 30 routes under `/api/browser/*`, all `auth` |
-| Migrations | `002`–`007` creating `peakd_history`, `browser_settings`, `browser_downloads`, `browser_bookmarks`, `browser_vault`, `browser_passwords` |
+| Migrations | `002`–`007` creating `liteaura_history`, `browser_settings`, `browser_downloads`, `browser_bookmarks`, `browser_vault`, `browser_passwords` |
 | Window surface | `web/plugin.js` + `web/plugin.css` + `web/icon.svg`, served at `/plugins/browser/` |
 | Link handler | `capabilities = ["open-urls"]` — the default target of core's `web/js/linkRouter.js`; links clicked anywhere in the app open here as new tabs (see [`window.md`](window.md)) |
 | `on_load` work | Idempotent schema repairs (`history`, `settings`, `downloads`, `bookmarks`, `vault`) and a background ad-filter load |
@@ -96,7 +96,7 @@ is needed. See [`architecture.md`](architecture.md) for why.
 | `SEARXNG_URL` | A self-hosted SearXNG instance overrides any named search engine for searches **and** the news shelf |
 | `ADFILTER_DIR` | Overrides the compiled-filter cache directory |
 | `XDG_DATA_HOME` / `HOME` | Fallback cache dir: `$XDG_DATA_HOME/shiny/adfilter` or `~/.local/share/shiny/adfilter` |
-| `PEAKD_ADFILTER_DIR` (shell side) | Where the shell looks for the compiled cache the plugin writes |
+| `LITEAURA_ADFILTER_DIR` (shell side) | Where the shell looks for the compiled cache the plugin writes |
 
 ## Database tables
 
@@ -108,7 +108,7 @@ There is no foreign key; `traveler_id` is the core account id.
 
 | Table | Migration | Purpose | Key columns |
 |---|---|---|---|
-| `peakd_history` | `002` | Navigation log and interest-profile raw material | `id`, `traveler_id`, `url`, `mode`, `query`, `created_at` |
+| `liteaura_history` | `002` | Navigation log and interest-profile raw material | `id`, `traveler_id`, `url`, `mode`, `query`, `created_at` |
 | `browser_settings` | `003` (+`005`) | Per-user shield, incognito echo, search engine | `traveler_id` PK, `adblock`, `incognito`, `search_engine`, `updated_at` |
 | `browser_downloads` | `004` | Persisted download lifecycle rows | PK (`traveler_id`,`id`), `url`, `host`, `file_name`, `file_path`, `mime`, `total`, `received`, `state`, `error`, `incognito`, timestamps |
 | `browser_bookmarks` | `006` | Per-user saved pages | `id` PK, `traveler_id`, `url`, `title`, `created_at` |
@@ -117,7 +117,7 @@ There is no foreign key; `traveler_id` is the core account id.
 
 `mode` is one of `page` (address-bar navigate), `text`, `visit` (an in-page
 click) or `news_click` (a click on a recommended card). `query` stores the raw
-typed search phrase. The history table is deliberately named `peakd_history`
+typed search phrase. The history table is deliberately named `liteaura_history`
 (not `browser_history`) to avoid stranding existing installs; migration `002`
 drops the stale `browser_history` table.
 
@@ -260,7 +260,7 @@ Full detail in [`routes.md`](routes.md).
   [`../../../docs/plugins/architecture.md`](../../../docs/plugins/architecture.md).
 - [`../../../crates/shiny-filter/src/lib.rs`](../../../crates/shiny-filter/src/lib.rs),
   [`../../../crates/shiny-filter-core/src/lib.rs`](../../../crates/shiny-filter-core/src/lib.rs),
-  [`../../../crates/peakd/src/browse.rs`](../../../crates/peakd/src/browse.rs).
+  [`../../../crates/liteaura/src/browse.rs`](../../../crates/liteaura/src/browse.rs).
 - [`../../../web/js/nativeOccluders.js`](../../../web/js/nativeOccluders.js) —
   core HTML that must punch through a native page's mask.
 - [`../../../docs/core/desktop.md`](../../../docs/core/desktop.md) for the

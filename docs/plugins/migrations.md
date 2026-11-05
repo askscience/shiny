@@ -84,11 +84,11 @@ column" result can be treated as success. The reference is
 ```rust
 // Pseudocode: add a column only if missing.
 let has = ctx.db().query(
-    "SELECT COUNT(*) FROM pragma_table_info('peakd_history') WHERE name = 'kind'",
+    "SELECT COUNT(*) FROM pragma_table_info('liteaura_history') WHERE name = 'kind'",
     &[],
 )?;
 if has[0][0] == DbValue::Int(0) {
-    match ctx.db().execute("ALTER TABLE peakd_history ADD COLUMN kind TEXT", &[]) {
+    match ctx.db().execute("ALTER TABLE liteaura_history ADD COLUMN kind TEXT", &[]) {
         Ok(_) => {}
         // Race / already added by a replay: treat as success.
         Err(_) => {}

@@ -121,7 +121,7 @@ shown disabled rather than hidden.
 ## Lid and idle behaviour
 
 The session disables X blanking (`xset s off`, `xset -dpms` in
-[`scripts/peakd-kiosk.sh`](../../scripts/peakd-kiosk.sh)), so an idle kiosk never
+[`scripts/liteaura-kiosk.sh`](../../scripts/liteaura-kiosk.sh)), so an idle kiosk never
 goes dark on its own. T2 Macs report **phantom** power/sleep button presses, so
 `/etc/systemd/logind.conf.d/49-shiny-kiosk.conf` ignores the *short* phantom
 press but keeps a deliberate *long* hold working:

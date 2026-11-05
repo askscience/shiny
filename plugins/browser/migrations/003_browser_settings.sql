@@ -7,7 +7,7 @@
 -- Keyed on `traveler_id` (the account id) with no foreign key: settings are a
 -- convenience, and a missing/renamed user row must not make an upsert fail.
 -- The plugin reads and writes this table best-effort, exactly like
--- `peakd_history`.
+-- `liteaura_history`.
 
 CREATE TABLE IF NOT EXISTS browser_settings (
     traveler_id TEXT PRIMARY KEY,

@@ -2,7 +2,7 @@
 //!
 //! Lookup order:
 //! 1. the `GOKAPI_BIN` / `GOKAPI_CLI_BIN` overrides;
-//! 2. the copies bundled in the peakd package, [`BUNDLED_DIR`] (overridable
+//! 2. the copies bundled in the liteaura package, [`BUNDLED_DIR`] (overridable
 //!    with `SHINY_GOKAPI_BUNDLE_DIR`; see `packaging/gokapi.sh`);
 //! 3. copies downloaded into [`super::bin_dir`] (development checkouts with no
 //!    package);

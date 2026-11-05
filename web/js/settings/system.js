@@ -78,7 +78,7 @@ export function createSystemSection({ on, cleanups, resources }) {
         // the greeter. A plain browser has no bridge and reloads to the app's
         // own login screen.
         if (window.ipc?.postMessage) {
-          window.ipc.postMessage('peakd:logout');
+          window.ipc.postMessage('liteaura:logout');
           return;
         }
         window.location.href = '/';

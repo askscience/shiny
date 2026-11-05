@@ -222,7 +222,7 @@ keeps controls, inputs and ARIA roles from starting a drag.
 ### Native pages and masks
 
 The Browser renders its pages as native items above the app webview
-(`crates/peakd`), so core HTML can only appear over a page when its rect is cut
+(`crates/liteaura`), so core HTML can only appear over a page when its rect is cut
 out of the page's mask. `web/js/nativeOccluders.js` owns that list: the chat
 panel, top and workspace bars, virtual keyboard, navigation HUD, travel panel,
 tile overlay, and the shared menus/modals/sheets/floating

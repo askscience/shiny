@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Faster-Whisper streaming STT sidecar for PEAK'D!.
+"""Faster-Whisper streaming STT sidecar for LiteAura.
 
 Why a sidecar?
 --------------
@@ -452,7 +452,7 @@ MAX_UTTERANCE_SECONDS = float(os.environ.get("WHISPER_MAX_UTTERANCE_SECONDS", "1
 # Drop idle sessions so a closed tab cannot pin memory forever.
 SESSION_TTL_SECONDS = float(os.environ.get("WHISPER_SESSION_TTL_SECONDS", "120"))
 
-app = FastAPI(title="PEAK'D! faster-whisper STT", version="1.0.0")
+app = FastAPI(title="LiteAura faster-whisper STT", version="1.0.0")
 
 
 # ── Model manager ────────────────────────────────────────────────────────────
@@ -551,7 +551,7 @@ class Session:
     lang: str | None
     model: str
     # Bias text (Whisper's `initial_prompt`). The browser sends the wake phrase
-    # so an unusual assistant name survives the tiny model — "Peak'd" otherwise
+    # so an unusual assistant name survives the tiny model — "LiteAura" otherwise
     # comes back as "Beak".
     prompt: str | None = None
     # Audio from the first uncommitted word onwards (the decode window).

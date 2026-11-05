@@ -3,7 +3,7 @@
 //! The window is a client of the plugin, not a peer of it: every action the
 //! user takes (go, back, reload, search) round-trips through one of these so
 //! the session and the history log stay consistent. The page itself is rendered
-//! by a native child webview (`crates/peakd`'s `browse` module), so no proxied
+//! by a native child webview (`crates/liteaura`'s `browse` module), so no proxied
 //! view URL has to be handed back.
 
 use std::sync::Arc;
@@ -317,7 +317,7 @@ fn history_clear(ctx: Arc<PluginCtx>) -> RouteHandler {
 ///
 /// The window sends the link the shell just navigated to *inside* a page. A
 /// `title` key may be present; serde ignores unknown fields, and there is
-/// deliberately no title column in `peakd_history`, so it is accepted and
+/// deliberately no title column in `liteaura_history`, so it is accepted and
 /// dropped rather than rejected.
 #[derive(Deserialize)]
 struct HistoryRecordBody {

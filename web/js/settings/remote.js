@@ -64,7 +64,7 @@ export function createRemoteSection({ on, cleanups, resources }) {
 
     const linkBox = el('div', 'remote-link');
     linkBox.append(ticketEl, qrEl);
-    const linkHint = el('p', 'settings-hint', t('settings.remote.linkHint', null, 'On another device: peakd --iroh <link> opens the app in a window. To use a plain browser instead, turn on the public URL below.'));
+    const linkHint = el('p', 'settings-hint', t('settings.remote.linkHint', null, 'On another device: liteaura --iroh <link> opens the app in a window. To use a plain browser instead, turn on the public URL below.'));
 
     // ── Tailscale Funnel: a normal https:// URL for any browser ──────────
     const tsToggle = toggleRow({
@@ -193,7 +193,7 @@ export function createRemoteSection({ on, cleanups, resources }) {
           // In the kiosk, hand the screen to the server-mode window (the shell
           // exits with a mode-switch code). A plain browser — or a remote client,
           // which cannot enable anyway — has no bridge and just shows the link.
-          window.ipc?.postMessage?.('peakd:server-mode');
+          window.ipc?.postMessage?.('liteaura:server-mode');
         } else {
           apply({ enabled: false });
         }

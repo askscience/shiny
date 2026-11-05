@@ -32,10 +32,10 @@ pub fn apply(
         return Err("loop devices are refused by the production installer".into());
     }
 
-    let source_squash = std::env::var("PEAKD_ENGINE_SQUASHFS")
+    let source_squash = std::env::var("LITEAURA_ENGINE_SQUASHFS")
         .unwrap_or_else(|_| "/run/live/medium/live/filesystem.squashfs".into());
-    let source_override = std::env::var("PEAKD_ENGINE_SOURCE").ok();
-    let medium = std::env::var("PEAKD_ENGINE_MEDIUM")
+    let source_override = std::env::var("LITEAURA_ENGINE_SOURCE").ok();
+    let medium = std::env::var("LITEAURA_ENGINE_MEDIUM")
         .unwrap_or_else(|_| "/run/live/medium/live".into());
 
     let mut cleanup = Cleanup::default();
@@ -514,8 +514,8 @@ fn configure_target(
 
     // The live session becomes a normal target session: no breakthrough
     // installer, no seed DB, no live-only services.
-    let live_session = target.join("usr/local/bin/peakd-live-session");
-    let target_session = target.join("usr/local/bin/peakd-session");
+    let live_session = target.join("usr/local/bin/liteaura-live-session");
+    let target_session = target.join("usr/local/bin/liteaura-session");
     if let Ok(text) = fs::read_to_string(&live_session) {
         fs::write(&target_session, target_session_text(&text, plan))
             .map_err(|e| format!("target session: {e}"))?;
@@ -523,12 +523,12 @@ fn configure_target(
     }
     let _ = fs::remove_file(&live_session);
     remove_ai_payload(plan, target);
-    let desktop = target.join("usr/share/xsessions/peakd.desktop");
+    let desktop = target.join("usr/share/xsessions/liteaura.desktop");
     if let Ok(text) = fs::read_to_string(&desktop) {
-        fs::write(&desktop, text.replace("peakd-live-session", "peakd-session"))
+        fs::write(&desktop, text.replace("liteaura-live-session", "liteaura-session"))
             .map_err(|e| format!("session desktop: {e}"))?;
     }
-    let lightdm = target.join("etc/lightdm/lightdm.conf.d/99-peakd.conf");
+    let lightdm = target.join("etc/lightdm/lightdm.conf.d/99-liteaura.conf");
     if let Ok(text) = fs::read_to_string(&lightdm) {
         let text = text
             .replace("autologin-user=user", &format!("autologin-user={}", plan.username))
@@ -594,7 +594,7 @@ fn configure_target(
     write(
         target,
         "etc/default/grub",
-        "GRUB_DEFAULT=0\nGRUB_TIMEOUT=5\nGRUB_DISTRIBUTOR=\"PEAK'D!\"\nGRUB_CMDLINE_LINUX=\"quiet rw console=tty0 console=ttyS0,115200\"\nGRUB_CMDLINE_LINUX_DEFAULT=\"quiet rw\"\n",
+        "GRUB_DEFAULT=0\nGRUB_TIMEOUT=5\nGRUB_DISTRIBUTOR=\"LiteAura\"\nGRUB_CMDLINE_LINUX=\"quiet rw console=tty0 console=ttyS0,115200\"\nGRUB_CMDLINE_LINUX_DEFAULT=\"quiet rw\"\n",
     )?;
 
     let version = kernel_version(target, plan.is_t2())?;
@@ -634,7 +634,7 @@ fn configure_target(
     let grub_cfg = format!(
         "set timeout=5\nset default=0\ninsmod part_gpt\ninsmod ext2\ninsmod search_fs_uuid\n\
          search --no-floppy --fs-uuid --set=root {root_uuid}\n\
-         menuentry \"PEAK'D!\" {{\n linux /boot/vmlinuz-{version} root=UUID={root_uuid} rw quiet console=tty0 console=ttyS0,115200\n initrd /boot/initrd.img-{version}\n}}\n"
+         menuentry \"LiteAura\" {{\n linux /boot/vmlinuz-{version} root=UUID={root_uuid} rw quiet console=tty0 console=ttyS0,115200\n initrd /boot/initrd.img-{version}\n}}\n"
     );
     write(target, "boot/grub/grub.cfg", &grub_cfg)?;
     mount_chroot(target)?;
@@ -682,8 +682,8 @@ fn target_session_text(live: &str, plan: &InstallPlan) -> String {
         "export SHINY_LIVE_INSTALLER=0",
     )
     .replace(
-        "export PEAKD_AI_TIER=live",
-        &format!("export PEAKD_AI_TIER={tier}"),
+        "export LITEAURA_AI_TIER=live",
+        &format!("export LITEAURA_AI_TIER={tier}"),
     )
 }
 
@@ -804,21 +804,21 @@ mod tests {
 
     #[test]
     fn the_ai_tier_is_written_into_the_session() {
-        let live = "export SHINY_LIVE_INSTALLER=1\nexport PEAKD_AI_TIER=live\n";
+        let live = "export SHINY_LIVE_INSTALLER=1\nexport LITEAURA_AI_TIER=live\n";
         let mut plan = manual_plan(None);
         for tier in [AI_TIER_OFF, AI_TIER_NONE, AI_TIER_VOICE, AI_TIER_LOCAL] {
             plan.ai_tier = tier.into();
             let text = target_session_text(live, &plan);
             assert!(text.contains("SHINY_LIVE_INSTALLER=0"));
-            assert!(text.contains(&format!("export PEAKD_AI_TIER={tier}\n")));
+            assert!(text.contains(&format!("export LITEAURA_AI_TIER={tier}\n")));
         }
         plan.ai_tier = "bogus".into();
-        assert!(target_session_text(live, &plan).contains("PEAKD_AI_TIER=voice"));
+        assert!(target_session_text(live, &plan).contains("LITEAURA_AI_TIER=voice"));
     }
 
     #[test]
     fn no_slop_leaves_no_ollama_on_the_target() {
-        let dir = std::env::temp_dir().join(format!("peakd-ai-payload-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("liteaura-ai-payload-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(dir.join("usr/local/lib/ollama/vulkan")).unwrap();
         fs::create_dir_all(dir.join("usr/local/bin")).unwrap();

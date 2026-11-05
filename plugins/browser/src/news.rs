@@ -2089,7 +2089,7 @@ mod tests {
         (format!("http://{addr}"), handle)
     }
 
-    /// A ctx over a scratch database holding the given `peakd_history` rows
+    /// A ctx over a scratch database holding the given `liteaura_history` rows
     /// (`url`, optional typed query, `created_at`).
     fn ctx_with_history(
         path: &str,
@@ -2100,12 +2100,12 @@ mod tests {
         let ctx = crate::history::tests_support::ctx_for(path);
         let db = Db::open(&format!("sqlite://{path}")).expect("open scratch db");
         db.execute(
-            "CREATE TABLE peakd_history (id TEXT PRIMARY KEY, traveler_id TEXT NOT NULL,
+            "CREATE TABLE liteaura_history (id TEXT PRIMARY KEY, traveler_id TEXT NOT NULL,
              url TEXT NOT NULL, mode TEXT NOT NULL DEFAULT 'page', query TEXT,
              created_at TEXT NOT NULL DEFAULT (datetime('now')))",
             &[],
         )
-        .expect("create peakd_history");
+        .expect("create liteaura_history");
         db.execute(
             "CREATE TABLE travelers (id TEXT PRIMARY KEY, name TEXT NOT NULL,
              email TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL)",
@@ -2119,7 +2119,7 @@ mod tests {
         .expect("seed traveler");
         for (index, (url, query, at)) in rows.iter().enumerate() {
             db.execute(
-                "INSERT INTO peakd_history (id, traveler_id, url, mode, query, created_at)
+                "INSERT INTO liteaura_history (id, traveler_id, url, mode, query, created_at)
                  VALUES (?1, 'u1', ?2, 'page', ?3, ?4)",
                 &[
                     Value::text(format!("row-{index}")),

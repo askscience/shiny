@@ -133,7 +133,7 @@ function initialState() {
     timezone: defaultTimezone(),
     fullName: '',
     username: '',
-    hostname: 'peakd',
+    hostname: 'liteaura',
     hostnameTouched: false,
     password: '',
     password2: '',
@@ -181,7 +181,7 @@ function reasonLabel(reason) {
     loop: T('disk.reason.loop', 'Virtual disk'),
     optical: T('disk.reason.optical', 'CD/DVD drive'),
     mounted: T('disk.reason.mounted', 'A partition is mounted'),
-    live: T('disk.reason.live', 'This is the drive PEAK’D! is running from'),
+    live: T('disk.reason.live', 'This is the drive LiteAura is running from'),
     serial: T('disk.reason.serial', 'No serial number reported'),
     small: T('disk.reason.small', 'Smaller than 8 GiB'),
     table: T('disk.reason.table', 'Uses an old partition table (only GPT is supported)'),
@@ -193,18 +193,18 @@ function plannedBarLabel(kind) {
   if (kind === 'efi') return T('disk.efi', 'EFI system');
   if (kind === 'swap') return T('disk.swapSegment', 'Swap');
   if (kind === 'home') return T('disk.home', 'Home');
-  return T('disk.root', "PEAK'D root");
+  return T('disk.root', "LiteAura root");
 }
 
 function modelBarSegment(segment) {
   let label = segment.label;
   if (segment.planned) label = plannedBarLabel(segment.kind);
   else if (segment.kind === 'free') label = T('disk.free', 'Free space');
-  else if (segment.selectedRoot) label = T('disk.root', "PEAK'D root");
+  else if (segment.selectedRoot) label = T('disk.root', "LiteAura root");
   else if (segment.reused) label = T('disk.efi', 'EFI system');
   else if (segment.part) label = partitionLabel(segment.part, T);
   // Same colour language as the timeline: existing partitions are grey,
-  // whatever they hold; only PEAK'D!'s own pieces are coloured.
+  // whatever they hold; only LiteAura's own pieces are coloured.
   let kind = 'kept';
   if (segment.planned) kind = segment.kind;
   else if (segment.kind === 'free') kind = 'free';
@@ -365,7 +365,7 @@ function createInput(key, options = {}) {
       state[key] = value;
       if (key === 'hostname') state.hostnameTouched = true;
       if (key === 'username' && !state.hostnameTouched) {
-        state.hostname = value ? `${value}-peakd` : 'peakd';
+        state.hostname = value ? `${value}-liteaura` : 'liteaura';
         if (refs.hostnameInput) refs.hostnameInput.value = state.hostname;
       }
       if (key === 'fullName' || key === 'username') updateAvatar();
@@ -480,12 +480,12 @@ function modelErrorLabel(code) {
     noDisk: T('disk.noDisk', 'No disk selected'),
     noFree: T('disk.manual.noFree', 'No usable free space found on this disk'),
     noOffsets: T('disk.timeline.noOffsets', 'Partition positions are approximate; refresh the disks before changing the layout.'),
-    gapTooSmall: T('disk.timeline.gapTooSmall', 'The free space is too small for PEAK’D!.'),
+    gapTooSmall: T('disk.timeline.gapTooSmall', 'The free space is too small for LiteAura.'),
     swapTooBig: T('disk.timeline.swapTooBig', 'The support memory does not fit in this free space.'),
-    homeTooBig: T('disk.manual.homeTooBig', 'Leave at least 20 GiB for the PEAK’D! system'),
+    homeTooBig: T('disk.manual.homeTooBig', 'Leave at least 20 GiB for the LiteAura system'),
     rootTooBig: T('disk.timeline.rootTooBig', 'The system does not fit in this free space.'),
     rootSmall: T('disk.manual.rootSmall', 'Leave at least 20 GiB for the system.'),
-    noRoot: T('disk.existing.noRoot', 'Choose a partition for PEAK’D! (ext4 or empty, not in use)'),
+    noRoot: T('disk.existing.noRoot', 'Choose a partition for LiteAura (ext4 or empty, not in use)'),
     noEsp: T('disk.existing.noEsp', 'No startup partition found on this disk'),
   };
   return values[code] || code;
@@ -501,7 +501,7 @@ function diskLocalErrors() {
   if (state.partitionMode === MODE_EXISTING) {
     const root = selectedExistingRoot();
     const esp = selectedExistingEsp();
-    if (!root) errors.push(T('disk.existing.noRoot', 'Choose a partition for PEAK’D! (ext4 or empty, not in use)'));
+    if (!root) errors.push(T('disk.existing.noRoot', 'Choose a partition for LiteAura (ext4 or empty, not in use)'));
     if (!esp) errors.push(T('disk.existing.noEsp', 'No startup partition found on this disk'));
     if (root) {
       if ((root.mountpoints || []).length) {
@@ -511,7 +511,7 @@ function diskLocalErrors() {
         errors.push(T('disk.existing.rootBusy', 'The selected partition is being used by the system'));
       }
       if (root.fstype && root.fstype !== 'ext4') {
-        errors.push(T('disk.existing.rootFilesystem', 'The partition for PEAK’D! must be ext4 or empty'));
+        errors.push(T('disk.existing.rootFilesystem', 'The partition for LiteAura must be ext4 or empty'));
       }
       if (String(root.fstype || '').trim() && !state.existingConfirmed) {
         errors.push(T('disk.existing.needConfirm', 'Confirm that this partition will be formatted'));
@@ -1005,7 +1005,7 @@ function renderRegion() {
     'accent',
     'ui/info',
     T('region.live.title', 'The live session stays yours'),
-    T('region.live.body', "Keep using PEAK'D while the installer prepares the disk. Nothing is written until you press Install."),
+    T('region.live.body', "Keep using LiteAura while the installer prepares the disk. Nothing is written until you press Install."),
   ));
   const detected = el('div', 'installer-detected');
   detected.append(
@@ -1038,7 +1038,7 @@ function renderDisk() {
     wrap.appendChild(emptyState({
       icon: 'ui/monitor',
       title: T('disk.empty.title', 'No installable disks'),
-      body: T('disk.empty.body', 'The drive PEAK’D! is running from, virtual disks and CD/DVD drives are hidden. Plug in a disk or refresh.'),
+      body: T('disk.empty.body', 'The drive LiteAura is running from, virtual disks and CD/DVD drives are hidden. Plug in a disk or refresh.'),
       action: button({
         label: T('disk.refresh', 'Refresh disks'),
         variant: 'ghost',
@@ -1138,7 +1138,7 @@ function renderDiskShelf(disks) {
 
 /**
  * A tiny "before → after" drawing for each choice, in the same colours as the
- * big bars: grey = kept, hatched = free, red = erased, accent = PEAK'D!.
+ * big bars: grey = kept, hatched = free, red = erased, accent = LiteAura.
  */
 const INTENT_PICTOS = {
   [MODE_MANUAL]: [[['kept', 3], ['free', 2]], [['kept', 3], ['new', 2]]],
@@ -1380,15 +1380,15 @@ function renderGuidedNotes(disk) {
     wrap.appendChild(note(
       'warn',
       'ui/warning',
-      T('disk.guided.noSpaceTitle', 'No room for PEAK’D!'),
-      T('disk.guided.noSpaceBody', 'This disk has no usable free space and no partition PEAK’D! can reuse. Erase the disk or free some space from the other system, then refresh.'),
+      T('disk.guided.noSpaceTitle', 'No room for LiteAura'),
+      T('disk.guided.noSpaceBody', 'This disk has no usable free space and no partition LiteAura can reuse. Erase the disk or free some space from the other system, then refresh.'),
     ));
   }
   if (!findEsp(disk) && state.partitionMode === MODE_EXISTING) {
     wrap.appendChild(alertBlock(
       'danger',
       T('disk.existing.noEspTitle', 'Startup partition missing'),
-      T('disk.existing.noEspBody', 'This disk has no FAT32 startup partition. PEAK’D! needs one to start; choose “Create the partitions” or erase the whole disk.'),
+      T('disk.existing.noEspBody', 'This disk has no FAT32 startup partition. LiteAura needs one to start; choose “Create the partitions” or erase the whole disk.'),
     ));
   }
   return wrap;
@@ -1526,7 +1526,7 @@ function renderAccount() {
     refs.avatar,
     refs.accountName,
     refs.accountLogin,
-    badge(T('account.owner', "PEAK'D owner"), { tone: 'accent' }),
+    badge(T('account.owner', "LiteAura owner"), { tone: 'accent' }),
     badge(T('account.admin', 'Administrator'), { tone: 'neutral' }),
   );
   wrap.appendChild(card);
@@ -1534,11 +1534,11 @@ function renderAccount() {
   const fields = el('div', 'installer-account-fields');
   const fullName = createInput('fullName', { placeholder: 'Ada Lovelace', autocomplete: 'name' });
   const username = createInput('username', { placeholder: 'ada', autocomplete: 'username' });
-  const hostname = createInput('hostname', { placeholder: 'peakd', autocomplete: 'off' });
+  const hostname = createInput('hostname', { placeholder: 'liteaura', autocomplete: 'off' });
   refs.hostnameInput = hostname;
   fields.appendChild(fieldWithError({
     label: T('account.fullName.label', 'Full name'),
-    hint: T('account.fullName.hint', "The name shown on the lock screen and in the PEAK'D profile."),
+    hint: T('account.fullName.hint', "The name shown on the lock screen and in the LiteAura profile."),
     control: fullName,
     error: state.showErrors ? errors.fullName?.[0] : '',
   }));
@@ -1831,7 +1831,7 @@ function renderNvidiaSection() {
         'accent',
         'ui/info',
         T('profile.nvidia.hybridTitle', 'Hybrid graphics'),
-        T('profile.nvidia.hybridBody', 'The integrated GPU stays on. PEAK\'D! uses the NVIDIA GPU only for apps that need it.'),
+        T('profile.nvidia.hybridBody', 'The integrated GPU stays on. LiteAura uses the NVIDIA GPU only for apps that need it.'),
       ));
     }
   }
@@ -2020,7 +2020,7 @@ function renderReview() {
   serial.id = 'installer-confirm-serial';
   confirm.appendChild(field({
     label: T('review.confirm.serial', 'Disk serial'),
-    hint: disk?.serial ? `${T('review.confirm.expected', 'Expected')}: ${disk.serial}` : T('review.confirm.noSerial', 'This disk does not report a serial number, so PEAK\'D! cannot be installed on it.'),
+    hint: disk?.serial ? `${T('review.confirm.expected', 'Expected')}: ${disk.serial}` : T('review.confirm.noSerial', 'This disk does not report a serial number, so LiteAura cannot be installed on it.'),
     control: serial,
   }));
   if (disk?.serial && state.confirmSerial && state.confirmSerial.trim() !== disk.serial) {
@@ -2174,7 +2174,7 @@ function renderFooter() {
         }));
       }
       const install = button({
-        label: T('common.install', "Install PEAK'D!"),
+        label: T('common.install', "Install LiteAura"),
         variant: 'primary',
         arrow: true,
         disabled: !installReady(),
@@ -2386,12 +2386,12 @@ function updateProgressDom() {
 
 function progressHead() {
   const head = el('header', 'installer-step-head');
-  const title = el('h2', 'installer-step-title', T('progress.title', "Installing PEAK'D!"));
+  const title = el('h2', 'installer-step-title', T('progress.title', "Installing LiteAura"));
   title.tabIndex = -1;
   head.append(
     el('div', 'installer-step-kicker', counter(STEPS.length + 1, STEPS.length + 1)),
     title,
-    el('p', 'installer-step-subtitle', T('progress.body', 'You can keep using this live session while PEAK\'D! is installed on the disk.')),
+    el('p', 'installer-step-subtitle', T('progress.body', 'You can keep using this live session while LiteAura is installed on the disk.')),
   );
   return head;
 }
@@ -2412,7 +2412,7 @@ function renderProgress() {
   copy.append(
     el('div', 'installer-progress-kicker', dryRun ? T('progress.dryBadge', 'Simulation') : T('progress.liveBadge', 'Install')),
     el('h3', 'installer-progress-title', T('progress.stepTitle', 'Preparing the disk')),
-    el('p', 'installer-progress-sub', T('progress.body', 'You can keep using this live session while PEAK\'D! is installed on the disk.')),
+    el('p', 'installer-progress-sub', T('progress.body', 'You can keep using this live session while LiteAura is installed on the disk.')),
   );
   refs.progressStage = el('div', 'installer-progress-stage', stageLabel(status.stage));
   refs.progressStage.dataset.stage = String(status.stage || '');
@@ -2428,7 +2428,7 @@ function renderProgress() {
       dryRun ? T('progress.dryDoneTitle', 'Simulation complete') : T('progress.installDoneTitle', 'Installation complete'),
       dryRun
         ? T('progress.dryDoneBody', 'No disk was modified. The helper accepted this plan for testing.')
-        : T('progress.installDoneBody', 'PEAK\'D! is installed. Restart the computer and remove the USB stick.'),
+        : T('progress.installDoneBody', 'LiteAura is installed. Restart the computer and remove the USB stick.'),
     ));
   } else if (status.done && !status.success) {
     wrap.appendChild(alertBlock('danger', T('progress.failed', 'Installation failed'), status.error || T('progress.failedBody', 'The installer stopped.')));
@@ -2518,7 +2518,7 @@ function renderManifest() {
   }
   manifest.appendChild(target);
 
-  // The plan as one picture: the "after" bar and how big PEAK'D! gets.
+  // The plan as one picture: the "after" bar and how big LiteAura gets.
   const layoutSection = el('section', 'installer-manifest-section');
   layoutSection.appendChild(el('span', 'installer-manifest-label', T('manifest.layout', 'Layout')));
   layoutSection.appendChild(el('strong', 'installer-manifest-value', modeLabel()));
@@ -2526,7 +2526,7 @@ function renderManifest() {
     const rootBytes = state.partitionMode === MODE_EXISTING
       ? Number(selectedExistingRoot()?.size_bytes) || 0
       : model.sizes.root;
-    if (rootBytes) layoutSection.appendChild(el('span', 'installer-manifest-sub', `PEAK’D! ${formatBytes(rootBytes)}`));
+    if (rootBytes) layoutSection.appendChild(el('span', 'installer-manifest-sub', `LiteAura ${formatBytes(rootBytes)}`));
   }
   layoutSection.appendChild(segmentBar(plannedSegments(), { mini: true, label: T('disk.afterBar', 'Planned partition layout') }));
   manifest.appendChild(layoutSection);

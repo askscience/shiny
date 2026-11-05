@@ -26,8 +26,8 @@ boot ─▶ multi-user.target
              └─ /usr/local/bin/shiny-greeter-start
                   └─ xinit /usr/local/bin/shiny-greeter
                        ├─ shiny server      SHINY_GREETER=1, 127.0.0.1:8079, no plugins
-                       ├─ matchbox + xset + peakd --url http://127.0.0.1:8079
-                       └─ restart peakd (and the server) if either dies
+                       ├─ matchbox + xset + liteaura --url http://127.0.0.1:8079
+                       └─ restart liteaura (and the server) if either dies
 
 login screen → POST /api/auth/login {user, password}
    └─ shiny-auth socket, op `login-session`        (root)
@@ -38,9 +38,9 @@ login screen → POST /api/auth/login {user, password}
 
 shiny-kiosk@<user>.service                 User=%i, PAMName=login, vt1
    └─ xinit /usr/local/bin/shiny-session
-        └─ per-user server + sidecars + boot-token auto-login + peakd ⇄ server-mode
+        └─ per-user server + sidecars + boot-token auto-login + liteaura ⇄ server-mode
 
-sign out (Alt+Q, or Log out → `peakd:logout`, exit 43)
+sign out (Alt+Q, or Log out → `liteaura:logout`, exit 43)
    └─ kiosk unit stops cleanly → ExecStopPost → shiny-seat-stop.sh kiosk
         ├─ rm /run/shiny/handover
         └─ systemctl start shiny-greeter.service      → login screen
@@ -61,7 +61,7 @@ sign out (Alt+Q, or Log out → `peakd:logout`, exit 43)
   on port `8080 + uid − 1000`, and the shell auto-logs in with the loopback
   session token, so the user signs in once — at the login screen.
 - Sign-out is a *session* boundary: the app's own sign-in overlay is never the
-  machine's login. `peakd:logout` (exit 43) and Alt+Q both end the session.
+  machine's login. `liteaura:logout` (exit 43) and Alt+Q both end the session.
 
 ## Units
 
@@ -145,7 +145,7 @@ out for unusual setups.
 |---|---|---|
 | `/run/shiny/handover` | `shiny-auth` on a successful `login-session` | Tells the greeter's stop script this stop is a handover. Cleared when the kiosk session ends. |
 | `/var/lib/shiny-greeter/.local/share/shiny/shiny.db` | greeter server | The greeter's own (account-free) database. |
-| `$HOME/.local/share/shiny/peakd/` | `peakd` in the session or greeter | QtWebEngine profile (cookies, localStorage, cache); the greeter gets its own under the system account's home. |
+| `$HOME/.local/share/shiny/liteaura/` | `liteaura` in the session or greeter | QtWebEngine profile (cookies, localStorage, cache); the greeter gets its own under the system account's home. |
 | `$XDG_RUNTIME_DIR/shiny-session-token` | session server | Loopback boot token, single-use, re-read before every launch. |
 | `$XDG_RUNTIME_DIR/shiny-remote.state` | session server | `on`/`off`: server-mode window instead of the kiosk. |
 
@@ -155,8 +155,8 @@ out for unusual setups.
 |---|---|---|---|
 | `SHINY_GREETER` | `false` | server | Greeter mode: login starts a session instead of issuing a cookie. |
 | `SHINY_GREETER_PORT` | `8079` | greeter launcher | Port the greeter's server listens on (loopback). |
-| `PEAKD_DATA_DIR` | `$HOME/.local/share/shiny/peakd` | greeter launcher | QtWebEngine profile for the login screen. It must live in the greeter's own home: the repo's `data/peakd` belongs to the desktop user and QtWebEngine cannot write it. |
-| `PEAKD_UI_SCALE` | `1.5` (greeter) | greeter launcher | Login-card scale. The internal panel is 3072×1920 but Xorg reports 96 DPI, so the automatic scale is unreadable. |
+| `LITEAURA_DATA_DIR` | `$HOME/.local/share/shiny/liteaura` | greeter launcher | QtWebEngine profile for the login screen. It must live in the greeter's own home: the repo's `data/liteaura` belongs to the desktop user and QtWebEngine cannot write it. |
+| `LITEAURA_UI_SCALE` | `1.5` (greeter) | greeter launcher | Login-card scale. The internal panel is 3072×1920 but Xorg reports 96 DPI, so the automatic scale is unreadable. |
 | `SHINY_LOGIN_SELF_ONLY` | = `SHINY_LINUX_USERS` | server | Refuse PAM logins for accounts other than the server's own uid. |
 | `SHINY_AUTH_KIOSK_UNIT` | `shiny-kiosk@%s.service` | helper | Unit the `login-session` op starts (`%s` = verified account). |
 | `SHINY_AUTH_SYSTEMCTL` | `/usr/bin/systemctl` | helper | systemctl path (tests/overrides). |
@@ -230,8 +230,8 @@ but it does not apply here: the session starts with `HOME=/root` instead of the
 account's own home.
 
 Every `$HOME`-relative path in the launcher then resolves somewhere the account
-cannot write — `/root/.config/shiny`, the per-user `peakd` QtWebEngine profile,
-the ADFilter cache — and the session dies before `peakd` is ever reached. It
+cannot write — `/root/.config/shiny`, the per-user `liteaura` QtWebEngine profile,
+the ADFilter cache — and the session dies before `liteaura` is ever reached. It
 dies *silently*, because xinit swallows the client's stderr, so the handover
 bounces back to the login screen with nothing in the journal to explain it.
 `PAMName=login` already sets `HOME` correctly, so the line was not merely
@@ -259,7 +259,7 @@ and is independent of `PAMName=login`.
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| Black screen with only a mouse cursor; the unit crash-loops with `status=1/FAILURE` in ~1s | The greeter account cannot reach the repo. `/home/<user>` is `0700`, so `$SHINY_BIN`, `$PEAKD_BIN` and `WEB_DIR` all fail with a bare "Permission denied". Invisible under LightDM, because the session then ran as the user who owns the repo. | `chmod o+x /home/<user>` — traverse only, no listing. The installer detects this and applies it itself (§1b) unless `SHINY_FIX_HOME_PERMS=0`. |
+| Black screen with only a mouse cursor; the unit crash-loops with `status=1/FAILURE` in ~1s | The greeter account cannot reach the repo. `/home/<user>` is `0700`, so `$SHINY_BIN`, `$LITEAURA_BIN` and `WEB_DIR` all fail with a bare "Permission denied". Invisible under LightDM, because the session then ran as the user who owns the repo. | `chmod o+x /home/<user>` — traverse only, no listing. The installer detects this and applies it itself (§1b) unless `SHINY_FIX_HOME_PERMS=0`. |
 | `shiny-greeter.service` stuck in `start-pre`, killed after 90s | An `ExecStartPre` that blocks — historically `chvt` (see above). | Check `journalctl -u shiny-greeter -b` for `start-pre operation timed out`; the named control process is the culprit. |
 | Console after a reboot, no login screen | The machine booted GRUB's *recovery* entry (`single` in `/proc/cmdline`), so systemd started `rescue.target` and never reached `multi-user.target`. | Boot the normal entry. `systemctl get-default` should say `multi-user.target`. |
 | X works but shows an empty desktop | Not the greeter — a bare `startx` with no `.xinitrc` starts X with no client. | Check `/var/log/Xorg.0.log`; if it is clean, X is fine. |
@@ -276,6 +276,6 @@ LightDM off the seat when it finds it.
 ## Related
 
 - [Multi-user Linux](multi-user-linux.md) — Linux-user mode, per-user servers.
-- [Kiosk shell](kiosk-shell.md) — `peakd`, exit codes, server mode.
+- [Kiosk shell](kiosk-shell.md) — `liteaura`, exit codes, server mode.
 - [Remote access](remote-access.md) — Iroh / Tailscale.
 - [Auth API](../api/auth.md) — endpoints in greeter mode.

@@ -1,4 +1,4 @@
-//! PEAK'D! look for Gokapi's public pages, and per-share sender cards.
+//! LiteAura look for Gokapi's public pages, and per-share sender cards.
 //!
 //! Gokapi 2.2.4 loads optional files from a `custom/` folder relative to its
 //! working directory (`CustomStaticContent.go`); Shiny runs it from
@@ -19,7 +19,7 @@ use super::{install::sha256_hex, state_dir};
 
 const CUSTOM_CSS: &str = include_str!("theme/custom.css");
 const PUBLIC_JS: &str = include_str!("theme/public.js");
-/// The PEAK'D! mark (the desktop's favicon), used as a CSS mask on the page.
+/// The LiteAura mark (the desktop's favicon), used as a CSS mask on the page.
 const LOGO_SVG: &str = include_str!("../../../../web/favicon.svg");
 
 /// Fonts the page uses, copied from the host's Debian font packages
@@ -82,7 +82,7 @@ pub fn write_theme() -> std::io::Result<()> {
     for (name, body) in [
         ("custom.css", CUSTOM_CSS),
         ("public.js", PUBLIC_JS),
-        ("peakd-logo.svg", LOGO_SVG),
+        ("liteaura-logo.svg", LOGO_SVG),
         ("version.txt", version),
     ] {
         let path = dir.join(name);
@@ -180,7 +180,7 @@ mod tests {
 
     #[test]
     fn theme_assets_pass_the_gate() {
-        for name in ["custom.css", "public.js", "peakd-logo.svg"]
+        for name in ["custom.css", "public.js", "liteaura-logo.svg"]
             .into_iter()
             .chain(FONTS.iter().map(|(n, _)| *n))
         {

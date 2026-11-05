@@ -1,18 +1,18 @@
-# Kiosk shell (`peakd` / `peakd-mac`)
+# Kiosk shell (`liteaura` / `liteaura-mac`)
 
 The web UI is normally rendered by a native shell rather than a browser tab —
 this is what gives Shiny real child browser web views, trackpad gestures, the
 macOS Touch Bar and a kiosk that survives crashes.
 
-Source: [`crates/peakd/`](../../crates/peakd),
-[`crates/peakd-mac/`](../../crates/peakd-mac),
+Source: [`crates/liteaura/`](../../crates/liteaura),
+[`crates/liteaura-mac/`](../../crates/liteaura-mac),
 [`crates/shiny-server-mode/`](../../crates/shiny-server-mode),
-[`scripts/peakd-kiosk.sh`](../../scripts/peakd-kiosk.sh),
+[`scripts/liteaura-kiosk.sh`](../../scripts/liteaura-kiosk.sh),
 [`scripts/shiny-session`](../../scripts/shiny-session).
 
 ---
 
-## `peakd` (Linux)
+## `liteaura` (Linux)
 
 A Qt 6 + QtWebEngine window (`QT_QPA_PLATFORM=xcb`). It renders the app and owns
 the **Browser** plugin's tabs as real child web views at the page's true origin.
@@ -20,7 +20,7 @@ the **Browser** plugin's tabs as real child web views at the page's true origin.
 | Module | Role |
 |---|---|
 | `main.rs` | Window, args, event loop. |
-| `config.rs` | Command-line/env config (`PEAKD_*`). |
+| `config.rs` | Command-line/env config (`LITEAURA_*`). |
 | `display.rs` | Applies the interface scale the server persists (`/api/display`). |
 | `browse.rs` | Child web views for Browser tabs; request interceptor hookup. |
 | `downloads.rs` | Download manager plumbing. |
@@ -32,26 +32,26 @@ the **Browser** plugin's tabs as real child web views at the page's true origin.
 
 ### Startup
 
-[`scripts/peakd-kiosk.sh`](../../scripts/peakd-kiosk.sh) is the X11 session:
-pins Qt to X11, sets `PEAKD_APP_ORIGIN` and `PEAKD_ADFILTER_DIR`, disables X
+[`scripts/liteaura-kiosk.sh`](../../scripts/liteaura-kiosk.sh) is the X11 session:
+pins Qt to X11, sets `LITEAURA_APP_ORIGIN` and `LITEAURA_ADFILTER_DIR`, disables X
 blanking (`xset s off`, `-dpms`), starts matchbox (no titlebar), then runs
-`peakd` under a supervisor. The supervisor distinguishes a deliberate quit
+`liteaura` under a supervisor. The supervisor distinguishes a deliberate quit
 (status 0) from a crash (non-zero → restart) because `xinit` does not propagate
 the client's status. Status `42` is the **server-mode switch** (see
 [remote access](remote-access.md)).
 
-The shell resolves `peakd` via `PEAKD_BIN`, then `/usr/local/bin/peakd` /
-`/usr/bin/peakd`, then `PATH`.
+The shell resolves `liteaura` via `LITEAURA_BIN`, then `/usr/local/bin/liteaura` /
+`/usr/bin/liteaura`, then `PATH`.
 
 ### Environment
 
 | Variable | Meaning |
 |---|---|
-| `PEAKD_APP_ORIGIN` | URL of the local server (default `http://127.0.0.1:8080`). |
-| `PEAKD_ADFILTER_DIR` | Shared compiled ad-filter cache (per user). |
-| `PEAKD_DATA_DIR` | QtWebEngine profile root. Sessions use `~/.local/share/shiny/peakd` (per user; two accounts must not share cookies). |
-| `PEAKD_TOUCHPAD` | Override the touchpad device (`/dev/input/eventN`). |
-| `PEAKD_BIN` | Path to the shell binary. |
+| `LITEAURA_APP_ORIGIN` | URL of the local server (default `http://127.0.0.1:8080`). |
+| `LITEAURA_ADFILTER_DIR` | Shared compiled ad-filter cache (per user). |
+| `LITEAURA_DATA_DIR` | QtWebEngine profile root. Sessions use `~/.local/share/shiny/liteaura` (per user; two accounts must not share cookies). |
+| `LITEAURA_TOUCHPAD` | Override the touchpad device (`/dev/input/eventN`). |
+| `LITEAURA_BIN` | Path to the shell binary. |
 | `QT_QPA_PLATFORM` | Pinned to `xcb`. |
 
 ### Browser child web views
@@ -67,11 +67,11 @@ EasyList/EasyPrivacy into a cache the shell restores, and a
 filter proxy in the page path. The one thing a filter list cannot reach —
 YouTube's video ads, which are served from the video's own URL shape — is a
 document-start script the shell injects into every frame
-(`crates/peakd/js/youtube-ads.js`); it follows the same shield toggle and is
+(`crates/liteaura/js/youtube-ads.js`); it follows the same shield toggle and is
 Linux-shell only.
 
 The QtWebEngine profile (cookies, local storage, cache) lives under
-`data/peakd/qtwebengine/` (`--data-dir` moves it; storage in `storage/`, HTTP
+`data/liteaura/qtwebengine/` (`--data-dir` moves it; storage in `storage/`, HTTP
 cache in `cache/`). It is configured **before** the first load: the storage name
 first, then the off-the-record flag is cleared, then the paths. Qt refuses those
 changes once a profile has been used — it warns about an empty storage name and
@@ -89,14 +89,14 @@ the Files window's thumbnail grid) outside the tiling and backed by the Files
 plugin, so it also works for the shell's own uploads; and
 `web/js/webAppSurface.js` shims every web app's file inputs to the same picker.
 That keeps one file UI, in the app's theme, instead of a native Qt dialog, and
-needs no signal wiring in `peakd`. Saving is unaffected: app downloads arrive
+needs no signal wiring in `liteaura`. Saving is unaffected: app downloads arrive
 through `downloadRequested` and are reported back by `appSaves.js`.
 
 ---
 
-## `peakd-mac` (macOS)
+## `liteaura-mac` (macOS)
 
-A WKWebView shell packaged as `Peakd.app` by
+A WKWebView shell packaged as `LiteAura.app` by
 [`scripts/bundle-app.sh`](../../scripts/bundle-app.sh). The `.app` bundle is
 required for macOS to grant microphone/camera access (`getUserMedia` needs
 `NSMicrophoneUsageDescription` and a real bundle TCC can key a grant to).
@@ -109,7 +109,7 @@ required for macOS to grant microphone/camera access (`getUserMedia` needs
 | `display.rs` | Display scale. |
 | `config.rs` | CLI/env config. |
 
-Flags/env: `PEAKD_TOUCHBAR=0` or `--no-touchbar` disables the bar. macOS has
+Flags/env: `LITEAURA_TOUCHBAR=0` or `--no-touchbar` disables the bar. macOS has
 native multi-touch gestures, so it does not use the evdev reader.
 
 ---
@@ -136,10 +136,10 @@ install, or by LightDM's session entry):
 3. Waits (up to ~30 s) for `/api/voice/languages` to answer.
 4. Auto-logs-in the kiosk with the loopback session token (or opens the plain
    URL if the token file is missing).
-5. Starts matchbox and loops between `peakd` and the server-mode window.
+5. Starts matchbox and loops between `liteaura` and the server-mode window.
 
 Exit codes in that loop: `42` is the server-mode switch, `43` is a **sign-out**
-(the app posts `peakd:logout`; the supervisor exits 0 so the seat returns to
+(the app posts `liteaura:logout`; the supervisor exits 0 so the seat returns to
 the login screen), `0` is a deliberate quit (`Alt`+`Q`, same result), and a
 **signal death** (`≥128`: 139 SIGSEGV, 134 SIGABRT) is a crash. Each iteration
 logs the status it got. A crash is retried up to three times, 2 s apart, with

@@ -1,7 +1,7 @@
 //! `browser` plugin — a web browser window inside Shiny.
 //!
 //! The page is rendered by the shell in a native child webview
-//! (`crates/peakd`'s `browse` module), so the plugin owns only the window's
+//! (`crates/liteaura`'s `browse` module), so the plugin owns only the window's
 //! chrome, its sessions, its history and the news home surface.
 //!
 //! Modules:

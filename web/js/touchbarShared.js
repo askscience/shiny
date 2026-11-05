@@ -4,9 +4,9 @@
  * The Touch Bar reaches Shiny over two very different transports, and both
  * have to speak the same action names:
  *
- *  - **macOS** — `peakd` puts a native `NSTouchBar` on the kiosk window; each
+ *  - **macOS** — `liteaura` puts a native `NSTouchBar` on the kiosk window; each
  *    button evaluates a `touchbar:action` CustomEvent in the page
- *    (`crates/peakd/src/touchbar.rs`).
+ *    (`crates/liteaura/src/touchbar.rs`).
  *  - **Linux T2** — the `tiny-dfr` daemon draws the bar and its buttons emit a
  *    key combo through uinput; the page maps that combo back to the same
  *    actions (`web/js/touchbar.js`, config in `scripts/touchbar/`).
@@ -36,7 +36,7 @@ export const TOUCHBAR_MODIFIERS = { ctrlKey: true, altKey: true, shiftKey: true 
  *  - `action`   — the name both transports dispatch (never translated: it is
  *                 the wire protocol).
  *  - `labelKey` — the catalogue key of the Settings label; `label` is its
- *                 English fallback. The native bar (`crates/peakd-mac`) reads
+ *                 English fallback. The native bar (`crates/liteaura-mac`) reads
  *                 the same keys, so both sides always show the same word.
  *  - `icon`     — the tiny-dfr icon name (`shiny_*` is ours, shipped in
  *                 `scripts/touchbar/icons/`; anything else is a tiny-dfr built-in).
@@ -102,7 +102,7 @@ export function actionLabel(action) {
 /**
  * Whether the page should act on Touch Bar input.
  *
- * `auto` follows the host: `peakd` sets `window.__shinyTouchBar` when it has
+ * `auto` follows the host: `liteaura` sets `window.__shinyTouchBar` when it has
  * put a bar on screen (macOS) or found the T2 hardware (Linux), and the server
  * answers the same question at `GET /api/touchbar`. On any other machine both
  * say no, so `auto` is inert and a normal PC never reacts to the combo. `on`

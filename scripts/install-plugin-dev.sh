@@ -8,7 +8,7 @@
 # The library is replaced atomically (copy, then rename), so a running server
 # keeps its mapped copy and never reads a half-written file; the new code is
 # picked up on the next start. --restart restarts shiny.service — run that
-# from a terminal OUTSIDE the PEAK'D Terminal plugin (the restart closes it),
+# from a terminal OUTSIDE the LiteAura Terminal plugin (the restart closes it),
 # or simply reboot.
 set -e
 name="$1"

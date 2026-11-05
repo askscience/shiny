@@ -59,7 +59,7 @@ headlessly (`src/share/e2e.rs`): it creates the empty registry, puts the key
 in `gokapi-cli.json`, sets `Encryption.Level = 5` and restarts Gokapi.
 Unencrypted links keep working on level 5. E2E uploads run one at a time.
 
-**Look.** `src/share/theme/` holds the PEAK'D! skin (`custom.css`,
+**Look.** `src/share/theme/` holds the LiteAura skin (`custom.css`,
 `public.js`), written to Gokapi's `custom/` folder before every start, and one
 `custom/s/<id>.json` per share holding the sender card. Sender text is
 inserted with `textContent` only.
@@ -68,7 +68,7 @@ inserted with `textContent` only.
 core's Tailscale enable. The UI for them is Settings → Remote → File sharing
 (`web/js/settings/fileSharing.js`).
 
-The peakd package bundles the binaries in `/usr/libexec/shiny/gokapi/` (see
+The liteaura package bundles the binaries in `/usr/libexec/shiny/gokapi/` (see
 `packaging/gokapi.sh`; AGPL-3.0 notice and Corresponding Source are handled by
 `scripts/build-deb.sh`). Lookup order: `GOKAPI_BIN` / `GOKAPI_CLI_BIN`, the
 bundled copies (`SHINY_GOKAPI_BUNDLE_DIR`), the downloaded copies, then

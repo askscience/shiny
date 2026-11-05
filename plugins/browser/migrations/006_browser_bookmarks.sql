@@ -5,7 +5,7 @@
 -- (PLUGINS.md §9).
 --
 -- Keyed on a generated `id`; `traveler_id` (the account id) scopes the list
--- with no foreign key, exactly like `peakd_history` and `browser_settings`.
+-- with no foreign key, exactly like `liteaura_history` and `browser_settings`.
 -- Bookmarking is a convenience, so a broken database must never make it fail:
 -- every statement in `src/bookmarks.rs` is best-effort.
 --

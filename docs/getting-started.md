@@ -71,7 +71,7 @@ cargo build --features iroh    # include peer-to-peer remote access
 ```
 
 The [kiosk shell](deployment/kiosk-shell.md) is a separate binary
-(`cargo build -p peakd` on Linux, `-p peakd-mac` on macOS).
+(`cargo build -p liteaura` on Linux, `-p liteaura-mac` on macOS).
 
 ---
 
@@ -151,7 +151,7 @@ Run checks without starting or restarting the desktop:
 scripts/test-web.sh
 scripts/check-format.sh
 CARGO_BUILD_JOBS=1 scripts/test-rust.sh
-cargo clippy --locked --workspace --exclude peakd --exclude peakd-mac --all-targets
+cargo clippy --locked --workspace --exclude liteaura --exclude liteaura-mac --all-targets
 ```
 
 The web check syntax-checks first-party JavaScript and runs every Node test and

@@ -343,9 +343,9 @@ const check = (name, condition, detail = '') => {
 const tick = (ms = 50) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const viewCommands = () => ipcMessages
-  .filter((m) => m.startsWith('peakd:view:'))
-  .map((m) => JSON.parse(m.slice('peakd:view:'.length)));
-const rawCommands = () => ipcMessages.filter((m) => !m.startsWith('peakd:view:'));
+  .filter((m) => m.startsWith('liteaura:view:'))
+  .map((m) => JSON.parse(m.slice('liteaura:view:'.length)));
+const rawCommands = () => ipcMessages.filter((m) => !m.startsWith('liteaura:view:'));
 const lastView = (op) => viewCommands().filter((c) => c.op === op).pop();
 
 console.log('browser window smoke test');
@@ -377,10 +377,10 @@ check('there is a Downloads control', !!byLabel('Downloads'));
 check('there is a New incognito tab control', !!byLabel('New incognito tab'));
 
 /* The shell was told the settings + where downloads go. */
-const settingsMsg = rawCommands().find((m) => m.startsWith('peakd:settings:'));
+const settingsMsg = rawCommands().find((m) => m.startsWith('liteaura:settings:'));
 check('mount pushes settings to the shell', !!settingsMsg, rawCommands().join(' | ').slice(0, 120));
 if (settingsMsg) {
-  const parsed = JSON.parse(settingsMsg.slice('peakd:settings:'.length));
+  const parsed = JSON.parse(settingsMsg.slice('liteaura:settings:'.length));
   check('settings carry adblock + downloads dir', parsed.adblock === true && parsed.downloadsDir === '/home/u/Downloads', JSON.stringify(parsed));
 }
 
@@ -438,12 +438,12 @@ check(
 /* The shield toggles ad blocking and tells the shell. */
 const shield = shieldControl;
 const reloads = () => viewCommands().filter((c) => c.op === 'reload').length;
-const lastFilter = () => rawCommands().filter((m) => m.startsWith('peakd:filter:')).pop();
+const lastFilter = () => rawCommands().filter((m) => m.startsWith('liteaura:filter:')).pop();
 const shieldReloadsBefore = reloads();
 shield.dispatch('click', {});
 await tick(30);
 check('the shield persists the choice', calls.settings.some((s) => s.adblock === false), JSON.stringify(calls.settings));
-check('the shield tells the shell to disable', rawCommands().some((m) => m === 'peakd:filter:{"enabled":false}'), rawCommands().join(' | ').slice(0, 120));
+check('the shield tells the shell to disable', rawCommands().some((m) => m === 'liteaura:filter:{"enabled":false}'), rawCommands().join(' | ').slice(0, 120));
 check('the shield reflects its off state', String(shield.className).includes('is-off'));
 // Half the filter is a document-start script: an open page only gets the new
 // state when it loads again, so the shield reloads it (this is what makes
@@ -456,21 +456,21 @@ check(
 );
 shield.dispatch('click', {});
 await tick(30);
-check('the shield can be turned back on', rawCommands().some((m) => m === 'peakd:filter:{"enabled":true}'));
+check('the shield can be turned back on', rawCommands().some((m) => m === 'liteaura:filter:{"enabled":true}'));
 check('turning it back on reloads again', reloads() === shieldReloadsBefore + 2, String(reloads()));
 
 /* Core's Settings window writes the same preference: follow it live. */
 serverAdblock = false; // what that window's save would have left on the server
 const settingsListeners = windowListeners['settings:change'] || [];
 check('the window listens for settings changes', settingsListeners.length > 0);
-const pushesBefore = rawCommands().filter((m) => m.startsWith('peakd:settings:')).length;
+const pushesBefore = rawCommands().filter((m) => m.startsWith('liteaura:settings:')).length;
 const reloadsBeforeSettings = reloads();
 for (const fn of settingsListeners) fn({ detail: { section: 'browser' } });
 await tick(60);
 check(
   'a settings change re-pushes the state to the shell',
-  rawCommands().filter((m) => m.startsWith('peakd:settings:')).length > pushesBefore
-    && JSON.parse(rawCommands().filter((m) => m.startsWith('peakd:settings:')).pop().slice('peakd:settings:'.length)).adblock === false,
+  rawCommands().filter((m) => m.startsWith('liteaura:settings:')).length > pushesBefore
+    && JSON.parse(rawCommands().filter((m) => m.startsWith('liteaura:settings:')).pop().slice('liteaura:settings:'.length)).adblock === false,
   rawCommands().slice(-2).join(' | '),
 );
 check(
@@ -486,13 +486,13 @@ const reloadsAtHome = reloads();
 shield.dispatch('click', {});
 await tick(30);
 check('a home tab is not reloaded by the shield', reloads() === reloadsAtHome, String(reloads()));
-check('the shield still tells the shell from a home tab', lastFilter() === 'peakd:filter:{"enabled":true}', lastFilter());
+check('the shield still tells the shell from a home tab', lastFilter() === 'liteaura:filter:{"enabled":true}', lastFilter());
 
 /* The window keeps the shell's block count live while it is open. */
 await tick(3200);
 check(
   'the window polls the shell for the live shield state',
-  rawCommands().includes('peakd:shield:query'),
+  rawCommands().includes('liteaura:shield:query'),
   rawCommands().slice(-3).join(' | '),
 );
 
@@ -517,7 +517,7 @@ check(
 );
 
 /* Downloads: shell events feed the panel and get persisted. */
-windowStub.__peakdViewEvent({
+windowStub.__liteauraViewEvent({
   type: 'download',
   kind: 'completed',
   download: { id: 'd1', file: 'pexels-cat.jpg', host: 'images.pexels.com', state: 'completed', total: 2048, received: 2048 },
@@ -526,7 +526,7 @@ await tick(30);
 check('a download event reaches the panel', !!findAll(tile, (el) => String(el.className).includes('browser-download is-completed'))[0]);
 check('a download event is persisted', calls.downloadEvents.some((d) => d.id === 'd1'));
 
-windowStub.__peakdViewEvent({
+windowStub.__liteauraViewEvent({
   type: 'download',
   kind: 'progress',
   download: { id: 'd2', file: 'big.iso', host: 'example.com', state: 'downloading', total: 100, received: 50 },
@@ -624,7 +624,7 @@ check(
   fillCmd?.script === `FILL ${new URL(pagePasswordUrl).origin} me pw` && !!fillCmd?.token,
   JSON.stringify(fillCmd),
 );
-windowStub.__peakdViewEvent({ id: fillCmd.id, type: 'page-js', token: fillCmd.token, result: 'ok' });
+windowStub.__liteauraViewEvent({ id: fillCmd.id, type: 'page-js', token: fillCmd.token, result: 'ok' });
 check('the page answer resolves the fill', (await filling) === 'ok');
 check('a filled page gets the keyboard', lastView('focus')?.id === fillCmd.id);
 byLabel('Passwords')?.dispatch('click', {});
@@ -677,10 +677,10 @@ if (pasteListeners[0]) {
 
 /* Right-click inside a page: the shell forwards the request, the window opens
    core's own menu at the cursor (frame origin + position, scaled by dpr) and
-   routes the verbs back as `peakd:view` commands. */
+   routes the verbs back as `liteaura:view` commands. */
 const activeTabId = viewCommands().filter((c) => c.op === 'open').pop()?.id;
 openedMenus.length = 0;
-windowStub.__peakdViewEvent({
+windowStub.__liteauraViewEvent({
   type: 'context-menu',
   id: activeTabId,
   menu: { x: 10, y: 20, linkUrl: '', editable: false, selection: 'hello' },
@@ -711,7 +711,7 @@ check(
 );
 
 openedMenus.length = 0;
-windowStub.__peakdViewEvent({
+windowStub.__liteauraViewEvent({
   type: 'context-menu',
   id: activeTabId,
   menu: { x: 1, y: 2, linkUrl: 'https://example.com/', editable: true, selection: '' },

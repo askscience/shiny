@@ -51,7 +51,7 @@ export function paintStateLabel(el, state) {
   decodeText(el, text);
 }
 
-/** The brand mark: the PEAK'D! favicon, masked and painted in the current ink. */
+/** The brand mark: the LiteAura favicon, masked and painted in the current ink. */
 const BRAND = 'app-icon';
 
 /** Drop whatever the glyph was showing (text, icon, mark) and its state. */

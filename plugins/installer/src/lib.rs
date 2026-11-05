@@ -1,4 +1,4 @@
-//! PEAK'D! live installer plugin.
+//! LiteAura live installer plugin.
 
 pub mod client;
 pub mod plugin;

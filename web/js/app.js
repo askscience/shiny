@@ -194,7 +194,7 @@ async function initApp() {
   initFullscreenBubble(); // app name + close/exit in a top-bar bubble while fullscreen
   initOverview();    // three-finger swipe up: every open window, live
   initLauncher();    // three-finger swipe down: the plugin launcher
-  initGestures();    // the trackpad:gesture vocabulary the peakd shell sends (Linux)
+  initGestures();    // the trackpad:gesture vocabulary the liteaura shell sends (Linux)
   initContextMenu(); // right-click menus on the desktop / window title bars / workspace dots
   initLinkRouter();  // every link opens in the browser plugin (kiosk only)
   initKeyboard();    // virtual keyboard plugin — bottom bar + HUD toggle

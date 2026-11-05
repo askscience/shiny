@@ -5,11 +5,11 @@
 # Installs:
 #   /etc/systemd/user/shiny.service       (per-user server, started by the session)
 #   /usr/local/bin/shiny-session          (per-user kiosk launcher)
-#   /etc/geoclue/conf.d/50-peakd.conf     (location for the Qt shell's HUD)
+#   /etc/geoclue/conf.d/50-liteaura.conf     (location for the Qt shell's HUD)
 # and migrates the installing user's data from the shared DB into their per-user
 # DB (~/.local/share/shiny/shiny.db). It then disables the single-user system
 # units so the seat owner can start sessions:
-#   systemctl disable --now shiny.service peakd.service
+#   systemctl disable --now shiny.service liteaura.service
 #
 # The seat itself is installed separately:
 #   scripts/install-kiosk-greeter.sh  the Shiny login screen (default)
@@ -19,7 +19,7 @@
 #   sudo scripts/install-linux-session.sh --uninstall
 #
 # Overridable: SHINY_USER (default: detected — SHINY_USER, else SUDO_USER,
-# else the repo's owner), SHINY_REPO, SHINY_BIN, PEAKD_BIN,
+# else the repo's owner), SHINY_REPO, SHINY_BIN, LITEAURA_BIN,
 # PORT_BASE (default 8080) and UID_BASE (default: this machine's first human
 # uid, normally 1000). Account N gets PORT_BASE + uid(N) - UID_BASE.
 set -eu
@@ -30,7 +30,7 @@ REPO_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 SHINY_USER=${SHINY_USER:-$(. "$REPO_DIR/scripts/shiny-install-user.sh")}
 SHINY_REPO=${SHINY_REPO:-$REPO_DIR}
 SHINY_BIN=${SHINY_BIN:-$SHINY_REPO/target/debug/shiny}
-PEAKD_BIN=${PEAKD_BIN:-$SHINY_REPO/target/debug/peakd}
+LITEAURA_BIN=${LITEAURA_BIN:-$SHINY_REPO/target/debug/liteaura}
 SERVER_MODE_BIN=${SERVER_MODE_BIN:-$SHINY_REPO/target/debug/shiny-server-mode}
 PORT_BASE=${PORT_BASE:-8080}
 
@@ -43,7 +43,7 @@ UID_BASE=${UID_BASE:-$(getent passwd | awk -F: '$3 >= 1000 && $3 < 65534 { print
 
 USER_UNIT=/etc/systemd/user/shiny.service
 SESSION_BIN=/usr/local/bin/shiny-session
-GEOCLUE_RULE=/etc/geoclue/conf.d/50-peakd.conf
+GEOCLUE_RULE=/etc/geoclue/conf.d/50-liteaura.conf
 # The T2 MacBook installers are copied here and re-run in part 4; the
 # uninstall branch references their installed paths too, so they are defined
 # here rather than inline below.
@@ -77,9 +77,9 @@ if [ "${1:-}" = "--uninstall" ]; then
     rm -f /etc/logrotate.d/shiny-session
     systemctl daemon-reload 2>/dev/null || true
     # Bring the single-user units back.
-    systemctl enable shiny.service peakd.service 2>/dev/null || true
+    systemctl enable shiny.service liteaura.service 2>/dev/null || true
     systemctl start shiny.service 2>/dev/null || true
-    echo "Done. Reboot (or start peakd.service) to return to the single-user kiosk."
+    echo "Done. Reboot (or start liteaura.service) to return to the single-user kiosk."
     echo "The T2 audio fixes are left installed; remove them with:"
     echo "  sudo $T2_INSTALLER --uninstall"
     echo "  sudo $T2_WATCHDOG_INSTALLER --uninstall"
@@ -98,7 +98,7 @@ echo "Installing the per-user Shiny session"
 echo "  user      : $SHINY_USER ($USER_HOME)"
 echo "  repo      : $SHINY_REPO"
 echo "  shiny bin : $SHINY_BIN"
-echo "  peakd     : $PEAKD_BIN"
+echo "  liteaura     : $LITEAURA_BIN"
 echo "  port base : $PORT_BASE (uid $UID_BASE -> $PORT_BASE, +1 per uid above it)"
 
 # ── 1. Per-user server unit ─────────────────────────────────────────────────
@@ -190,36 +190,36 @@ fi
 
 # The kiosk shell. Building it needs the Qt 6 WebEngine dev packages; when they
 # are missing the build fails visibly and the install continues.
-if [ ! -x "$PEAKD_BIN" ]; then
-    echo "Building peakd…"
+if [ ! -x "$LITEAURA_BIN" ]; then
+    echo "Building liteaura…"
     if command -v sudo >/dev/null 2>&1 && [ "$(id -u)" -eq 0 ]; then
-        sudo -u "$SHINY_USER" -H sh -c "cd '$SHINY_REPO' && cargo build -p peakd" || true
+        sudo -u "$SHINY_USER" -H sh -c "cd '$SHINY_REPO' && cargo build -p liteaura" || true
     else
-        ( cd "$SHINY_REPO" && cargo build -p peakd ) || true
+        ( cd "$SHINY_REPO" && cargo build -p liteaura ) || true
     fi
 fi
 sed -e "s|@PORT_BASE@|$PORT_BASE|g" \
     -e "s|@UID_BASE@|$UID_BASE|g" \
     -e "s|@SHINY_REPO@|$SHINY_REPO|g" \
-    -e "s|@PEAKD_BIN@|$PEAKD_BIN|g" \
+    -e "s|@LITEAURA_BIN@|$LITEAURA_BIN|g" \
     -e "s|@SERVER_MODE_BIN@|$SERVER_MODE_BIN|g" \
     "$SHINY_REPO/scripts/shiny-session" > "$SESSION_BIN"
 chmod 0755 "$SESSION_BIN"
 
 # Location for the kiosk shell: QtWebEngine resolves navigator.geolocation
 # through Qt Positioning -> GeoClue2, whose D-Bus client DesktopId is the
-# applicationName peakd.cpp sets ("peakd"). Without an allowlist entry GeoClue
+# applicationName liteaura.cpp sets ("liteaura"). Without an allowlist entry GeoClue
 # insists on an interactive agent — there is none in a kiosk session — and the
 # HUD weather, the clock's timezone and the traveler GPS would all sit on
 # "Location unavailable". The session launcher starts the packaged demo agent,
 # which GeoClue requires to be *present* even for an allowlisted client.
 install -d -m 0755 /etc/geoclue/conf.d
 cat > "$GEOCLUE_RULE" <<'EOF'
-# The peakd kiosk reads location through Qt Positioning -> GeoClue2.
+# The liteaura kiosk reads location through Qt Positioning -> GeoClue2.
 # Qt sends QCoreApplication::applicationName() as the D-Bus DesktopId, and
-# peakd.cpp sets it to "peakd". allowed=true keeps GeoClue from needing an
+# liteaura.cpp sets it to "liteaura". allowed=true keeps GeoClue from needing an
 # interactive agent (there is none in a kiosk session).
-[peakd]
+[liteaura]
 allowed=true
 system=true
 users=
@@ -293,13 +293,13 @@ fi
 
 # ── 5. Hand the seat to the display manager ─────────────────────────────────
 systemctl disable --now shiny.service 2>/dev/null || true
-systemctl disable --now peakd.service 2>/dev/null || true
+systemctl disable --now liteaura.service 2>/dev/null || true
 systemctl daemon-reload
 
 echo
 echo "Installed."
 echo "  launcher: $SESSION_BIN"
 echo "  server  : systemd user unit shiny.service (port = $PORT_BASE + uid - $UID_BASE)"
-echo "  system shiny.service and peakd.service are disabled."
+echo "  system shiny.service and liteaura.service are disabled."
 echo "  Next: install the seat — scripts/install-kiosk-greeter.sh (default) or"
 echo "  scripts/install-greeter.sh (LightDM + Shiny theme)."

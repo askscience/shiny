@@ -27,6 +27,16 @@
 
 ### Changed
 
+- The shell is now called **LiteAura** (the name PEAK'D! was taken): the
+  crates (`crates/liteaura`, `liteaura-core`, `liteaura-mac`), the binary, the
+  `LITEAURA_*` variables, the live-session scripts, the Debian packages and
+  the APT suite, and every translation of the app name. An existing install
+  keeps everything: `~/.config`, `~/.cache` and `~/.local/share` `peakd`
+  folders and the web profile (cookies, site logins) move on the first start
+  (`liteaura_core::legacy`), `PEAKD_*` variables still apply when the new name
+  is unset, the Browser copies `peakd_history` into `liteaura_history`, and a
+  transitional `peakd` package plus a `peakd` APT suite keep installed systems
+  updating and starting.
 - Words no longer break letter by letter in narrow places: a segmented
   control's segment is never narrower than its longest word (the row wraps
   between segments instead), labels and values use `overflow-wrap:
@@ -93,7 +103,7 @@
 
 ### Added
 
-- Phone shell: on a phone PEAK'D! reads like a mobile OS. The top bar is a
+- Phone shell: on a phone LiteAura reads like a mobile OS. The top bar is a
   status bar (time, weather, the apps, a control button); the host status chips
   and the bar actions live in a control centre sheet (`web/js/controlCenter.js`).
   Windows fill the screen one at a time; with none on screen the launcher grid
@@ -126,7 +136,7 @@
   (pinned SHA-256s, `packaging/gokapi.sh`), with its license and NOTICE; the
   release publishes Gokapi's Corresponding Source next to the package
   (AGPL-3.0 §6(d)).
-- Peakd: browsed pages follow the interface scale, like the app view around
+- LiteAura: browsed pages follow the interface scale, like the app view around
   them (Linux and macOS shells).
 
 ### Changed
@@ -159,9 +169,9 @@
   folders (Desktop, Documents, …), hidden entries skipped and the walk bounded
   so a huge Downloads folder cannot stall it; the launcher's mosaic reads the
   same list (`files::fs_util::recent`).
-- Peakd gestures: two-finger pinch events (scale per step, recognised against
+- LiteAura gestures: two-finger pinch events (scale per step, recognised against
   a two-finger scroll) reach the web layer beside swipes
-  (`crates/peakd/src/gestures.rs`).
+  (`crates/liteaura/src/gestures.rs`).
 - "No slop": the AI can be switched off entirely
   (`src/services/ai_switch.rs`). Per user the `ai.enabled` preference, per
   machine a small state file the session script reads before the server
@@ -170,12 +180,12 @@
   a context menu offers "Turn on the AI…"; switching it back on in Settings →
   Assistant starts Ollama and lets the watchdog bring the voice sidecars up —
   no restart.
-- `peakd-ollama-start` starts the local Ollama server, and both callers use
-  it: the login session (`peakd-live-session`) and the server when the AI is
+- `liteaura-ollama-start` starts the local Ollama server, and both callers use
+  it: the login session (`liteaura-live-session`) and the server when the AI is
   switched back on.
 - Installer: the AI tier is chosen at install — off ("No slop"), none ("Text
   only"), voice ("Voice pack"), local ("Local AI") — and written as
-  `PEAKD_AI_DEFAULT`; a fresh account inherits it. The disk timeline
+  `LITEAURA_AI_DEFAULT`; a fresh account inherits it. The disk timeline
   describes partitions as a person would ("Windows stays untouched" rather
   than "ntfs · /dev/nvme0n1p3") and names what is erased or kept at every
   outcome.
@@ -346,11 +356,11 @@
 
 ### Added
 
-- Live image configures apt against the public PEAK'D! repository and registers
-  the payload in dpkg, so `apt upgrade` tracks `peakd` from the first boot.
+- Live image configures apt against the public LiteAura repository and registers
+  the payload in dpkg, so `apt upgrade` tracks `liteaura` from the first boot.
 - Native plugin windows follow updates: hidden windows rebuild silently, a
   visible window picks the new version when it is closed and reopened.
-- Release publishing from `v*` tags: Debian package, signed APT suite `peakd` on
+- Release publishing from `v*` tags: Debian package, signed APT suite `liteaura` on
   GitHub Pages and a GitHub Release with the package and checksums.
 
 ### Fixed
@@ -365,6 +375,6 @@
 
 ### Added
 
-- Initial PEAK'D! live installer ISO for Apple T2 and generic hardware.
-- `peakd` Debian package with the Qt shell, the `shiny` core, plugins and web UI.
+- Initial LiteAura live installer ISO for Apple T2 and generic hardware.
+- `liteaura` Debian package with the Qt shell, the `shiny` core, plugins and web UI.
 - Signed APT repository served from GitHub Pages.

@@ -3797,6 +3797,44 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32a66949e030da00e8c7d4434b251670a91556f4144941d37452769c25d58a53"
 
 [[package]]
+name = "liteaura"
+version = "0.1.0"
+dependencies = [
+ "cc",
+ "libc",
+ "liteaura-core",
+ "parking_lot",
+ "pkg-config",
+ "serde_json",
+ "shiny-filter-core",
+ "shiny-iroh-client",
+]
+
+[[package]]
+name = "liteaura-core"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
+name = "liteaura-mac"
+version = "0.1.0"
+dependencies = [
+ "liteaura-core",
+ "objc2",
+ "objc2-app-kit",
+ "objc2-foundation",
+ "parking_lot",
+ "serde_json",
+ "shiny-iroh-client",
+ "tao",
+ "tracing",
+ "tracing-subscriber",
+ "wry",
+]
+
+[[package]]
 name = "litemap"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5192,44 +5230,6 @@ dependencies = [
  "serde",
  "skrifa 0.44.0",
  "thiserror 2.0.18",
-]
-
-[[package]]
-name = "peakd"
-version = "0.1.0"
-dependencies = [
- "cc",
- "libc",
- "parking_lot",
- "peakd-core",
- "pkg-config",
- "serde_json",
- "shiny-filter-core",
- "shiny-iroh-client",
-]
-
-[[package]]
-name = "peakd-core"
-version = "0.1.0"
-dependencies = [
- "serde_json",
-]
-
-[[package]]
-name = "peakd-mac"
-version = "0.1.0"
-dependencies = [
- "objc2",
- "objc2-app-kit",
- "objc2-foundation",
- "parking_lot",
- "peakd-core",
- "serde_json",
- "shiny-iroh-client",
- "tao",
- "tracing",
- "tracing-subscriber",
- "wry",
 ]
 
 [[package]]
@@ -6786,6 +6786,7 @@ dependencies = [
  "libc",
  "libloading",
  "libsqlite3-sys",
+ "liteaura-core",
  "nmrs",
  "parking_lot",
  "qrcode",

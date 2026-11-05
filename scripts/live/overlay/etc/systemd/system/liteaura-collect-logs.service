@@ -1,0 +1,16 @@
+[Unit]
+Description=LiteAura live test log collector (USB EFI partition)
+ConditionPathExists=/run/live/medium
+After=local-fs.target
+Before=display-manager.service
+Nice=19
+IOSchedulingClass=idle
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/liteaura-collect-logs
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

@@ -2,7 +2,7 @@
 //!
 //! Listens for plain HTTP on a local address and tunnels each connection to a
 //! remote Shiny server over an Iroh peer-to-peer QUIC connection, so an ordinary
-//! browser — or `peakd` in Iroh mode — can reach the app. One QUIC bidirectional
+//! browser — or `liteaura` in Iroh mode — can reach the app. One QUIC bidirectional
 //! stream carries one HTTP/1.1 connection.
 //!
 //! The proxy tags every forwarded request with `x-shiny-remote: 1` (and

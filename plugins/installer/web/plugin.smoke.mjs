@@ -611,7 +611,7 @@ async function runWizardIntegration() {
   };
   setInput('installer-fullName', 'Ada Lovelace');
   setInput('installer-username', 'ada');
-  setInput('installer-hostname', 'ada-peakd');
+  setInput('installer-hostname', 'ada-liteaura');
   setInput('installer-password', 'correct-horse');
   setInput('installer-password2', 'correct-horse');
 

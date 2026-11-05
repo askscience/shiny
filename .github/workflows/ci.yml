@@ -18,7 +18,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Formatting for refactored modules
         run: scripts/check-format.sh
-      - run: cargo clippy --workspace --exclude peakd --exclude peakd-mac --all-targets
+      - run: cargo clippy --workspace --exclude liteaura --exclude liteaura-mac --all-targets
       - name: Build native fixtures and run Rust tests
         run: scripts/test-rust.sh
 
@@ -44,4 +44,4 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Compile the Debian native shell
-        run: cargo build --locked -p peakd
+        run: cargo build --locked -p liteaura

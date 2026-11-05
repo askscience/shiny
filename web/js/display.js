@@ -1,7 +1,7 @@
 /**
  * display.js — the host interface scale (page zoom applied by the kiosk shell).
  *
- * Not a per-user preference: the scale belongs to the panel, and `peakd`
+ * Not a per-user preference: the scale belongs to the panel, and `liteaura`
  * applies it before anyone signs in. The server persists the choice to a file
  * the shell watches, so changing it here re-zooms the page live — which also
  * re-fits the Terminal, since the logical viewport shrinks.

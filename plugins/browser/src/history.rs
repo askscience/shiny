@@ -8,15 +8,18 @@
 //! swallowed with a log line. If the insert works, the user gets history; if
 //! it does not, the browser still browses.
 //!
-//! Rows are written to `peakd_history` — the table `migrations/002_peakd_history.sql`
-//! creates. That name matters: the plugin's own name has changed (`browser`,
-//! then `peakd`, now `browser` again) but the history table deliberately did
-//! not, because renaming it would strand every existing install's history. An
-//! earlier revision of this module assumed the table followed the plugin name
-//! (`browser_history`) while the migration created `peakd_history`, so on a
-//! clean install every insert and read failed silently. Both names are asserted
-//! against the migration file in the tests below so the two can never drift
-//! apart again.
+//! Rows are written to `liteaura_history`, created by
+//! `migrations/008_liteaura_history.sql`. That name matters: the plugin's own
+//! name has changed (`browser`, then `peakd`, now `browser` again) and the
+//! history table followed the shell's name, `peakd_history`, until the shell
+//! became LiteAura. Renaming a table strands every existing install's history
+//! unless the rows move too, so [`ensure_schema`] copies a leftover
+//! `peakd_history` into the new table on load and then drops it. An earlier
+//! revision of this module assumed the table followed the plugin name
+//! (`browser_history`) while the migration created another, so on a clean
+//! install every insert and read failed silently. The name is asserted against
+//! the migration files in the tests below so the two can never drift apart
+//! again.
 
 use std::sync::Arc;
 
@@ -24,51 +27,74 @@ use shiny_plugin_sdk::db::Value;
 use shiny_plugin_sdk::services::PluginCtx;
 
 /// The table this module reads and writes. See the module note.
-pub const TABLE: &str = "peakd_history";
+pub const TABLE: &str = "liteaura_history";
 
-/// Column the recommendation profile needs, and the schema repair that adds it.
+/// The table this module used before the shell was renamed from `peakd`.
+pub const LEGACY_TABLE: &str = "peakd_history";
+
+/// Column the recommendation profile needs, and the schema repair that adds it
+/// to a [`LEGACY_TABLE`] that predates it.
 ///
 /// Why this is code and not only a migration: `002_peakd_history.sql` was
-/// *edited after it had already been applied*, so on this install its
+/// *edited after it had already been applied*, so on some installs its
 /// `CREATE TABLE IF NOT EXISTS` was a no-op — the table already existed from
-/// 001, without the column — and the runner never re-runs a recorded file. The
-/// result was a table that every `INSERT` in this module silently failed
-/// against: browsing history and the whole news profile were dead, with only a
-/// `debug!` line to show for it.
+/// 001, without the column — and the runner never re-runs a recorded file.
 ///
-/// SQLite cannot express conditional DDL, so a migration cannot repair this
-/// idempotently (a bare `ALTER TABLE … ADD COLUMN` aborts the rest of the file
-/// with "duplicate column name" on a healthy database). The plugin can, though:
-/// a *duplicate column* is success here, and any other error is logged and
+/// SQLite cannot express conditional DDL, so a migration cannot repair or copy
+/// this idempotently (a bare `ALTER TABLE … ADD COLUMN` aborts the rest of the
+/// file with "duplicate column name" on a healthy database, and a copy that
+/// names `query` fails on a table without it). The plugin can, though: a
+/// *duplicate column* is success here, and any other error is logged and
 /// ignored so a broken database still cannot stop the browser from browsing.
-const ADD_QUERY_COLUMN: &str =
-    "ALTER TABLE peakd_history ADD COLUMN query TEXT";
+const ADD_LEGACY_QUERY_COLUMN: &str = "ALTER TABLE peakd_history ADD COLUMN query TEXT";
 
-/// Bring an older `peakd_history` up to the schema this module writes.
+/// Every legacy row, copied into the current table. `OR IGNORE` keeps a
+/// half-finished earlier copy from failing on rows it already moved.
+const COPY_LEGACY_ROWS: &str = "INSERT OR IGNORE INTO liteaura_history \
+     (id, traveler_id, url, mode, query, created_at) \
+     SELECT id, traveler_id, url, mode, query, created_at FROM peakd_history";
+
+const DROP_LEGACY_TABLE: &str = "DROP TABLE IF EXISTS peakd_history";
+
+/// Move the history of an install made before the rename into [`TABLE`].
 ///
-/// Runs on load. Best-effort: never fatal, never blocks the browser.
+/// Runs on load, after the migrations have created [`TABLE`]. Best-effort:
+/// never fatal, never blocks the browser. The legacy table is dropped only
+/// once its rows are copied, so a failed copy is retried on the next load.
 pub fn ensure_schema(ctx: &PluginCtx) {
     let db = ctx.db();
-    let has_column = db
+    let legacy_exists = db
         .query(
-            "SELECT COUNT(*) FROM pragma_table_info('peakd_history') WHERE name = 'query'",
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'peakd_history'",
             &[],
         )
         .ok()
         .and_then(|rows| rows.into_iter().next())
         .and_then(|row| row.into_iter().next())
         .map(|value| matches!(value, Value::Int(n) if n > 0))
-        .unwrap_or(true); // unreadable schema: leave it alone rather than guess
+        .unwrap_or(false); // unreadable schema: leave it alone rather than guess
 
-    if has_column {
+    if !legacy_exists {
         return;
     }
 
-    match db.execute(ADD_QUERY_COLUMN, &[]) {
-        Ok(_) => tracing::info!("browser: added the history `query` column"),
-        // Raced by another caller, or already present after all.
+    match db.execute(ADD_LEGACY_QUERY_COLUMN, &[]) {
+        Ok(_) => {}
+        // The usual case: the column is already there.
         Err(err) if err.to_string().contains("duplicate column") => {}
-        Err(err) => tracing::warn!("browser: could not add the history `query` column: {err}"),
+        Err(err) => {
+            tracing::warn!("browser: could not repair the legacy history table: {err}");
+            return;
+        }
+    }
+
+    if let Err(err) = db.execute(COPY_LEGACY_ROWS, &[]) {
+        tracing::warn!("browser: could not move the legacy history: {err}");
+        return;
+    }
+    match db.execute(DROP_LEGACY_TABLE, &[]) {
+        Ok(_) => tracing::info!("browser: moved the history to {TABLE}"),
+        Err(err) => tracing::warn!("browser: could not drop the legacy history table: {err}"),
     }
 }
 
@@ -305,7 +331,7 @@ mod tests {
         assert!(recent(&ctx, "nobody", 5).is_empty());
         // And the Db type itself opens without the table existing.
         let db = Db::open("sqlite:///tmp/browser-history-test.db").unwrap();
-        assert!(db.query("SELECT url FROM peakd_history", &[]).is_err());
+        assert!(db.query("SELECT url FROM liteaura_history", &[]).is_err());
     }
 
     #[test]
@@ -351,13 +377,13 @@ mod tests {
         // sort order alone proves nothing. Pin the timestamps instead: B is the
         // newer visit and must come first.
         db.execute(
-            "UPDATE peakd_history SET created_at = '2026-09-13 10:00:00'
+            "UPDATE liteaura_history SET created_at = '2026-09-13 10:00:00'
              WHERE url = 'https://example.com/a'",
             &[],
         )
         .unwrap();
         db.execute(
-            "UPDATE peakd_history SET created_at = '2026-09-13 11:00:00'
+            "UPDATE liteaura_history SET created_at = '2026-09-13 11:00:00'
              WHERE url = 'https://example.com/b'",
             &[],
         )
@@ -371,6 +397,48 @@ mod tests {
         // The typed search is stored verbatim — it is the recommender's input.
         assert_eq!(rows[1].query.as_deref(), Some("aurora forecast"));
         assert!(rows[1].created_at.starts_with("2026-09-13"));
+    }
+
+    #[test]
+    fn legacy_history_moves_to_the_new_table() {
+        let path = "/tmp/browser-history-legacy.db";
+        let ctx = ctx_with_db(path);
+        let db = Db::open(&format!("sqlite://{path}")).unwrap();
+        db.execute(
+            &format!(
+                "CREATE TABLE {TABLE} (id TEXT PRIMARY KEY, traveler_id TEXT NOT NULL,
+                 url TEXT NOT NULL, mode TEXT NOT NULL DEFAULT 'page',
+                 query TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')))"
+            ),
+            &[],
+        )
+        .unwrap();
+        // The oldest legacy shape: no `query` column.
+        db.execute(
+            &format!(
+                "CREATE TABLE {LEGACY_TABLE} (id TEXT PRIMARY KEY, traveler_id TEXT NOT NULL,
+                 url TEXT NOT NULL, mode TEXT NOT NULL DEFAULT 'page',
+                 created_at TEXT NOT NULL DEFAULT (datetime('now')))"
+            ),
+            &[],
+        )
+        .unwrap();
+        db.execute(
+            &format!("INSERT INTO {LEGACY_TABLE} (id, traveler_id, url, created_at) VALUES ('old','u1','https://old/','2026-09-01 10:00:00')"),
+            &[],
+        )
+        .unwrap();
+
+        ensure_schema(&ctx);
+        let rows = recent_rows(&ctx, "u1", 10).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].url, "https://old/");
+        assert!(rows[0].created_at.starts_with("2026-09-01"));
+        assert!(db.query(&format!("SELECT 1 FROM {LEGACY_TABLE}"), &[]).is_err(), "legacy table dropped");
+
+        // Nothing left to move: a no-op.
+        ensure_schema(&ctx);
+        assert_eq!(recent_rows(&ctx, "u1", 10).unwrap().len(), 1);
     }
 
     #[test]
@@ -388,12 +456,12 @@ mod tests {
         )
         .unwrap();
         db.execute(
-            "INSERT INTO peakd_history (id, traveler_id, url, mode) VALUES ('r1','u1','https://a/','page')",
+            "INSERT INTO liteaura_history (id, traveler_id, url, mode) VALUES ('r1','u1','https://a/','page')",
             &[],
         )
         .unwrap();
         db.execute(
-            "INSERT INTO peakd_history (id, traveler_id, url, mode) VALUES ('r2','u2','https://b/','visit')",
+            "INSERT INTO liteaura_history (id, traveler_id, url, mode) VALUES ('r2','u2','https://b/','visit')",
             &[],
         )
         .unwrap();
@@ -423,7 +491,7 @@ mod tests {
 /// the code just starts failing to write.
 ///
 /// So the *files themselves* are checked here: replaying them in order must
-/// produce a `peakd_history` whose columns include every one this module's SQL
+/// produce a `liteaura_history` whose columns include every one this module's SQL
 /// names. The parser is deliberately small and only needs to understand the
 /// statements these migrations actually contain; anything it does not
 /// understand is skipped and reported as such by the coverage assertion.

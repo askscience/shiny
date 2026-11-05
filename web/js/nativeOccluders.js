@@ -2,9 +2,9 @@
  * nativeOccluders.js — core surfaces that must be cut out of a native page.
  *
  * The Browser plugin renders each page in a native WebEngine item in the
- * shell's scene (crates/peakd), above the whole app webview. HTML can only stay
+ * shell's scene (crates/liteaura), above the whole app webview. HTML can only stay
  * visible over a page when the plugin lists the surface's rect in
- * `peakd:view:setMask`; otherwise the page paints over it.
+ * `liteaura:view:setMask`; otherwise the page paints over it.
  *
  * This module owns the core half of that list. The Browser adds its own
  * popovers and any higher floating window. Keep the selector in step with new

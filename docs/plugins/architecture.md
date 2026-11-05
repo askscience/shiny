@@ -74,7 +74,7 @@ shiny/
 │   │       ├── db.rs                 # synchronous plugin DB handle
 │   │       └── migrations.rs         # per-plugin migration runner
 │   ├── shiny-osm/                    # OSM client shared by core + traveler
-│   └── peakd-core/                   # display-scale state shared by the shells
+│   └── liteaura-core/                   # display-scale state shared by the shells
 ├── plugins/<name>/                   # one self-contained plugin each
 └── src/plugins/                      # loader/registry/manager/installer/admin_api
 ```

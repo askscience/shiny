@@ -7,7 +7,7 @@
 //!
 //! Like the audio and network panels this is a *host* capability, not a
 //! per-user preference: it belongs to the machine, and it is the same sysfs
-//! check `crates/peakd/src/touchbar.rs` makes for the kiosk.
+//! check `crates/liteaura/src/touchbar.rs` makes for the kiosk.
 
 use serde_json::{json, Value};
 

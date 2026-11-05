@@ -1,11 +1,11 @@
 //! The server's ad-filter engine: fetch + compile the lists, hand the compiled
-//! cache to the `peakd` shell.
+//! cache to the `liteaura` shell.
 //!
 //! The shell does the per-request blocking in-process (a
 //! `QWebEngineUrlRequestInterceptor`), which needs the compiled engine but not
 //! an HTTP client or a runtime. This module owns the network half and writes
 //! `engine.dat` + `engine.json` into a shared directory the shell reads
-//! (`PEAKD_ADFILTER_DIR`).
+//! (`LITEAURA_ADFILTER_DIR`).
 
 use std::path::PathBuf;
 use std::sync::OnceLock;
@@ -28,7 +28,7 @@ fn slot() -> &'static RwLock<Option<AdFilter>> {
 ///
 /// `ADFILTER_DIR` wins; otherwise the per-user data dir
 /// (`$XDG_DATA_HOME/shiny/adfilter`, defaulting to `~/.local/share/...`), which
-/// is exactly what the shell resolves when `PEAKD_ADFILTER_DIR` is unset. Both
+/// is exactly what the shell resolves when `LITEAURA_ADFILTER_DIR` is unset. Both
 /// processes run as the same user, so they agree without any fixed path or
 /// username.
 pub fn cache_dir(_ctx: &PluginCtx) -> PathBuf {
@@ -65,7 +65,7 @@ pub fn rules() -> usize {
 /// have covered only intermittently. The *video* ads are not reachable from
 /// here at all — they are served from the same `googlevideo.com/videoplayback`
 /// shape as the video — and that half is the shell's document-start scriptlet
-/// (`crates/peakd/js/youtube-ads.js`).
+/// (`crates/liteaura/js/youtube-ads.js`).
 fn extra_filters() -> Vec<String> {
     [
         "||youtube.com/api/stats/ads",

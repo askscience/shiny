@@ -7,7 +7,7 @@ import {
  * The window's chrome is HTML (this file): a tab strip, back / forward /
  * reload / home, and an address bar that doubles as a search box. The **page**
  * is not rendered here — the shell renders it in a native WebKit child webview
- * (`crates/peakd`'s `browse` module) at the page's real origin, so anti-bot
+ * (`crates/liteaura`'s `browse` module) at the page's real origin, so anti-bot
  * challenges (Cloudflare) pass and cookies/TLS are the page's own. This file
  * drives that view over the shell's IPC bridge and mirrors its URL/title back
  * into the toolbar.
@@ -54,7 +54,7 @@ const SEARCH_ENGINES = [
 /**
  * The native-view bridge.
  *
- * The shell exposes `window.ipc` (see `crates/peakd`). Every tab is rendered by
+ * The shell exposes `window.ipc` (see `crates/liteaura`). Every tab is rendered by
  * a real WebKit child webview at the page's true origin — no iframe, no HTML
  * rewriting — so anti-bot systems such as Cloudflare see an ordinary browser.
  */
@@ -62,7 +62,7 @@ const nativeAvailable =
   typeof window !== 'undefined' &&
   window.ipc &&
   typeof window.ipc.postMessage === 'function';
-const NATIVE_PREFIX = 'peakd:view:';
+const NATIVE_PREFIX = 'liteaura:view:';
 
 /** Send one native-view command. Returns false when there is no bridge. */
 function nativeSend(payload) {
@@ -76,9 +76,9 @@ function nativeSend(payload) {
 }
 
 /**
- * Send a shell message with a non-view prefix (`peakd:settings:`,
- * `peakd:filter:`, `peakd:download:`). The app view is the only one whose IPC
- * bridge forwards these; a browsing page's bridge accepts only `peakd:exit`.
+ * Send a shell message with a non-view prefix (`liteaura:settings:`,
+ * `liteaura:filter:`, `liteaura:download:`). The app view is the only one whose IPC
+ * bridge forwards these; a browsing page's bridge accepts only `liteaura:exit`.
  */
 function shellSend(prefix, payload) {
   if (!nativeAvailable) return false;
@@ -90,7 +90,7 @@ function shellSend(prefix, payload) {
   }
 }
 
-/** Send a raw (non-JSON) shell message, e.g. `peakd:downloads:list`. */
+/** Send a raw (non-JSON) shell message, e.g. `liteaura:downloads:list`. */
 function shellRaw(message) {
   if (!nativeAvailable) return false;
   try {
@@ -121,7 +121,7 @@ function viewportRect() {
 /**
  * Whether the active page should currently be on screen.
  *
- * The page is an item in the shell's own scene (see `crates/peakd`), composited
+ * The page is an item in the shell's own scene (see `crates/liteaura`), composited
  * by the same renderer as the app's DOM: it follows its window frame for frame
  * and never has to be dropped while it moves. Only the states the app draws
  * over everything — a hidden tile (a workspace switch), the overview, the
@@ -1060,7 +1060,7 @@ function goHome() {
  *  - the **shield**, which toggles the shell's ad blocker live and persists the
  *    choice per user (`/api/browser/settings`);
  *  - the **downloads** button + panel, fed by shell events
- *    (`window.__peakdViewEvent`, type `download`) and persisted server-side;
+ *    (`window.__liteauraViewEvent`, type `download`) and persisted server-side;
  *  - a **new incognito tab**.
  */
 
@@ -1088,7 +1088,7 @@ async function loadSettings() {
  * site's own dark/light styling follow the app's Ink/Dusk theme.
  */
 function pushSettings() {
-  shellSend('peakd:settings:', {
+  shellSend('liteaura:settings:', {
     adblock: browserSettings.adblock,
     downloadsDir: browserSettings.downloadsDir,
     colorScheme: themeMode() === 'light' ? 'light' : 'dark',
@@ -1100,7 +1100,7 @@ function toggleShield() {
   const on = !browserSettings.adblock;
   browserSettings.adblock = on;
   updateShield();
-  shellSend('peakd:filter:', { enabled: on });
+  shellSend('liteaura:filter:', { enabled: on });
   // Half the filter is a document-start script (it joins or leaves a page when
   // that page loads), so the tab in front of the user has to reload for "off"
   // to really let ads through — and for "on" to hide them again.
@@ -1210,7 +1210,7 @@ async function loadDownloads() {
   } catch (_) {
     /* history is optional */
   }
-  shellRaw('peakd:downloads:list');
+  shellRaw('liteaura:downloads:list');
   renderDownloads();
 }
 
@@ -1238,7 +1238,7 @@ function applyDownload(event) {
 /** Send a control command for one download and mirror it locally. */
 function downloadAction(id, action) {
   if (action === 'clear') {
-    shellSend('peakd:download:', { id: '', action: 'clear' });
+    shellSend('liteaura:download:', { id: '', action: 'clear' });
     downloads = downloads.filter(
       (d) => !['completed', 'cancelled', 'interrupted'].includes(d.state),
     );
@@ -1247,7 +1247,7 @@ function downloadAction(id, action) {
     return;
   }
   if (!id) return;
-  shellSend('peakd:download:', { id, action });
+  shellSend('liteaura:download:', { id, action });
   if (action === 'remove') {
     downloads = downloads.filter((d) => d.id !== id);
     renderDownloads();
@@ -1417,7 +1417,7 @@ function updateDownloadsBadge() {
 }
 
 /* Shell → window: shield state and the live download list. */
-window.__peakdShield = function (state) {
+window.__liteauraShield = function (state) {
   if (!state || typeof state !== 'object') return;
   if (typeof state.enabled === 'boolean') browserSettings.adblock = state.enabled;
   if (typeof state.blocked === 'number') browserSettings.blocked = state.blocked;
@@ -1425,7 +1425,7 @@ window.__peakdShield = function (state) {
   updateShield();
 };
 
-window.__peakdDownloads = function (list) {
+window.__liteauraDownloads = function (list) {
   if (!Array.isArray(list)) return;
   // The shell's list is chronological (oldest first); show newest first and
   // keep any persisted rows the shell no longer tracks.
@@ -2510,7 +2510,7 @@ function onFrameMessage(event) {
  * A right-click inside a page: the shell forwards the request (position local
  * to the view item, plus the link and selection state) and the app's own menu
  * opens over the page — the mask hole keeps it visible and clickable. Page
- * verbs travel back as `peakd:view` commands; Copy Link Address goes through
+ * verbs travel back as `liteaura:view` commands; Copy Link Address goes through
  * the app's clipboard service, so it lands in the Clipboard menu like every
  * other copy. Navigation uses the dedicated ops, the edit verbs the generic
  * `action` op (only a native view can touch its page's DOM).
@@ -2617,7 +2617,7 @@ function openPageContextMenu(tab, menu) {
  * Defined at module scope because the shell may call it before `wireEvents`
  * runs (a navigation can complete while the window is still mounting).
  */
-window.__peakdViewEvent = function (event) {
+window.__liteauraViewEvent = function (event) {
   // The page is native: its input never reaches the app's DOM. A navigation
   // is someone using it, so the lock screen's idle clock hears about it.
   if (event && typeof CustomEvent === 'function'
@@ -2775,13 +2775,13 @@ function stopBoundsSync() {
 /**
  * Keep the shield's blocked count honest while this window is open.
  *
- * The shell only pushes `window.__peakdShield` when something changes, so
+ * The shell only pushes `window.__liteauraShield` when something changes, so
  * without a poll the count would look frozen even while the filter is busy.
  */
 function startShieldPoll() {
   stopShieldPoll();
   shieldTimer = setInterval(() => {
-    if (!document.hidden && nativeAvailable) shellRaw('peakd:shield:query');
+    if (!document.hidden && nativeAvailable) shellRaw('liteaura:shield:query');
   }, SHIELD_POLL_MS);
 }
 
@@ -2822,7 +2822,7 @@ function onArtifactSaved(event) {
  * A pick in the top-bar Clipboard menu with this window focused.
  *
  * The page is a native child view, so the app cannot touch its DOM: the shell
- * delivers the text (`peakd:view` `paste` command sets the system clipboard
+ * delivers the text (`liteaura:view` `paste` command sets the system clipboard
  * and triggers the engine's Paste action on the tab).
  */
 function onClipboardPaste(event) {

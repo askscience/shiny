@@ -1,7 +1,7 @@
 /* ─────────────────────────────────────────────────────────────
    Gesture surfaces — the window overview (the launcher: css/launcher.css).
 
-   Both are opened by three-finger swipes (crates/peakd/src/gestures.rs →
+   Both are opened by three-finger swipes (crates/liteaura/src/gestures.rs →
    web/js/gestures.js) and are plain web layers, so they work the same on any
    input that can raise the `trackpad:gesture` event.
 

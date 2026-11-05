@@ -15,4 +15,4 @@ cd "$(dirname "$0")/.."
     done
     cargo build --locked "$@"
 )
-cargo test --locked --workspace --exclude peakd --exclude peakd-mac "$@"
+cargo test --locked --workspace --exclude liteaura --exclude liteaura-mac "$@"

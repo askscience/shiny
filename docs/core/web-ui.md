@@ -98,7 +98,7 @@ The shell is split by concern. Grouped:
 | `settingsWindow.js`, `preferences.js` | Settings window (section rail, panel stage, live manifest) + per-user preferences. |
 | `pluginsWindow.js`, `activePlugins.js`, `pluginIcon.js` | Plugin manager as an app store (Discover / Installed / Updates, detail pages), active set, icon resolution (theme icon → `icon.svg` → `icon.png`). |
 | `craftStore.js` | Craft App Suite catalog + the background updater (install/update via `/api/plugins/store`, including an install still missing its AI control); also toggles an app's AI control (its MCP server). |
-| `webAppSurface.js` | Window surface for a `kind = "web"` plugin: the iframe that hosts its static site, the `shiny:context` hand-off (the PEAK'D interface language and theme, with `color-scheme` so `prefers-color-scheme` follows), plus the page half of live AI control (detects `window[<app>].request` and answers the core's control-channel proxy) and the file-input shim that gives every app's Open… the shell's picker. |
+| `webAppSurface.js` | Window surface for a `kind = "web"` plugin: the iframe that hosts its static site, the `shiny:context` hand-off (the LiteAura interface language and theme, with `color-scheme` so `prefers-color-scheme` follows), plus the page half of live AI control (detects `window[<app>].request` and answers the core's control-channel proxy) and the file-input shim that gives every app's Open… the shell's picker. |
 | `filePicker.js` | The shell's file picker: a compact **floating window** (`ui/floating`: the desktop's own title bar with only close, outside the tiling) with the Files window's thumbnail grid (`files-*` classes, `/api/files/thumb`) browsing the user's home through the Files plugin. Returns picked entries, or real `File` objects for the caller's realm. Used by `files.js`; `installFileInputShim(realm)` points every `<input type=file>` at it — the app's own window (installed in `app.js`) and each web app's frame — covering `click()`/`showPicker()` and direct or `<label>` clicks, so no plugin ever opens the engine's Qt dialog. An input marked `data-native-picker` keeps the engine dialog (the fallback when the Files plugin is not answering). |
 | `appSaves.js` | Follows the shell's `shiny:file-saved` reports — a web app saved through the browser APIs inside its iframe — and turns them into the toast with the real path plus the `files:external` refresh the Files window listens for. |
 | `appearance.js` | Accent/gradient/theme. |
@@ -215,7 +215,7 @@ Global shell styles live in `web/css/` (`app.css`, `tiles.css`, `sphere.css`,
 ## No-build rationale
 
 The module graph is plain ES modules with relative imports so the same tree
-works under `peakd`/`peakd-mac` and in any browser, and plugins can import the
+works under `liteaura`/`liteaura-mac` and in any browser, and plugins can import the
 UI library relative to their own served location. There is no transpile step to
 keep in sync with the server.
 

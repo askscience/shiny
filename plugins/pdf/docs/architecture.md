@@ -31,12 +31,12 @@ truth; the PDF is regenerated. Updating replaces comments made on the old PDF
 ## Exact export (shell print)
 
 `editor.js` builds a standalone page (`doc-themes.js` `printHtml`) and posts
-`peakd:print:{id, html, options}`. peakd writes it to a private temp dir,
+`liteaura:print:{id, html, options}`. liteaura writes it to a private temp dir,
 loads it in an off-screen `QWebEnginePage` (own off-the-record profile,
 JavaScript off, no remote or file access) and calls `printToPdf` with the page
-size and margins; the bytes return as `window.__peakdPrinted({id, ok, data})`
+size and margins; the bytes return as `window.__liteauraPrinted({id, ok, data})`
 and the window uploads them (`POST /:id/replace-file`). The shell advertises the
-feature as `window.__peakdCaps.print`; without it the window uses
+feature as `window.__liteauraCaps.print`; without it the window uses
 `POST /:id/render-html` (compose fallback).
 
 ## PdfCraft

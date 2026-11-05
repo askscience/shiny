@@ -51,7 +51,7 @@ Browser (web/)                              shiny (core binary)
 - **Optional** and self-hiding when the daemon is absent.
 
 **Kiosk & multi-user**
-- Native shells: `peakd` (Qt WebEngine) and `peakd-mac` (WKWebView + Touch Bar).
+- Native shells: `liteaura` (Qt WebEngine) and `liteaura-mac` (WKWebView + Touch Bar).
 - Real Linux-user mode (NSS + PAM), per-user servers and the **Shiny greeter** —
   the app's own login screen on the seat, no display manager (LightDM optional).
 - Remote access over **Iroh** (P2P) or **Tailscale Funnel** (public HTTPS URL),
@@ -86,32 +86,32 @@ Microphone access needs HTTPS unless you connect over `localhost`.
 
 ## Packages
 
-Each release tag (`v*`) builds the `peakd` Debian package, publishes the signed
+Each release tag (`v*`) builds the `liteaura` Debian package, publishes the signed
 APT repository to <https://askscience.github.io/shiny/apt/>, and creates a
 GitHub Release with the `.deb`. Ordinary pushes do not build packages.
 
 ### Add the APT repository
 
-The repository is signed. Add its public key and the `peakd` suite once:
+The repository is signed. Add its public key and the `liteaura` suite once:
 
 ```sh
-sudo curl -fsSL https://askscience.github.io/shiny/apt/peakd-archive.gpg \
-  -o /usr/share/keyrings/peakd-archive.gpg
-echo 'deb [signed-by=/usr/share/keyrings/peakd-archive.gpg] https://askscience.github.io/shiny/apt/ peakd main' \
-  | sudo tee /etc/apt/sources.list.d/peakd.list
+sudo curl -fsSL https://askscience.github.io/shiny/apt/liteaura-archive.gpg \
+  -o /usr/share/keyrings/liteaura-archive.gpg
+echo 'deb [signed-by=/usr/share/keyrings/liteaura-archive.gpg] https://askscience.github.io/shiny/apt/ liteaura main' \
+  | sudo tee /etc/apt/sources.list.d/liteaura.list
 sudo apt update
 ```
 
-The suite is called `peakd`, not a Debian codename. Then install or upgrade:
+The suite is called `liteaura`, not a Debian codename. Then install or upgrade:
 
 ```sh
-sudo apt install peakd      # first install
+sudo apt install liteaura      # first install
 sudo apt upgrade            # later updates
 ```
 
 The same key is available in
-[`packaging/peakd-archive.gpg`](packaging/peakd-archive.gpg) and in the
-`peakd-archive-keyring` package, so a checkout or the live image can install it
+[`packaging/liteaura-archive.gpg`](packaging/liteaura-archive.gpg) and in the
+`liteaura-archive-keyring` package, so a checkout or the live image can install it
 offline. Tag a version (for example `v0.1.2`) to cut a release; the tag is the
 package version. See [Debian package and APT repository](docs/deployment/packages.md)
 for the workflow, versioning and signing-key details.
@@ -196,7 +196,7 @@ src/                      # core binary: agent, auth, host panels, plugin host
 crates/
   shiny-plugin-sdk/       # the plugin API + ODT/ODS/ODP codecs + shared clients
   shiny-filter/ + -core/  # the Browser's in-process ad/tracker filtering engine
-  peakd/ · peakd-mac/     # Linux / macOS native shells
+  liteaura/ · liteaura-mac/     # Linux / macOS native shells
   shiny-auth/             # root PAM verify helper
   shiny-iroh-client/ · shiny-iroh-proto/ · shiny-server-mode/
 plugins/<name>/           # 19 self-contained plugins, each with docs/

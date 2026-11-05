@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Download a faster-whisper (CTranslate2) model for the PEAK'D! STT sidecar.
+"""Download a faster-whisper (CTranslate2) model for the LiteAura STT sidecar.
 
 The tiny model is bundled with the app; this script exists so the optional
 small model can be fetched on demand from Settings → Voice, and so a fresh
@@ -48,7 +48,7 @@ MODELS_DIR = Path(
 def _download(url: str, dest: Path) -> None:
     """Fetch url → dest atomically, so a killed download is never half-loaded."""
     tmp = dest.with_suffix(dest.suffix + ".part")
-    req = urllib.request.Request(url, headers={"User-Agent": "peakd-voice/1.0"})
+    req = urllib.request.Request(url, headers={"User-Agent": "liteaura-voice/1.0"})
     with urllib.request.urlopen(req) as resp, open(tmp, "wb") as out:
         shutil.copyfileobj(resp, out, length=1024 * 1024)
     tmp.replace(dest)

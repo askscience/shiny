@@ -18,7 +18,7 @@ Terms that recur across the Shiny docs.
 | **Deactivate vs uninstall** | Deactivate keeps the install dir + tables and turns tools off; uninstall removes the library and contributions. |
 | **`doc_fragment`** | Markdown a tool returns to advertise itself to the LLM. Tools with no fragment stay hidden. |
 | **HUD** | The fixed top bar: clock/weather, plugin tray, host chips, workspace tabs, power menu, Settings/Plugins/Chats. |
-| **Kiosk** | The full-screen native shell (`peakd`/`peakd-mac`) that renders the web UI on a dedicated machine. |
+| **Kiosk** | The full-screen native shell (`liteaura`/`liteaura-mac`) that renders the web UI on a dedicated machine. |
 | **`PluginCtx`** | Per-plugin context carrying the manifest, config snapshot, and lazy plugin-owned DB/HTTP clients. |
 | **`plugin_schema_versions`** | Core-owned table recording which plugin migration files have run. |
 | **`shiny_plugin_entry`** | The C symbol a plugin cdylib exports so the loader can obtain a `*mut dyn Plugin`. |

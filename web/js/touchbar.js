@@ -5,7 +5,7 @@
  * the app does. Two sources feed it, both harmless on a machine without a
  * Touch Bar:
  *
- *  - `touchbar:action` CustomEvents — the native macOS bar (`peakd`) evaluates
+ *  - `touchbar:action` CustomEvents — the native macOS bar (`liteaura`) evaluates
  *    these in the page.
  *  - `F13`–`F21` keydowns — the Linux T2 `tiny-dfr` buttons, which emit plain
  *    uinput key codes.
@@ -30,7 +30,7 @@ import { t } from './i18n.js';
 let handlers = {};
 let installed = false;
 
-// The kiosk shell (`peakd`) sets `window.__shinyTouchBar` before any module
+// The kiosk shell (`liteaura`) sets `window.__shinyTouchBar` before any module
 // runs; the server's `/api/touchbar` probe refines it for a plain browser.
 let hostFlag = window.__shinyTouchBar === true;
 

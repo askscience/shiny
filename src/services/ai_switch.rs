@@ -2,10 +2,10 @@
 //!
 //! Two layers, both reversible from Settings → Assistant:
 //! - **Per user**, the `ai.enabled` preference (`"false"` = off; missing = on).
-//!   A new account inherits the system default (`PEAKD_AI_DEFAULT=off`, written
+//!   A new account inherits the system default (`LITEAURA_AI_DEFAULT=off`, written
 //!   by the installer when the "No slop" tier is chosen), so the first login
 //!   already has the AI off. Chat and agent requests are refused while it is off.
-//! - **Per machine**, a small state file (`$PEAKD_DATA_DIR/ai-state`, "on"/"off")
+//! - **Per machine**, a small state file (`$LITEAURA_DATA_DIR/ai-state`, "on"/"off")
 //!   that the session script reads *before* the server starts, to decide
 //!   whether to launch Ollama. The server keeps it in step with the preference
 //!   and, when the AI is switched back on, starts Ollama and lets the voice
@@ -16,8 +16,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use sqlx::SqlitePool;
 
 pub const PREF_KEY: &str = "ai.enabled";
-const DEFAULT_ENV: &str = "PEAKD_AI_DEFAULT";
-const OLLAMA_START: &str = "/usr/local/bin/peakd-ollama-start";
+const DEFAULT_ENV: &str = "LITEAURA_AI_DEFAULT";
+const OLLAMA_START: &str = "/usr/local/bin/liteaura-ollama-start";
+/// The same script on a system installed under the former name.
+const LEGACY_OLLAMA_START: &str = "/usr/local/bin/peakd-ollama-start";
 
 static MACHINE_ON: AtomicBool = AtomicBool::new(true);
 
@@ -36,7 +38,7 @@ fn parse_on(value: &str) -> Option<bool> {
 }
 
 fn state_file() -> Option<PathBuf> {
-    std::env::var_os("PEAKD_DATA_DIR").map(|dir| PathBuf::from(dir).join("ai-state"))
+    std::env::var_os("LITEAURA_DATA_DIR").map(|dir| PathBuf::from(dir).join("ai-state"))
 }
 
 /// Read the machine state once at startup: the state file wins, then the
@@ -58,10 +60,10 @@ pub fn machine_on() -> bool {
 }
 
 /// Whether the client may fetch speech models on its own at login. Off for
-/// the "Text only" and "No slop" tiers (`PEAKD_AI_TIER` from the session).
+/// the "Text only" and "No slop" tiers (`LITEAURA_AI_TIER` from the session).
 pub fn voice_auto_prepare() -> bool {
     !matches!(
-        std::env::var("PEAKD_AI_TIER").unwrap_or_default().as_str(),
+        std::env::var("LITEAURA_AI_TIER").unwrap_or_default().as_str(),
         "none" | "off"
     )
 }
@@ -142,10 +144,13 @@ fn set_machine(on: bool) {
 /// The session script skips Ollama when the AI is off; turning it on starts
 /// it with the same helper the session uses. Missing helper (dev setups) is fine.
 fn start_ollama() {
-    if !std::path::Path::new(OLLAMA_START).exists() {
+    let Some(helper) = [OLLAMA_START, LEGACY_OLLAMA_START]
+        .into_iter()
+        .find(|path| std::path::Path::new(path).exists())
+    else {
         return;
-    }
-    if let Err(e) = std::process::Command::new(OLLAMA_START)
+    };
+    if let Err(e) = std::process::Command::new(helper)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())

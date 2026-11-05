@@ -1,5 +1,5 @@
 [Unit]
-Description=PEAK'D! installer helper (live only)
+Description=LiteAura installer helper (live only)
 After=local-fs.target
 ConditionPathExists=/run/live/medium
 

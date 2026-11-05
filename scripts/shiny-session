@@ -7,10 +7,10 @@
 #
 # It brings up *this user's* Shiny server, then supervises one window:
 #
-#   * normally the kiosk (`peakd`);
+#   * normally the kiosk (`liteaura`);
 #   * when Server mode is on, the server-mode window (link + controls).
 #
-# `peakd` exits 42 when the user turns Server mode on and 43 when the user logs
+# `liteaura` exits 42 when the user turns Server mode on and 43 when the user logs
 # out; the server-mode window exits 0 on Stop. Which window to show is decided
 # by the state file the server writes ($XDG_RUNTIME_DIR/shiny-remote.state);
 # a sign-out (or a clean quit) ends the session, which hands the seat back to
@@ -47,7 +47,7 @@ log() {
 }
 
 export XDG_SESSION_TYPE=x11
-# Pin Qt to X11: the shell is peakd (QtWebEngine, xcb platform plugin), and
+# Pin Qt to X11: the shell is liteaura (QtWebEngine, xcb platform plugin), and
 # the session's X-specific parts (matchbox, the evdev gesture reader) assume
 # Xorg.
 export QT_QPA_PLATFORM=xcb
@@ -64,19 +64,19 @@ PORT=$((PORT_BASE + $(id -u) - UID_BASE))
 # The per-user server unit reads SERVER_PORT from here, so both sides agree.
 mkdir -p "$HOME/.config/shiny"
 printf 'SERVER_PORT=%s\n' "$PORT" > "$HOME/.config/shiny/env"
-export PEAKD_APP_ORIGIN="http://127.0.0.1:$PORT"
+export LITEAURA_APP_ORIGIN="http://127.0.0.1:$PORT"
 # Where the shell opens at startup. It navigates to the auto-login URL instead
 # when a boot token is available (see load_boot_token below).
-APP_URL="$PEAKD_APP_ORIGIN/"
+APP_URL="$LITEAURA_APP_ORIGIN/"
 
 # The compiled ad-filter cache is shared between this user's server and the
 # shell (the unit below sets the server's ADFILTER_DIR). Per-user, not fixed.
-export PEAKD_ADFILTER_DIR="${PEAKD_ADFILTER_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/shiny/adfilter}"
+export LITEAURA_ADFILTER_DIR="${LITEAURA_ADFILTER_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/shiny/adfilter}"
 
 # The QtWebEngine profile (cookies, local storage, cache) is per-user too: two
 # accounts on this machine must never share a browser profile. The old shared
-# location was the repo's data/peakd, which only ever worked with one user.
-export PEAKD_DATA_DIR="${PEAKD_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/shiny/peakd}"
+# location was the repo's data/liteaura, which only ever worked with one user.
+export LITEAURA_DATA_DIR="${LITEAURA_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/shiny/liteaura}"
 
 log "launcher up: user=$(id -un) uid=$(id -u) port=$PORT repo=$SHINY_REPO"
 log "env: DISPLAY=${DISPLAY:-<unset>} XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-<unset>} HOME=$HOME"
@@ -103,7 +103,7 @@ else
 fi
 nohup bash "$SHINY_REPO/voice/start_supertonic.sh" >/dev/null 2>&1 &
 
-# Wait until it answers (up to ~30s) so peakd does not open on a dead port.
+# Wait until it answers (up to ~30s) so liteaura does not open on a dead port.
 waited=0
 for _ in $(seq 1 60); do
     if curl -sf "http://127.0.0.1:$PORT/api/voice/languages" >/dev/null 2>&1; then
@@ -120,14 +120,14 @@ STATE_FILE="$RUNTIME_DIR/shiny-remote.state"
 
 # Auto-login the kiosk with the loopback-only session token: the server turns it
 # into the normal shiny_token cookie, so the app opens without a second login.
-# The token is handed to peakd through the **environment**, never argv: on Linux
+# The token is handed to liteaura through the **environment**, never argv: on Linux
 # `/proc/<pid>/cmdline` is world-readable while `/proc/<pid>/environ` is
 # owner-only. The shell appends it to the bootstrap URL itself.
 #
 # Re-read for *every* launch, not once per session: the server rotates the
 # secret after each redemption and rewrites the file, so a value captured at
 # session start is already spent by the time Server mode hands the screen back
-# (or peakd is restarted) — and a stale token is not a usable login. Unset first,
+# (or liteaura is restarted) — and a stale token is not a usable login. Unset first,
 # so a token from an earlier iteration can never leak into this one.
 load_boot_token() {
     unset SHINY_BOOT_TOKEN
@@ -149,14 +149,14 @@ matchbox-window-manager -use_titlebar no &
 #
 # QtWebEngine turns navigator.geolocation into Qt Positioning -> GeoClue2.
 # GeoClue's GetClient does not return until an *agent* is present, even for an
-# application allowlisted in /etc/geoclue/conf.d/50-peakd.conf. The packaged
-# demo agent satisfies that presence requirement; `peakd` is allowlisted, so it
+# application allowlisted in /etc/geoclue/conf.d/50-liteaura.conf. The packaged
+# demo agent satisfies that presence requirement; `liteaura` is allowlisted, so it
 # is authorized without the agent ever prompting.
 if [ -x /usr/libexec/geoclue-2.0/demos/agent ]; then
     /usr/libexec/geoclue-2.0/demos/agent >/dev/null 2>&1 &
 fi
 
-peakd=@PEAKD_BIN@
+liteaura=@LITEAURA_BIN@
 server_mode=@SERVER_MODE_BIN@
 
 read_state() {
@@ -170,7 +170,7 @@ read_state() {
 # needs must be reachable *as this user* before Xorg takes the seat, and the
 # reason has to be in the journal when it is not.
 missing=""
-[ -x "$peakd" ] || missing="$missing peakd($peakd)"
+[ -x "$liteaura" ] || missing="$missing liteaura($liteaura)"
 [ -x "$server_mode" ] || missing="$missing server-mode($server_mode)"
 [ -r "$SHINY_REPO/web/index.html" ] || missing="$missing web($SHINY_REPO/web)"
 if [ -n "$missing" ]; then
@@ -184,7 +184,7 @@ log "session starting for $(id -un) on port $PORT"
 
 # A HOME that is not this account's home is always a misconfiguration, and it
 # used to be fatal in the quietest way possible: every $HOME-relative path below
-# resolves somewhere unwritable, the launcher dies before peakd, and xinit eats
+# resolves somewhere unwritable, the launcher dies before liteaura, and xinit eats
 # the error. Catch it here, where it can still be reported.
 if [ ! -w "$HOME" ] 2>/dev/null || [ "$(id -u)" -eq 0 ]; then
     log "HOME=$HOME is not this account's home (uid $(id -u)) — refusing to start"
@@ -198,7 +198,7 @@ fi
 trap 'log "exiting with status $? at line $LINENO (cmd: $BASH_COMMAND)"' EXIT
 
 # A crash should leave a core for the next investigation: `core_pattern` is
-# `core`, and the limit is inherited by peakd (and by the server-mode window).
+# `core`, and the limit is inherited by liteaura (and by the server-mode window).
 ulimit -c unlimited 2>/dev/null || true
 
 # A crash is retried a few times in quick succession: losing the whole session
@@ -216,19 +216,19 @@ while true; do
     else
         load_boot_token
         log "launching the kiosk on $APP_URL"
-        # peakd's own stderr is swallowed by xinit too, and peakd dying is the
+        # liteaura's own stderr is swallowed by xinit too, and liteaura dying is the
         # most likely reason this session ends. Tee it into the log so the next
         # handover says why instead of just exiting 1.
-        "$peakd" --url "$APP_URL" 2>> "$SESSION_LOG"
+        "$liteaura" --url "$APP_URL" 2>> "$SESSION_LOG"
         code=$?
-        log "peakd exited with $code"
+        log "liteaura exited with $code"
         if [ "$code" -eq 42 ]; then
             # Server mode: switch windows.
             crashes=0
             continue
         fi
         if [ "$code" -eq 43 ]; then
-            # Sign-out: the app posted `peakd:logout`. End the session cleanly
+            # Sign-out: the app posted `liteaura:logout`. End the session cleanly
             # so the supervisor hands the seat back to the login screen rather
             # than showing this user's in-app overlay.
             echo "shiny-session: signed out" >&2
@@ -240,15 +240,15 @@ while true; do
             [ $((now - last_crash)) -gt 60 ] && crashes=0
             crashes=$((crashes + 1))
             last_crash=$now
-            echo "shiny-session: peakd died with signal $((code - 128)) (attempt $crashes/3)" >&2
+            echo "shiny-session: liteaura died with signal $((code - 128)) (attempt $crashes/3)" >&2
             if [ "$crashes" -lt 3 ]; then
                 sleep 2
                 continue
             fi
-            echo "shiny-session: peakd crash-looped $crashes times, ending the session" >&2
+            echo "shiny-session: liteaura crash-looped $crashes times, ending the session" >&2
         else
             # A real quit (Alt+Q) or an unexpected clean exit.
-            echo "shiny-session: peakd exited with status $code, ending the session" >&2
+            echo "shiny-session: liteaura exited with status $code, ending the session" >&2
         fi
         exit "$code"
     fi

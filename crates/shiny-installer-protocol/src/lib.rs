@@ -1,4 +1,4 @@
-//! Shared contract between the PEAK'D! installer plugin and the privileged helper.
+//! Shared contract between the LiteAura installer plugin and the privileged helper.
 //!
 //! The plugin runs as the live user; the helper runs as root and owns every
 //! destructive operation. Keeping the types here means neither side can drift
@@ -782,7 +782,7 @@ mod tests {
             full_name: "Ada Lovelace".into(),
             username: "ada".into(),
             password: "correct-horse".into(),
-            hostname: "ada-peakd".into(),
+            hostname: "ada-liteaura".into(),
             ..InstallPlan::default()
         }
     }

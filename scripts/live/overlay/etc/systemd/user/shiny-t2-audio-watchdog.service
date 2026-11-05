@@ -1,5 +1,5 @@
 [Unit]
-Description=PEAK'D! T2 audio watchdog
+Description=LiteAura T2 audio watchdog
 After=wireplumber.service pipewire-pulse.service
 
 [Service]

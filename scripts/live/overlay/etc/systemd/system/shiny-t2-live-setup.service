@@ -1,5 +1,5 @@
 [Unit]
-Description=PEAK'D! T2 hardware and audio setup
+Description=LiteAura T2 hardware and audio setup
 After=local-fs.target shiny-live-seed.service
 Before=display-manager.service
 

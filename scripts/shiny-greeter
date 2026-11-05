@@ -20,7 +20,7 @@ export QT_QPA_PLATFORM=xcb
 
 SHINY_REPO=@SHINY_REPO@
 SHINY_BIN=@SHINY_BIN@
-PEAKD_BIN=@PEAKD_BIN@
+LITEAURA_BIN=@LITEAURA_BIN@
 PORT="${SHINY_GREETER_PORT:-8079}"
 
 # pam_systemd sets the runtime dir for the login session; the fallback keeps a
@@ -40,17 +40,17 @@ export PLUGINS_DIR="$HOME/.local/share/shiny/plugins"
 export WEB_DIR="$SHINY_REPO/web"
 export RUST_LOG=info
 
-# peakd's QtWebEngine profile (cookies, local storage, cache) must live in the
-# greeter's own home. Without this it falls back to <repo>/data/peakd, which is
+# liteaura's QtWebEngine profile (cookies, local storage, cache) must live in the
+# greeter's own home. Without this it falls back to <repo>/data/liteaura, which is
 # owned by the desktop user and is not writable by shiny-greeter — QtWebEngine
 # then logs FILE_ERROR_ACCESS_DENIED and runs with a broken profile.
-export PEAKD_DATA_DIR="${PEAKD_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/shiny/peakd}"
-mkdir -p "$PEAKD_DATA_DIR"
-export PEAKD_APP_ORIGIN="http://127.0.0.1:$PORT"
-# The internal panel is 3072x1920, but Xorg reports 96 DPI, so peakd's automatic
+export LITEAURA_DATA_DIR="${LITEAURA_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/shiny/liteaura}"
+mkdir -p "$LITEAURA_DATA_DIR"
+export LITEAURA_APP_ORIGIN="http://127.0.0.1:$PORT"
+# The internal panel is 3072x1920, but Xorg reports 96 DPI, so liteaura's automatic
 # scale comes out at 100% and the login card is unreadably small. Use the same
 # 150% the desktop session uses (the account's saved display choice).
-export PEAKD_UI_SCALE="${PEAKD_UI_SCALE:-1.5}"
+export LITEAURA_UI_SCALE="${LITEAURA_UI_SCALE:-1.5}"
 
 # The greeter *is* the login: it lists Linux accounts and verifies passwords
 # through the privileged helper. In this mode the login endpoint starts a
@@ -70,18 +70,18 @@ server=""
 
 # Preflight: everything this launcher needs must be reachable *as this user*.
 # The greeter is a system account, not the desktop user, so anything under a
-# private home ($SHINY_BIN, $PEAKD_BIN and $WEB_DIR all live in the repo) is
+# private home ($SHINY_BIN, $LITEAURA_BIN and $WEB_DIR all live in the repo) is
 # invisible unless that home is traversable. A 0700 home — the Debian default
 # for a home created with a restrictive umask — makes every one of these fail
 # with a bare "Permission denied" and no window at all. Say so plainly instead.
 preflight() {
-    if [ ! -d "$PEAKD_DATA_DIR" ] || [ ! -w "$PEAKD_DATA_DIR" ]; then
-        echo "shiny-greeter: $PEAKD_DATA_DIR is not writable by $(id -un)." >&2
+    if [ ! -d "$LITEAURA_DATA_DIR" ] || [ ! -w "$LITEAURA_DATA_DIR" ]; then
+        echo "shiny-greeter: $LITEAURA_DATA_DIR is not writable by $(id -un)." >&2
         echo "shiny-greeter: QtWebEngine cannot start without a writable profile." >&2
         exit 1
     fi
     missing=""
-    for path in "$SHINY_BIN" "$PEAKD_BIN"; do
+    for path in "$SHINY_BIN" "$LITEAURA_BIN"; do
         [ -x "$path" ] && [ -r "$path" ] || missing="$missing $path"
     done
     [ -r "$WEB_DIR/index.html" ] || missing="$missing $WEB_DIR"
@@ -118,7 +118,7 @@ preflight() {
 }
 preflight
 
-# Start the server and wait until the login API answers (up to ~30 s) so peakd
+# Start the server and wait until the login API answers (up to ~30 s) so liteaura
 # does not open on a dead port. `/api/auth/unix-users` is the loopback-only
 # endpoint the login screen itself calls first.
 start_server() {
@@ -150,7 +150,7 @@ xset -dpms     >/dev/null 2>&1 || true
 # matchbox maximises the single window and adds no chrome.
 matchbox-window-manager -use_titlebar no &
 
-# The login screen must always be on screen: whatever peakd exits with, bring it
+# The login screen must always be on screen: whatever liteaura exits with, bring it
 # back, and if the server behind it died, bring that back too — a login screen
 # that cannot verify passwords is worse than none. A handover stops this unit
 # (SIGTERM to the cgroup), which ends the loop; a crash-loop is bounded by the
@@ -161,8 +161,8 @@ while true; do
         echo "shiny-greeter: the server died — restarting it" >&2
         start_server
     fi
-    "$PEAKD_BIN" --url "$APP_URL"
+    "$LITEAURA_BIN" --url "$APP_URL"
     code=$?
-    echo "shiny-greeter: peakd exited with status $code — restarting" >&2
+    echo "shiny-greeter: liteaura exited with status $code — restarting" >&2
     sleep 2
 done

@@ -40,7 +40,7 @@ function plannedLabel(kind, t) {
   if (kind === 'efi') return t('disk.timeline.plannedEfi', 'Startup');
   if (kind === 'swap') return t('disk.timeline.plannedSwap', 'Support memory');
   if (kind === 'home') return t('disk.timeline.plannedHome', 'Personal files');
-  return t('disk.timeline.plannedRoot', "PEAK'D! system");
+  return t('disk.timeline.plannedRoot', "LiteAura system");
 }
 
 function boundaryEdge(model, id) {
@@ -172,7 +172,7 @@ export function renderTimelinePanel(options) {
   // Formatting an existing partition is confirmed right under the bars.
   if (confirm) wrap.appendChild(confirm);
 
-  // One outcome line: what survives (or what is lost) and how big PEAK'D! gets.
+  // One outcome line: what survives (or what is lost) and how big LiteAura gets.
   const outcome = el('div', 'installer-outcome');
   const outcomeMark = el('span', 'installer-outcome-mark');
   outcomeMark.setAttribute('aria-hidden', 'true');
@@ -238,7 +238,7 @@ export function renderTimelinePanel(options) {
   function segmentLabel(segment) {
     if (segment.planned) return plannedLabel(segment.kind, t);
     if (segment.kind === 'free') return t('disk.free', 'Free space');
-    if (segment.selectedRoot) return t('disk.timeline.plannedRoot', "PEAK'D! system");
+    if (segment.selectedRoot) return t('disk.timeline.plannedRoot', "LiteAura system");
     if (segment.reused) return t('disk.timeline.plannedEfi', 'Startup');
     return partitionLabel(segment.part, t) || segment.label || '';
   }
@@ -281,7 +281,7 @@ export function renderTimelinePanel(options) {
       && rootCandidates(disk).some((part) => part.path === segment.part.path)) {
       node = el('button', segmentClass(segment, which));
       node.type = 'button';
-      node.setAttribute('aria-label', `${label} ${compact(segment.size, formatBytes)} — ${t('disk.existing.pickOne', 'Install PEAK’D! in this partition')}`);
+      node.setAttribute('aria-label', `${label} ${compact(segment.size, formatBytes)} — ${t('disk.existing.pickOne', 'Install LiteAura in this partition')}`);
       node.addEventListener('click', () => onSelectPartition?.(segment.part));
     } else {
       node = el('div', segmentClass(segment, which));
@@ -368,7 +368,7 @@ export function renderTimelinePanel(options) {
     outcomeMark.textContent = result.tone === 'danger' ? '!' : result.tone === 'ok' ? '✓' : '→';
     outcomeText.textContent = result.text;
     outcomeSize.textContent = result.size
-      ? `PEAK’D! ${compact(result.size, formatBytes)}`
+      ? `LiteAura ${compact(result.size, formatBytes)}`
       : '';
     clear(summaryErrors);
     for (const error of model.errors) {
@@ -427,12 +427,12 @@ export function renderTimelinePanel(options) {
       noDisk: t('disk.noDisk', 'No disk selected'),
       noFree: t('disk.manual.noFree', 'No usable free space found on this disk'),
       noOffsets: t('disk.timeline.noOffsets', 'Partition positions are approximate; refresh the disks before changing the layout.'),
-      gapTooSmall: t('disk.timeline.gapTooSmall', 'The free space is too small for PEAK’D!.'),
+      gapTooSmall: t('disk.timeline.gapTooSmall', 'The free space is too small for LiteAura.'),
       swapTooBig: t('disk.timeline.swapTooBig', 'The support memory does not fit in this free space.'),
       homeTooBig: t('disk.timeline.homeTooBig', 'The personal-files partition does not fit in this free space.'),
       rootTooBig: t('disk.timeline.rootTooBig', 'The system does not fit in this free space.'),
       rootSmall: t('disk.manual.rootSmall', 'Leave at least 20 GiB for the system.'),
-      noRoot: t('disk.existing.noRoot', 'Choose a partition for PEAK’D! (ext4 or empty, not in use)'),
+      noRoot: t('disk.existing.noRoot', 'Choose a partition for LiteAura (ext4 or empty, not in use)'),
       noEsp: t('disk.existing.noEsp', 'No startup partition found on this disk'),
     };
     return values[code] || code;

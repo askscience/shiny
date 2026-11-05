@@ -6,7 +6,7 @@
  * through the shell's own dialog, and the fallback — an anchor download —
  * through the shell's download handler. Either way the bytes land on disk
  * without the app telling anyone, so the Qt shell reports the path back with a
- * `shiny:file-saved` event (see `crates/peakd/shim/peakd.cpp`). This turns that
+ * `shiny:file-saved` event (see `crates/liteaura/shim/liteaura.cpp`). This turns that
  * into the two things the desktop would have done for any other save: tell the
  * user where the file went, and repaint the folder, so an open Files window
  * does not keep showing the listing it had before.

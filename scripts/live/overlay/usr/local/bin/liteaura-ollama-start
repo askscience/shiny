@@ -1,0 +1,18 @@
+#!/bin/sh
+# Start the local Ollama server for this user if it is not already answering.
+# Used by the session at login and by the LiteAura server when the AI is switched
+# back on in Settings ("No slop" off), so both start it the same way.
+[ -x /usr/local/bin/ollama ] || exit 0
+if curl -sf --max-time 1 "http://127.0.0.1:11434/api/tags" >/dev/null 2>&1; then
+    exit 0
+fi
+LOG_DIR="${LOG_DIR:-$HOME/.local/share/shiny}"
+mkdir -p "$LOG_DIR" "$HOME/.local/share/shiny/ollama-models"
+OLLAMA_HOST=127.0.0.1:11434 \
+OLLAMA_MODELS="$HOME/.local/share/shiny/ollama-models" \
+OLLAMA_VULKAN=1 \
+OLLAMA_FLASH_ATTENTION=1 \
+OLLAMA_KEEP_ALIVE=15m \
+LD_LIBRARY_PATH=/usr/local/lib/ollama/vulkan:/usr/local/lib/ollama \
+    nohup /usr/local/bin/ollama serve >>"$LOG_DIR/ollama.log" 2>&1 &
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] ollama pid=$!"

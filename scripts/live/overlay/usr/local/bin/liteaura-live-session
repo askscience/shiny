@@ -1,0 +1,217 @@
+#!/bin/bash
+# Live installer session: start the loopback-only LiteAura server as the live
+# user, mint the session token, then open the kiosk. No root, no installation.
+set -u
+
+LOG_DIR="$HOME/.local/share/shiny"
+mkdir -p "$LOG_DIR" "$HOME/.local/share/shiny/liteaura" "$HOME/.local/share/shiny/plugins"
+LOG="$LOG_DIR/live-session.log"
+exec >>"$LOG" 2>&1
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] liteaura-live-session start user=$(id -un) uid=$(id -u)"
+
+export XDG_SESSION_TYPE=x11
+export QT_QPA_PLATFORM=xcb
+export XDG_CURRENT_DESKTOP=LITEAURA
+export DESKTOP_SESSION=liteaura
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+export SERVER_HOST=127.0.0.1
+export SERVER_PORT=8080
+export DATABASE_URL="sqlite://$HOME/.local/share/shiny/shiny.db"
+export BACKGROUNDS_DIR=/usr/share/shiny/backgrounds
+export LOG_FILE="$LOG_DIR/shiny.log"
+export PLUGINS_DIR="$HOME/.local/share/shiny/plugins"
+export SYSTEM_PLUGINS_DIR=/usr/lib/shiny/plugins
+export ADFILTER_DIR="$HOME/.local/share/shiny/adfilter"
+export WEB_DIR=/usr/share/shiny/web
+export SHINY_LIVE_INSTALLER=1
+export SHINY_AUTH_ENABLED=false
+export SHINY_LINUX_USERS=false
+export SHINY_HOME_MODE=virtual
+export SHINY_LOGIN_SELF_ONLY=false
+export SHINY_SESSION_TOKEN_FILE="$XDG_RUNTIME_DIR/shiny-session-token"
+export RUST_LOG=info
+export LITEAURA_APP_ORIGIN="http://127.0.0.1:8080"
+export LITEAURA_DATA_DIR="$HOME/.local/share/shiny/liteaura"
+export LITEAURA_ADFILTER_DIR="$HOME/.local/share/shiny/adfilter"
+
+# AI tier chosen in the installer; the installer rewrites this line on the
+# target. "live" is the USB session itself: AI on, nothing installed to RAM.
+#   off   "No slop": no AI at all (chat/agent refused, no Ollama, no voice)
+#   none  "Text only": chat and agent, no speech engines
+#   voice "Voice pack": speech engines installed on the first online start
+#   local "Local AI": voice, plus the image/music models (Settings)
+export LITEAURA_AI_TIER=live
+# Booleans spelled true/false: the server parses them as Rust bools ("0" does
+# not parse and would fall back to the default, which is "install").
+case "$LITEAURA_AI_TIER" in
+    off) LITEAURA_AI_DEFAULT=off; voice_start=false; voice_install=false ;;
+    none) LITEAURA_AI_DEFAULT=on; voice_start=false; voice_install=false ;;
+    voice|local) LITEAURA_AI_DEFAULT=on; voice_start=true; voice_install=true ;;
+    *) LITEAURA_AI_DEFAULT=on; voice_start=true; voice_install=false ;;
+esac
+export LITEAURA_AI_DEFAULT
+export AUTO_START_WHISPER=$voice_start AUTO_START_SUPERTONIC=$voice_start
+export WHISPER_AUTO_INSTALL=$voice_install SUPERTONIC_AUTO_INSTALL=$voice_install
+
+# "No slop": LITEAURA_AI_DEFAULT=off comes from the tier above; the server keeps
+# $LITEAURA_DATA_DIR/ai-state ("on"/"off") in step with Settings → Assistant.
+# The state file wins; without one the install-time default applies.
+ai_is_off() {
+    state="$(cat "$LITEAURA_DATA_DIR/ai-state" 2>/dev/null)"
+    case "$state" in
+        off*) return 0 ;;
+        on*) return 1 ;;
+    esac
+    [ "${LITEAURA_AI_DEFAULT:-on}" = off ]
+}
+
+start_ollama() {
+    if ai_is_off; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] AI switched off (No slop): ollama not started"
+        return 0
+    fi
+    LOG_DIR="$LOG_DIR" /usr/local/bin/liteaura-ollama-start
+}
+
+is_t2() {
+    [ -d /sys/module/t2bce_audio ] && return 0
+    grep -qiE 'Apple T2 Audio|AppleT2' /proc/asound/cards 2>/dev/null && return 0
+    return 1
+}
+
+start_t2_audio_units() {
+    # The boot service normally does this before LightDM. Keep a session-side
+    # fallback so a slow or interrupted setup still cannot leave native
+    # PulseAudio owning the socket and showing only "Dummy Output".
+    systemctl --user mask --runtime pulseaudio.socket pulseaudio.service >/dev/null 2>&1 || true
+    systemctl --user stop pulseaudio.socket pulseaudio.service >/dev/null 2>&1 || true
+    for unit in pipewire.socket pipewire.service pipewire-pulse.socket \
+        pipewire-pulse.service wireplumber.service filter-chain.service \
+        shiny-t2-audio-watchdog.service; do
+        systemctl --user start "$unit" >/dev/null 2>&1 || true
+    done
+}
+
+start_audio() {
+    if is_t2; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] T2 audio: starting host PipeWire/WirePlumber units"
+        start_t2_audio_units
+    else
+        systemctl --user unmask pulseaudio.socket pulseaudio.service >/dev/null 2>&1 || true
+        systemctl --user start pulseaudio.socket pulseaudio.service >/dev/null 2>&1 \
+            || pulseaudio --start >/dev/null 2>&1 || true
+    fi
+
+    # The boot service has already prepared the card and the host's user units.
+    # Wait for the same sink/source exposed by the working T2 host, without
+    # replacing them with a different fallback stack during session startup.
+    i=0
+    while [ "$i" -lt 60 ]; do
+        if is_t2; then
+            if pactl info 2>/dev/null | grep -qi 'PipeWire' \
+                && pactl list short sinks 2>/dev/null | grep -q 'audio_effect.t2-161-speakers' \
+                && pactl list short sources 2>/dev/null | grep -q 'audio_effect.t2-161-mic'; then
+                break
+            fi
+        elif pactl list short sinks 2>/dev/null | awk '{print $2}' | grep -qv '^Dummy'; then
+            break
+        fi
+        i=$((i + 1)); sleep 0.5
+    done
+
+    # Prefer the tuned DSP nodes on T2. The host state normally does this, but
+    # make it deterministic on a fresh live account.
+    if is_t2; then
+        pactl set-default-sink audio_effect.t2-161-speakers >/dev/null 2>&1 || true
+        pactl set-default-source audio_effect.t2-161-mic >/dev/null 2>&1 || true
+    fi
+
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] audio info:" >>"$LOG_DIR/audio.log"
+    pactl info >>"$LOG_DIR/audio.log" 2>&1 || true
+    echo "audio sinks:" >>"$LOG_DIR/audio.log"
+    pactl list short sinks >>"$LOG_DIR/audio.log" 2>&1 || true
+    echo "audio sources:" >>"$LOG_DIR/audio.log"
+    pactl list short sources >>"$LOG_DIR/audio.log" 2>&1 || true
+    echo "wireplumber status:" >>"$LOG_DIR/audio.log"
+    wpctl status >>"$LOG_DIR/audio.log" 2>&1 || true
+    systemctl --user --no-pager --full status pipewire pipewire-pulse wireplumber \
+        shiny-t2-audio-watchdog >>"$LOG_DIR/audio.log" 2>&1 || true
+}
+
+start_ollama
+start_audio
+
+# The server runs its helpers as `voice/<script>` and keeps models under
+# `data/` relative to its working directory: give it a per-user one that links
+# the shipped scripts, so venvs and downloads land in the user's home.
+APP_HOME="$HOME/.local/share/shiny/app"
+mkdir -p "$APP_HOME"
+[ -d /usr/share/shiny/voice ] && ln -sfn /usr/share/shiny/voice "$APP_HOME/voice"
+
+start_server() {
+    (cd "$APP_HOME" && exec /usr/bin/shiny >>"$LOG_DIR/shiny.log" 2>&1) &
+    SERVER_PID=$!
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] shiny pid=$SERVER_PID"
+}
+
+wait_server() {
+    i=0
+    while [ "$i" -lt 120 ]; do
+        if curl -sf "http://127.0.0.1:8080/api/health/live" >/dev/null 2>&1 \
+            || curl -sf "http://127.0.0.1:8080/" >/dev/null 2>&1; then
+            return 0
+        fi
+        i=$((i + 1))
+        sleep 0.5
+    done
+    return 1
+}
+
+if ! pgrep -u "$(id -u)" -f '/usr/bin/shiny' >/dev/null 2>&1; then
+    start_server
+fi
+if ! wait_server; then
+    echo "server did not answer; leaving the log at $LOG_DIR/shiny.log"
+    exit 1
+fi
+
+# A fresh live DB has no traveler, so init_session cannot write the kiosk token.
+# Register the session account once, then restart the server so it is bound to
+# the account and writes $XDG_RUNTIME_DIR/shiny-session-token.
+if [ ! -s "$SHINY_SESSION_TOKEN_FILE" ]; then
+    USER_NAME=$(id -un)
+    curl -sS -o /dev/null -X POST "http://127.0.0.1:8080/api/auth/register" \
+        -H 'Content-Type: application/json' \
+        -d "{\"username\":\"$USER_NAME\",\"password\":\"live-installer\"}" || true
+    if pgrep -u "$(id -u)" -f '/usr/bin/shiny' >/dev/null 2>&1; then
+        pkill -u "$(id -u)" -f '/usr/bin/shiny' || true
+        sleep 1
+    fi
+    start_server
+    if ! wait_server; then
+        echo "server did not answer after registration"
+        exit 1
+    fi
+fi
+
+# Audio was selected before the server started: PulseAudio for generic,
+# PipeWire/WirePlumber + T2 DSP for a T2 machine.
+
+if [ -s "$SHINY_SESSION_TOKEN_FILE" ]; then
+    export SHINY_BOOT_TOKEN="$(cat "$SHINY_SESSION_TOKEN_FILE")"
+fi
+
+# No XFCE session: this is the product kiosk. Matchbox only supplies a minimal
+# window manager; liteaura is the only visible application.
+if command -v matchbox-window-manager >/dev/null 2>&1; then
+    matchbox-window-manager -use_titlebar no >/dev/null 2>&1 &
+    sleep 0.5
+fi
+
+cd /usr/share/shiny || cd /
+while :; do
+    /usr/bin/liteaura --app-mode
+    status=$?
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] liteaura exited $status; restarting"
+    sleep 2
+done

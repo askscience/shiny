@@ -9,14 +9,14 @@ Source: [`src/services/display.rs`](../../src/services/display.rs),
 [`screen_brightness.rs`](../../src/services/screen_brightness.rs),
 [`backlight.rs`](../../src/services/backlight.rs),
 [`touchbar.rs`](../../src/services/touchbar.rs),
-[`crates/peakd/src/gestures.rs`](../../crates/peakd/src/gestures.rs).
+[`crates/liteaura/src/gestures.rs`](../../crates/liteaura/src/gestures.rs).
 
 ---
 
 ## Interface scale
 
 `DisplayService` persists the webview page-zoom choice; the kiosk shell
-(`peakd`) reads it and applies it. The server never touches WebKit.
+(`liteaura`) reads it and applies it. The server never touches WebKit.
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
@@ -73,11 +73,11 @@ already expose. On a normal PC nothing is registered and the feature is dormant.
 There are two transports but one action vocabulary
 ([`web/js/touchbarShared.js`](../../web/js/touchbarShared.js)):
 
-- **macOS** — `peakd-mac` puts a native `NSTouchBar` on the window
-  ([`crates/peakd-mac/src/touchbar.rs`](../../crates/peakd-mac/src/touchbar.rs));
+- **macOS** — `liteaura-mac` puts a native `NSTouchBar` on the window
+  ([`crates/liteaura-mac/src/touchbar.rs`](../../crates/liteaura-mac/src/touchbar.rs));
   each button evaluates a `touchbar:action` event in the page. A Mac with no
-  Touch Bar hardware never shows the bar. Disable with `PEAKD_TOUCHBAR=0` or
-  `peakd-mac --no-touchbar`.
+  Touch Bar hardware never shows the bar. Disable with `LITEAURA_TOUCHBAR=0` or
+  `liteaura-mac --no-touchbar`.
 - **Linux T2** — the kernel (`hid-appletb-*` / `apple-ib-tb`) plus the
   `tiny-dfr` daemon own the bar. `sudo scripts/touchbar/install-touchbar.sh`
   installs a Shiny icon row and copies the custom SVGs into `/etc/tiny-dfr`. It
@@ -119,7 +119,7 @@ The kiosk recognises three-finger trackpad swipes:
 
 Web engines do not deliver trackpad gestures to the page, so the Linux shell
 reads the touchpad's evdev stream itself
-([`crates/peakd/src/gestures.rs`](../../crates/peakd/src/gestures.rs)) and
+([`crates/liteaura/src/gestures.rs`](../../crates/liteaura/src/gestures.rs)) and
 dispatches a `trackpad:gesture` event that
 [`web/js/gestures.js`](../../web/js/gestures.js) maps onto the desktop. The
 reader only *watches* the device — read-only, never `EVIOCGRAB` — so the pointer
@@ -155,7 +155,7 @@ in [Overview and launcher](../core/desktop.md#continuous-gestures).
 Delivery: the bridge coalesces updates (only the newest between two pump
 ticks survives; `begin`/`end`/`cancel` are never dropped). The shell's pump
 normally runs every 100 ms; on `begin` the reader thread calls
-`peakd_qt_pump_rate(16, wake)` — queued onto the GUI thread — so events are
+`liteaura_qt_pump_rate(16, wake)` — queued onto the GUI thread — so events are
 delivered at frame rate while the fingers move, and on `end`/`cancel` it goes
 back to 100 ms. Both transitions also wake the pump at once.
 
@@ -167,7 +167,7 @@ sudo scripts/install-touchpad-gestures.sh   # tags the touchpad with uaccess
 ```
 
 Without it the shell logs that gestures are off and everything else is
-unchanged. `PEAKD_TOUCHPAD=/dev/input/eventN` overrides discovery.
+unchanged. `LITEAURA_TOUCHPAD=/dev/input/eventN` overrides discovery.
 
 ---
 

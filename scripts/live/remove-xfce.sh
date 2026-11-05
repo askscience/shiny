@@ -1,6 +1,6 @@
 #!/bin/bash
 # Remove the XFCE desktop payload from an already-extracted Debian live rootfs.
-# Xorg, LightDM, the GTK greeter, matchbox and the PEAK'D! kiosk stay.
+# Xorg, LightDM, the GTK greeter, matchbox and the LiteAura kiosk stay.
 set -euo pipefail
 
 ROOTFS=${1:?usage: remove-xfce.sh ROOTFS}

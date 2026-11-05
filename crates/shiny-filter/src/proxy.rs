@@ -511,7 +511,7 @@ async fn handle_forward(
             continue;
         }
         // `User-Agent` is pinned to the impersonated browser, never taken from
-        // the client. A webview UA (or `Peakd/…`) over Chrome's TLS fingerprint
+        // the client. A webview UA (or `LiteAura/…`) over Chrome's TLS fingerprint
         // is a mismatch that is itself a bot signal — the two must agree.
         if name == header::USER_AGENT {
             continue;

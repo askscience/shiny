@@ -1,7 +1,7 @@
 //! The network half of the filter engine.
 //!
 //! The engine type itself lives in `shiny-filter-core` (no HTTP client, no
-//! runtime) so the `peakd` shell can link it. This module re-exports that
+//! runtime) so the `liteaura` shell can link it. This module re-exports that
 //! surface and adds [`load`], which fetches the configured filter lists,
 //! compiles them and writes the shared on-disk cache the shell restores from.
 

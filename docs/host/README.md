@@ -32,7 +32,7 @@ snapshot on every chip update and the menus poll while open.
 | Battery | `BatteryStatus` (`src/services/battery.rs`) | sysfs `/sys/class/power_supply` | 30 s poll |
 | Bluetooth | `BluetoothStatus` (`src/services/bluetooth.rs`) | BlueZ system D-Bus (`zbus`) | 3 s poll |
 | Power | `PowerStatus` (`src/services/power.rs`) | logind system D-Bus | stateless, read on demand |
-| Display | JSON (`src/services/display.rs`) | `peakd` config/runtime files | stateless, read on demand |
+| Display | JSON (`src/services/display.rs`) | `liteaura` config/runtime files | stateless, read on demand |
 | Touch Bar | `{ "available": bool }` (`src/services/touchbar.rs`) | sysfs probe | once at construction |
 | Keyboard backlight | JSON (`src/services/keyboard_backlight.rs`) | sysfs LED | stateless |
 | Screen brightness | JSON (`src/services/screen_brightness.rs`) | sysfs backlight | stateless |
@@ -189,7 +189,7 @@ when that has not been done. The trackpad gesture reader needs a separate udev
 | `src/services/battery.rs` | sysfs power-supply reader |
 | `src/services/bluetooth.rs` | BlueZ D-Bus reader + pairing agent |
 | `src/services/power.rs` | logind power actions |
-| `src/services/display.rs` | interface-scale file bridge to `peakd` |
+| `src/services/display.rs` | interface-scale file bridge to `liteaura` |
 | `src/services/touchbar.rs` | T2 Touch Bar detection |
 | `src/services/keyboard_backlight.rs`, `screen_brightness.rs`, `backlight.rs` | sysfs backlights |
 | `src/api/{network,audio,battery,bluetooth,power,display,touchbar,keyboard_backlight,screen_brightness}.rs` | REST + SSE handlers |

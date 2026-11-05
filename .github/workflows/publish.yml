@@ -1,4 +1,4 @@
-name: Publish PEAK'D!
+name: Publish LiteAura
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: peakd-publish-${{ github.ref }}
+  group: liteaura-publish-${{ github.ref }}
   cancel-in-progress: false
 
 env:
@@ -25,11 +25,11 @@ jobs:
     steps:
       - name: Verify signing key is configured
         env:
-          PEAKD_GPG_PRIVATE_KEY: ${{ secrets.PEAKD_GPG_PRIVATE_KEY }}
+          LITEAURA_GPG_PRIVATE_KEY: ${{ secrets.LITEAURA_GPG_PRIVATE_KEY || secrets.PEAKD_GPG_PRIVATE_KEY }}
         run: |
           set -euo pipefail
-          if [ -z "${PEAKD_GPG_PRIVATE_KEY:-}" ]; then
-            echo "::error title=Missing signing key::Add the PEAKD_GPG_PRIVATE_KEY repository secret with the armored private key."
+          if [ -z "${LITEAURA_GPG_PRIVATE_KEY:-}" ]; then
+            echo "::error title=Missing signing key::Add the LITEAURA_GPG_PRIVATE_KEY repository secret with the armored private key."
             exit 1
           fi
 
@@ -66,22 +66,22 @@ jobs:
           version="${GITHUB_REF_NAME#v}"
           [[ "$version" =~ ^[0-9] ]] || { echo "invalid Debian version: $version" >&2; exit 1; }
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "PEAKD_VERSION=$version" >> "$GITHUB_ENV"
+          echo "LITEAURA_VERSION=$version" >> "$GITHUB_ENV"
 
       - name: Build release workspace
-        run: cargo build --release --workspace --exclude peakd-mac --locked
+        run: cargo build --release --workspace --exclude liteaura-mac --locked
 
       - name: Build Debian packages
         env:
-          PEAKD_VERSION: ${{ steps.meta.outputs.version }}
-          PEAKD_DEB_BUILD: ${{ github.workspace }}/deb-out
-          PEAKD_KEYRING: ${{ github.workspace }}/packaging/peakd-archive.gpg
+          LITEAURA_VERSION: ${{ steps.meta.outputs.version }}
+          LITEAURA_DEB_BUILD: ${{ github.workspace }}/deb-out
+          LITEAURA_KEYRING: ${{ github.workspace }}/packaging/liteaura-archive.gpg
         run: ./scripts/build-deb.sh
 
       - name: Upload Debian packages
         uses: actions/upload-artifact@v4
         with:
-          name: peakd-deb
+          name: liteaura-deb
           path: deb-out/out
           if-no-files-found: error
           retention-days: 14
@@ -102,44 +102,44 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          name: peakd-deb
+          name: liteaura-deb
           path: deb-out/out
 
       - name: Import signing key
         id: signing
         env:
-          PEAKD_GPG_PRIVATE_KEY: ${{ secrets.PEAKD_GPG_PRIVATE_KEY }}
+          LITEAURA_GPG_PRIVATE_KEY: ${{ secrets.LITEAURA_GPG_PRIVATE_KEY || secrets.PEAKD_GPG_PRIVATE_KEY }}
         run: |
           set -euo pipefail
-          if [ -z "${PEAKD_GPG_PRIVATE_KEY:-}" ]; then
-            echo "::error title=Missing signing key::Add the PEAKD_GPG_PRIVATE_KEY repository secret with the armored private key."
+          if [ -z "${LITEAURA_GPG_PRIVATE_KEY:-}" ]; then
+            echo "::error title=Missing signing key::Add the LITEAURA_GPG_PRIVATE_KEY repository secret with the armored private key."
             exit 1
           fi
           install -d -m 0700 "$RUNNER_TEMP/gnupg"
-          printf '%s\n' "$PEAKD_GPG_PRIVATE_KEY" | gpg --homedir "$RUNNER_TEMP/gnupg" --batch --import
+          printf '%s\n' "$LITEAURA_GPG_PRIVATE_KEY" | gpg --homedir "$RUNNER_TEMP/gnupg" --batch --import
           key=$(gpg --homedir "$RUNNER_TEMP/gnupg" --list-secret-keys --with-colons | awk -F: '/^fpr:/ {print $10; exit}')
-          expected=$(gpg --show-keys --with-colons packaging/peakd-archive.gpg | awk -F: '/^fpr:/ {print $10; exit}')
+          expected=$(gpg --show-keys --with-colons packaging/liteaura-archive.gpg | awk -F: '/^fpr:/ {print $10; exit}')
           if [ "$key" != "$expected" ]; then
-            echo "::error::The secret key ($key) does not match packaging/peakd-archive.gpg ($expected)."
+            echo "::error::The secret key ($key) does not match packaging/liteaura-archive.gpg ($expected)."
             exit 1
           fi
           echo "fingerprint=$key" >> "$GITHUB_OUTPUT"
 
       - name: Build signed APT repository
         env:
-          PEAKD_VERSION: ${{ needs.build.outputs.version }}
-          PEAKD_DEB_BUILD: ${{ github.workspace }}/deb-out
-          PEAKD_APT_DIR: ${{ github.workspace }}/site/apt
-          PEAKD_KEYRING: ${{ github.workspace }}/packaging/peakd-archive.gpg
-          PEAKD_GNUPGHOME: ${{ runner.temp }}/gnupg
-          PEAKD_APT_SUITE: peakd
+          LITEAURA_VERSION: ${{ needs.build.outputs.version }}
+          LITEAURA_DEB_BUILD: ${{ github.workspace }}/deb-out
+          LITEAURA_APT_DIR: ${{ github.workspace }}/site/apt
+          LITEAURA_KEYRING: ${{ github.workspace }}/packaging/liteaura-archive.gpg
+          LITEAURA_GNUPGHOME: ${{ runner.temp }}/gnupg
+          LITEAURA_APT_SUITE: liteaura
         run: ./scripts/build-apt-repo.sh
 
       - name: Assemble Pages site
         run: |
           set -euo pipefail
           mkdir -p site
-          cp -a peakd-web/www/. site/
+          cp -a liteaura-web/www/. site/
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
@@ -171,7 +171,7 @@ jobs:
             gh release upload "$tag" "${files[@]}" --clobber
           else
             gh release create "$tag" "${files[@]}" \
-              --title "PEAK'D! ${tag}" \
+              --title "LiteAura ${tag}" \
               --notes "Package version \`${version}\`." \
               --verify-tag
           fi

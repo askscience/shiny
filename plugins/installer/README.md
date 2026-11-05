@@ -1,6 +1,6 @@
 # Installer plugin (live only)
 
-The PEAK'D! installer is a normal native plugin plus a separate privileged helper.
+The LiteAura installer is a normal native plugin plus a separate privileged helper.
 The plugin runs as the live user and can only send a typed JSON plan to a Unix socket;
 the helper runs as root, re-probes the machine and applies the plan.
 
