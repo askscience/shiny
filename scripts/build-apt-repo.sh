@@ -9,9 +9,6 @@ REPO_DIR=${LITEAURA_APT_DIR:-$HOME/liteaura-apt}
 VERSION=${LITEAURA_VERSION:-0.1.0}
 SUITE=${LITEAURA_APT_SUITE:-liteaura}
 CODENAME=${LITEAURA_APT_CODENAME:-$SUITE}
-# Suites published with the same packages for systems installed before the
-# rename: their sources.list still names the `peakd` suite.
-LEGACY_SUITES=${LITEAURA_APT_LEGACY_SUITES:-peakd}
 GNUPGHOME=${LITEAURA_GNUPGHOME:-$HOME/liteaura-iso/apt-gnupg}
 KEYRING=${LITEAURA_KEYRING:-$REPO/packaging/liteaura-archive.gpg}
 KEY_ID=${LITEAURA_KEY_ID:-}
@@ -22,26 +19,23 @@ COMP=main
 die() { echo "error: $*" >&2; exit 1; }
 [ -f "$DEB_DIR/out/liteaura_${VERSION}_amd64.deb" ] || die "missing liteaura deb"
 [ -f "$DEB_DIR/out/liteaura-archive-keyring_${VERSION}_all.deb" ] || die "missing keyring deb"
-[ -f "$DEB_DIR/out/peakd_${VERSION}_all.deb" ] || die "missing transitional peakd deb"
 [ -f "$KEYRING" ] || die "missing public keyring"
 [ -d "$GNUPGHOME" ] || die "missing GNUPGHOME for signing"
 
-mkdir -p "$REPO_DIR/pool/main/p/liteaura" "$REPO_DIR/pool/main/p/liteaura-archive-keyring" "$REPO_DIR/pool/main/p/peakd"
+mkdir -p "$REPO_DIR/pool/main/p/liteaura" "$REPO_DIR/pool/main/p/liteaura-archive-keyring"
 # Keep only the published suites: old snapshots must not stay on Pages.
 mkdir -p "$REPO_DIR/dists"
 for dir in "$REPO_DIR/dists"/*/; do
     [ -d "$dir" ] || continue
     name=$(basename "$dir")
-    case " $SUITE $LEGACY_SUITES " in *" $name "*) ;; *) rm -rf "$dir" ;; esac
+    [ "$name" = "$SUITE" ] || rm -rf "$dir"
 done
 # The published repository carries the current build only; this also removes
 # artifacts from the old Debian-codename packaging.
 rm -f "$REPO_DIR/pool/main/p/liteaura/"*.deb
 rm -f "$REPO_DIR/pool/main/p/liteaura-archive-keyring/"*.deb
-rm -f "$REPO_DIR/pool/main/p/peakd/"*.deb "$REPO_DIR/pool/main/p/peakd-archive-keyring/"*.deb
 cp -f "$DEB_DIR/out/liteaura_${VERSION}_amd64.deb" "$REPO_DIR/pool/main/p/liteaura/"
 cp -f "$DEB_DIR/out/liteaura-archive-keyring_${VERSION}_all.deb" "$REPO_DIR/pool/main/p/liteaura-archive-keyring/"
-cp -f "$DEB_DIR/out/peakd_${VERSION}_all.deb" "$REPO_DIR/pool/main/p/peakd/"
 cp -f "$KEYRING" "$REPO_DIR/liteaura-archive.gpg"
 GNUPGHOME="$GNUPGHOME" gpg --export --armor > "$REPO_DIR/liteaura-archive.asc"
 
@@ -97,11 +91,6 @@ EOF
 }
 
 publish_suite "$SUITE" "$CODENAME"
-for legacy in $LEGACY_SUITES; do
-    publish_suite "$legacy" "$legacy"
-done
-# The legacy keyring path that old installs' README told them to download.
-cp -f "$KEYRING" "$REPO_DIR/peakd-archive.gpg"
 
 cat > README.md <<EOF
 # LiteAura APT repository

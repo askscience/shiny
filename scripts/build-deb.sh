@@ -15,7 +15,7 @@ die() { echo "error: $*" >&2; exit 1; }
 [ -x "$REPO/target/release/liteaura" ] || die "target/release/liteaura missing"
 [ -x "$REPO/target/release/shiny" ] || die "target/release/shiny missing"
 mkdir -p "$OUT"
-rm -f "$OUT"/liteaura_*.deb "$OUT"/peakd_*.deb "$OUT"/liteaura-archive-keyring_*.deb "$OUT"/gokapi-*-source.tar.gz "$OUT"/SHA256SUMS
+rm -f "$OUT"/liteaura_*.deb "$OUT"/liteaura-archive-keyring_*.deb "$OUT"/gokapi-*-source.tar.gz "$OUT"/SHA256SUMS
 
 rm -rf "$PKG"
 mkdir -p "$PKG/DEBIAN" \
@@ -199,8 +199,6 @@ EOF
 cat > "$PKG/DEBIAN/control" <<EOF
 Package: liteaura
 Version: $VERSION
-Replaces: peakd (<< $VERSION~)
-Breaks: peakd (<< $VERSION~)
 Section: misc
 Priority: optional
 Architecture: amd64
@@ -285,8 +283,6 @@ install -m 0644 "$KEYRING_FILE" "$KEYRING/usr/share/keyrings/liteaura-archive.gp
 cat > "$KEYRING/DEBIAN/control" <<EOF
 Package: liteaura-archive-keyring
 Version: $VERSION
-Replaces: peakd-archive-keyring (<< $VERSION~)
-Breaks: peakd-archive-keyring (<< $VERSION~)
 Section: misc
 Priority: optional
 Architecture: all
@@ -298,32 +294,6 @@ cat > "$KEYRING/usr/share/doc/liteaura-archive-keyring/README" <<'EOF'
 Public keyring for the LiteAura APT repository. The private key is never shipped.
 EOF
 dpkg-deb --root-owner-group --build "$KEYRING" "$OUT/liteaura-archive-keyring_${VERSION}_all.deb" >/dev/null
-
-# Transitional package for systems installed when the shell was `peakd`.
-# Their session script and LightDM config still start /usr/bin/peakd, and
-# their apt sources still trust the peakd keyring path, so both names keep
-# working: `peakd` pulls in `liteaura` and links the old names to the new ones.
-LEGACY="$BUILD/peakd-transitional"
-rm -rf "$LEGACY"
-mkdir -p "$LEGACY/DEBIAN" "$LEGACY/usr/bin" "$LEGACY/usr/share/keyrings"
-ln -s liteaura "$LEGACY/usr/bin/peakd"
-ln -s liteaura-archive.gpg "$LEGACY/usr/share/keyrings/peakd-archive.gpg"
-cat > "$LEGACY/DEBIAN/control" <<EOF
-Package: peakd
-Version: $VERSION
-Section: oldlibs
-Priority: optional
-Architecture: all
-Maintainer: LiteAura <noreply@localhost>
-Depends: liteaura (>= $VERSION), liteaura-archive-keyring (>= $VERSION)
-Replaces: peakd-archive-keyring (<< $VERSION~)
-Breaks: peakd-archive-keyring (<< $VERSION~)
-Description: transitional package for LiteAura
- The shell formerly called peakd is now LiteAura. This package installs
- liteaura and keeps the old command and keyring names working. It can be
- removed once nothing starts /usr/bin/peakd.
-EOF
-dpkg-deb --root-owner-group --build "$LEGACY" "$OUT/peakd_${VERSION}_all.deb" >/dev/null
 
 ( cd "$OUT" && sha256sum *.deb gokapi-*-source.tar.gz > SHA256SUMS )
 ls -lh "$OUT"/*.deb "$OUT"/gokapi-*-source.tar.gz "$OUT/SHA256SUMS"

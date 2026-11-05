@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Removed
+
+- The transitional `peakd` package and the `peakd` APT suite. They existed
+  for systems installed under the former name, and there are none: the
+  repository now publishes only the `liteaura` suite, with `liteaura` and
+  `liteaura-archive-keyring`, and `liteaura` no longer declares
+  `Replaces`/`Breaks: peakd`. The shell still moves a development machine's
+  `peakd` folders, variables and browser history on its first start.
+
 ## [0.1.9] - 2026-11-05
 
 ### Fixed
