@@ -33,7 +33,16 @@ new tag for every release.
 
 ## Repository layout
 
-The repository is served from <https://askscience.github.io/shiny/apt/>:
+The repository is served from <https://askscience.github.io/shiny/apt/>. The
+whole Pages site — `apt/` and, at the root, the iroh web client
+(`liteaura-web/www`) — is one artifact the release workflow deploys.
+
+> **Settings → Pages → Source must be "GitHub Actions".** With "Deploy from a
+> branch", GitHub rebuilds the site from `main` on every push (the
+> `pages build and deployment` run), which replaces it with the rendered
+> README and takes `apt/` offline until the next release: every installed
+> machine's `apt update` then fails with 404.
+
 
 ```text
 apt/

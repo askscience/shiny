@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- The APT repository no longer goes offline between releases. GitHub Pages
+  was set to deploy from the `main` branch, so every push replaced the site
+  (and `apt/` with it) until the next tag; it now deploys only from the
+  release workflow. The requirement is in `docs/deployment/packages.md`.
+
 ## [0.1.8] - 2026-11-05
 
 ### Added
