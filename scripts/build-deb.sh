@@ -61,10 +61,37 @@ done
 . "$REPO/packaging/gokapi.sh"
 CACHE=${LITEAURA_DOWNLOAD_CACHE:-$BUILD/cache}
 mkdir -p "$CACHE"
+# The same release asset through the REST API. GitHub's direct
+# `releases/download/` links have answered 504 for hours at a time while the
+# API kept serving the file; the checksum below guards either route.
+api_asset_url() { # https://github.com/<owner>/<repo>/releases/download/<tag>/<name>
+    case "$1" in
+        https://github.com/*/releases/download/*) ;;
+        *) return 1 ;;
+    esac
+    local rest=${1#https://github.com/} repo tag name
+    repo=$(printf '%s' "$rest" | cut -d/ -f1-2)
+    tag=$(printf '%s' "$rest" | cut -d/ -f5)
+    name=$(printf '%s' "$rest" | cut -d/ -f6-)
+    curl -fsSL --retry 3 "https://api.github.com/repos/$repo/releases/tags/$tag" |
+        python3 -I -c 'import json, sys
+name = sys.argv[1]
+for asset in json.load(sys.stdin).get("assets", []):
+    if asset.get("name") == name:
+        print(asset["url"])
+        break
+' "$name"
+}
 fetch() { # url sha256 dest
-    local url=$1 sum=$2 dest=$3
+    local url=$1 sum=$2 dest=$3 api
     if ! { [ -f "$dest" ] && echo "$sum  $dest" | sha256sum -c --status; }; then
-        curl -fsSL --retry 3 -o "$dest.part" "$url" || die "download failed: $url"
+        if ! curl -fsSL --retry 3 --retry-all-errors -o "$dest.part" "$url"; then
+            api=$(api_asset_url "$url" || true)
+            [ -n "$api" ] || die "download failed: $url"
+            echo "direct download failed, trying the API route for $url" >&2
+            curl -fsSL --retry 3 --retry-all-errors -H 'Accept: application/octet-stream' \
+                -o "$dest.part" "$api" || die "download failed: $url"
+        fi
         mv "$dest.part" "$dest"
     fi
     echo "$sum  $dest" | sha256sum -c --status || die "checksum mismatch: $url"
