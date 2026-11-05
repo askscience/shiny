@@ -1,0 +1,16 @@
+[Unit]
+Description=Shiny PAM authentication socket
+Documentation=file:/usr/share/doc/liteaura/README.md
+
+[Socket]
+ListenStream=/run/shiny/auth.sock
+# Callers are the `shiny` group: the greeter account and every account that
+# signs in on this machine (liteaura-seat adds them). shiny-auth reads the
+# peer's credentials; a login still needs the account's own password.
+SocketMode=0660
+SocketUser=root
+SocketGroup=shiny
+RemoveOnStop=yes
+
+[Install]
+WantedBy=sockets.target

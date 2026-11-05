@@ -109,6 +109,14 @@ sudo apt install liteaura      # first install
 sudo apt upgrade            # later updates
 ```
 
+The package brings LiteAura's own login screen but does not switch it on, so
+it never takes over a desktop's existing login. To make LiteAura the machine's
+login screen (it disables the display manager):
+
+```sh
+sudo liteaura-seat enable
+```
+
 The same key is available in
 [`packaging/liteaura-archive.gpg`](packaging/liteaura-archive.gpg) and in the
 `liteaura-archive-keyring` package, so a checkout or the live image can install it

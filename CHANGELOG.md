@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### Added
+
+- The Debian package carries LiteAura's own login screen: the greeter, the
+  PAM helper (`shiny-auth`), the per-account session and server, at system
+  paths (`packaging/seat`). It is off after `apt install`, so a desktop keeps
+  its login; `sudo liteaura-seat enable` puts it on the seat (disabling the
+  display manager), and the installer does that on a new system instead of
+  setting up LightDM autologin. The AI tier chosen in the installer is now
+  the machine default in `/etc/default/liteaura`. LightDM is no longer
+  recommended by the package. See `docs/deployment/packages.md`.
+
 ## [0.1.7] - 2026-11-05
 
 ### Added

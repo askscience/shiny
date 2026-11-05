@@ -512,29 +512,22 @@ fn configure_target(
             .map_err(|e| format!("localtime: {e}"))?;
     }
 
-    // The live session becomes a normal target session: no breakthrough
-    // installer, no seed DB, no live-only services.
-    let live_session = target.join("usr/local/bin/liteaura-live-session");
-    let target_session = target.join("usr/local/bin/liteaura-session");
-    if let Ok(text) = fs::read_to_string(&live_session) {
-        fs::write(&target_session, target_session_text(&text, plan))
-            .map_err(|e| format!("target session: {e}"))?;
-        set_exec(&target_session)?;
+    // The installed system signs in on LiteAura's own login screen (the
+    // packaged seat, `liteaura-seat`), not through the live image's LightDM
+    // autologin: the live session, its xsession entry and the autologin
+    // drop-in go. The AI tier the user chose is the machine's default, read
+    // by every account's session and server.
+    write(target, "etc/default/liteaura", &machine_defaults(plan))?;
+    for path in [
+        "usr/local/bin/liteaura-live-session",
+        "usr/local/bin/liteaura-session",
+        "usr/share/xsessions/liteaura.desktop",
+        "etc/lightdm/lightdm.conf.d/99-liteaura.conf",
+        "etc/xdg/autostart/liteaura-live.desktop",
+    ] {
+        let _ = fs::remove_file(target.join(path));
     }
-    let _ = fs::remove_file(&live_session);
     remove_ai_payload(plan, target);
-    let desktop = target.join("usr/share/xsessions/liteaura.desktop");
-    if let Ok(text) = fs::read_to_string(&desktop) {
-        fs::write(&desktop, text.replace("liteaura-live-session", "liteaura-session"))
-            .map_err(|e| format!("session desktop: {e}"))?;
-    }
-    let lightdm = target.join("etc/lightdm/lightdm.conf.d/99-liteaura.conf");
-    if let Ok(text) = fs::read_to_string(&lightdm) {
-        let text = text
-            .replace("autologin-user=user", &format!("autologin-user={}", plan.username))
-            .replace("autologin-user-timeout=0", "autologin-user-timeout=0");
-        fs::write(&lightdm, text).map_err(|e| format!("lightdm: {e}"))?;
-    }
 
     for path in [
         "usr/share/shiny/live/seed.db",
@@ -572,17 +565,7 @@ fn configure_target(
         }
     }
     write(target, "etc/machine-id", "\n")?;
-    let display_manager = target.join("etc/systemd/system/display-manager.service");
-    let lightdm = target.join("lib/systemd/system/lightdm.service");
-    if lightdm.exists() {
-        let _ = std::os::unix::fs::symlink("/lib/systemd/system/lightdm.service", display_manager);
-        let wants = target.join("etc/systemd/system/multi-user.target.wants");
-        let _ = fs::create_dir_all(&wants);
-        let _ = std::os::unix::fs::symlink(
-            "/lib/systemd/system/lightdm.service",
-            wants.join("lightdm.service"),
-        );
-    }
+    enable_seat(target)?;
     if let Ok(entries) = fs::read_dir(target.join("etc/ssh")) {
         for entry in entries.flatten() {
             let name = entry.file_name().to_string_lossy().into_owned();
@@ -672,19 +655,62 @@ fn install_bootloader(
 /// The installed session script, derived from the live one: no installer, and
 /// the AI tier chosen in the wizard. The script turns the tier into the
 /// server's switches (AI on/off, speech engines started/installed).
-fn target_session_text(live: &str, plan: &InstallPlan) -> String {
+/// `/etc/default/liteaura`: the AI tier chosen in the installer, as the
+/// variables the session and the per-user server read. Booleans are spelled
+/// true/false: the server parses them as Rust bools.
+fn machine_defaults(plan: &InstallPlan) -> String {
     let tier = match plan.ai_tier.as_str() {
         AI_TIER_OFF | AI_TIER_NONE | AI_TIER_VOICE | AI_TIER_LOCAL => plan.ai_tier.as_str(),
         _ => AI_TIER_VOICE,
     };
-    live.replace(
-        "export SHINY_LIVE_INSTALLER=1",
-        "export SHINY_LIVE_INSTALLER=0",
+    let (default, voice_start, voice_install) = match tier {
+        AI_TIER_OFF => ("off", false, false),
+        AI_TIER_NONE => ("on", false, false),
+        _ => ("on", true, true),
+    };
+    format!(
+        "# Written by the LiteAura installer. Read by every account's session\n\
+         # (shiny-session) and server (systemd user unit shiny.service).\n\
+         LITEAURA_AI_TIER={tier}\n\
+         LITEAURA_AI_DEFAULT={default}\n\
+         AUTO_START_WHISPER={voice_start}\n\
+         AUTO_START_SUPERTONIC={voice_start}\n\
+         WHISPER_AUTO_INSTALL={voice_install}\n\
+         SUPERTONIC_AUTO_INSTALL={voice_install}\n"
     )
-    .replace(
-        "export LITEAURA_AI_TIER=live",
-        &format!("export LITEAURA_AI_TIER={tier}"),
-    )
+}
+
+/// Display managers the live image may carry; none of them may claim the seat.
+const DISPLAY_MANAGERS: &[&str] = &["lightdm", "gdm", "gdm3", "sddm", "lxdm", "xdm", "slim", "nodm", "greetd", "ly"];
+
+/// Put LiteAura's login screen on the target's seat, the same result as
+/// `liteaura-seat enable` but written as plain symlinks (the target is not
+/// booted, and its systemd must not run here): the password helper's socket
+/// and the login screen enabled, every display manager off, the machine
+/// booting to `multi-user.target`.
+fn enable_seat(target: &Path) -> Result<(), String> {
+    let units = target.join("etc/systemd/system");
+    let _ = fs::remove_file(units.join("display-manager.service"));
+    for dm in DISPLAY_MANAGERS {
+        for wants in ["multi-user.target.wants", "graphical.target.wants"] {
+            let _ = fs::remove_file(units.join(wants).join(format!("{dm}.service")));
+        }
+    }
+    let link = |unit: &str, wants: &str| -> Result<(), String> {
+        let dir = units.join(wants);
+        fs::create_dir_all(&dir).map_err(|e| format!("mkdir {}: {e}", dir.display()))?;
+        let path = dir.join(unit);
+        let _ = fs::remove_file(&path);
+        std::os::unix::fs::symlink(format!("/usr/lib/systemd/system/{unit}"), &path)
+            .map_err(|e| format!("enable {unit}: {e}"))
+    };
+    link("shiny-auth.socket", "sockets.target.wants")?;
+    link("shiny-greeter.service", "multi-user.target.wants")?;
+    let default = units.join("default.target");
+    let _ = fs::remove_file(&default);
+    std::os::unix::fs::symlink("/lib/systemd/system/multi-user.target", &default)
+        .map_err(|e| format!("default target: {e}"))?;
+    Ok(())
 }
 
 /// "No slop" installs no AI at all: the Ollama runtime (binary, ~5 GB of
@@ -773,13 +799,6 @@ fn install_file(source: &Path, dest: &Path) -> Result<(), String> {
     Ok(())
 }
 
-fn set_exec(path: &Path) -> Result<(), String> {
-    use std::os::unix::fs::PermissionsExt;
-    let mut perms = fs::metadata(path).map_err(|e| format!("stat {}: {e}", path.display()))?.permissions();
-    perms.set_mode(0o755);
-    fs::set_permissions(path, perms).map_err(|e| format!("chmod {}: {e}", path.display()))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -803,17 +822,54 @@ mod tests {
     }
 
     #[test]
-    fn the_ai_tier_is_written_into_the_session() {
-        let live = "export SHINY_LIVE_INSTALLER=1\nexport LITEAURA_AI_TIER=live\n";
+    fn the_ai_tier_becomes_the_machine_default() {
         let mut plan = manual_plan(None);
         for tier in [AI_TIER_OFF, AI_TIER_NONE, AI_TIER_VOICE, AI_TIER_LOCAL] {
             plan.ai_tier = tier.into();
-            let text = target_session_text(live, &plan);
-            assert!(text.contains("SHINY_LIVE_INSTALLER=0"));
-            assert!(text.contains(&format!("export LITEAURA_AI_TIER={tier}\n")));
+            let text = machine_defaults(&plan);
+            assert!(text.contains(&format!("\nLITEAURA_AI_TIER={tier}\n")), "{text}");
         }
+        plan.ai_tier = AI_TIER_OFF.into();
+        let off = machine_defaults(&plan);
+        assert!(off.contains("LITEAURA_AI_DEFAULT=off\n") && off.contains("AUTO_START_WHISPER=false\n"));
+        plan.ai_tier = AI_TIER_NONE.into();
+        let none = machine_defaults(&plan);
+        assert!(none.contains("LITEAURA_AI_DEFAULT=on\n") && none.contains("AUTO_START_SUPERTONIC=false\n"));
+        plan.ai_tier = AI_TIER_LOCAL.into();
+        assert!(machine_defaults(&plan).contains("WHISPER_AUTO_INSTALL=true\n"));
         plan.ai_tier = "bogus".into();
-        assert!(target_session_text(live, &plan).contains("LITEAURA_AI_TIER=voice"));
+        assert!(machine_defaults(&plan).contains("LITEAURA_AI_TIER=voice\n"));
+        // Every line is KEY=VALUE or a comment: systemd's EnvironmentFile reads it.
+        for line in machine_defaults(&plan).lines() {
+            assert!(line.starts_with('#') || line.split_once('=').is_some_and(|(k, _)| !k.contains(' ')), "{line}");
+        }
+    }
+
+    #[test]
+    fn the_target_signs_in_on_the_liteaura_login_screen() {
+        let dir = std::env::temp_dir().join(format!("liteaura-seat-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        let units = dir.join("etc/systemd/system");
+        fs::create_dir_all(units.join("multi-user.target.wants")).unwrap();
+        std::os::unix::fs::symlink("/lib/systemd/system/lightdm.service", units.join("display-manager.service")).unwrap();
+        std::os::unix::fs::symlink("/lib/systemd/system/lightdm.service", units.join("multi-user.target.wants/lightdm.service")).unwrap();
+        std::os::unix::fs::symlink("/lib/systemd/system/graphical.target", units.join("default.target")).unwrap();
+
+        enable_seat(&dir).unwrap();
+        assert!(fs::symlink_metadata(units.join("display-manager.service")).is_err(), "no display manager");
+        assert!(fs::symlink_metadata(units.join("multi-user.target.wants/lightdm.service")).is_err());
+        assert_eq!(
+            fs::read_link(units.join("multi-user.target.wants/shiny-greeter.service")).unwrap(),
+            Path::new("/usr/lib/systemd/system/shiny-greeter.service")
+        );
+        assert_eq!(
+            fs::read_link(units.join("sockets.target.wants/shiny-auth.socket")).unwrap(),
+            Path::new("/usr/lib/systemd/system/shiny-auth.socket")
+        );
+        assert_eq!(fs::read_link(units.join("default.target")).unwrap(), Path::new("/lib/systemd/system/multi-user.target"));
+        // Running it twice is harmless.
+        enable_seat(&dir).unwrap();
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

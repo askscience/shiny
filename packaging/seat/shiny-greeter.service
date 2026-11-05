@@ -1,0 +1,38 @@
+# The machine's login screen: LiteAura's own server and shell, as the
+# shiny-greeter account, on tty1. Not enabled by the package: `liteaura-seat
+# enable` puts it on the seat (the LiteAura installer does that). The VT
+# handling below mirrors getty@.service; see scripts/install-kiosk-greeter.sh
+# in the source tree for why each line is there.
+[Unit]
+Description=LiteAura login screen
+Documentation=file:/usr/share/doc/liteaura/README.md
+After=shiny-auth.socket
+Requires=shiny-auth.socket
+Conflicts=getty@tty1.service
+Before=getty@tty1.service
+OnFailure=shiny-greeter-fallback.service
+StartLimitIntervalSec=180
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=shiny-greeter
+Group=shiny-greeter
+PAMName=login
+Environment=HOME=/var/lib/shiny-greeter
+Environment=SHINY_GREETER_BIN=/usr/libexec/shiny/shiny-greeter
+ExecStartPre=-/usr/bin/timeout 20 /usr/libexec/shiny/shiny-wait-drm.sh
+ExecStart=/usr/libexec/shiny/shiny-greeter-start
+Restart=on-failure
+RestartSec=5
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+StandardInput=tty
+StandardOutput=journal
+StandardError=journal
+ExecStopPost=+/usr/libexec/shiny/shiny-seat-stop.sh greeter
+
+[Install]
+WantedBy=multi-user.target

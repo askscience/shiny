@@ -53,6 +53,46 @@ for dir in "$REPO"/plugins/*/; do
     cp -a "$so" "$dest/"
 done
 
+# ── The login screen and the per-user session (packaging/seat) ───────────
+# The same seat a development checkout installs with
+# scripts/install-kiosk-greeter.sh, at system paths. Shipped disabled:
+# `liteaura-seat enable` (run by the LiteAura installer) puts it on the seat.
+SEAT="$REPO/packaging/seat"
+UNITS="$PKG/usr/lib/systemd/system"
+install -d "$UNITS" "$PKG/usr/lib/systemd/user" "$PKG/usr/lib/tmpfiles.d" \
+    "$PKG/usr/sbin" "$PKG/etc/pam.d" "$PKG/etc/geoclue/conf.d"
+for unit in shiny-auth.socket shiny-auth.service shiny-greeter.service \
+    shiny-kiosk@.service shiny-greeter-fallback.service shiny-kiosk-fallback.service; do
+    install -m 0644 "$SEAT/$unit" "$UNITS/$unit"
+done
+install -m 0644 "$SEAT/shiny-user.service" "$PKG/usr/lib/systemd/user/shiny.service"
+install -m 0644 "$SEAT/liteaura.tmpfiles" "$PKG/usr/lib/tmpfiles.d/liteaura.conf"
+install -m 0644 "$SEAT/shiny.pam" "$PKG/etc/pam.d/shiny"
+install -m 0644 "$SEAT/geoclue-liteaura.conf" "$PKG/etc/geoclue/conf.d/50-liteaura.conf"
+install -m 0755 "$SEAT/liteaura-seat" "$PKG/usr/sbin/liteaura-seat"
+[ -x "$PKG/usr/bin/shiny-auth" ] || die "target/release/shiny-auth missing (the login screen needs it)"
+[ -x "$PKG/usr/bin/shiny-server-mode" ] || die "target/release/shiny-server-mode missing"
+install -m 0755 "$REPO/scripts/shiny-wait-drm.sh" "$PKG/usr/libexec/shiny/shiny-wait-drm.sh"
+install -m 0755 "$REPO/scripts/shiny-seat-stop.sh" "$PKG/usr/libexec/shiny/shiny-seat-stop.sh"
+install -m 0755 "$REPO/scripts/shiny-greeter-start" "$PKG/usr/libexec/shiny/shiny-greeter-start"
+sed -e 's|@SHINY_REPO@|/usr/share/shiny|g' \
+    -e 's|@SHINY_BIN@|/usr/bin/shiny|g' \
+    -e 's|@LITEAURA_BIN@|/usr/bin/liteaura|g' \
+    "$REPO/scripts/shiny-greeter" > "$PKG/usr/libexec/shiny/shiny-greeter"
+# The first human uid is a property of the machine, not of the build: the
+# packaged session reads it when it starts.
+sed -e 's|@PORT_BASE@|8080|g' \
+    -e "s|@UID_BASE@|\$(getent passwd \| awk -F: '\$3 >= 1000 \&\& \$3 < 65534 { print \$3; exit }')|g" \
+    -e 's|@SHINY_REPO@|/usr/share/shiny|g' \
+    -e 's|@LITEAURA_BIN@|/usr/bin/liteaura|g' \
+    -e 's|@SERVER_MODE_BIN@|/usr/bin/shiny-server-mode|g' \
+    "$REPO/scripts/shiny-session" > "$PKG/usr/libexec/shiny/shiny-session"
+chmod 0755 "$PKG/usr/libexec/shiny/shiny-greeter" "$PKG/usr/libexec/shiny/shiny-session"
+if grep -n '@[A-Z_]*@' "$PKG/usr/libexec/shiny/shiny-greeter" "$PKG/usr/libexec/shiny/shiny-session"; then
+    die "unsubstituted placeholder in a packaged launcher"
+fi
+printf '%s\n' /etc/pam.d/shiny /etc/geoclue/conf.d/50-liteaura.conf > "$PKG/DEBIAN/conffiles"
+
 # ── Gokapi (AGPL-3.0): link sharing in the Files plugin ──────────────────
 # Unmodified upstream release binaries, verified against pinned SHA-256s. The
 # Corresponding Source of each binary is published next to the .deb on the
@@ -165,8 +205,9 @@ Section: misc
 Priority: optional
 Architecture: amd64
 Maintainer: LiteAura <noreply@localhost>
-Depends: libc6, libgcc-s1, libstdc++6, libsqlite3-0, libbz2-1.0, libgtk-3-0t64, libqt6core6t64, libqt6gui6, libqt6widgets6, libqt6quick6, libqt6quickwidgets6, libqt6webenginecore6, libqt6webenginecore6-bin, libqt6webenginequick6, libqt6webengine6-data, libqt6webchannel6, libqt6webchannelquick6, libqt6network6, libqt6qml6, libqt6qmlmodels6, libqt6qmlworkerscript6, libqt6quickcontrols2-6, libqt6quicktemplates2-6, libqt6opengl6, libqt6positioning6, libqt6positioning6-plugins, libqt6svg6, libnss3, libnspr4, libasound2t64, libx11-6, libxcomposite1, libxdamage1, libxext6, libxfixes3, libxrandr2, libxtst6, libdbus-1-3, libfontconfig1, libfreetype6, libexpat1, libpng16-16t64, libwebp7, libwebpdemux2, libharfbuzz0b, libdrm2, libxkbcommon0, libxcb1, libsnappy1v5, libminizip1t64, libgbm1, libevent-2.1-7t64, libopus0, libjpeg62-turbo, libzstd1, zlib1g, fonts-roboto-unhinted, ca-certificates, curl, parted, e2fsprogs, dosfstools, python3-venv
-Recommends: lightdm, matchbox-window-manager, xinit
+Depends: libc6, libgcc-s1, libstdc++6, libsqlite3-0, libbz2-1.0, libgtk-3-0t64, libqt6core6t64, libqt6gui6, libqt6widgets6, libqt6quick6, libqt6quickwidgets6, libqt6webenginecore6, libqt6webenginecore6-bin, libqt6webenginequick6, libqt6webengine6-data, libqt6webchannel6, libqt6webchannelquick6, libqt6network6, libqt6qml6, libqt6qmlmodels6, libqt6qmlworkerscript6, libqt6quickcontrols2-6, libqt6quicktemplates2-6, libqt6opengl6, libqt6positioning6, libqt6positioning6-plugins, libqt6svg6, libnss3, libnspr4, libasound2t64, libx11-6, libxcomposite1, libxdamage1, libxext6, libxfixes3, libxrandr2, libxtst6, libdbus-1-3, libfontconfig1, libfreetype6, libexpat1, libpng16-16t64, libwebp7, libwebpdemux2, libharfbuzz0b, libdrm2, libxkbcommon0, libxcb1, libsnappy1v5, libminizip1t64, libgbm1, libevent-2.1-7t64, libopus0, libjpeg62-turbo, libzstd1, zlib1g, libpam0g, passwd, fonts-roboto-unhinted, ca-certificates, curl, parted, e2fsprogs, dosfstools, python3-venv
+Recommends: xinit, xserver-xorg, matchbox-window-manager, x11-xserver-utils
+Suggests: geoclue-2.0
 Description: LiteAura AI desktop shell and server
  The LiteAura kiosk shell, the Shiny local server, the baseline plugins and the
  live installer plugin/helper. This package contains no user data or models.
@@ -174,12 +215,57 @@ EOF
 
 cat > "$PKG/DEBIAN/postinst" <<'EOF'
 #!/bin/sh
+# Accounts and directories the login screen needs. Nothing is enabled here:
+# `liteaura-seat enable` (the LiteAura installer runs it) puts the login
+# screen on the seat, so an apt install never takes over a desktop's login.
 set -e
-# Nothing is enabled automatically: the installer/session config is supplied by
-# the live image or by the administrator. Keep this empty on purpose.
+if [ "$1" = configure ]; then
+    getent group shiny >/dev/null 2>&1 || groupadd --system shiny
+    if ! getent passwd shiny-greeter >/dev/null 2>&1; then
+        # No --create-home: the home and every directory the login screen
+        # writes come from tmpfiles.d (liteaura.conf), which also runs at boot.
+        useradd --system --user-group --no-create-home --home-dir /var/lib/shiny-greeter \
+            --shell /usr/sbin/nologin --comment "LiteAura login screen" shiny-greeter
+    fi
+    usermod -aG shiny shiny-greeter
+    # Best effort: inside an image build the greeter's uid may not be mappable
+    # yet, and the boot-time tmpfiles run puts ownership right.
+    systemd-tmpfiles --create /usr/lib/tmpfiles.d/liteaura.conf >/dev/null 2>&1 || true
+    if [ -d /run/systemd/system ]; then
+        systemctl daemon-reload >/dev/null 2>&1 || true
+    fi
+fi
 exit 0
 EOF
 chmod 0755 "$PKG/DEBIAN/postinst"
+
+cat > "$PKG/DEBIAN/prerm" <<'EOF'
+#!/bin/sh
+# Removing the package takes the login screen off the seat; the machine then
+# boots to a console (tty1) until another login is enabled.
+set -e
+if [ "$1" = remove ] && [ -d /run/systemd/system ]; then
+    systemctl disable shiny-greeter.service shiny-auth.socket >/dev/null 2>&1 || true
+fi
+exit 0
+EOF
+chmod 0755 "$PKG/DEBIAN/prerm"
+
+cat > "$PKG/DEBIAN/postrm" <<'EOF'
+#!/bin/sh
+set -e
+if [ "$1" = purge ]; then
+    if getent passwd shiny-greeter >/dev/null 2>&1; then
+        userdel shiny-greeter >/dev/null 2>&1 || true
+    fi
+    rm -rf /var/lib/shiny-greeter
+fi
+if [ -d /run/systemd/system ]; then
+    systemctl daemon-reload >/dev/null 2>&1 || true
+fi
+exit 0
+EOF
+chmod 0755 "$PKG/DEBIAN/postrm"
 
 # Safety: no database, endpoint/key, model, Tailscale or developer state.
 for forbidden in 'data' '*.db' '*.sqlite' 'mail.key' '*.env' '*.log' 'paired_devices.json'; do

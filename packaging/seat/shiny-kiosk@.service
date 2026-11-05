@@ -1,0 +1,30 @@
+# One signed-in account's session on the seat, started by shiny-auth after the
+# login screen verified the password. Starting it stops the login screen.
+[Unit]
+Description=LiteAura session for %i
+Documentation=file:/usr/share/doc/liteaura/README.md
+Conflicts=shiny-greeter.service getty@tty1.service
+After=shiny-greeter.service systemd-user-sessions.service
+OnFailure=shiny-kiosk-fallback.service
+StartLimitIntervalSec=180
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=%i
+Group=%i
+# PAMName=login sets HOME; do not add Environment=HOME=%h (not expanded here).
+PAMName=login
+Environment=XDG_RUNTIME_DIR=/run/user/%U
+ExecStartPre=-/usr/bin/timeout 20 /usr/libexec/shiny/shiny-wait-drm.sh
+ExecStart=/usr/bin/xinit /usr/libexec/shiny/shiny-session -- :0 -nolisten tcp vt1 -keeptty
+Restart=on-failure
+RestartSec=5
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+StandardInput=tty
+StandardOutput=journal
+StandardError=journal
+ExecStopPost=+/usr/libexec/shiny/shiny-seat-stop.sh kiosk

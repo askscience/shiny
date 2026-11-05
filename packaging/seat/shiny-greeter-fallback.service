@@ -1,0 +1,7 @@
+[Unit]
+Description=LiteAura login screen failure fallback
+
+[Service]
+Type=oneshot
+# Brings the console back when the login screen cannot run at all.
+ExecStart=/usr/libexec/shiny/shiny-seat-stop.sh greeter failed

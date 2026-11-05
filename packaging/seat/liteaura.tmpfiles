@@ -1,0 +1,11 @@
+# Directories of the LiteAura login screen. Created (and their owner and mode
+# put right) at every boot, not only by the package's postinst: the live
+# image is assembled in a user namespace where the greeter's uid cannot own
+# anything yet.
+d /run/shiny 0750 root shiny -
+d /var/log/shiny 2775 root shiny -
+d /var/lib/shiny-greeter 0755 shiny-greeter shiny-greeter -
+d /var/lib/shiny-greeter/.local 0755 shiny-greeter shiny-greeter -
+d /var/lib/shiny-greeter/.local/share 0755 shiny-greeter shiny-greeter -
+d /var/lib/shiny-greeter/.local/share/shiny 0755 shiny-greeter shiny-greeter -
+d /var/lib/shiny-greeter/.local/share/shiny/plugins 0755 shiny-greeter shiny-greeter -

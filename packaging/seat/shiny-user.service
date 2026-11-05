@@ -1,0 +1,40 @@
+# One account's LiteAura server, started by the session (systemctl --user).
+# Installed as /usr/lib/systemd/user/shiny.service; a copy in
+# /etc/systemd/user (a development install) takes precedence.
+[Unit]
+Description=LiteAura server (per user)
+After=pipewire.socket
+Wants=pipewire.socket
+
+[Service]
+Type=simple
+# The voice helpers keep their virtualenvs next to their scripts, so the
+# server runs from a per-user directory that links the shipped ones
+# (shiny-session creates it).
+WorkingDirectory=%h/.local/share/shiny/app
+ExecStart=/usr/bin/shiny
+EnvironmentFile=-%h/.config/shiny/env
+EnvironmentFile=-/etc/default/liteaura
+Environment=RUST_LOG=info
+Environment=HOME=%h
+Environment=XDG_RUNTIME_DIR=/run/user/%U
+Environment=SERVER_HOST=127.0.0.1
+Environment=DATABASE_URL=sqlite://%h/.local/share/shiny/shiny.db
+Environment=BACKGROUNDS_DIR=/usr/share/shiny/backgrounds
+Environment=LOG_FILE=%h/.local/share/shiny/shiny.log
+Environment=PLUGINS_DIR=%h/.local/share/shiny/plugins
+Environment=SYSTEM_PLUGINS_DIR=/usr/lib/shiny/plugins
+Environment=ADFILTER_DIR=%h/.local/share/shiny/adfilter
+Environment=WEB_DIR=/usr/share/shiny/web
+Environment=VOSK_MODELS_DIR=%h/.local/share/shiny/vosk-models
+Environment=WHISPER_MODELS_DIR=%h/.local/share/shiny/whisper-models
+Environment=SHINY_LINUX_USERS=true
+Environment=SHINY_HOME_MODE=real
+Environment=SHINY_AUTH_ENABLED=true
+Environment=SHINY_AUTH_SOCK=/run/shiny/auth.sock
+Environment=SHINY_LOGIN_SELF_ONLY=true
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target

@@ -78,8 +78,48 @@ export LITEAURA_ADFILTER_DIR="${LITEAURA_ADFILTER_DIR:-${XDG_DATA_HOME:-$HOME/.l
 # location was the repo's data/liteaura, which only ever worked with one user.
 export LITEAURA_DATA_DIR="${LITEAURA_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/shiny/liteaura}"
 
+# A packaged install has no repo: /usr/share/shiny holds web/ and voice/, and
+# the voice helpers create their virtualenvs next to their scripts. Give this
+# account its own app directory that links the shipped ones; the per-user
+# server unit runs from it (WorkingDirectory). A development checkout is
+# writable by its owner and is used as it is.
+if [ ! -w "$SHINY_REPO" ]; then
+    APP_HOME="$HOME/.local/share/shiny/app"
+    mkdir -p "$APP_HOME"
+    for part in web voice; do
+        [ -e "$SHINY_REPO/$part" ] && ln -sfn "$SHINY_REPO/$part" "$APP_HOME/$part"
+    done
+    SHINY_REPO=$APP_HOME
+fi
+
+# What the installer chose for this machine (the AI tier): the same file the
+# per-user server unit reads. The tier decides whether the assistant starts on
+# and whether the voice engines start and install themselves.
+if [ -r /etc/default/liteaura ]; then
+    set -a
+    . /etc/default/liteaura
+    set +a
+fi
+case "${LITEAURA_AI_TIER:-}" in
+    off) export LITEAURA_AI_DEFAULT="${LITEAURA_AI_DEFAULT:-off}" ;;
+    none|voice|local) export LITEAURA_AI_DEFAULT="${LITEAURA_AI_DEFAULT:-on}" ;;
+esac
+
 log "launcher up: user=$(id -un) uid=$(id -u) port=$PORT repo=$SHINY_REPO"
 log "env: DISPLAY=${DISPLAY:-<unset>} XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-<unset>} HOME=$HOME"
+
+# Ollama, when this machine has it and the assistant is on: the server's
+# Settings switch keeps $LITEAURA_DATA_DIR/ai-state in step ("on"/"off"); the
+# installer's default applies until the user changes it.
+ai_state=$(cat "$LITEAURA_DATA_DIR/ai-state" 2>/dev/null || true)
+case "$ai_state" in
+    off*) ai_on=0 ;;
+    on*) ai_on=1 ;;
+    *) [ "${LITEAURA_AI_DEFAULT:-on}" = off ] && ai_on=0 || ai_on=1 ;;
+esac
+if [ "$ai_on" = 1 ] && [ -x /usr/local/bin/liteaura-ollama-start ]; then
+    /usr/local/bin/liteaura-ollama-start >/dev/null 2>&1 &
+fi
 
 # Bring up this user's Shiny server (idempotent; a no-op if already running).
 systemctl --user start shiny.service 2>/dev/null || true

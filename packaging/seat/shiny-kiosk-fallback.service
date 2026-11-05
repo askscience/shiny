@@ -1,0 +1,7 @@
+[Unit]
+Description=LiteAura session failure fallback
+
+[Service]
+Type=oneshot
+# Brings the login screen back when a session cannot run at all.
+ExecStart=/usr/libexec/shiny/shiny-seat-stop.sh kiosk failed

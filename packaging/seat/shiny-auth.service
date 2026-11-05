@@ -1,0 +1,25 @@
+[Unit]
+Description=Shiny PAM authentication helper (verify-only)
+Documentation=file:/usr/share/doc/liteaura/README.md
+Requires=shiny-auth.socket
+After=shiny-auth.socket
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/bin/shiny-auth
+Environment=SHINY_AUTH_SOCK=/run/shiny/auth.sock
+Environment=SHINY_AUTH_PAM_SERVICE=shiny
+Restart=on-failure
+RestartSec=2
+PrivateTmp=yes
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX
+LockPersonality=yes
+RestrictNamespaces=yes
+
+[Install]
+WantedBy=multi-user.target

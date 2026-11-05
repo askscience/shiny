@@ -1,0 +1,4 @@
+# Shiny web login — verify-only PAM service used by the shiny-auth helper.
+# It authenticates and checks the account; it never opens a session.
+@include common-auth
+@include common-account

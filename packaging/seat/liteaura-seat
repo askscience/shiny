@@ -1,0 +1,124 @@
+#!/bin/sh
+# liteaura-seat — put the LiteAura login screen on this machine's seat, or
+# take it off again.
+#
+#   liteaura-seat enable [--user NAME]... [--now]
+#   liteaura-seat disable [--now]
+#   liteaura-seat status
+#
+# The package installs the login screen but never enables it: on a desktop
+# with its own display manager an apt install must not take over the login.
+# `enable` does what the LiteAura installer does on a new system:
+#   - adds every account named with --user (or, without --user, every human
+#     account) to the `shiny` group, which may talk to the password helper;
+#   - enables shiny-auth.socket and shiny-greeter.service;
+#   - disables the display manager (LightDM, GDM, SDDM, …) and boots to
+#     multi-user.target, so nothing else claims tty1.
+# Without --now the change takes effect at the next boot: switching the seat
+# ends the graphical session that is running on it.
+#
+# `disable` undoes the systemd part (the display manager is not re-enabled:
+# `systemctl enable <dm>` and `systemctl set-default graphical.target` do it).
+#
+# --root DIR works on a system mounted at DIR (an installer's target) without
+# starting anything.
+set -eu
+# usermod and friends live in sbin, which a plain user's PATH may not have.
+PATH=/usr/local/sbin:/usr/sbin:/sbin:/usr/local/bin:/usr/bin:/bin
+export PATH
+
+ROOT=
+NOW=0
+USERS=
+
+die() { echo "liteaura-seat: $*" >&2; exit 1; }
+
+action=${1:-}
+[ -n "$action" ] || die "usage: liteaura-seat enable|disable|status [--user NAME]... [--now] [--root DIR]"
+shift
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --user) [ $# -ge 2 ] || die "--user needs a name"; USERS="$USERS $2"; shift 2 ;;
+        --now) NOW=1; shift ;;
+        --root) [ $# -ge 2 ] || die "--root needs a directory"; ROOT=$2; shift 2 ;;
+        -h|--help) sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        *) die "unknown option: $1" ;;
+    esac
+done
+
+systemctl_() {
+    if [ -n "$ROOT" ]; then systemctl --root="$ROOT" "$@"; else systemctl "$@"; fi
+}
+passwd_file() { echo "${ROOT}/etc/passwd"; }
+
+human_accounts() {
+    awk -F: '$3 >= 1000 && $3 < 65534 && $7 !~ /(nologin|false)$/ { print $1 }' "$(passwd_file)"
+}
+
+add_to_group() {
+    if [ -n "$ROOT" ]; then
+        usermod --root "$ROOT" -aG shiny "$1"
+    else
+        usermod -aG shiny "$1"
+    fi
+}
+
+display_managers() {
+    for unit in lightdm gdm gdm3 sddm lxdm xdm slim nodm greetd ly; do
+        for dir in etc/systemd/system lib/systemd/system usr/lib/systemd/system; do
+            if [ -e "$ROOT/$dir/$unit.service" ]; then
+                echo "$unit"
+                break
+            fi
+        done
+    done
+}
+
+case "$action" in
+    enable)
+        [ "$(id -u)" -eq 0 ] || die "run as root"
+        grep -q '^shiny:' "${ROOT}/etc/group" || die "the shiny group is missing (is the liteaura package installed?)"
+        [ -n "$USERS" ] || USERS=$(human_accounts)
+        for name in $USERS; do
+            grep -q "^$name:" "$(passwd_file)" || die "no such account: $name"
+            add_to_group "$name"
+            echo "liteaura-seat: $name may sign in on the login screen"
+        done
+        for dm in $(display_managers); do
+            systemctl_ disable "$dm.service" >/dev/null 2>&1 || true
+            echo "liteaura-seat: $dm disabled"
+        done
+        rm -f "$ROOT/etc/systemd/system/display-manager.service"
+        systemctl_ set-default multi-user.target >/dev/null
+        systemctl_ enable shiny-auth.socket shiny-greeter.service >/dev/null
+        echo "liteaura-seat: the login screen is enabled"
+        if [ "$NOW" = 1 ] && [ -z "$ROOT" ]; then
+            for dm in $(display_managers); do systemctl stop "$dm.service" 2>/dev/null || true; done
+            systemctl start shiny-auth.socket
+            systemctl reset-failed shiny-greeter.service 2>/dev/null || true
+            systemctl start shiny-greeter.service
+        else
+            echo "liteaura-seat: it takes over the screen at the next boot"
+        fi
+        ;;
+    disable)
+        [ "$(id -u)" -eq 0 ] || die "run as root"
+        systemctl_ disable shiny-greeter.service >/dev/null 2>&1 || true
+        if [ "$NOW" = 1 ] && [ -z "$ROOT" ]; then
+            systemctl stop shiny-greeter.service 'shiny-kiosk@*.service' 2>/dev/null || true
+            systemctl start getty@tty1.service 2>/dev/null || true
+        fi
+        echo "liteaura-seat: the login screen is disabled; re-enable a display manager with"
+        echo "  systemctl enable <lightdm|gdm3|sddm> && systemctl set-default graphical.target"
+        ;;
+    status)
+        # is-enabled prints the state and exits non-zero for anything but
+        # "enabled": keep its words, ignore its status.
+        state() { out=$(systemctl_ is-enabled "$1" 2>/dev/null || true); echo "${out:-not installed}"; }
+        printf 'login screen : %s\n' "$(state shiny-greeter.service)"
+        printf 'auth socket  : %s\n' "$(state shiny-auth.socket)"
+        printf 'default      : %s\n' "$(systemctl_ get-default 2>/dev/null || echo unknown)"
+        printf 'shiny group  : %s\n' "$(awk -F: '$1 == "shiny" { print $4 }' "${ROOT}/etc/group")"
+        ;;
+    *) die "unknown action: $action" ;;
+esac

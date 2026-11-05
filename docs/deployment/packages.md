@@ -55,6 +55,44 @@ sudo apt update
 sudo apt install liteaura
 ```
 
+## Login screen
+
+The package carries LiteAura's own login screen, the same seat a checkout
+installs with `scripts/install-kiosk-greeter.sh`, at system paths:
+
+| Piece | Path |
+|---|---|
+| Login screen (as the `shiny-greeter` account, tty1) | `/usr/lib/systemd/system/shiny-greeter.service`, `/usr/libexec/shiny/shiny-greeter{,-start}` |
+| Password helper (PAM, root, socket-activated) | `/usr/bin/shiny-auth`, `shiny-auth.{socket,service}`, `/etc/pam.d/shiny` |
+| One account's session (started after a login) | `shiny-kiosk@.service` → `xinit /usr/libexec/shiny/shiny-session` |
+| That account's server | `/usr/lib/systemd/user/shiny.service` (`systemctl --user`) |
+| Directories (also fixed at every boot) | `/usr/lib/tmpfiles.d/liteaura.conf` |
+| Switch | `/usr/sbin/liteaura-seat enable\|disable\|status` |
+
+The postinst only creates the `shiny` group and the `shiny-greeter` account.
+**Nothing is enabled**: on a desktop with its own display manager an
+`apt install liteaura` must not take over the login. To use it:
+
+```sh
+sudo liteaura-seat enable            # every human account may sign in
+sudo liteaura-seat enable --user ada # only these accounts
+sudo liteaura-seat enable --now      # switch right away (ends the running graphical session)
+```
+
+`enable` adds the accounts to `shiny`, enables `shiny-auth.socket` and
+`shiny-greeter.service`, disables every display manager it finds and sets
+`multi-user.target` as the default. The LiteAura installer does the same on a
+new system (`enable_seat` in `crates/shiny-installer-helper/src/engine.rs`)
+and writes the AI tier the user chose to `/etc/default/liteaura`, which every
+account's session and server read. LightDM is no longer recommended by the
+package; the live image still uses its own LightDM autologin for the live
+session only.
+
+A development install (`/etc/systemd/system/shiny-*.service`,
+`/etc/systemd/user/shiny.service`) takes precedence over the packaged units
+of the same name, so installing the package on a development machine changes
+nothing that runs.
+
 ## Live image
 
 The live ISO ships the package payload as plain files and points apt at this
