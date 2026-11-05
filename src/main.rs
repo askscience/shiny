@@ -57,6 +57,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let pool = db::init_pool(&config.database_url).await?;
 
     let mut state = AppState::new(config.clone(), pool.clone());
+    // A per-user server's first start: its account must exist before the
+    // session token is bound to it (see `provision_session_account`).
+    let provisioned = shiny::api::auth::provision_session_account(&state).await;
     state.session = shiny::auth::init_session(&pool, &config).await;
     let mut workers = shiny::application::lifecycle::Workers::default();
     workers.track(Some(shiny::application::voice_watchdog::start(
@@ -78,6 +81,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     std::fs::create_dir_all(&config.plugins_dir)?;
     let base_ctx = state.plugin_ctx();
     let installed = state.plugins.discover_and_install(base_ctx).await;
+    // Plugins provision per-user state (the Files home) for a new account;
+    // the account above was created before they were loaded.
+    if let Some(id) = &provisioned {
+        state.plugins.notify_user_registered(id).await;
+    }
     if !installed.is_empty() {
         tracing::info!("Loaded plugins: {}", installed.join(", "));
     } else {

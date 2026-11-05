@@ -4,6 +4,15 @@
 
 ### Fixed
 
+- The package depends on the QML modules the shell loads (QtQuick, its
+  window and effects, QtWebEngine, QtWebChannel). Without them a clean
+  install opened a black screen with a cursor: the shell exited at once with
+  `module "QtWebEngine" … not found` and the login screen kept restarting it.
+- An account's first session goes straight to the desktop. The per-user
+  server now creates the account of the Linux user it runs as on its first
+  start, so the kiosk's boot token has an account to sign into; before, a new
+  account was asked for its password a second time by the app after the
+  login screen.
 - The APT repository no longer goes offline between releases. GitHub Pages
   was set to deploy from the `main` branch, so every push replaced the site
   (and `apt/` with it) until the next tag; it now deploys only from the

@@ -461,6 +461,46 @@ async fn find_or_provision_linux_user(
         .map_err(AppError::Database)
 }
 
+/// The account of the Linux user this server runs as, created when missing.
+///
+/// A per-user server (`SHINY_LINUX_USERS`, not the login screen) belongs to
+/// one account, which has just signed in on the machine's login screen. On
+/// that account's first session the database is empty, so without this there
+/// is nothing to bind the kiosk's boot token to and the app asks for the
+/// password a second time. Returns the new account's id when one was created:
+/// plugins are not loaded yet at this point, so the caller tells them once
+/// they are (`notify_user_registered`).
+pub async fn provision_session_account(state: &AppState) -> Option<String> {
+    if !state.config.linux_users || state.config.greeter_mode {
+        return None;
+    }
+    let uid = unsafe { libc::getuid() };
+    let user = crate::services::unix_user::lookup_uid(uid)?;
+    if !user.is_human() {
+        return None;
+    }
+    let username = normalize_username(&user.name);
+    let exists: Option<String> = sqlx::query_scalar(
+        "SELECT id FROM travelers WHERE unix_user = ?1 OR username = ?2 LIMIT 1",
+    )
+    .bind(&user.name)
+    .bind(&username)
+    .fetch_optional(&state.pool)
+    .await
+    .ok()
+    .flatten();
+    if exists.is_some() {
+        return None;
+    }
+    match find_or_provision_linux_user(state, &user).await {
+        Ok(traveler) => Some(traveler.id),
+        Err(error) => {
+            tracing::warn!("could not create the account of {}: {error}", user.name);
+            None
+        }
+    }
+}
+
 pub(crate) fn validate_username(username: &str) -> Result<(), AppError> {
     if username.len() < 2 {
         return Err(AppError::BadRequest("Username must be at least 2 characters".into()));
