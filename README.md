@@ -9,17 +9,20 @@ its own login screen — and every app beyond the assistant is a **self-containe
 plugin** you can add or remove while it runs.
 
 <p align="center">
-  <img src="docs/screenshots/desktop-dusk.webp" alt="LiteAura desktop in the Dusk theme: Calendar and Word side by side over the wallpaper" width="100%">
+  <a href="docs/screenshots/liteaura-tour.mp4"><img src="docs/screenshots/liteaura-tour.webp" alt="A 30-second tour: windows open in tiling, a document is typed, the layout switches to columns and free windows, the grid overview, the Ink theme and the lock screen" width="100%"></a>
 </p>
+<p align="center"><sub>A 30-second tour (<a href="docs/screenshots/liteaura-tour.mp4">MP4</a>): tiling, columns and free windows, the overview, the switch from Dusk to Ink, the lock screen.</sub></p>
+
+| Tiling · Dusk | Free windows · Ink |
+|---|---|
+| ![Files, Calendar and Word tiled side by side in the Dusk theme](docs/screenshots/tiling-dusk.webp) | ![The same three apps as overlapping free windows in the Ink theme](docs/screenshots/windows-ink.webp) |
+
 <p align="center">
-  <img src="docs/screenshots/desktop-ink.webp" alt="The same desktop in the Ink theme, near-black" width="100%">
-</p>
-<p align="center">
-  <img src="docs/screenshots/phone-dusk.webp" alt="LiteAura on a phone, Dusk theme" width="32%">
+  <img src="docs/screenshots/phone-dusk.webp" alt="LiteAura on a phone, Dusk theme: one window at a time under the status bar" width="30%">
   &nbsp;
-  <img src="docs/screenshots/phone-ink.webp" alt="LiteAura on a phone, Ink theme" width="32%">
+  <img src="docs/screenshots/phone-ink.webp" alt="LiteAura on a phone, Ink theme" width="30%">
 </p>
-<p align="center"><sub>The two built-in themes: <b>Dusk</b> (default, light windows) and <b>Ink</b> (near-black), on a desktop and on a phone.</sub></p>
+<p align="center"><sub>On a phone: a status bar, one window at a time and a single bottom bar. The two built-in themes are <b>Dusk</b> (default, light windows) and <b>Ink</b> (near-black).</sub></p>
 
 > The repository, the server binary and some crates are still called `shiny`:
 > that is the core's internal name. The product, the kiosk shell (`liteaura`),
@@ -55,8 +58,9 @@ LiteAura shell (Qt WebEngine)  /  any browser       shiny (core server)
   voice — and the desktop keeps working on its own.
 
 **Desktop**
-- Tiled, column or floating windows across workspaces, a grid **overview**,
-  focus mode and keyboard shortcuts.
+- Three ways to arrange windows — **Tiling**, **Columns** and free
+  **Windows** — across workspaces, a grid **overview**, focus mode and
+  keyboard shortcuts.
 - A top bar with clock, weather, the plugin tray and the system chips (sound,
   network, Bluetooth, battery, power).
 - A **lock screen** (idle time, before suspend, `Super+L`) and an editorial
