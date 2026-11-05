@@ -1,6 +1,7 @@
-# Shiny documentation
+# LiteAura documentation
 
-This directory is the source of truth for how Shiny works. It is split into a
+This directory is the source of truth for how LiteAura works (its core server
+is still called `shiny` internally). It is split into a
 small number of areas; each area has its own index and cross-links.
 
 > New here? Start with **[Getting started](getting-started.md)** and

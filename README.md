@@ -1,61 +1,92 @@
-# Shiny — AI Desktop
+# LiteAura
 
-**Shiny is a local-first AI assistant you talk to, wrapped in a desktop.** The
-core is a voice-first conversational agent (Ollama) inside a browser-based
-desktop shell — a fixed HUD, tiled/floating plugin windows across workspaces, a
-voice bar, resumable chat and web search. Everything beyond that ships as a
-**self-contained plugin**: a folder with `plugin.toml`, a Rust `cdylib`, and
-optional migrations, skills and a `web/plugin.js` window.
+**LiteAura is a local-first AI assistant you talk to, wrapped in a desktop.**
+Say "Hey, Laura" (or press the voice bar) and a conversational agent running on
+your own machine (Ollama) answers out loud, opens windows, writes documents and
+drives its apps. Around it is a complete desktop shell — windows across
+workspaces, a top bar with the system's controls, a phone layout, a lock screen,
+its own login screen — and every app beyond the assistant is a **self-contained
+plugin** you can add or remove while it runs.
 
-Plugins are installed at runtime (drop a `.zip`/`.tar.gz` on the API) with hot
-router swap: **no core edits, no restart**. With no plugin active, Shiny is just
-the voice/chat assistant.
+<p align="center">
+  <img src="docs/screenshots/desktop-dusk.webp" alt="LiteAura desktop in the Dusk theme: Calendar and Word side by side over the wallpaper" width="100%">
+</p>
+<p align="center">
+  <img src="docs/screenshots/desktop-ink.webp" alt="The same desktop in the Ink theme, near-black" width="100%">
+</p>
+<p align="center">
+  <img src="docs/screenshots/phone-dusk.webp" alt="LiteAura on a phone, Dusk theme" width="32%">
+  &nbsp;
+  <img src="docs/screenshots/phone-ink.webp" alt="LiteAura on a phone, Ink theme" width="32%">
+</p>
+<p align="center"><sub>The two built-in themes: <b>Dusk</b> (default, light windows) and <b>Ink</b> (near-black), on a desktop and on a phone.</sub></p>
+
+> The repository, the server binary and some crates are still called `shiny`:
+> that is the core's internal name. The product, the kiosk shell (`liteaura`),
+> the Debian package and the APT suite are LiteAura.
 
 ```
-Browser (web/)                              shiny (core binary)
-┌───────────────────────────┐               ┌───────────────────────────────────────┐
-│ desktop shell · HUD        │     HTTP/SSE  │ agent loop (Ollama) · plugin dispatch  │
-│ windows · voice bar        │◀────────────▶ │ voice (Whisper/Vosk + Supertonic TTS)  │
-│ chat · settings · plugins  │               │ auth · SQLite · host panels · plugins  │
-└───────────────────────────┘               └───────────────┬───────────────────────┘
-                                                            │ dlopen (cdylib)
-                                              Plugin: tools · routes · schema · window
+LiteAura shell (Qt WebEngine)  /  any browser       shiny (core server)
+┌──────────────────────────────┐               ┌───────────────────────────────────────┐
+│ desktop · top bar · windows   │     HTTP/SSE  │ agent loop (Ollama) · plugin dispatch  │
+│ voice bar · chat · settings   │◀────────────▶ │ voice (Whisper/Vosk + Supertonic TTS)  │
+│ phone layout · lock screen    │               │ auth (PAM) · SQLite · host panels      │
+└──────────────────────────────┘               └───────────────┬───────────────────────┘
+                                                               │ dlopen (cdylib)
+                                                 Plugin: tools · routes · schema · window
 ```
 
 ---
 
 ## Highlights
 
-**Core assistant**
-- Ollama-driven agent loop — voice or typed input, spoken + text replies.
-- **faster-whisper** streaming STT (local sidecar; Vosk in-browser fallback) and
-  **Supertonic 3** TTS (optional **Qwen3-TTS**).
-- Resumable conversations, Markdown replies, artifact dock, GNOME-style
-  notifications, web search, and a thinking toggle for Ollama reasoning models
-  whose trace is shown per reply (folded, and saved with the conversation).
-- Agent actions for plugins and the desktop (`plugin_*`, `workspace_*`,
-  `desktop_*`, `show_plugin`).
+**Assistant**
+- An agent loop on Ollama: talk or type, get spoken and written replies. The
+  assistant is called **Laura** by default ("Hey, Laura"); the name is yours to
+  change in Settings → Assistant.
+- **faster-whisper** streaming speech recognition (Vosk in the browser as a
+  fallback, and for the wake word) and **Supertonic 3** voices (optional
+  **Qwen3-TTS**), all local.
+- Resumable conversations, Markdown replies, an artifact dock, web search,
+  notifications, and a thinking toggle for reasoning models.
+- The agent drives the desktop and every plugin through tools (open, arrange,
+  focus windows; create documents, events, routes, music…).
+- **"No slop"**: the AI can be switched off entirely — no chat, no agent, no
+  voice — and the desktop keeps working on its own.
 
-**Desktop shell (`web/`)**
-- Tiling / columns / floating windows across workspaces, with `Alt`-shortcuts.
-- Top HUD: clock + weather, plugin tray grouped by category, host chips
-  (sound, network, Bluetooth, battery), workspace tabs, power menu, Settings /
-  Plugins / Chats.
-- Voice bar gestures (tap to type / long-press wake / double-tap to listen), barge-in, a
-  selectable icon library (Infinity coloured set by default, auto light/dark)
-  and five bundled themes.
+**Desktop**
+- Tiled, column or floating windows across workspaces, a grid **overview**,
+  focus mode and keyboard shortcuts.
+- A top bar with clock, weather, the plugin tray and the system chips (sound,
+  network, Bluetooth, battery, power).
+- A **lock screen** (idle time, before suspend, `Super+L`) and an editorial
+  sign-in screen, in the user's motion settings.
+- Two themes, **Dusk** and **Ink**, one accent colour and gradient of your
+  choice, selectable icon sets and wallpapers.
+- Every string translated in **26 languages**.
 
-**Host integration (Linux)**
-- PipeWire sound panel, NetworkManager Wi-Fi, BlueZ Bluetooth, sysfs battery,
-  logind power actions, display scale, screen/keyboard backlight.
-- **Optional** and self-hiding when the daemon is absent.
+**On a phone**
+- A status bar and a control centre, one window at a time, a single bottom bar
+  with gestures, and window bars that fold their controls into a menu.
 
-**Kiosk & multi-user**
-- Native shells: `liteaura` (Qt WebEngine) and `liteaura-mac` (WKWebView + Touch Bar).
-- Real Linux-user mode (NSS + PAM), per-user servers and the **Shiny greeter** —
-  the app's own login screen on the seat, no display manager (LightDM optional).
-- Remote access over **Iroh** (P2P) or **Tailscale Funnel** (public HTTPS URL),
-  with host controls kept local.
+**Updates without a restart**
+- Plugins whose files change are loaded again while the server runs; the
+  server swaps itself for a new binary without closing its port; the page
+  reloads only what changed and restores every window. The kiosk shell, the
+  one piece that needs a relaunch, does it behind the next locked screen
+  ([Live update](docs/core/live-update.md)).
+
+**The machine**
+- Linux host integration: PipeWire sound, NetworkManager Wi-Fi, BlueZ
+  Bluetooth, battery, logind power actions, display scale, backlights — each
+  optional and hidden when its daemon is absent.
+- Native shells: `liteaura` (Qt WebEngine, Linux) and `liteaura-mac`
+  (WKWebView + Touch Bar).
+- **Its own login screen** for real Linux accounts (PAM), with one server per
+  account — no display manager needed (`sudo liteaura-seat enable`).
+- Remote access over **Iroh** (peer to peer) or **Tailscale Funnel**, with host
+  controls kept local, and a web client for other devices.
+- A live ISO with a graphical installer, including Apple T2 MacBooks.
 
 ---
 
@@ -64,7 +95,7 @@ Browser (web/)                              shiny (core binary)
 See **[Getting started](docs/getting-started.md)** for the full guide.
 
 ```bash
-git clone <repo>
+git clone https://github.com/askscience/shiny.git
 cd shiny
 
 # Optional: create a .env (see docs/configuration.md).
@@ -105,7 +136,7 @@ sudo apt update
 The suite is called `liteaura`, not a Debian codename. Then install or upgrade:
 
 ```sh
-sudo apt install liteaura      # first install
+sudo apt install liteaura   # first install
 sudo apt upgrade            # later updates
 ```
 
@@ -120,7 +151,7 @@ sudo liteaura-seat enable
 The same key is available in
 [`packaging/liteaura-archive.gpg`](packaging/liteaura-archive.gpg) and in the
 `liteaura-archive-keyring` package, so a checkout or the live image can install it
-offline. Tag a version (for example `v0.1.2`) to cut a release; the tag is the
+offline. Tag a version (for example `v0.2.0`) to cut a release; the tag is the
 package version. See [Debian package and APT repository](docs/deployment/packages.md)
 for the workflow, versioning and signing-key details.
 
@@ -141,7 +172,8 @@ window. In the multi-user install plugins are also **installed per user**
 | `terminal` | System | A real PTY login shell rendered with xterm.js, and a `terminal_exec` agent tool that runs commands in it. |
 | `keyboard` | System | Virtual multi-language on-screen keyboard (8 layouts). |
 | `hello` | System | Minimal plugin-authoring example (one tool). |
-| `updates` | System | System + Ollama updates for every major distro, with a top-bar chip. |
+| `updates` | System | System + Ollama updates for every major distro, with a top-bar chip; applied without a restart. |
+| `installer` | System | The live session's disk installer (partitioning, account, AI tier). |
 | `traveler` | Travel | 22 trip/GPS/map/navigation/diary/planning/artifact tools. |
 | `word` | Office | Word processor storing real `.odt` documents. |
 | `calc` | Office | Spreadsheets with live formulas and `.ods` import/export. |
@@ -162,7 +194,8 @@ example [`plugins/files/docs/README.md`](plugins/files/docs/README.md)).
 
 The Plugins window's **Craft apps** tab is a store for the
 [Craft App Suite](https://getartcraft.com/apps) (PhotoCraft, FilmCraft,
-WordCraft, PdfCraft, …): it lists each app from the core's catalog, installs
+WordCraft, PdfCraft, …). New apps join it on their own: once a day it reads
+the suite's release feeds. It lists each app from the catalog, installs
 that app's own **web build** from its GitHub release — verified against the
 release's SHA-256 — as a web-app plugin (`kind = "web"`, served at
 `/plugins/<id>/` and mounted in a window as an iframe), and keeps it updated.
@@ -200,20 +233,24 @@ The full documentation lives in **[`docs/`](docs/README.md)**:
 ## Project layout
 
 ```
-src/                      # core binary: agent, auth, host panels, plugin host
+src/                          # core server (shiny): agent, auth, host panels, plugin host
 crates/
-  shiny-plugin-sdk/       # the plugin API + ODT/ODS/ODP codecs + shared clients
-  shiny-filter/ + -core/  # the Browser's in-process ad/tracker filtering engine
-  liteaura/ · liteaura-mac/     # Linux / macOS native shells
-  shiny-auth/             # root PAM verify helper
+  shiny-plugin-sdk/           # the plugin API + ODT/ODS/ODP codecs + shared clients
+  shiny-filter/ + -core/      # the Browser's in-process ad/tracker filtering engine
+  liteaura/ · liteaura-mac/   # Linux / macOS native shells
+  liteaura-core/              # state shared by both shells
+  shiny-auth/                 # root PAM helper (password checks, starts sessions)
+  shiny-installer-*/          # the live installer's helper and protocol
   shiny-iroh-client/ · shiny-iroh-proto/ · shiny-server-mode/
-plugins/<name>/           # 19 self-contained plugins, each with docs/
-migrations/               # core SQL migrations (001..009)
-web/                      # browser UI: ui/ (library), themes/, js/, vendor/
-voice/                    # speech sidecars and model tooling
-scripts/                  # installers, kiosk scripts, icon curator
-greeter/                  # LightDM theme (optional seat)
-docs/                     # this documentation
+plugins/<name>/               # 19 self-contained plugins, each with docs/
+migrations/                   # core SQL migrations (001..013)
+web/                          # browser UI: ui/ (library), themes/, js/, vendor/
+liteaura-web/                 # the web client for remote devices (GitHub Pages)
+packaging/                    # signing key, Gokapi, the packaged login screen (seat/)
+voice/                        # speech sidecars and model tooling
+scripts/                      # deb/ISO builds, session scripts, installers
+greeter/                      # optional LightDM theme
+docs/                         # this documentation (screenshots in docs/screenshots)
 ```
 
 See the [crate map](docs/reference/crate-map.md) for every crate.
@@ -245,8 +282,10 @@ cargo check                        # compile check
 ```
 
 Plugin development: [docs/plugins/authoring.md](docs/plugins/authoring.md).
-Editing a plugin window? The app serves the **installed** copy at
-`data/plugins/<name>/web/`, not `plugins/<name>/web/`.
+Editing a plugin window? The app serves the **installed** copy
+(`data/plugins/<name>/web/`, or the account's `~/.local/share/shiny/plugins/`),
+not `plugins/<name>/web/`. Copy your changes there: the server reloads a
+changed plugin within ten seconds and open windows pick it up, no restart.
 
 ---
 

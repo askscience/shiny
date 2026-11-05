@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Changed
+
+- README: LiteAura throughout (the core keeps its internal name `shiny`), the
+  features as they are now — phone layout, lock screen, its own login screen,
+  updates without a restart, the assistant Laura, 26 languages — and
+  screenshots of the desktop and the phone in the Dusk and Ink themes
+  (`docs/screenshots/`).
+
 ### Removed
 
 - The transitional `peakd` package and the `peakd` APT suite. They existed
