@@ -15,7 +15,7 @@ plugin** you can add or remove while it runs.
 
 | Tiling · Dusk | Free windows · Ink |
 |---|---|
-| ![Files, Calendar and Word tiled side by side in the Dusk theme](docs/screenshots/tiling-dusk.webp) | ![The same three apps as overlapping free windows in the Ink theme](docs/screenshots/windows-ink.webp) |
+| ![Five apps tiled in the Dusk theme: Files as the main column, Calc, Calendar, Word and Calculator stacked beside it](docs/screenshots/tiling-dusk.webp) | ![The same five apps as overlapping free windows in the Ink theme](docs/screenshots/windows-ink.webp) |
 
 <p align="center">
   <img src="docs/screenshots/phone-dusk.webp" alt="LiteAura on a phone, Dusk theme: one window at a time under the status bar" width="30%">
