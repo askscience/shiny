@@ -494,7 +494,13 @@ export async function openPluginWindow(name, { focus = false } = {}) {
     openCoreWindow(name);
     return true;
   }
-  if (!isPluginActive(name)) return false;
+  // The server may have activated it a moment ago (the assistant's
+  // show_plugin does): ask again before giving up.
+  if (!isPluginActive(name)) {
+    await refreshActivePlugins({ force: true });
+    if (!isPluginActive(name)) return false;
+    await refreshCatalog(true);
+  }
 
   if (name !== MAP_TILE_PLUGIN) {
     if (!pluginCatalog.has(name)) await refreshCatalog();

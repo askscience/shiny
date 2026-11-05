@@ -20,6 +20,20 @@ use crate::services::artifacts::Artifact;
 use crate::services::navigation::NavigationSession;
 
 const MAX_TOOL_STEPS: usize = 40;
+/// Identical repeats of a call that just succeeded before the turn is ended.
+const MAX_REPEATS: usize = 3;
+
+/// The identity of one tool call: its name and parameters. `serde_json` keeps
+/// object keys sorted, so the same parameters in another order compare equal.
+fn names_an_open(action: &str) -> bool {
+    action
+        .split(|c: char| c == '_' || c == '.' || c == '-')
+        .any(|part| part.eq_ignore_ascii_case("open") || part.eq_ignore_ascii_case("show"))
+}
+
+fn repeat_key(action: &str, params: &Value) -> String {
+    format!("{action}\u{1f}{}", serde_json::to_string(params).unwrap_or_default())
+}
 
 /// Has the user stopped this turn? (No handle = nothing to cancel.)
 fn turn_stopped(cancel: &Option<crate::services::agent_cancel::CancelHandle>) -> bool {
@@ -216,6 +230,11 @@ where
     let mut final_reply = String::new();
     let mut turn_events: Vec<(String, String)> = Vec::new();
     let mut interrupted = false;
+    // The last call that succeeded, and how many times in a row the model
+    // asked for exactly it again (see `repeat_key`).
+    let mut last_ok_call: Option<String> = None;
+    let mut repeats = 0usize;
+    let mut stuck = false;
 
     // The continuation prompt is append-only: its system half and the
     // conversation history are rendered once, then each finished tool appends
@@ -244,6 +263,10 @@ where
     // as apps are opened mid-turn.
     let focused_craft: std::collections::BTreeSet<String> = input.ctx.focused.iter().cloned().collect();
     let mut craft_open = input.craft_open.clone();
+    // Every window on screen (the client's open windows, then whatever the
+    // model surfaces): a plugin's result says so when its window is closed.
+    let mut on_screen: std::collections::BTreeSet<String> = input.craft_open.clone();
+    let mut hinted: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
 
     for iteration in 0..MAX_TOOL_STEPS {
         if turn_stopped(&cancel) {
@@ -327,6 +350,28 @@ where
                 "Agent tool call: {action} {}",
                 serde_json::to_string(&params).unwrap_or_default()
             );
+
+            // A model that does not register a result sometimes asks for the
+            // very same call again and again: forty identical calc_create in
+            // one turn left forty spreadsheets behind. An exact repeat of the
+            // call that just succeeded is not run again; the model is told it
+            // is done, and after a few repeats the turn ends.
+            let call_key = repeat_key(&action, &params);
+            if last_ok_call.as_deref() == Some(call_key.as_str()) {
+                repeats += 1;
+                tracing::info!("Not repeating {action}: identical to the call that just succeeded ({repeats})");
+                if repeats >= MAX_REPEATS {
+                    stuck = true;
+                    break;
+                }
+                continuation_messages.push((
+                    "user".to_string(),
+                    format!(
+                        "[Done] {action} already ran with exactly these parameters and succeeded; it was not run again. Do not call it again: do the next step the user asked for, or reply."
+                    ),
+                ));
+                continue;
+            }
 
             // Workspaces do not exist on a vertical, phone-like screen: the
             // tool is refused before it runs, with a step that says so rather
@@ -558,6 +603,33 @@ where
                     }
                 }
 
+                if outcome.action == "show_plugin" && outcome.result == "ok" {
+                    if let Some(name) = outcome.data.get("plugin").and_then(|v| v.as_str()) {
+                        on_screen.insert(name.to_string());
+                    }
+                }
+                // "open_document", "doc_open", "open_spreadsheet": a call the
+                // model named as opening something means the user wants to see
+                // it, whatever the tool does underneath (often just a read).
+                if outcome.result == "ok" && names_an_open(&action) {
+                    if let Some(owner) = outcome.owner.as_deref().filter(|o| *o != "core") {
+                        focus_plugin = Some(owner.to_string());
+                        on_screen.insert(owner.to_string());
+                    }
+                }
+                // "Write it in a document and open it": the document exists but
+                // its window is closed, and models then claim it is on screen.
+                // Say so once per plugin, with the call that opens it.
+                if outcome.result == "ok" {
+                    if let Some(owner) = outcome.owner.as_deref().filter(|o| *o != "core") {
+                        if !on_screen.contains(owner) && hinted.insert(owner.to_string()) {
+                            note.push_str(&format!(
+                                "\nThe {owner} window is not open. If the user asked to see or open it, call show_plugin with {{\"name\":\"{owner}\"}} before replying; do not say it is open otherwise."
+                            ));
+                        }
+                    }
+                }
+
                 // Keep a plugin's tool docs in the conversation after its tools
                 // are used: the continuation prompt is slim, so without this the
                 // model "forgets" calc_write after calc_create and replies
@@ -609,6 +681,12 @@ where
                 continuation_messages
                     .push(("user".to_string(), format!("[Done] {note}")));
                 completed_steps.push(note);
+                if outcome.result == "ok" {
+                    last_ok_call = Some(call_key.clone());
+                    repeats = 0;
+                } else {
+                    last_ok_call = None;
+                }
                 // The chat's card for this call: capped and stripped of
                 // credentials, streamed now and stored with the turn.
                 let card = crate::services::tool_cards::card_record(
@@ -652,7 +730,7 @@ where
             }
         }
 
-        if interrupted {
+        if interrupted || stuck {
             break;
         }
     }
@@ -681,4 +759,30 @@ where
         events: turn_events,
         interrupted,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::repeat_key;
+    use serde_json::json;
+
+    #[test]
+    fn a_repeat_is_the_same_call_with_the_same_parameters() {
+        let a = repeat_key("calc_create", &json!({ "title": "Trip budget", "cells": { "A1": "Item", "B1": "Cost" } }));
+        let b = repeat_key("calc_create", &json!({ "cells": { "B1": "Cost", "A1": "Item" }, "title": "Trip budget" }));
+        assert_eq!(a, b, "key order does not matter");
+        assert_ne!(a, repeat_key("calc_create", &json!({ "title": "Other" })));
+        assert_ne!(a, repeat_key("calc_write", &json!({ "title": "Trip budget", "cells": { "A1": "Item", "B1": "Cost" } })));
+    }
+
+    #[test]
+    fn opening_calls_are_recognised_by_name() {
+        use super::names_an_open;
+        for name in ["doc_open", "open_document", "word.open_document", "calc-open", "show_spreadsheet"] {
+            assert!(names_an_open(name), "{name}");
+        }
+        for name in ["doc_read", "opener_tool", "calc_create", "reopen"] {
+            assert!(!names_an_open(name), "{name}");
+        }
+    }
 }

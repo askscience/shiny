@@ -80,6 +80,16 @@ pub const LONG_FORM_BLOCK: &str = "\n## Documents and long-form content\n\
 /// The continuation prompt's system half. It depends only on the conversation
 /// and the active plugin set, so the loop builds it once and appends `[Done]`
 /// notes as tools finish instead of re-rendering every earlier step.
+/// Today's date and the local time, for every prompt the model sees: without
+/// it the model guesses the year from its training data ("November 20" became
+/// an event in 2024). The continuation prompt needs it as much as the first
+/// one — the tool that uses a date usually runs after another tool.
+pub fn today_line() -> String {
+    chrono::Local::now()
+        .format("Today is %A, %-d %B %Y; the local time is %H:%M.")
+        .to_string()
+}
+
 pub fn build_continuation_system(
     ai_name: &str,
     lang: &str,
@@ -124,8 +134,10 @@ pub fn build_continuation_system(
     let doc_line = "If a document, report or other long-form deliverable was created or updated in the \
                     steps above, confirm it in one or two short sentences (what it is and its title). \
                     Do NOT restate, summarize or list its contents — the user reads it in its window.\n";
+    let today = today_line();
     format!(
         "You are {ai_name}. Language: {lang}. Mode: {mode} — answer fully and clearly; be concise for simple questions but give detail when helpful.\n\
+         {today}\n\
          {voice_line}{correction_line}{doc_line}\
          Call exactly ONE tool per turn (raw JSON line, no markdown) or reply in plain language if done.\n\
          Format: {{\"action\":\"tool_name\",\"params\":{{...}}}}\n\

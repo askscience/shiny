@@ -134,6 +134,34 @@ fn merge_cells(
 ///  - `{ cells: [{"A1":"v"}, ...] }` (array of single-cell objects)
 ///  - `{ cell: {A1: "v"} }` or `{ ref: "A1", value: "v" }` (one cell)
 ///  - top-level `{ A1: "v", ... }` next to `sheet_id`/`title`
+/// Column letters for a 0-based index: 0 → A, 25 → Z, 26 → AA.
+fn column_name(mut index: usize) -> String {
+    let mut name = String::new();
+    loop {
+        name.insert(0, (b'A' + (index % 26) as u8) as char);
+        if index < 26 {
+            break;
+        }
+        index = index / 26 - 1;
+    }
+    name
+}
+
+/// Rows of values into `{ "A1": …, "B1": … }`, skipping empty values.
+fn rows_to_cells(rows: &[Value]) -> Map<String, Value> {
+    let mut map = Map::new();
+    for (r, row) in rows.iter().enumerate() {
+        let Some(values) = row.as_array() else { continue };
+        for (c, value) in values.iter().enumerate() {
+            if value.is_null() || value.as_str().is_some_and(|s| s.is_empty()) {
+                continue;
+            }
+            map.insert(format!("{}{}", column_name(c), r + 1), value.clone());
+        }
+    }
+    map
+}
+
 fn incoming_cells(req: &ToolRequest<'_>) -> Result<Map<String, Value>, AppError> {
     normalize_cells(incoming_cells_raw(req)?)
 }
@@ -163,13 +191,22 @@ fn incoming_cells_raw(req: &ToolRequest<'_>) -> Result<Map<String, Value>, AppEr
     if let Some(cell) = req.params.get("cell").and_then(|v| v.as_object()) {
         return Ok(cell.clone());
     }
+    // A table of rows — `data: [["Item","Cost"],["Flights",184]]` — is how
+    // models write a sheet when they do not think in cell names. Row 1 is A1.
+    for key in ["data", "rows", "values", "table"] {
+        if let Some(rows) = req.params.get(key).and_then(|v| v.as_array()) {
+            if rows.iter().all(|r| r.is_array()) && !rows.is_empty() {
+                return Ok(rows_to_cells(rows));
+            }
+        }
+    }
     if let (Some(r), Some(v)) = (req.params.param_str("ref"), req.params.get("value")) {
         let mut map = Map::new();
         map.insert(r, v.clone());
         return Ok(map);
     }
     if let Some(obj) = req.params.as_object() {
-        const KNOWN: &[&str] = &["sheet_id", "title", "cells", "cell", "ref", "value"];
+        const KNOWN: &[&str] = &["sheet_id", "title", "cells", "cell", "ref", "value", "rows", "cols", "name"];
         let mut map = Map::new();
         for (k, v) in obj {
             if !KNOWN.contains(&k.as_str()) {
@@ -232,7 +269,7 @@ pub struct CalcCreate;
 #[async_trait]
 impl Tool for CalcCreate {
     fn name(&self) -> &str { "calc_create" }
-    fn aliases(&self) -> &[&str] { &["create_spreadsheet", "new_sheet", "new_spreadsheet"] }
+    fn aliases(&self) -> &[&str] { &["create_spreadsheet", "create_sheet", "new_sheet", "new_spreadsheet", "spreadsheet_create"] }
     fn step_label(&self) -> &str { "Creating spreadsheet…" }
     fn doc_fragment(&self) -> Option<&str> {
         Some("- `calc_create` — Create a new spreadsheet. params: `{ title?: string, cells?: { A1: \"value\", ... }, rows?: number, cols?: number }` — `cells` optionally seeds the sheet so one call creates AND fills it; returns the new `sheet_id`.")
@@ -262,6 +299,37 @@ impl Tool for CalcCreate {
         let cells_map = incoming_cells(&req).unwrap_or_default();
         let count = cells_map.len();
         let cells_json = serde_json::to_string(&cells_map)?;
+
+        // A model that first creates the sheet bare and then again with its
+        // cells must not leave an empty twin behind: an empty sheet of the
+        // same name made a moment ago is filled instead of duplicated.
+        let empty_twin: Option<String> = sqlx::query_scalar(
+            "SELECT id FROM spreadsheets WHERE user_id = ?1 AND lower(title) = lower(?2) \
+             AND (cells IS NULL OR cells = '' OR cells = '{}') \
+             AND created_at >= datetime('now', '-5 minutes') \
+             ORDER BY created_at DESC LIMIT 1",
+        )
+        .bind(req.traveler_id)
+        .bind(&title)
+        .fetch_optional(ctx.pool().await)
+        .await?;
+        if let Some(id) = empty_twin {
+            sqlx::query(
+                "UPDATE spreadsheets SET cells = ?1, rows = ?2, cols = ?3, updated_at = datetime('now') \
+                 WHERE id = ?4 AND user_id = ?5",
+            )
+            .bind(&cells_json)
+            .bind(rows)
+            .bind(cols)
+            .bind(&id)
+            .bind(req.traveler_id)
+            .execute(ctx.pool().await)
+            .await?;
+            return Ok(ActionOutcome::ok(
+                "calc_create",
+                json!({ "sheet_id": id, "title": title, "rows": rows, "cols": cols, "count": count }),
+            ));
+        }
 
         sqlx::query(
             "INSERT INTO spreadsheets (id, user_id, title, cells, rows, cols, created_at, updated_at) \
@@ -551,5 +619,24 @@ impl Tool for CalcDelete {
             return Ok(ActionOutcome::error("calc_delete", "Spreadsheet not found"));
         }
         Ok(ActionOutcome::ok("calc_delete", json!({ "sheet_id": sheet_id })))
+    }
+}
+
+#[cfg(test)]
+mod table_tests {
+    use super::{column_name, rows_to_cells};
+    use serde_json::json;
+
+    #[test]
+    fn a_table_of_rows_becomes_named_cells() {
+        assert_eq!(column_name(0), "A");
+        assert_eq!(column_name(25), "Z");
+        assert_eq!(column_name(26), "AA");
+        let rows = json!([["Item", "Cost"], ["Flights", 184], ["Total", "=SUM(B2:B2)"], ["", null]]);
+        let cells = rows_to_cells(rows.as_array().unwrap());
+        assert_eq!(cells["A1"], "Item");
+        assert_eq!(cells["B2"], 184);
+        assert_eq!(cells["B3"], "=SUM(B2:B2)");
+        assert_eq!(cells.len(), 6);
     }
 }

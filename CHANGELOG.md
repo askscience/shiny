@@ -2,6 +2,26 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- The assistant no longer runs the same action over and over. A model that
+  did not register a result asked for one identical `calc_create` forty times
+  in a turn and left forty spreadsheets; an exact repeat of the call that just
+  succeeded is now not run again, the model is told it is done, and after
+  three repeats the turn ends.
+- "Show me Word" opens Word. `show_plugin` refused a plugin that was installed
+  but not active this session (every plugin, after a sign-in without
+  "Remember my workspace") and the model then answered "it is open" over the
+  error; it now activates the plugin and the window opens.
+- The assistant knows today's date: without it "November 20" became an event
+  in 2024.
+- When a plugin's tool succeeds but its window is closed, the model is told
+  so, with the call that opens it, instead of claiming the result is on screen.
+- Calendar events accept the shapes models send: `summary`, `name` or
+  `subject` for the title, and `start`/`end` as ISO date-times
+  (`2026-11-20T08:15:00`); times with seconds are accepted too. Calc answers
+  to `create_sheet`.
+
 ### Changed
 
 - README: LiteAura throughout (the core keeps its internal name `shiny`), the

@@ -65,12 +65,23 @@ async fn resolve_event_id(
     Ok(by_title)
 }
 
+/// The event's name. Models also send it as `summary` (iCalendar), `name`,
+/// `subject` or `event`; any of them is the title.
 fn require_title(req: &ToolRequest<'_>) -> Result<String, AppError> {
-    req.params
-        .param_str("title")
+    ["title", "summary", "name", "subject", "event"]
+        .iter()
+        .find_map(|key| req.params.param_str(key))
         .map(|t| t.trim().to_string())
         .filter(|t| !t.is_empty())
         .ok_or_else(|| AppError::BadRequest("title required".into()))
+}
+
+/// `start` / `end` as one ISO date-time (`2026-11-20T08:15:00`), the shape
+/// most calendar APIs use, split into the date and the time this tool keeps.
+fn datetime_param(req: &ToolRequest<'_>, keys: &[&str]) -> Option<(String, String)> {
+    keys.iter()
+        .find_map(|key| req.params.param_str(key))
+        .and_then(|v| crate::date::split_datetime(&v))
 }
 
 /* ── calendar_create ────────────────────────────────────────── */
@@ -83,7 +94,7 @@ impl Tool for CalendarCreate {
     fn aliases(&self) -> &[&str] { &["create_event", "add_event", "schedule", "new_event"] }
     fn step_label(&self) -> &str { "Scheduling event…" }
     fn doc_fragment(&self) -> Option<&str> {
-        Some("- `calendar_create` — Schedule an event. params: `{ title: string, date: string, start_time?: string, end_time?: string, all_day?: boolean, description?: string, location?: string }` — `title` and `date` required (date = \"YYYY-MM-DD\", \"today\", \"tomorrow\" or \"yesterday\"; `time` is an alias for `start_time`). Returns the new `event_id`.")
+        Some("- `calendar_create` — Schedule an event. params: `{ title: string, date: string, start_time?: string, end_time?: string, all_day?: boolean, description?: string, location?: string }` — `title` and `date` required (date = \"YYYY-MM-DD\", \"today\", \"tomorrow\" or \"yesterday\"; `time` is an alias for `start_time`; `start`/`end` may also be ISO date-times like \"2026-11-20T08:15\"). Returns the new `event_id`.")
     }
     fn humanize(&self, _r: &str, data: &Value) -> String {
         let title = data.get("title").and_then(|v| v.as_str()).unwrap_or("Event");
@@ -93,20 +104,29 @@ impl Tool for CalendarCreate {
 
     async fn invoke(&self, ctx: &PluginCtx, req: ToolRequest<'_>) -> Result<ActionOutcome, AppError> {
         let title = require_title(&req)?;
+        // `start_time: "2026-11-20T08:15:00"` carries the date as well.
+        let start = datetime_param(&req, &["start", "start_datetime", "datetime", "when", "start_time", "time"]);
+        let end = datetime_param(&req, &["end", "end_datetime", "end_time"]);
         let date_raw = req
             .params
             .param_str("date")
             .or_else(|| req.params.param_str("day"))
+            .or_else(|| start.as_ref().map(|(d, _)| d.clone()))
             .unwrap_or_default();
         let date = normalize_date(&date_raw).map_err(AppError::BadRequest)?;
-        let start_raw = req
-            .params
-            .param_str("start_time")
+        let start_raw = start
+            .as_ref()
+            .map(|(_, t)| t.clone())
+            .or_else(|| req.params.param_str("start_time"))
             .or_else(|| req.params.param_str("time"))
             .unwrap_or_default();
         let start_time = normalize_time(&start_raw).map_err(AppError::BadRequest)?;
-        let end_time = normalize_time(&req.params.param_str("end_time").unwrap_or_default())
-            .map_err(AppError::BadRequest)?;
+        let end_raw = end
+            .as_ref()
+            .map(|(_, t)| t.clone())
+            .or_else(|| req.params.param_str("end_time"))
+            .unwrap_or_default();
+        let end_time = normalize_time(&end_raw).map_err(AppError::BadRequest)?;
         let all_day = req.params.param_bool("all_day").unwrap_or(false);
         let description = req.params.param_str("description").unwrap_or_default();
         let location = req.params.param_str("location").unwrap_or_default();

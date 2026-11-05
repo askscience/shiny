@@ -148,10 +148,14 @@ pub async fn execute_action(
                     owner: None,
                 }
             } else {
+                // "Show me Word" means open it: an installed plugin that is not
+                // active this session is activated rather than refused (the
+                // model would otherwise answer "it is open" over the error).
+                state.plugins.set_enabled_for(&traveler.id, &name, true).await?;
                 ActionOutcome {
                     action: action_key.clone(),
-                    result: "error".into(),
-                    data: json!({ "error": format!("plugin '{name}' is inactive — activate it with plugin_activate first") }),
+                    result: "ok".into(),
+                    data: json!({ "plugin": name, "activated": true }),
                     artifact: None,
                     extra_artifacts: vec![],
                     owner: None,

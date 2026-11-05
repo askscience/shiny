@@ -66,6 +66,12 @@ pub fn normalize_time(s: &str) -> Result<String, String> {
     }
 
     let parts: Vec<&str> = body.split(':').collect();
+    // "08:15:00" — the seconds a model copies from an ISO timestamp.
+    let parts = if parts.len() == 3 && parts[2].parse::<u32>().is_ok_and(|s| s < 60) {
+        parts[..2].to_vec()
+    } else {
+        parts
+    };
     let (mut h, m) = match parts.len() {
         1 => {
             let h: u32 = parts[0].parse().map_err(|_| format!("invalid time \"{s}\""))?;
@@ -96,6 +102,25 @@ pub fn normalize_time(s: &str) -> Result<String, String> {
 }
 
 /// First and last day of a "YYYY-MM" month, as (from, to) "YYYY-MM-DD" pairs.
+/// A date-and-time a model may send in one field: `2026-11-20T08:15`,
+/// `2026-11-20T08:15:00Z`, `2026-11-20 08:15:00+01:00`, or a bare date.
+/// Returns `(YYYY-MM-DD, HH:MM or "")`; `None` when no date leads the text.
+pub fn split_datetime(s: &str) -> Option<(String, String)> {
+    let t = s.trim();
+    if t.len() < 10 {
+        return None;
+    }
+    let date = normalize_date(&t[..10]).ok()?;
+    let rest = t[10..].trim_start_matches(['T', 't', ' ']);
+    // Drop a zone suffix: the event is stored in local wall-clock time.
+    let clock: String = rest
+        .chars()
+        .take_while(|c| c.is_ascii_digit() || *c == ':')
+        .collect();
+    let time = if clock.is_empty() { String::new() } else { normalize_time(&clock).ok()? };
+    Some((date, time))
+}
+
 pub fn month_bounds(month: &str) -> Result<(String, String), String> {
     let m = month.trim();
     let first = NaiveDate::parse_from_str(&format!("{m}-01"), "%Y-%m-%d")
@@ -119,6 +144,16 @@ mod tests {
         assert_eq!(normalize_date("2026-08-14").unwrap(), "2026-08-14");
         assert_eq!(normalize_date("2026/8/4").unwrap(), "2026-08-04");
         assert_eq!(normalize_date("today").unwrap(), today());
+    }
+
+    #[test]
+    fn datetimes_in_one_field() {
+        assert_eq!(split_datetime("2026-11-20T08:15:00"), Some(("2026-11-20".into(), "08:15".into())));
+        assert_eq!(split_datetime("2026-11-20T08:15:00Z"), Some(("2026-11-20".into(), "08:15".into())));
+        assert_eq!(split_datetime("2026-11-20 21:30+01:00"), Some(("2026-11-20".into(), "21:30".into())));
+        assert_eq!(split_datetime("2026-11-20"), Some(("2026-11-20".into(), String::new())));
+        assert_eq!(split_datetime("08:15"), None);
+        assert_eq!(normalize_time("08:15:00").unwrap(), "08:15");
     }
 
     #[test]

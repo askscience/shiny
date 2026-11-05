@@ -60,6 +60,26 @@ fn doc_summary_json(row: &(String, String, String)) -> Value {
     json!({ "doc_id": row.0, "title": row.1, "updated_at": row.2 })
 }
 
+/// The first Markdown heading of `content`, else its first non-empty line,
+/// cleaned of Markdown marks and kept to 80 characters.
+fn title_from_content(content: &str) -> Option<String> {
+    let lines: Vec<&str> = content.lines().map(str::trim).filter(|l| !l.is_empty()).collect();
+    let pick = lines
+        .iter()
+        .find(|l| l.starts_with('#'))
+        .or_else(|| lines.first())?;
+    let clean: String = pick
+        .trim_start_matches('#')
+        .trim()
+        .replace("**", "")
+        .replace('*', "")
+        .chars()
+        .take(80)
+        .collect();
+    let clean = clean.trim().to_string();
+    (!clean.is_empty()).then_some(clean)
+}
+
 /* ── doc_create ─────────────────────────────────────────────── */
 
 pub struct DocCreate;
@@ -78,12 +98,16 @@ impl Tool for DocCreate {
     }
 
     async fn invoke(&self, ctx: &PluginCtx, req: ToolRequest<'_>) -> Result<ActionOutcome, AppError> {
+        let content = req.params.param_str("content").unwrap_or_default();
+        // A document written without a title is named after its first
+        // heading (or first line), not left as "Untitled".
         let title = req
             .params
             .param_str("title")
+            .or_else(|| req.params.param_str("name"))
             .filter(|t| !t.trim().is_empty())
+            .or_else(|| title_from_content(&content))
             .unwrap_or_else(|| "Untitled".into());
-        let content = req.params.param_str("content").unwrap_or_default();
         let html = content_to_html(&content);
         let odt_bytes = engine::html_to_odt(&html)?;
         let id = uuid::Uuid::new_v4().to_string();
@@ -674,5 +698,18 @@ mod tests {
         assert!(home_file("u", Some(h), "Pictures").is_err(), "a folder is not a picture");
         assert!(home_file("u", Some(h), "missing.png").is_err());
         let _ = std::fs::remove_dir_all(&base);
+    }
+}
+
+#[cfg(test)]
+mod title_tests {
+    use super::title_from_content;
+
+    #[test]
+    fn an_untitled_document_takes_its_first_heading() {
+        assert_eq!(title_from_content("# Three-Day Lisbon Itinerary\n\n## Day 1").as_deref(), Some("Three-Day Lisbon Itinerary"));
+        assert_eq!(title_from_content("Intro line\n\n## Later heading").as_deref(), Some("Later heading"));
+        assert_eq!(title_from_content("**Packing list**\n- socks").as_deref(), Some("Packing list"));
+        assert_eq!(title_from_content("   \n").as_deref(), None);
     }
 }

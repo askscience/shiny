@@ -770,6 +770,10 @@ async fn prepare_agent(
     // intendo Milano" arrives as a question about nothing.
     let correction_note = correction_block(correction);
 
+    // Without the date the model guesses the year from its training data:
+    // "November 20" became an event in 2024.
+    let today_line = crate::services::agent_steps::today_line();
+
     let system = format!(
         "You are {ai_name}, {persona}. Always reply in {lang_name}. {style_lead}\n\
          The user may wake you by saying \"hey {ai_lower}\".\n\
@@ -782,7 +786,7 @@ async fn prepare_agent(
          - Always include \"params\". Use {{}} when a tool has no parameters.\n\
          \n\
          ## Tools\n{skill}\n\n\
-         ## Context\n{focus_line}User name: {user_first}\n{location_line}\n{trip_line}\nDiary: {diary_line}{context_block}\n\
+         ## Context\n{today_line}\n{focus_line}User name: {user_first}\n{location_line}\n{trip_line}\nDiary: {diary_line}{context_block}\n\
          Mode: {mode} — answer fully and clearly.{history_block}{plugin_windows_block}{craft_block}{focus_block}{plugin_catalog_block}{desktop_block}",
         ai_name = ai_name,
         persona = persona,
@@ -794,6 +798,7 @@ async fn prepare_agent(
         long_form = LONG_FORM_BLOCK,
         skill = skill,
         focus_line = focus_line,
+        today_line = today_line,
         location_line = location_line,
         trip_line = trip_line,
         diary_line = diary_line,
