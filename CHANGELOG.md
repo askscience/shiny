@@ -4,6 +4,16 @@
 
 ### Added
 
+- Import from another browser, in the Browser's main menu. History and
+  bookmarks come in one click from the browsers installed on the computer —
+  Firefox, LibreWolf, Chrome, Chromium, Brave, Edge, Vivaldi, Opera, also as
+  Snap or Flatpak — read from a copy of the profile, so a running Firefox is
+  no obstacle. Passwords come from the CSV a browser or password manager
+  exports (Firefox, Chrome, Edge, Brave, Safari, Bitwarden, KeePassXC,
+  1Password, recognised by the header), bookmarks also from the HTML every
+  browser exports. Importing again adds nothing twice; a login already saved
+  is updated, not duplicated.
+
 - The Browser's password manager works on its own, like a browser's: after
   a sign-in it offers to save the login ("Save", "Not now", "Never" for the
   site), or to update it when the password changed; on a login page it fills

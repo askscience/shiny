@@ -85,6 +85,9 @@ impl Plugin for BrowserPlugin {
             (HttpMethod::Post, "/api/browser/passwords/reveal", "browser_password_reveal"),
             (HttpMethod::Post, "/api/browser/passwords/save", "browser_password_save"),
             (HttpMethod::Post, "/api/browser/passwords/remove", "browser_password_remove"),
+            (HttpMethod::Get, "/api/browser/import/sources", "browser_import_sources"),
+            (HttpMethod::Post, "/api/browser/import/profile", "browser_import_profile"),
+            (HttpMethod::Post, "/api/browser/import/file", "browser_import_file"),
         ].map(|(method, path, tag)| RouteSpec::new(method, path, tag)));
 
         // A URL the window should be showing right now, for the UI to poll.

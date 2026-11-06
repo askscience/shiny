@@ -131,6 +131,22 @@ pub fn add(
     }
 }
 
+/// How many bookmarks a user has (0 when the table cannot be read).
+pub fn count(ctx: &Arc<PluginCtx>, user_id: &str) -> usize {
+    ctx.db()
+        .query(
+            &format!("SELECT COUNT(*) FROM {TABLE} WHERE traveler_id = ?1"),
+            &[Value::text(user_id.to_string())],
+        )
+        .ok()
+        .and_then(|rows| rows.into_iter().next())
+        .and_then(|row| row.into_iter().next())
+        .map_or(0, |v| match v {
+            Value::Int(n) => n.max(0) as usize,
+            _ => 0,
+        })
+}
+
 /// Drop one bookmark by id. `false` means nothing matched (or the DB is
 /// unreadable) — never fatal.
 pub fn remove(ctx: &Arc<PluginCtx>, user_id: &str, id: &str) -> bool {

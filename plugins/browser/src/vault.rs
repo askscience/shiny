@@ -623,6 +623,88 @@ pub fn save(ctx: &PluginCtx, user_id: &str, req: &SaveRequest) -> Result<Entry, 
     Ok(Entry { id, origin, username, note: secret.note.clone(), updated_at: String::new() })
 }
 
+/// What an import did with the logins it was given.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct ImportCounts {
+    /// New logins.
+    pub added: usize,
+    /// Saved logins whose password (or note) the import changed.
+    pub updated: usize,
+    /// Already saved exactly as given.
+    pub unchanged: usize,
+    /// Not a web address, or no password.
+    pub skipped: usize,
+}
+
+/// Save many logins at once (an import from another browser).
+///
+/// Like [`save`] per login — the same origin and username update the saved
+/// entry — but the vault is opened once and every write is one transaction,
+/// so a thousand logins do not decrypt the vault a thousand times. A login
+/// already saved with the same password is left alone; a note is kept when
+/// the import brings none.
+pub fn save_many(ctx: &PluginCtx, user_id: &str, logins: &[SaveRequest]) -> Result<ImportCounts, AppError> {
+    let key = data_key(user_id).ok_or_else(locked)?;
+    let mut known: HashMap<(String, String), (String, Secret)> = load_entries(ctx, user_id, &key)?
+        .into_iter()
+        .map(|(e, secret)| ((e.origin.clone(), e.username.clone()), (e.id, secret)))
+        .collect();
+    let mut counts = ImportCounts::default();
+    let db = ctx.db();
+    db.execute("BEGIN IMMEDIATE", &[])?;
+    let result = (|| -> Result<(), AppError> {
+        for login in logins {
+            let (Some(origin), false) = (origin_of(&login.site), login.password.is_empty()) else {
+                counts.skipped += 1;
+                continue;
+            };
+            let username = login.username.trim().to_string();
+            let note = login.note.trim().to_string();
+            let slot = (origin.clone(), username.clone());
+            let (id, note) = match known.get(&slot) {
+                Some((_, saved)) if saved.password == login.password && (note.is_empty() || note == saved.note) => {
+                    counts.unchanged += 1;
+                    continue;
+                }
+                Some((id, saved)) => {
+                    counts.updated += 1;
+                    (id.clone(), if note.is_empty() { saved.note.clone() } else { note })
+                }
+                None => {
+                    counts.added += 1;
+                    (uuid::Uuid::new_v4().to_string(), note)
+                }
+            };
+            let secret = Secret { origin, username, password: login.password.clone(), note };
+            let plain = Zeroizing::new(
+                serde_json::to_vec(&secret).map_err(|e| AppError::Internal(e.to_string()))?,
+            );
+            let sealed = seal(&key, &plain, &entry_aad(user_id, &id))?;
+            db.execute(
+                &format!(
+                    "INSERT INTO {ENTRY_TABLE} (id, traveler_id, sealed, created_at, updated_at) \
+                     VALUES (?1, ?2, ?3, datetime('now'), datetime('now')) \
+                     ON CONFLICT(id) DO UPDATE SET sealed = excluded.sealed, updated_at = datetime('now') \
+                     WHERE browser_passwords.traveler_id = excluded.traveler_id"
+                ),
+                &[Value::text(id.clone()), Value::text(user_id.to_string()), Value::text(sealed)],
+            )?;
+            known.insert(slot, (id, secret));
+        }
+        Ok(())
+    })();
+    match result {
+        Ok(()) => {
+            db.execute("COMMIT", &[])?;
+            Ok(counts)
+        }
+        Err(err) => {
+            let _ = db.execute("ROLLBACK", &[]);
+            Err(err)
+        }
+    }
+}
+
 /// Drop one login. Needs the vault open, like every other change.
 pub fn remove(ctx: &PluginCtx, user_id: &str, id: &str) -> Result<bool, AppError> {
     data_key(user_id).ok_or_else(locked)?;
@@ -708,6 +790,53 @@ mod tests {
         assert!(!attempt_allowed(user));
         clear_failures(user);
         assert!(attempt_allowed(user));
+    }
+
+    fn login(site: &str, username: &str, password: &str) -> SaveRequest {
+        SaveRequest { id: None, site: site.into(), username: username.into(), password: password.into(), note: String::new() }
+    }
+
+    #[test]
+    fn an_import_adds_updates_and_skips() {
+        let path = "/tmp/browser-vault-import-test.db";
+        let _ = std::fs::remove_file(path);
+        let ctx = crate::history::tests_support::ctx_for(path);
+        ctx.db()
+            .execute(
+                &format!(
+                    "CREATE TABLE {ENTRY_TABLE} (id TEXT PRIMARY KEY, traveler_id TEXT NOT NULL, \
+                     sealed TEXT NOT NULL, created_at TEXT, updated_at TEXT)"
+                ),
+                &[],
+            )
+            .unwrap();
+        let user = "import-test-user";
+        keep_open(user, Zeroizing::new([5u8; KEY_LEN]));
+
+        let first = save_many(&ctx, user, &[
+            login("https://www.example.com/login", "me", "one"),
+            login("https://other.example/", "", "two"),
+            login("chrome://settings", "x", "y"),
+            login("https://empty.example/", "x", ""),
+        ])
+        .unwrap();
+        assert_eq!(first, ImportCounts { added: 2, updated: 0, unchanged: 0, skipped: 2 });
+
+        let again = save_many(&ctx, user, &[
+            login("https://example.com", "me", "one"),
+            login("https://other.example", "", "changed"),
+        ])
+        .unwrap();
+        assert_eq!(again, ImportCounts { added: 0, updated: 1, unchanged: 1, skipped: 0 });
+
+        let all = list(&ctx, user, None).unwrap();
+        assert_eq!(all.len(), 2);
+        let other = all.iter().find(|e| e.origin == "https://other.example").unwrap();
+        assert_eq!(reveal(&ctx, user, &other.id).unwrap().1.as_str(), "changed");
+
+        lock(user);
+        assert!(save_many(&ctx, user, &[login("https://a.example", "a", "b")]).is_err());
+        let _ = std::fs::remove_file(path);
     }
 
     #[test]

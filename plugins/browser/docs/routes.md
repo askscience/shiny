@@ -477,6 +477,42 @@ than duplicated. `data`: `{ "entry": { … } }`.
 
 **Request**: `{ "id": "…" }`. `data`: `{ "removed": bool }`.
 
+## Import from another browser
+
+`src/import.rs`. History and bookmarks come straight from the profiles of
+browsers installed on this machine; passwords and bookmarks from the files
+browsers export.
+
+### GET `/api/browser/import/sources`
+
+The Firefox-family (`places.sqlite`: Firefox, LibreWolf) and Chromium-family
+(`History` / `Bookmarks`: Chrome, Chromium, Brave, Edge, Vivaldi, Opera)
+profiles in the home, in their usual, Snap and Flatpak places. `data`:
+`{ "sources": [{ "id": "firefox-0", "browser": "Firefox", "profile":
+"default-release", "family": "firefox", "history": true, "bookmarks": true }] }`.
+No path is ever sent.
+
+### POST `/api/browser/import/profile`
+
+**Request**: `{ "id": "firefox-0" }` — an id the list above gave; the server
+detects again and refuses an unknown one (404). The profile database is copied
+aside with its `-wal` (a running Firefox keeps it locked) and read; the copy
+is removed. History brings each address once at its last visit, newest first,
+at most 5 000; importing again adds nothing twice. Bookmarks are deduped by
+URL. `data`: `{ "added": { "history": n, "bookmarks": n }, "found": { … } }`.
+
+### POST `/api/browser/import/file`
+
+**Request**: `{ "text": "…" }` (up to 32 MiB) — the file's text. A Netscape
+bookmark file (`bookmarks.html`) adds bookmarks: `data`: `{ "kind":
+"bookmarks", "found": n, "added": n }`. Otherwise it must be a password CSV,
+recognised by its header — Firefox, Chrome/Edge/Brave, Safari, Bitwarden,
+KeePassXC, 1Password — and needs the vault open (`vault_locked` otherwise).
+Logins are saved like `passwords/save` (same origin and username update the
+entry) in one transaction: `data`: `{ "kind": "passwords", "found": n,
+"counts": { "added", "updated", "unchanged", "skipped" } }`. Anything else is
+`400 not_an_import_file`.
+
 ---
 
 ## Cross-references

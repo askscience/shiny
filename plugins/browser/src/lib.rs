@@ -27,6 +27,7 @@ pub mod downloads;
 pub mod fetch;
 pub mod filter;
 pub mod history;
+pub mod import;
 pub mod news;
 pub mod plugin;
 pub mod preview;

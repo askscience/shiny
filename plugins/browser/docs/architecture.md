@@ -37,7 +37,8 @@ rewriting rules, but not on the render path.
 | `src/preview.rs` | `Preview`, `is_allowed`, `fetch`, `parse` | Hover link metadata + SSRF guard + cache |
 | `src/sessions.rs` | `Session`, create/get/update/close/list | In-memory bounded tabs |
 | `src/news.rs` | `NewsCard`, `HomeNews`, `Profile`, `Interest`, `RawResult`, `tokenize`, `profile_from_history`, `select_topics`, `parse_results`, `rank_results`, `interests_for`, `home_news` | Related-news recommender |
-| `src/vault.rs` | `ensure_schema`, `unlock`, `Unlock`, `lock`, `is_unlocked`, `reset`, `list`, `reveal`, `save`, `SaveRequest`, `remove`, `Entry`, `origin_of`, `origin_matches`, `IDLE_LOCK` | Password vault sealed under the login password |
+| `src/vault.rs` | `ensure_schema`, `unlock`, `Unlock`, `lock`, `is_unlocked`, `reset`, `list`, `reveal`, `save`, `save_many`, `ImportCounts`, `SaveRequest`, `remove`, `Entry`, `origin_of`, `origin_matches`, `IDLE_LOCK` | Password vault sealed under the login password |
+| `src/import.rs` | `detect`, `Source`, `read_profile`, `parse_passwords_csv`, `parse_bookmarks_html`, `parse_chromium_bookmarks`, `parse_csv`, `add_history`, `add_bookmarks`, `HISTORY_LIMIT` | Import from other browsers: profiles and exported files |
 
 ## Registration and lifecycle
 
@@ -235,6 +236,27 @@ fill on a page
 - Every entry is one sealed JSON document; the table holds no site names.
 - Copying a password uses `copyText(…, { sensitive: true })`, so it never
   enters the clipboard history.
+
+### 8. Import (`/api/browser/import/*`)
+
+```
+menu "Import from another browser…" -> import-panel.js
+  GET import/sources          detect(): profiles under $HOME (Firefox, LibreWolf,
+                              Chrome, Chromium, Brave, Edge, Vivaldi, Opera;
+                              usual, Snap and Flatpak places) -> ids, no paths
+  click a profile -> POST import/profile { id }
+    re-detect, find by id -> copy places.sqlite / History (+ -wal) to a temp dir
+    read the copy -> add_history (one transaction, (url, time) once)
+                  -> bookmarks::add (URL-deduped)
+  "From a file…" -> pickFiles -> file.text() -> POST import/file { text }
+    bookmarks HTML -> parse_bookmarks_html -> bookmarks
+    password CSV   -> parse_passwords_csv (by header) -> vault::save_many
+                      (vault_locked -> unlock prompt -> the window resends)
+```
+
+Passwords are never read from a profile: Firefox seals them with the
+profile's key (`key4.db`) and Chrome with the desktop keyring's, while every
+browser exports a CSV. The window reminds the user to delete that file.
 
 ## Schema and best-effort rule
 

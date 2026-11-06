@@ -18,6 +18,7 @@ import { onOpenUrl } from '../../js/linkRouter.js';
 import { nativeOccluderHoles, watchNativeOccluders } from '../../js/nativeOccluders.js';
 import { createPasswordsPanel, fillScript, readScript } from './passwords.js';
 import { createLoginAssist } from './login-assist.js';
+import { createImportPanel } from './import-panel.js';
 import { openCoreWindow } from '../../js/tiles.js';
 import { icon, iconButton, searchBar, tabStrip, tab, themeMode } from '../../ui/index.js';
 ```
@@ -254,6 +255,7 @@ above the page.
 | `GET/POST/DELETE /api/browser/history*` | history panel open/clear |
 | `GET /api/browser/vault`, `POST …/vault/{unlock,lock,reset}`, `GET /api/browser/passwords`, `POST …/passwords/{reveal,save,remove}` | the password manager (`passwords.js`) |
 | `GET /api/browser/bookmarks`, `POST …/add`, `POST …/remove` | bookmarks panel and the star toggle |
+| `GET /api/browser/import/sources`, `POST …/import/{profile,file}` | the import panel (`import-panel.js`) |
 
 ## Tab model
 
@@ -382,6 +384,18 @@ never from an incognito tab and never for a site marked "Never" (kept in
 the unlock prompt and then the editor, prefilled. A background tab keeps its
 offer until the user switches to it. The vault still locks after its idle
 time and with the server: the fill waits for an unlock.
+
+## Import
+
+"Import from another browser…" in the main menu opens `web/import-panel.js`
+(`.browser-import-panel`): the browser profiles found on this computer, one
+row each ("Firefox · default-release", with what it brings) that imports its
+history and bookmarks, and "From a file…", which picks a password CSV or a
+bookmarks HTML with the shared file picker (`pickFiles`) and sends its text.
+A password file with the vault locked opens the unlock prompt; once it is
+open the window comes back to the import, which finishes by itself. After
+passwords the panel reminds the user to delete the CSV. Bookmarks are
+reloaded after every import. Routes: [`routes.md`](routes.md#import-from-another-browser).
 
 ## Right-click inside a page
 

@@ -33,6 +33,7 @@ import { onOpenUrl } from '../../js/linkRouter.js';
 import { nativeOccluderHoles, watchNativeOccluders } from '../../js/nativeOccluders.js';
 import { createPasswordsPanel, fillScript, readScript } from './passwords.js';
 import { createLoginAssist } from './login-assist.js';
+import { createImportPanel } from './import-panel.js';
 import { openCoreWindow } from '../../js/tiles.js';
 
 export const BROWSER_PLUGIN = 'browser';
@@ -278,12 +279,15 @@ let passwordsPanel = null;
 /** Save / fill / suggest on its own (login-assist.js) and its offer popover. */
 let loginAssist = null;
 let loginOfferEl = null;
+/** "Import from another browser" (import-panel.js). */
+let importer = null;
+let importPanel = null;
 /** The password manager behind `passwordsPanel` (see passwords.js). */
 let passwords = null;
 
 /** Every popover this window owns, open or not. */
 function browserPopovers() {
-  return [downloadsPanel, browserMenu, historyPanel, bookmarksPanel, tabsPanel, passwordsPanel, loginOfferEl]
+  return [downloadsPanel, browserMenu, historyPanel, bookmarksPanel, tabsPanel, passwordsPanel, loginOfferEl, importPanel]
     .filter(Boolean);
 }
 
@@ -1526,6 +1530,10 @@ function buildBrowserMenu() {
       closeBrowserMenu();
       void openPasswordsPanel();
     })),
+    menuItem('ui/folder-open', t('plugin.browser.import.menu', null, 'Import from another browser…'), () => {
+      closeBrowserMenu();
+      void openImportPanel();
+    }),
     popoverSeparator(),
     menuItem('ui/settings', t('plugin.browser.menu.settings', null, 'Settings'), () => {
       closeBrowserMenu();
@@ -1675,7 +1683,13 @@ function buildPasswords() {
     readPage: readActivePage,
     onLayout: () => requestSync(),
     closePanels: () => closeAllBrowserPanels(),
-    onUnlocked: () => loginAssist?.refill(activeTab()),
+    onUnlocked: () => {
+      loginAssist?.refill(activeTab());
+      // A password file waited for this: back to the import, which finishes.
+      if (importer?.hasPending()) {
+        void openImportPanel().then(() => importer?.vaultUnlocked());
+      }
+    },
   });
   return passwords.element;
 }
@@ -1721,6 +1735,24 @@ function buildLoginAssist() {
     },
   });
   return loginAssist.element;
+}
+
+function buildImportPanel() {
+  importer = createImportPanel({
+    popover,
+    onLayout: () => requestSync(),
+    onImported: () => void loadBookmarks(),
+    openPasswords: () => void openPasswordsPanel(),
+  });
+  return importer.element;
+}
+
+async function openImportPanel() {
+  closeAllBrowserPanels();
+  if (!importPanel || !importer) return;
+  importPanel.classList.remove('hidden');
+  requestSync();
+  await importer.open();
 }
 
 async function openPasswordsPanel() {
@@ -2971,9 +3003,11 @@ export function mountBrowserTile() {
   tabsPanel = buildTabsPanel();
   passwordsPanel = buildPasswords();
   loginOfferEl = buildLoginAssist();
+  importPanel = buildImportPanel();
   tileEl.append(
     tabstripEl, buildToolbar(), viewportEl,
     downloadsPanel, browserMenu, historyPanel, bookmarksPanel, tabsPanel, passwordsPanel, loginOfferEl,
+    importPanel,
   );
 
   document.addEventListener('pointerdown', onBrowserPointerDown, true);
@@ -3061,6 +3095,8 @@ export function unmountBrowserTile() {
   passwordsPanel = null;
   loginOfferEl = null;
   loginAssist = null;
+  importPanel = null;
+  importer = null;
   passwords = null;
   passwordsBtn = null;
   for (const resolve of pageJsWaiters.values()) resolve('');

@@ -139,10 +139,15 @@ drops the stale `browser_history` table.
 | `src/sessions.rs` | In-memory tab sessions (bounded to 64) |
 | `src/news.rs` | Interest profile, topic selection, engine HTML parsing, ranking, home shelf |
 | `src/sites.rs` | Most visited sites, RSS/Atom feed discovery + parsing, site cards for the shelf |
-| `src/vault.rs` | Password vault: key wrapping, unlock/idle lock/throttle, sealed entries, origin matching |
+| `src/vault.rs` | Password vault: key wrapping, unlock/idle lock/throttle, sealed entries, bulk import, origin matching |
+| `src/import.rs` | Import from other browsers: installed profiles' history and bookmarks, password CSV and bookmarks HTML |
 | `web/plugin.js` | The window surface (chrome + native-view IPC + core occluder holes + home shelf + tab switcher) |
 | `web/passwords.js` | The password manager popover and the page scripts that fill/read login forms |
-| `web/passwords.test.mjs` | Page-script checks: origin guard, field choice, events, escaping |
+| `web/passwords.test.mjs` | Page-script checks: origin guard, field choice, events, escaping, watching a form, strong passwords |
+| `web/login-assist.js` | Saving a submitted login, filling the saved one, suggesting a strong password, on the tab's load events |
+| `web/login-assist.test.mjs` | When a login is offered, updated, filled or left alone |
+| `web/import-panel.js` | "Import from another browser" (main menu) |
+| `web/import-panel.test.mjs` | Profiles imported by id, files, the locked-vault resume |
 | `web/plugin.css` | Layout-only styles, scoped under `.browser-tile` |
 | `web/icon.svg` | Theme-aware flame glyph (`ui/launcher`) |
 | `web/plugin.smoke.mjs` | Node DOM-shim smoke test of the window surface |
@@ -249,6 +254,9 @@ Full detail in [`tools.md`](tools.md).
 | POST | `/api/browser/passwords/reveal` | `browser_password_reveal` |
 | POST | `/api/browser/passwords/save` | `browser_password_save` |
 | POST | `/api/browser/passwords/remove` | `browser_password_remove` |
+| GET | `/api/browser/import/sources` | `browser_import_sources` |
+| POST | `/api/browser/import/profile` | `browser_import_profile` |
+| POST | `/api/browser/import/file` | `browser_import_file` |
 
 Full detail in [`routes.md`](routes.md).
 

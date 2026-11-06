@@ -321,6 +321,14 @@ const createPasswordsPanel = (deps) => {
   return { element, open: async () => { passwordOpens += 1; } };
 };
 const fillScript = (origin, username, password) => `FILL ${origin} ${username} ${password}`;
+/** The import panel (import-panel.js, tested on its own): opened from the menu. */
+let importOpens = 0;
+const createImportPanel = (deps) => ({
+  element: deps.popover('browser-import-panel'),
+  open: async () => { importOpens += 1; },
+  vaultUnlocked: () => {},
+  hasPending: () => false,
+});
 /** The automatic save/fill (login-assist.js, tested on its own): the window
  *  must feed it the tab's load and address events. */
 const assistEvents = [];
@@ -375,6 +383,7 @@ const context = vm.createContext({
   watchNativeOccluders,
   createPasswordsPanel,
   createLoginAssist,
+  createImportPanel,
   fillScript,
   readScript,
   // The i18n runtime: resolve to the inline English fallback, as the catalog does.
@@ -589,6 +598,17 @@ await tick(10);
 check('an address change after it is', assistEvents.some((e) => e.name === 'address' && e.id === assistTab));
 check('the offer is one of the window popovers', !!findAll(tile, (el) => String(el.className).includes('browser-pw-offer'))[0]);
 check('the assist sees the loaded origin', assistDeps?.originOf({ native: true, url: 'https://a.example/x' }) === 'https://a.example');
+
+/* Import: the main menu opens it. */
+const importItem = findAll(tile, (el) => String(el.className).includes('browser-menu-item')
+  && findAll(el, (k) => k.textContent === 'Import from another browser…').length)[0];
+check('the main menu offers the import', !!importItem);
+importItem?.dispatch('click', {});
+await tick(20);
+const importEl = findAll(tile, (el) => String(el.className).includes('browser-import-panel'))[0];
+check('it opens the import panel', importOpens === 1 && importEl && !importEl.classList.contains('hidden'));
+importItem?.dispatch('click', {});
+await tick(10);
 
 /* Downloads: shell events feed the panel and get persisted. */
 windowStub.__liteauraViewEvent({

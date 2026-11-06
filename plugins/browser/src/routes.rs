@@ -18,7 +18,7 @@ use shiny_plugin_sdk::routes::{bridged_route, RouteHandler, ok, user_id};
 use shiny_plugin_sdk::services::PluginCtx;
 
 use crate::sessions;
-use crate::{bookmarks, downloads, filter, settings, vault};
+use crate::{bookmarks, downloads, filter, import, settings, vault};
 
 pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
     let ctx = ctx.clone();
@@ -53,6 +53,9 @@ pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
         "browser_password_reveal" => Some(password_reveal(ctx)),
         "browser_password_save" => Some(password_save(ctx)),
         "browser_password_remove" => Some(password_remove(ctx)),
+        "browser_import_sources" => Some(import_sources()),
+        "browser_import_profile" => Some(import_profile(ctx)),
+        "browser_import_file" => Some(import_file(ctx)),
         _ => None,
     }
 }
@@ -833,6 +836,85 @@ fn password_remove(ctx: Arc<PluginCtx>) -> RouteHandler {
             let body = take_json::<SessionBody>(req).await?;
             let removed = vault::remove(&ctx, &uid, &body.id)?;
             Ok(ok(json!({ "removed": removed })))
+        }
+    })
+}
+
+/* ── Import from another browser ────────────────────────────────── */
+
+/// GET /api/browser/import/sources — the browser profiles on this machine.
+fn import_sources() -> RouteHandler {
+    bridged_route(move |req: axum::extract::Request| async move {
+        user_id(&req)?;
+        let sources = import::home().map(|h| import::detect(&h)).unwrap_or_default();
+        Ok(ok(json!({ "sources": sources })))
+    })
+}
+
+#[derive(Deserialize)]
+struct ImportProfileBody {
+    id: String,
+}
+
+/// POST /api/browser/import/profile — history and bookmarks of one profile
+/// `detect` listed, by its id (never a path).
+fn import_profile(ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req: axum::extract::Request| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            let body = take_json::<ImportProfileBody>(req).await?;
+            let source = import::home()
+                .map(|h| import::detect(&h))
+                .unwrap_or_default()
+                .into_iter()
+                .find(|s| s.id == body.id)
+                .ok_or_else(|| AppError::NotFound("no such browser profile".into()))?;
+            let (visits, marks) = import::read_profile(&source)?;
+            let added = import::Added {
+                history: import::add_history(&ctx, &uid, &visits)?,
+                bookmarks: import::add_bookmarks(&ctx, &uid, &marks),
+            };
+            Ok(ok(json!({ "added": added, "found": { "history": visits.len(), "bookmarks": marks.len() } })))
+        }
+    })
+}
+
+#[derive(Deserialize)]
+struct ImportFileBody {
+    text: String,
+}
+
+impl Drop for ImportFileBody {
+    fn drop(&mut self) {
+        use zeroize::Zeroize;
+        self.text.zeroize();
+    }
+}
+
+/// POST /api/browser/import/file — an exported file's text: a password CSV
+/// (needs the vault open) or a bookmarks HTML.
+fn import_file(ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req: axum::extract::Request| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            let (_parts, body) = req.into_parts();
+            let bytes = axum::body::to_bytes(body, 32 * 1024 * 1024)
+                .await
+                .map_err(|e| AppError::BadRequest(format!("could not read body: {e}")))?;
+            let body: ImportFileBody = serde_json::from_slice(&bytes)
+                .map_err(|e| AppError::BadRequest(format!("invalid body: {e}")))?;
+            drop(bytes);
+            if import::looks_like_bookmarks_html(&body.text) {
+                let marks = import::parse_bookmarks_html(&body.text);
+                let added = import::add_bookmarks(&ctx, &uid, &marks);
+                return Ok(ok(json!({ "kind": "bookmarks", "found": marks.len(), "added": added })));
+            }
+            let logins = import::parse_passwords_csv(&body.text)
+                .ok_or_else(|| AppError::BadRequest("not_an_import_file".into()))?;
+            let counts = vault::save_many(&ctx, &uid, &logins)?;
+            Ok(ok(json!({ "kind": "passwords", "found": logins.len(), "counts": counts })))
         }
     })
 }

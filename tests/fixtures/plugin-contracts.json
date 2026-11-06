@@ -25,6 +25,11 @@
       {
         "auth": "auth",
         "method": "Get",
+        "path": "/api/browser/import/sources"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
         "path": "/api/browser/news"
       },
       {
@@ -91,6 +96,16 @@
         "auth": "auth",
         "method": "Post",
         "path": "/api/browser/history/record"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/browser/import/file"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/browser/import/profile"
       },
       {
         "auth": "auth",
