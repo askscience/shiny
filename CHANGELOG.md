@@ -24,6 +24,14 @@
   opens the unlock prompt and then the editor, prefilled. Incognito tabs
   fill but never save. The editor has the same strong-password suggestion.
 
+### Fixed
+
+- A plugin directory with a leftover library next to the rebuilt one loaded
+  the leftover: the loader only recognised `lib<name>.so`, never the
+  `libshiny_<name>_plugin.so` every build produces, and fell back to the
+  alphabetically first file. A development machine kept running an October
+  Browser library this way. The built name now wins.
+
 ### Changed
 
 - The Browser's tabs look like the Terminal's — flat mono capitals, the

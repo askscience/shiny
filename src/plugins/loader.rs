@@ -560,7 +560,10 @@ pub(crate) fn find_cdylib(install_dir: &Path, name: &str) -> Option<PathBuf> {
     // Accept any regular `.so` / `.dylib` / `.dll` file at or below the install
     // dir. Selection is deterministic so an archive cannot smuggle in a second
     // library and win the race by `read_dir` order:
-    //   1. an exact `lib<name>.<ext>` / `<name>.<ext>` match wins;
+    //   1. an exact match wins: `lib<name>.<ext>` / `<name>.<ext>`, or the name
+    //      every first-party build produces, `libshiny_<name>_plugin.<ext>`
+    //      (without it a stale library left next to a fresh build won by
+    //      sorting first: a browser kept loading an October library);
     //   2. otherwise the lexicographically first cdylib.
     // Symlinks are never followed: a tar archive can contain one, and we must
     // not `dlopen` a file that was not part of the archive's own tree.
@@ -597,6 +600,7 @@ pub(crate) fn find_cdylib(install_dir: &Path, name: &str) -> Option<PathBuf> {
     }
     candidates.sort();
     let wanted = name.to_lowercase();
+    let built = format!("shiny_{}_plugin", wanted.replace('-', "_"));
     let selected = candidates
         .iter()
         .find(|p| {
@@ -604,7 +608,10 @@ pub(crate) fn find_cdylib(install_dir: &Path, name: &str) -> Option<PathBuf> {
                 .file_stem()
                 .map(|s| s.to_string_lossy().to_lowercase())
                 .unwrap_or_default();
-            stem == wanted || stem == format!("lib{wanted}")
+            stem == wanted
+                || stem == format!("lib{wanted}")
+                || stem == built
+                || stem == format!("lib{built}")
         })
         .cloned()
         .or_else(|| candidates.first().cloned());
@@ -682,6 +689,25 @@ fn current_target_triple() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_built_library_wins_over_a_stale_one_beside_it() {
+        let dir = std::env::temp_dir().join(format!("shiny-find-cdylib-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        // Sorts first, but is not the plugin's own library.
+        std::fs::write(dir.join("libbrowser_stable.so"), b"old").unwrap();
+        std::fs::write(dir.join("libshiny_browser_plugin.so"), b"new").unwrap();
+        assert_eq!(
+            find_cdylib(&dir, "browser").unwrap().file_name().unwrap(),
+            "libshiny_browser_plugin.so"
+        );
+        std::fs::write(dir.join("libshiny_my_app_plugin.so"), b"x").unwrap();
+        assert_eq!(
+            find_cdylib(&dir, "my-app").unwrap().file_name().unwrap(),
+            "libshiny_my_app_plugin.so"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn plugin_names_are_single_safe_components() {
