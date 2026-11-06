@@ -30,17 +30,6 @@ html[data-motion='fluid'] #reply-text .reply-word { transition: transform var(--
 html[data-motion='depth'] #reply-text .reply-word { transform: translateY(0.2em) scale(0.9); filter: blur(6px); }
 html[data-motion='depth'] #reply-text .reply-word.is-said { transform: none; filter: none; }
 
-/* ── Voice bar: the assistant's state as a decoded label ─────────── */
-html[data-orb-status='state'] .voice-step {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  text-overflow: clip;
-}
-/* The label stays while the reply is spoken: "Speaking" is the point. */
-html[data-orb-status='state'] body.orb-speaking .voice-step { visibility: visible; }
-
 /* ── Kinetic: titles set in mono capitals, a rule under the active one ── */
 html[data-motion='kinetic'] .tile-header-title {
   position: relative;

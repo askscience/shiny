@@ -84,7 +84,7 @@ The shell is split by concern. Grouped:
 | `agent.js` | Drives `/api/agent` (JSON + SSE), renders replies, answers the terminal `approval` event. |
 | `chatHistory.js` | Conversation list + message bubbles. |
 | `voice.js`, `transcriptGuard.js`, `textInput.js`, `sphere.js` | Voice bar, STT/TTS wiring, the compose chat panel (pending wheel + live step line, "Thinking" fold, image/song blocks, the terminal command approval card, close), the sphere. |
-| `dockStep.js`, `voiceGlyph.js`, `toolIcons.js` | The assistant's status line and the voice bar's glyph: the dock bubble, the same line or the running tool's icon inside the bar (with its swap fade), and the tool → catalogue-icon map. |
+| `dockStep.js`, `voiceDots.js`, `voiceDotGlyphs.js`, `toolIcons.js` | The assistant's status line and the voice bar: the dock bubble (which re-broadcasts each step, with its tool, as `agent:step`), the bar's dot grid that follows the audio and the tools (four effects, also mounted as the Settings preview), its dot-matrix tool marks, and the tool → catalogue-icon map the tool cards use. |
 | `thinkToggle.js` | Chat head's brain button + voice-bar menu entry: Ollama thinking on/off, gated by the model's capability (`GET /api/ai/thinking`). |
 | `artifacts.js`, `artifactStore.js` | Artifact cards + dock. |
 | `files.js` | `saveOrDownload` / `openWithPlugin` desktop integration. |

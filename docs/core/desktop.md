@@ -726,20 +726,24 @@ on `<html>` / a CSS variable):
 | Setting | Values | Effect |
 |---|---|---|
 | `orb_width` / `orb_height` | 64–400 px / 24–72 px | Published as `--voice-bar-width` / `--voice-bar-height` and applied to the bar where it holds an edge alone. Riding the top bar's row the bar takes the rail's size instead, so the panel hides these two there. |
-| `orb_color` | `accent`, `palette` | The bar's own body: the theme accent, or `--focus-bar`, the same multi-accent gradient the focus-mode window frame uses. The audio bloom keeps the accent in both modes, so the voice-reactive shadow survives "all accents". |
-| `orb_border` | `none`, `hairline`, `palette` | The bar's own border — a line on the bar, not what makes it exist. The hairline is the accent's contrast ink, so it reads on the accent fill; `palette` copies the focus-mode ring (`--focus-ring`, a conic gradient) through a masked pseudo-element, because a border cannot hold a gradient. |
-| `orb_status` | `off`, `state` (default), `text`, `icons` | What the bar's own glyph wears (`#voice-step`, the one span inside it): nothing — the line stays in the bubble above — the assistant's **state** as a small mono label (Ready, Listening, Thinking, Speaking…) that decodes letter by letter on every change (`paintStateLabel` in `voiceGlyph.js`, driven by `voice:state` from `sphere.js`; it stays up while the reply is spoken) — the humanised tool step line as **text** (in the accent's contrast ink; the slot grows to fit it in the top row), or the **icon** of the tool that is running. The icon mode always carries a mark: the app's own at rest, the tool's while one runs, and back — each swap a short fade ([`voiceGlyph.js`](../../web/js/voiceGlyph.js) paints it, `sphere.css` animates it). `toolIcons.js` maps a tool action to a catalogue icon by prefix; the action rides the step from the server (`agent_runner.rs` → the SSE `step` event → `agent.js`). With any mode but `off` the bubble's own line is hidden, so the line never shows twice, and the dock keeps the live region. |
-| `orb_style` | `accent`, `bar` | The bar's own look: `accent` is the accent body (the colour above), `bar` the same glass plate the top bar's rail wears (`--surface`, the glass hairline, the glass blur) — the accent then shows in the audio glow alone. The panel's preview follows the choice. |
+| `orb_style` | `bar` (default), `dark`, `light`, `accent` | The bar's plate. `bar` follows the theme: the same glass plate the top bar's rail wears (`--surface`, the glass hairline, the glass blur), with the dots in the theme's `--text`. `dark` and `light` are that plate in a fixed tone whatever the theme (light dots on dark, dark dots on light — `--voice-plate*` in `sphere.css`). `accent` fills the body with the colour below, the dots in `--accent-contrast`. Settings shows `orb_style` and `orb_color` as one **Voice bar colour** control (Theme · Dark · Light · Theme accent · All accents). |
+| `orb_color` | `accent`, `palette` | With the accent plate: the theme accent, or `--focus-bar`, the same multi-accent gradient the focus-mode window frame uses. |
+| `orb_border` | `none`, `hairline`, `palette` | The bar's own border — a line on the bar, not what makes it exist. The hairline is the accent's contrast ink on the accent fill and the plate's own line otherwise; `palette` copies the focus-mode ring (`--focus-ring`, a conic gradient) through a masked pseudo-element, because a border cannot hold a gradient. |
+| `orb_effect` | `glyph` (default), `eq`, `ripple`, `firefly` | How the dot grid inside the bar moves ([`voiceDots.js`](../../web/js/voiceDots.js)). **Glyph**: a dot-matrix display — the level scrolls by like a scope, a running tool draws its own 5-row mark dot by dot (`voiceDotGlyphs.js`, matched by tool prefix), thinking hops three dots. **Equaliser**: columns mirrored from the centre; a scanner sweeps for tools and the grid flashes on each new one. **Ripple**: a halftone that swells with the voice (leaning with the pan) and rings on every peak; a comet runs round the edge for tools. **Fireflies**: sparks as many as the level, gathered toward the pan; a snake roams for tools and a burst marks each new one. The panel previews the pick live on a looped demo exchange. |
+| `orb_react` | `voice`, `tools`, `both` (default) | What the dots follow: the audio (`voice:level` while listening or speaking), the assistant's work (`agent:step` from `dockStep.js`, which carries the running tool's `action` — the server sends it with the SSE `step` event), or both — tools win while they run. |
+
+The dots are the bar's **only** effect: there is no audio shadow and no status
+glyph inside it any more (the step line lives in the bubble above). The grid
+runs edge to edge — five rows on a thin bar (more as it grows tall, pitch near
+7px), half a pitch in from every side, so the rounded ends clip the corner
+dots; on a side rail it runs along the bar's long side. At rest a faint wave
+crosses it at a dozen frames a second; a hidden page draws nothing, and reduced
+motion keeps the rest still (the dots still react). The colour is the bar's
+`--voice-ink`, read as the host's `color`; an unhappy mic turns the dots (or
+the accent body) to `--error`.
 
 The corners are **not** a setting: the bar uses the top bar's rounding
-(`--voice-radius`, 999px — the rail is a pill). Its shadow is the assistant's
-presence: `--voice-glow`, the bar's own `box-shadow` — a halo that swells with
-`--voice-level` plus a bloom that rises above the bar and leans with
-`--voice-pan` (both driven from `sphere.js`). Every offset, blur and spread in
-that token rides the level, so a bar with the mic quiet casts **nothing**: the
-shadow is the audio effect and not a resting decoration. The top-bar look keeps
-it — it must not set `box-shadow` itself, or a theme that collapses its shadows
-(`--shadow-glass: none`) would take the glow down with it.
+(`--voice-radius`, 999px — the rail is a pill).
 Themes that flatten gradients scope those rules to the accent mode, so the
 options keep working.
 

@@ -4,13 +4,13 @@ import { refreshPluginIcons } from '../pluginIcon.js';
 import { listFonts } from '../fonts.js';
 import { t } from '../i18n.js';
 import { isPluginActive } from '../activePlugins.js';
-import { MOTION_CHOICES, TERMINAL_STYLES, getTerminalStyle, setTerminalStyle, getDesktopSurface, setDesktopSurface, getImmersive, setImmersive, getHudChips, setHudChips, getHudWidgets, setHudWidgets, orbIsAttached, BAR_SCALE_MIN, BAR_SCALE_MAX, LAUNCHER_STYLES, getLauncher, setLauncher } from '../preferences.js';
+import { MOTION_CHOICES, TERMINAL_STYLES, getTerminalStyle, setTerminalStyle, getDesktopSurface, setDesktopSurface, getImmersive, setImmersive, getHudChips, setHudChips, getHudWidgets, setHudWidgets, orbIsAttached, ORB_EFFECTS, ORB_REACTS, BAR_SCALE_MIN, BAR_SCALE_MAX, LAUNCHER_STYLES, getLauncher, setLauncher } from '../preferences.js';
 import { SCALE_OPTIONS, getDisplayScale, setDisplayScale } from '../display.js';
 import { getBackground, setBackground, renderBackgroundPresets } from '../background.js';
 import { pickFiles } from '../files.js';
 import { el, field, sliderField, pageHeading, pageTabs } from './controls.js';
 import { stylePreview, windowPreview, barPreview, launcherPreview } from './previews.js';
-import { paintGlyph } from '../voiceGlyph.js';
+import { mountVoiceDots } from '../voiceDots.js';
 import { revealRegion, disposeMotion } from '../../ui/motion.js';
 
 /** Build the appearance section with resources owned by its current mount. */
@@ -328,23 +328,26 @@ export function createAppearancePanelSection({ on, cleanups, resources }) {
     });
     orbPosition.select.value = immersive.orb_position;
 
+    /* The bar's colour: the theme's own plate (the default — the dots take the
+       theme's text), a dark or light plate whatever the theme, the accent body,
+       or every accent at once. Two stored choices behind one control:
+       `orb_style` and, for the accent body, `orb_color`. */
+    const PLATES = { theme: 'bar', dark: 'dark', light: 'light' };
+    const colourOf = (s) => (s.orb_style === 'accent' ? s.orb_color
+      : Object.keys(PLATES).find((k) => PLATES[k] === s.orb_style));
     const orbColor = select({
       options: [
+        { value: 'theme', label: t('settings.appearance.orbColor.theme', null, 'Theme') },
+        { value: 'dark', label: t('settings.appearance.orbColor.dark', null, 'Dark') },
+        { value: 'light', label: t('settings.appearance.orbColor.light', null, 'Light') },
         { value: 'accent', label: t('settings.appearance.orbColor.accent', null, 'Theme accent') },
         { value: 'palette', label: t('settings.appearance.orbColor.palette', null, 'All accents together') },
       ],
-      onChange: (value) => setImmersive({ orb_color: value }),
+      onChange: (value) => setImmersive(PLATES[value]
+        ? { orb_style: PLATES[value] }
+        : { orb_style: 'accent', orb_color: value }),
     });
-    orbColor.select.value = immersive.orb_color;
-
-    const orbStyle = select({
-      options: [
-        { value: 'accent', label: t('settings.appearance.orbStyle.accent', null, 'Accent') },
-        { value: 'bar', label: t('settings.appearance.orbStyle.bar', null, 'Top bar') },
-      ],
-      onChange: (value) => setImmersive({ orb_style: value }),
-    });
-    orbStyle.select.value = immersive.orb_style;
+    orbColor.select.value = colourOf(immersive);
 
     const orbWidthControl = slider({
       min: 64, max: 400, step: 4, value: immersive.orb_width,
@@ -382,51 +385,39 @@ export function createAppearancePanelSection({ on, cleanups, resources }) {
     });
     orbBorder.select.value = immersive.orb_border;
 
-    /* What the bar itself wears: nothing, the status line as text, or the icon
-       of the tool that is running. The preview beside the control is live — it
-       cycles the app's mark and a few tools' marks with the very same swap
-       fade the bar runs (voiceGlyph.js / sphere.css), so the option shows
-       what it does. */
-    const statusPreview = el('span', 'orb-preview');
-    const statusGlyph = el('span', 'orb-preview-glyph');
-    statusPreview.appendChild(statusGlyph);
-    const PREVIEW_TOOLS = ['', 'web_search', 'generate_image', 'generate_song', 'mail_send'];
-    let previewIndex = 0;
-    let previewTimer = null;
-    const paintPreview = () => {
-      paintGlyph(statusGlyph, {
-        mode: 'icons',
-        action: PREVIEW_TOOLS[previewIndex % PREVIEW_TOOLS.length],
-      });
+    /* The dot grid inside the bar (voiceDots.js): how it moves and what it
+       follows. The preview beside the effect is the same renderer on a looped
+       demo exchange (listen → tools → speak), in the bar's own colours. */
+    const effectLabels = {
+      glyph: t('settings.appearance.orbEffect.glyph', null, 'Glyph'),
+      eq: t('settings.appearance.orbEffect.eq', null, 'Equaliser'),
+      ripple: t('settings.appearance.orbEffect.ripple', null, 'Ripple'),
+      firefly: t('settings.appearance.orbEffect.firefly', null, 'Fireflies'),
     };
-    const syncStatus = () => {
-      const icons = orbStatus.select.value === 'icons';
-      statusPreview.classList.toggle('hidden', !icons);
-      clearInterval(previewTimer);
-      previewTimer = null;
-      if (!icons) return;
-      previewIndex = 0;
-      paintPreview();
-      previewTimer = setInterval(() => { previewIndex += 1; paintPreview(); }, 2400);
+    const reactLabels = {
+      voice: t('settings.appearance.orbReact.voice', null, 'Voice'),
+      tools: t('settings.appearance.orbReact.tools', null, 'Tools'),
+      both: t('settings.appearance.orbReact.both', null, 'Both'),
     };
-    cleanups.push(() => clearInterval(previewTimer));
-
-    const orbStatus = select({
-      options: [
-        { value: 'off', label: t('settings.appearance.orbStatus.off', null, 'Nothing') },
-        { value: 'state', label: t('settings.appearance.orbStatus.state', null, 'Assistant state') },
-        { value: 'text', label: t('settings.appearance.orbStatus.text', null, 'Step line') },
-        { value: 'icons', label: t('settings.appearance.orbStatus.icons', null, 'Tool icons') },
-      ],
-      onChange: (value) => {
-        setImmersive({ orb_status: value });
-        syncStatus();
-      },
+    const orbEffect = select({
+      options: ORB_EFFECTS.map((value) => ({ value, label: effectLabels[value] })),
+      onChange: (value) => setImmersive({ orb_effect: value }),
     });
-    orbStatus.select.value = immersive.orb_status;
-    const orbStatusRow = el('span', 'orb-status-control');
-    orbStatusRow.append(orbStatus.select, statusPreview);
-    syncStatus();
+    orbEffect.select.value = immersive.orb_effect;
+    const orbReact = select({
+      options: ORB_REACTS.map((value) => ({ value, label: reactLabels[value] })),
+      onChange: (value) => setImmersive({ orb_react: value }),
+    });
+    orbReact.select.value = immersive.orb_react;
+    const dotsPreview = el('span', 'orb-preview');
+    dotsPreview.setAttribute('aria-hidden', 'true');
+    const preview = mountVoiceDots(dotsPreview, {
+      demo: true,
+      options: () => ({ effect: orbEffect.select.value, react: orbReact.select.value }),
+    });
+    cleanups.push(() => preview.destroy());
+    const orbEffectRow = el('span', 'orb-effect-control');
+    orbEffectRow.append(orbEffect.select, dotsPreview);
 
     /* Riding the top bar the voice bar takes the rail's size and hides with the
        bar, so the size and its own autohide only mean something on the edge it
@@ -459,26 +450,13 @@ export function createAppearancePanelSection({ on, cleanups, resources }) {
           + 'and moves and hides with it — even when the top bar is docked to the bottom edge. '
           + 'Width, height and the voice bar\'s own autohide apply only in the other positions.'),
       })),
-      field(t('settings.appearance.orbColor', null, 'Voice bar colour'), orbColor, {
-        hint: t('settings.appearance.orbColorHint', null,
-          '“All accents” uses every accent the theme declares at once — the same palette as the '
-          + 'focus-mode window frame.'),
-      }),
-      field(t('settings.appearance.orbStyle', null, 'Voice bar style'), orbStyle, {
-        hint: t('settings.appearance.orbStyleHint', null,
-          'Fill the bar with the accent (or every accent at once), or give it the same glass surface '
-          + 'as the top bar — the accent then shows only in the glow that follows the audio.'),
-      }),
+      field(t('settings.appearance.orbColor', null, 'Voice bar colour'), orbColor),
+      field(t('settings.appearance.orbEffect', null, 'Voice bar effect'), orbEffectRow),
+      field(t('settings.appearance.orbReact', null, 'Dots react to'), orbReact),
       orbWidth.wrap,
       orbHeight.wrap,
       field(t('settings.appearance.orbBorder', null, 'Voice bar border'), orbBorder, {
         hint: t('settings.appearance.orbBorderHint', null, 'Border of the bar itself.'),
-      }),
-      field(t('settings.appearance.orbStatus', null, 'Tool status'), orbStatusRow, {
-        hint: t('settings.appearance.orbStatusHint', null,
-          'What the voice bar shows while the assistant works: nothing, the assistant\'s state, '
-          + 'a short text line describing the current step, or the icon of the running tool. '
-          + 'While it is only thinking, the icon option shows the app\'s own logo.'),
       }),
     ];
   }

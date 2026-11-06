@@ -3,7 +3,7 @@ import { requireAuth } from './auth.js';
 import { initMap, getCurrentPosition } from './map.js';
 import {
   initSphere, setSphereState, onShortTap, onLongPressStart, onLongPressEnd,
-  onDoubleTap, setConversationMode, setMicLevel, resetMicLevel,
+  onDoubleTap, setConversationMode, resetMicLevel,
   getSphereState, waitForVoiceReady,
 } from './sphere.js';
 import { prepareVoice, startListening, cancelListening, isListening, releaseWakeHold, isWakeAwaitingCommand, markCorrectionPending, leaveConversation, isConversationOpen } from './voice.js';
@@ -36,6 +36,7 @@ import { initHudClipboard } from './clipboardMenu.js';
 import { initNavigator } from './navigator.js';
 import { initTileManager, openCoreWindow, getPluginTile } from './tiles.js';
 import { initFullscreen } from './fullscreen.js';
+import { initVoiceDots } from './voiceDots.js';
 import { initFullscreenBubble } from './fullscreenBubble.js';
 import { initOverview } from './overview.js';
 import { initLauncher, openLauncher } from './launcher.js';
@@ -170,6 +171,7 @@ async function initApp() {
   appInitialized = true;
 
   initSphere();
+  initVoiceDots(); // the voice bar's dot grid (voiceDots.js)
   initArtifactDock();
   initTextInput(submitTextToAgent);
   initChatHistory(); // core chat history panel (new chat / resume old chats)
@@ -516,10 +518,6 @@ function wireVoiceResults() {
 
   window.addEventListener('voice:barge-in', () => {
     void handleBargeIn();
-  });
-
-  window.addEventListener('voice:level', (e) => {
-    setMicLevel(e.detail);
   });
 }
 

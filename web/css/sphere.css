@@ -1,9 +1,10 @@
 /* Voice bar — the assistant's presence, and ONE element.
  *
  * The bar IS #sphere-container and the element is all of it: its own body
- * (Settings → Appearance "Voice bar colour" — the theme accent, or every accent
- * at once), its own border, its own rounding and its own audio-reactive shadow.
- * Nothing sits inside it but the step line's text.
+ * (Settings → Appearance "Voice bar colour" — the theme's plate, the accent,
+ * or every accent at once), its own border and its own rounding. Inside it
+ * there is only the dot grid (voiceDots.js), edge to edge: it is the bar's one
+ * effect, following the audio and/or the assistant's tools.
  *
  * It has two modes:
  *
@@ -17,8 +18,7 @@
  *    top bar.
  *
  * The rounding is the top bar's own (its rail is a pill), so it is not a
- * setting; the colour follows the theme accent (or --error while the mic is
- * unhappy).
+ * setting; the dots wear the bar's ink (--error while the mic is unhappy).
  */
 
 :root {
@@ -57,30 +57,24 @@
   /* Where the bar is centred on the x axis. The corner positions set it to 0
      so the same transitions slide straight down (or up) without an x offset. */
   transform: translate(var(--orb-x, -50%), 0);
-  /* Driven from sphere.js: the audio level and the stereo pan of the voice. */
-  --voice-level: 0;
-  --voice-pan: 0;
-  --voice-halo: 42%;
   --voice-color: var(--accent);
-  /* The bar's ink: on the accent body the accent's contrast. The top-bar look
-     overrides it (and the body) — see `data-orb-style` below. */
+  /* The bar's ink — the dots' colour (voiceDots.js reads it as `color`): on
+     the accent body the accent's contrast. The theme look overrides it (and
+     the body) — see `data-orb-style` below. */
   --voice-ink: var(--accent-contrast, #08090b);
-  /* The presence, and the audio effect is all of it: at rest there is no shadow
-     at all (every offset, blur and spread is scaled by the level), and it
-     swells with the voice, leaning with the stereo pan. Kept in a token so the
-     top-bar look can compose it with that plate's own shadow. */
-  --voice-glow:
-    0 0 calc(var(--voice-level) * 28px) calc(var(--voice-level) * 4px)
-      color-mix(in srgb, var(--voice-color) var(--voice-halo), transparent),
-    calc(var(--voice-pan) * var(--voice-level) * 10px)
-      calc(var(--voice-level) * -20px)
-      calc(var(--voice-level) * 36px)
-      calc(var(--voice-level) * 4px)
-      color-mix(in srgb, var(--voice-color) 45%, transparent);
-  box-shadow: var(--voice-glow);
   transition:
     background-color var(--motion-feedback) linear,
     border-color var(--motion-feedback) linear;
+}
+
+/* The dot grid: the bar's whole inside, clipped by its own rounding. */
+#sphere-container > .voice-dots {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  pointer-events: none;
 }
 
 /* ── Attached: it rides the top bar's row ─────────────────────── */
@@ -178,6 +172,9 @@ html[data-orb-border='hairline'] #sphere-container {
 html[data-orb-style='bar'][data-orb-border='hairline'] #sphere-container {
   border-color: var(--glass-border);
 }
+html:is([data-orb-style='dark'], [data-orb-style='light'])[data-orb-border='hairline'] #sphere-container {
+  border-color: var(--voice-plate-line);
+}
 
 html[data-orb-border='palette'] #sphere-container { border-color: transparent; }
 
@@ -200,80 +197,49 @@ html[data-orb-border='palette'] #sphere-container::before {
 
 /* ── All accents at once ────────────────────────────────────────
  * `--focus-bar` is the palette the focus-mode window frame uses (the picked
- * accent plus every accent the theme declares). The bloom keeps the accent, so
- * the voice-reactive shadow survives this mode. The top-bar look keeps its own
- * plate (see below) and shows the palette in the shadow alone. */
-html[data-orb-color='palette']:not([data-orb-style='bar']) #sphere-container {
+ * accent plus every accent the theme declares). The theme look keeps its own
+ * plate (see below). */
+html[data-orb-color='palette'][data-orb-style='accent'] #sphere-container {
   background: var(--focus-bar, var(--accent));
 }
 
-/* ── The top-bar look ───────────────────────────────────────────
- * Settings → Appearance → "Voice bar style: top bar": the bar wears the same
- * plate as the top bar's rail (.hud-header-main) instead of the accent body —
- * same surface, same glass hairline, same float shadow — and the accent comes
- * back only in the audio glow. */
+/* ── The theme look (the default) ───────────────────────────────
+ * Settings → Appearance → "Voice bar colour: theme": the bar wears the same
+ * plate as the top bar's rail (.hud-header-main) — same surface, same glass
+ * hairline — and the dots take the theme's text: light on a dark theme, dark
+ * on a light one. */
 html[data-orb-style='bar'] #sphere-container {
   background: var(--surface);
   border-color: var(--glass-border);
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   --voice-ink: var(--text);
-  /* The plate's definition is its surface + hairline, the way the rail has it.
-     `box-shadow` is NOT touched here: a theme that collapses its shadows
-     (`--shadow-glass: none`) would otherwise take the audio glow with it
-     — `none, <glow>` is an invalid list and drops the whole declaration. */
 }
 
-html[data-orb-style='bar'][data-orb-border='none'] #sphere-container { border-color: transparent; }
-html[data-orb-style='bar'][data-orb-border='palette'] #sphere-container { border-color: transparent; }
-
-/* ── The bar's glyph: the status line, or the tool's icon ───────
- * Settings → Appearance → "Tool status": `off` shows nothing here (the line
- * stays in the bubble above the bar), `text` the humanised step line, `icons`
- * the running tool's mark — painted by voiceGlyph.js, which also re-runs the
- * swap fade below on every change. A step line needs room to read; an icon
- * needs a square, and with no tool the app's own mark fills it. */
-html[data-orb-status='text'] { --voice-slot: min(40vw, 220px); }
-
-html[data-orb-status='off'] .voice-step { display: none; }
-
-html[data-orb-status='icons'] .voice-step {
-  width: var(--voice-glyph, 20px);
-  height: var(--voice-glyph, 20px);
-  /* The brand mark (.app-icon) masks from the font size, so the square holds
-     for the app mark and for a catalogue icon alike. */
-  font-size: var(--voice-glyph, 20px);
+/* ── Dark or light, whatever the theme ──────────────────────────
+ * The same glass plate, with its own fixed tone: a dark plate with light dots,
+ * or a light one with dark dots. */
+html[data-orb-style='dark'] #sphere-container,
+html[data-orb-style='light'] #sphere-container {
+  background: var(--voice-plate);
+  border-color: var(--voice-plate-line);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
 }
-
-/* A mirror of the dock's live line, not a live region of its own: the dock
-   keeps that job (and stays in the accessibility tree). */
-.voice-step {
-  position: relative;
-  z-index: 3;
-  min-width: 0;
-  font-size: 10.5px;
-  line-height: 1.2;
-  color: var(--voice-ink);
-  text-align: center;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  pointer-events: none;
-  animation: dockStepIn var(--motion-feedback) var(--ease-out) both;
+html[data-orb-style='dark'] {
+  --voice-plate: rgba(16, 17, 21, 0.88);
+  --voice-plate-line: rgba(255, 255, 255, 0.12);
+  --voice-plate-ink: #f2f2f0;
 }
-
-/* The swap: the new mark fades in — soft, and over before it reads as motion.
-   Restarted by voiceGlyph.js on every change (it clears the class first). */
-.voice-step.is-fading { animation: voiceGlyphFade 260ms var(--ease-out) 1 both; }
-
-@keyframes voiceGlyphFade {
-  from { opacity: 0; transform: scale(0.86); filter: blur(3px); }
-  to { opacity: 1; transform: none; filter: none; }
+html[data-orb-style='light'] {
+  --voice-plate: rgba(255, 255, 255, 0.94);
+  --voice-plate-line: rgba(0, 0, 0, 0.1);
+  --voice-plate-ink: #0b0b0c;
 }
+html:is([data-orb-style='dark'], [data-orb-style='light']) #sphere-container { --voice-ink: var(--voice-plate-ink); }
 
-body.orb-speaking .voice-step { visibility: hidden; }
-body.compose-active .voice-step,
-body.navigator-active .voice-step { display: none; }
+html:not([data-orb-style='accent'])[data-orb-border='none'] #sphere-container { border-color: transparent; }
+html:not([data-orb-style='accent'])[data-orb-border='palette'] #sphere-container { border-color: transparent; }
 
 /* ── The status dock ────────────────────────────────────────────
  * A sibling of the bar, not its container: it hangs just clear of the bar's
@@ -346,23 +312,13 @@ html[data-orb-pos='top-left'][data-bar-pos='right'] #artifact-dock { right: 8px;
 
 #sphere-container.disabled {
   --voice-color: var(--muted);
-  --voice-halo: 20%;
   opacity: 0.45;
   pointer-events: none;
 }
 
-/* Any live voice state reads brighter than idle; error keeps its own red. */
-#sphere-container.state-listening,
-#sphere-container.state-conversation,
-#sphere-container.state-processing,
-#sphere-container.state-speaking,
-#sphere-container.state-warming {
-  --voice-halo: 62%;
-}
-#sphere-container.state-error {
-  --voice-color: var(--error);
-  --voice-halo: 72%;
-}
+/* An unhappy mic: the accent body turns red, the theme plate's dots do. */
+#sphere-container.state-error { --voice-color: var(--error); }
+html:not([data-orb-style='accent']) #sphere-container.state-error { --voice-ink: var(--error); }
 
 @media (prefers-reduced-motion: reduce) {
   #sphere-container { transition: none; }

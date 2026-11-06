@@ -266,11 +266,13 @@ silently reverting to the default one.
 ## The voice bar and gestures
 
 The bar (`web/js/sphere.js`, styled by `/css/sphere.css`) is the assistant's
-presence and **one element**: its body is the theme accent (or every accent at
-once) and its own shadow — a halo plus a bloom — rises and swells with the audio
-level, leaning with the stereo pan. Riding the top bar's row it takes that row's
-height and rounding and follows the bar; on its own edge it takes the width and
-height from Settings → Appearance, with the step line's text inside it.
+presence and **one element**: a plate (the theme's, dark, light or the accent)
+filled edge to edge with a grid of dots (`web/js/voiceDots.js`) that follows the
+audio level and the stereo pan, the assistant's tools, or both — Settings →
+Appearance picks the effect and what it reacts to (see
+[desktop.md](desktop.md)). Riding the top bar's row it takes that row's height
+and rounding and follows the bar; on its own edge it takes the width and height
+from Settings → Appearance.
 `setSphereState(state)` toggles the container classes; states seen in the code
 are `disabled`, `downloading`, `idle`, `listening`, `conversation`,
 `processing`, `speaking` and `error`.
@@ -284,8 +286,8 @@ are `disabled`, `downloading`, `idle`, `listening`, `conversation`,
 | Talk over the reply | barge-in monitor | `stopActiveTurn('barge-in')` then listen |
 
 The Touch Bar's "Ask" button calls the same `tapOrb` path (`initTouchBar({ talk:
-tapOrb })`). `voice:level` events feed `setMicLevel` (clamped to `--voice-level`
-/ `--voice-pan`).
+tapOrb })`). `voice:level` events (`{ level, pan }`) feed the dot grid directly;
+`resetMicLevel()` drops it back to silence.
 
 ## Wake word
 
@@ -410,7 +412,7 @@ keeps the window listening instead of creating a turn.
 
 Whisper gives no end-of-speech signal, so the browser runs its own gate and
 endpointer in the audio callback (`voice.js`). The same triangular-window speech
-level also drives the glow and the pan.
+level also drives the voice bar's dots and their pan.
 
 | Constant | Value | Meaning |
 |---|---|---|

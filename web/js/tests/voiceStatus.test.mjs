@@ -1,14 +1,15 @@
 /**
- * Voice-bar tool status: the tool → icon map, the glyph contract (one span, the
- * swap glitch) and the wire that feeds it — the running tool travels with the
- * step so the bar can wear its mark. Everything icon-shaped must come from the
- * icon catalogue (web/ui/icons/INDEX.md): a name that is not in it does not
- * exist.
+ * Voice-bar status: the tool → icon map (tool cards), the bar's dot grid
+ * (voiceDots.js: its tool marks, its settings, its signal) and the wire that
+ * feeds it — the running tool travels with the step so the bar can draw its
+ * mark. Everything icon-shaped must come from the icon catalogue
+ * (web/ui/icons/INDEX.md): a name that is not in it does not exist.
  */
 import './helpers/i18n.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { toolIcon } from '../toolIcons.js';
+import { GLYPHS, dotGlyph } from '../voiceDotGlyphs.js';
 
 const read = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
 
@@ -35,56 +36,56 @@ for (const name of names) {
   assert.ok(catalogue.includes(name), `${name} is not in the icon catalogue`);
 }
 
-/* ── 2. The glyph: one span, text or icon, swapped with a fade ── */
+/* ── 2. The dot grid: the bar's one effect ──────────────────── */
+
+for (const [name, rows] of Object.entries(GLYPHS)) {
+  assert.equal(rows.length, 5, `${name} is a 5-row mark`);
+  assert.ok(rows.every((row) => row.length === rows[0].length && /^[#.]+$/.test(row)), `${name} is a clean matrix`);
+}
+assert.equal(dotGlyph('web_search'), 'search');
+assert.equal(dotGlyph('get_weather'), 'cloud');
+assert.equal(dotGlyph('run_command'), 'term');
+assert.equal(dotGlyph('file_read'), 'file');
+assert.equal(dotGlyph('generate_song'), 'note');
+assert.equal(dotGlyph('some_unknown_tool'), 'spark', 'an unknown tool is still a tool');
+assert.equal(dotGlyph(''), null, 'no tool at all → thinking');
 
 const sphere = read('../../css/sphere.css');
-assert.ok(/html\[data-orb-status='icons'\] \.voice-step/.test(sphere), 'the icon mode sizes the glyph');
-assert.ok(/html\[data-orb-status='text'\] \.voice-step/.test(sphere) === false
-  && /html\[data-orb-status='text'\] \{ --voice-slot/.test(sphere), 'a step line gets the wide slot');
-assert.ok(/html\[data-orb-status='off'\] \.voice-step \{ display: none; \}/.test(sphere));
-assert.ok(/@keyframes voiceGlyphFade/.test(sphere) && /\.voice-step\.is-fading/.test(sphere),
-  'the swap fades');
-assert.ok(!/Glitch/i.test(sphere), 'the glitch is gone');
+assert.ok(/#sphere-container > \.voice-dots \{[\s\S]{0,200}?inset: 0/.test(sphere), 'the dots fill the bar');
+assert.ok(!/--voice-glow|box-shadow|\.voice-step/.test(sphere), 'no audio shadow, no status glyph');
+assert.ok(/data-orb-style='bar'\] #sphere-container \{[\s\S]{0,400}?--voice-ink: var\(--text\)/.test(sphere),
+  'the theme look draws the dots in the theme\'s text');
 
-/* The shadow is the audio effect alone: every offset, blur and spread rides the
-   level, so a resting bar casts nothing and only the voice makes it glow. */
-assert.ok(/--voice-glow:/.test(sphere) && /var\(--voice-glow\)/.test(sphere));
-const glow = /--voice-glow:([\s\S]*?);/.exec(sphere)[1];
-assert.ok(!/\+ \d/.test(glow), 'no additive constants — a resting bar casts nothing');
-assert.ok((glow.match(/var\(--voice-level\)/g) || []).length >= 6,
-  'the level scales the whole shadow');
-
-/* The top-bar look: another plate, the audio glow kept on top of it. */
-assert.ok(/data-orb-style='bar'\] #sphere-container \{[\s\S]{0,400}?background: var\(--surface\)/.test(sphere));
-assert.ok(!/data-orb-style='bar'\] #sphere-container \{[\s\S]{0,400}?box-shadow:/.test(sphere),
-  'the look never replaces the audio glow (a `none` glass shadow would drop it)');
+const dots = read('../voiceDots.js');
+for (const effect of ['glyph', 'eq', 'ripple', 'firefly']) {
+  assert.ok(new RegExp(`\\n  ${effect}: \\{`).test(dots), `the ${effect} effect exists`);
+}
+assert.ok(/'voice:state'/.test(dots) && /'voice:level'/.test(dots) && /'agent:step'/.test(dots),
+  'the grid follows the voice state, the audio level and the steps');
+assert.ok(/prefs\.react === 'voice'/.test(dots) && /prefs\.react === 'tools'/.test(dots),
+  'what the dots react to is a setting');
+assert.ok(/document\.hidden/.test(dots) && /prefers-reduced-motion/.test(dots),
+  'a hidden page draws nothing, reduced motion rests');
 
 const dock = read('../dockStep.js');
-assert.ok(/paintBarGlyph[\s\S]{0,600}?paintGlyph\(/.test(dock) && /action = ''/.test(dock),
-  'the bar repaints per step, with the tool');
-assert.ok(/mode === 'off' \|\| \(mode === 'text' && !lastText\)/.test(dock),
-  'the icon mode always carries a mark — the app\'s own at rest');
-assert.ok(/mode === 'state'\) \{ paintBarState\(\)/.test(dock) && /voice:state/.test(dock),
-  'the state mode paints the assistant state and follows it');
-assert.ok(/decodeText\(el, text\)/.test(read('../voiceGlyph.js')),
-  'the state label decodes in place');
-assert.ok(/desktop:immersive[\s\S]{0,80}?paintBarGlyph/.test(dock),
-  'a mode switch repaints the glyph in place');
+assert.ok(/detail: \{ message: text, action: String\(action \|\| ''\) \}/.test(dock),
+  'every step carries its tool to the bar');
 
 const appearance = read('../settings/appearance.js');
-assert.ok(/orb_status/.test(appearance) && /orb-preview-glyph/.test(appearance),
-  'the panel offers the mode and previews it');
-assert.ok(/orb_style/.test(appearance) && /orbStyle/.test(appearance),
-  'and the bar\'s own look');
-assert.ok(/PREVIEW_TOOLS/.test(appearance) && /setInterval/.test(appearance),
-  'the preview cycles tools');
+assert.ok(/orb_effect/.test(appearance) && /orb_react/.test(appearance) && /mountVoiceDots\(dotsPreview/.test(appearance),
+  'the panel offers the effect and what it follows, with a live preview');
+assert.ok(/theme: 'bar', dark: 'dark', light: 'light'/.test(appearance) && /orb_style: 'accent', orb_color: value/.test(appearance),
+  'one colour control: theme, dark, light, accent or every accent');
+assert.ok(/data-orb-style='dark'\] \{[\s\S]{0,200}?--voice-plate-ink: #f2f2f0/.test(sphere),
+  'the dark plate draws light dots, whatever the theme');
 
 /* ── 3. The wire: the running tool travels with the step ─────── */
 
 assert.ok(/action: event\.action/.test(read('../agent.js')),
   'the SSE step action reaches the client');
-assert.ok(/orb_status/.test(read('../preferences.js')) && /orbStatus/.test(read('../preferences.js')),
-  'the setting is stored and published');
+assert.ok(/orb_effect: 'glyph'/.test(read('../preferences.js')) && /orb_react: 'both'/.test(read('../preferences.js'))
+  && /orbEffect/.test(read('../preferences.js')),
+  'the settings are stored (glyph, both by default) and published');
 assert.ok(/action: Option<String>/.test(read('../../../src/api/agent.rs')),
   'the stream event carries the tool');
 

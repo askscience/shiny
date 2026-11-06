@@ -621,21 +621,25 @@ const DEFAULT_IMMERSIVE = {
   orb_width: 64,
   orb_height: 24,
   orb_color: 'accent',
-  /** The bar's own look: `accent` — the body is the accent (or the palette) —
-   *  or `bar`, the top bar's glass plate, leaving the accent to the audio glow. */
+  /** The bar's own look: `bar` — the theme's plate (the top bar's glass
+   *  surface, the theme's text for the dots) — a fixed `dark` or `light`
+   *  plate whatever the theme, or `accent`, the body filled with the accent
+   *  (or the palette, `orb_color`). */
   orb_style: 'bar',
   /** Border of the bar: none, the accent hairline, or the palette ring. */
   orb_border: 'palette',
-  /** What the bar wears: `off`, the assistant's `state` as a decoded label
-   *  (Ready → Listening → Thinking → Speaking), the humanised tool step line
-   *  as `text`, or the running tool's `icons` (swapped per tool with a fade). */
-  orb_status: 'state',
+  /** The dot grid that fills the bar (voiceDots.js): how it moves… */
+  orb_effect: 'glyph',
+  /** …and what it follows: the audio, the assistant's tools, or both. */
+  orb_react: 'both',
 };
 
 const ORB_COLORS = ['accent', 'palette'];
-const ORB_STYLES = ['accent', 'bar'];
-const ORB_STATUSES = ['off', 'state', 'text', 'icons'];
+const ORB_STYLES = ['accent', 'bar', 'dark', 'light'];
 const ORB_BORDERS = ['none', 'hairline', 'palette'];
+/** The voice bar's dot effects (voiceDots.js) and what they react to. */
+export const ORB_EFFECTS = ['glyph', 'eq', 'ripple', 'firefly'];
+export const ORB_REACTS = ['voice', 'tools', 'both'];
 
 /** Fullscreen chrome behaviour, merged over defaults. */
 export function getImmersive() {
@@ -660,10 +664,8 @@ export function getImmersive() {
     orb_color: ORB_COLORS.includes(src.orb_color) ? src.orb_color : d.orb_color,
     orb_style: ORB_STYLES.includes(src.orb_style) ? src.orb_style : d.orb_style,
     orb_border: ORB_BORDERS.includes(src.orb_border) ? src.orb_border : d.orb_border,
-    // `orb_step` (the retired on/off switch) still reads as the text mode.
-    orb_status: ORB_STATUSES.includes(src.orb_status)
-      ? src.orb_status
-      : (src.orb_step === true ? 'text' : d.orb_status),
+    orb_effect: ORB_EFFECTS.includes(src.orb_effect) ? src.orb_effect : d.orb_effect,
+    orb_react: ORB_REACTS.includes(src.orb_react) ? src.orb_react : d.orb_react,
   };
 }
 
@@ -737,7 +739,7 @@ export function applyImmersive() {
   root.dataset.orbColor = s.orb_color;
   root.dataset.orbBorder = s.orb_border;
   root.dataset.orbStyle = s.orb_style;
-  root.dataset.orbStatus = s.orb_status;
+  root.dataset.orbEffect = s.orb_effect;
   // The size the bar takes on its own edge, for the bar element (sphere.css).
   root.style.setProperty('--voice-bar-width', `${s.orb_width}px`);
   root.style.setProperty('--voice-bar-height', `${s.orb_height}px`);

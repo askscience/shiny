@@ -4,6 +4,16 @@
 
 ### Added
 
+- The voice bar is now a grid of dots that fills it edge to edge and moves
+  with the assistant: with the voice while it listens and speaks, with the
+  tools while it works. Settings → Appearance → "Voice bar effect" picks
+  how: Glyph (the default — a dot-matrix display where the voice scrolls by
+  and each tool draws its own little mark), Equaliser, Ripple or Fireflies,
+  with a live preview beside the choice. "Dots react to" picks Voice, Tools
+  or Both. "Voice bar colour" now follows the theme by default, and can be
+  a dark plate with light dots, a light one with dark dots, the accent or
+  every accent at once.
+
 - On a phone every window now reads like a phone app. A window's panes — a
   list and what it opens, a detail and its editor — come one at a time: the
   detail slides in over the list and a round back arrow, Escape, Android's
@@ -186,6 +196,11 @@
   Browser library this way. The built name now wins.
 
 ### Changed
+
+- The dots replace the voice bar's other animations: the glow that swelled
+  with the audio and the "Tool status" setting (the state word, the step
+  line or the tool's icon inside the bar) are gone. The step line stays in
+  the bubble above the bar.
 
 - The Browser's tabs look like the Terminal's — flat mono capitals, the
   active tab a pill, a tab's close on hover — because both windows now use

@@ -1,12 +1,11 @@
 /**
  * sphere.js — the voice bar at the bottom of the screen.
  *
- * There is no rendered orb any more: the assistant's presence is a small lip
- * with an accent-coloured shadow that rises from it and swells with the audio.
- * This module owns the gesture vocabulary (tap = type, long-press = wake,
- * double-tap = listen) and pushes the live audio level into CSS custom
- * properties on the bar. The look lives in /css/sphere.css; the colour follows
- * the active theme's accent (or --error while the mic is unhappy).
+ * There is no rendered orb any more: the assistant's presence is a grid of dots
+ * that fills the bar and follows the audio and the tools (voiceDots.js). This
+ * module owns the gesture vocabulary (tap = type, long-press = wake,
+ * double-tap = listen) and publishes the voice state. The look lives in
+ * /css/sphere.css.
  */
 
 const container = document.getElementById('sphere-container');
@@ -224,31 +223,9 @@ export function initSphere() {
 }
 
 /**
- * Feed the live audio level into the bar. Accepts the `voice:level` detail
- * ({ level, pan }) or a bare number; both are clamped before they reach CSS.
+ * Drop the bar back to silence at once (the dot grid, voiceDots.js, listens to
+ * `voice:level` itself and would otherwise ease down on its own).
  */
-export function setMicLevel(input) {
-  let level = 0;
-  let pan = 0;
-  if (typeof input === 'number') {
-    level = input;
-  } else if (input && typeof input === 'object') {
-    level = Number(input.level);
-    pan = Number(input.pan);
-  }
-  if (Number.isFinite(level)) {
-    container.style.setProperty('--voice-level', clamp(level, 0, 1).toFixed(3));
-  }
-  if (Number.isFinite(pan)) {
-    container.style.setProperty('--voice-pan', clamp(pan, -1, 1).toFixed(3));
-  }
-}
-
 export function resetMicLevel() {
-  container.style.setProperty('--voice-level', '0');
-  container.style.setProperty('--voice-pan', '0');
-}
-
-function clamp(value, min, max) {
-  return Math.min(max, Math.max(min, value));
+  window.dispatchEvent(new CustomEvent('voice:level', { detail: { level: 0, pan: 0 } }));
 }

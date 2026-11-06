@@ -365,15 +365,6 @@ html[data-motion='depth'][data-bar-style='capsule'] .hud-header-main:is(:hover, 
   html[data-bar-style] .hud-header-main * { transition-duration: 0s !important; transition-delay: 0s !important; }
 }
 
-/* ── The voice bar riding a side rail ───────────────────────── */
-
-/* Its state label runs up the rail instead of being cut to two letters. */
-html[data-orb-pos='top-left']:is([data-bar-pos='left'], [data-bar-pos='right']):not([data-orb-status='icons']) .voice-step {
-  writing-mode: vertical-rl;
-  rotate: 180deg;
-  max-height: 100%;
-}
-
 /* ═══ Size ════════════════════════════════════════════════════
    Settings → Appearance → Top bar size scales the whole bar — pill, icons,
    type and spacing — with the `scale` property rather than `zoom`: on the
