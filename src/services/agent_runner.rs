@@ -326,7 +326,9 @@ where
                 let trimmed = response.trim();
                 // If the whole response was (malformed) JSON, don't leak the
                 // raw tool call into the chat — fall back to a neutral ack.
-                final_reply = if trimmed.starts_with('{') || trimmed.starts_with('[') {
+                let markup = trimmed.starts_with('<')
+                    && (trimmed.contains("DSML") || trimmed.contains("invoke") || trimmed.contains("tool_call"));
+                final_reply = if trimmed.starts_with('{') || trimmed.starts_with('[') || markup {
                     "Done.".into()
                 } else {
                     trimmed.to_string()

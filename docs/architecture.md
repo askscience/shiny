@@ -154,8 +154,9 @@ The heart of the app. Full detail in [agent](core/agent.md).
    plugins and only their tools run ([focus mode](core/desktop.md#focus-mode)).
 3. The conversation history is loaded (or a conversation resumed) and sent to
    Ollama (or an OpenAI-compatible provider when the user configured one).
-4. The model may emit JSON action blocks; [`parse_actions`](../crates/shiny-plugin-sdk/src/tools.rs)
-   extracts them and [`ToolRegistry::invoke`](../src/plugins/registry.rs)
+4. The model may emit JSON action blocks (or, as DeepSeek and Qwen do, markup
+   tool calls: DSML, `<invoke>`/`<parameter>`, `<tool_call>`);
+   [`parse_actions`](../src/services/agent_tools.rs) extracts them and [`ToolRegistry::invoke`](../src/plugins/registry.rs)
    dispatches to the owning tool. A plugin's tool is refused if the plugin is
    deactivated for that user.
 5. Every result is appended to the step log; the loop continues (bounded) until

@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-06
+
 ### Fixed
 
 - The assistant no longer runs the same action over and over. A model that
@@ -25,6 +27,14 @@
   `subject` for the title, and `start`/`end` as ISO date-times
   (`2026-11-20T08:15:00`); times with seconds are accepted too. Calc answers
   to `create_sheet`.
+- Tool calls written as markup instead of JSON run instead of being printed in
+  the chat. DeepSeek, over an OpenAI-compatible API, writes its calls as
+  "DSML" tags (`<｜DSML｜invoke name="…">` with `<｜DSML｜parameter>`), other
+  models as `<invoke>`/`<parameter>` or Qwen/Hermes
+  `<tool_call>{"name", "arguments"}</tool_call>`: the call was shown as raw
+  markup and the turn ended without doing anything. These forms are parsed
+  like the JSON blocks, so the repeat guard covers them too, and any markup
+  left in a reply, even malformed, is hidden.
 
 ### Changed
 

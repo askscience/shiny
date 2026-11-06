@@ -971,6 +971,17 @@ pub fn parse_actions(text: &str) -> Vec<(String, Value)> {
                         .cloned()
                         .unwrap_or_else(|| json!({}));
                     actions.push((action.to_string(), params));
+                } else if let (Some(name), true) = (
+                    // Qwen/Hermes `<tool_call>{"name", "arguments"}</tool_call>`.
+                    v.get("name").and_then(|a| a.as_str()),
+                    v.get("arguments").is_some(),
+                ) {
+                    let params = match v.get("arguments") {
+                        Some(Value::String(s)) => serde_json::from_str(s).unwrap_or_else(|_| json!({})),
+                        Some(a) => a.clone(),
+                        None => json!({}),
+                    };
+                    actions.push((name.to_string(), params));
                 }
             }
             search_from = abs_start + end + 1;
@@ -978,7 +989,163 @@ pub fn parse_actions(text: &str) -> Vec<(String, Value)> {
             break;
         }
     }
+    actions.extend(parse_markup_actions(text));
     actions
+}
+
+/// Rewrite DeepSeek "DSML" tags (`<｜DSML｜invoke`, `<｜｜DSML｜｜ invoke`,
+/// `</|DSML|parameter`, …) into plain `<invoke` / `</parameter` so one matcher
+/// handles them and the generic `<invoke name=…>` markup other models emit.
+fn canonical_markup(text: &str) -> String {
+    let is_sep = |c: char| matches!(c, '｜' | '|' | '▁') || c.is_whitespace();
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(lt) = rest.find('<') {
+        out.push_str(&rest[..lt]);
+        out.push('<');
+        let mut after = &rest[lt + 1..];
+        if let Some(r) = after.strip_prefix('/') {
+            out.push('/');
+            after = r;
+        }
+        let trimmed = after.trim_start_matches(is_sep);
+        let is_dsml = trimmed.len() >= 4 && trimmed[..4].eq_ignore_ascii_case("dsml");
+        rest = if is_dsml { trimmed[4..].trim_start_matches(is_sep) } else { after };
+    }
+    out.push_str(rest);
+    out
+}
+
+/// Value of `key="…"` (or `'…'`) inside an opening tag.
+fn tag_attr(tag: &str, key: &str) -> Option<String> {
+    let lower = tag.to_ascii_lowercase();
+    let mut from = 0;
+    while let Some(i) = lower[from..].find(key) {
+        let at = from + i;
+        from = at + key.len();
+        let boundary = at == 0 || !lower.as_bytes()[at - 1].is_ascii_alphanumeric();
+        let rest = tag[from..].trim_start();
+        let Some(rest) = rest.strip_prefix('=') else { continue };
+        if !boundary {
+            continue;
+        }
+        let rest = rest.trim_start();
+        let quote = rest.chars().next()?;
+        if quote == '"' || quote == '\'' {
+            let body = &rest[1..];
+            return Some(body[..body.find(quote).unwrap_or(body.len())].to_string());
+        }
+        let end = rest.find(|c: char| c.is_whitespace() || c == '>').unwrap_or(rest.len());
+        return Some(rest[..end].to_string());
+    }
+    None
+}
+
+/// Tool calls written as markup instead of our JSON: DeepSeek DSML
+/// (`<｜DSML｜invoke name="x"><｜DSML｜parameter name="p" string="true">v</…>`)
+/// and the plain `<invoke name="x"><parameter name="p">v</parameter>` form.
+/// Without this the model's call is printed in the chat and the turn ends.
+fn parse_markup_actions(text: &str) -> Vec<(String, Value)> {
+    let canon = canonical_markup(text);
+    // ASCII lowercasing keeps byte offsets identical to `canon`.
+    let lower = canon.to_ascii_lowercase();
+    let mut actions = Vec::new();
+    let mut from = 0;
+    while let Some(i) = lower[from..].find("<invoke") {
+        let open = from + i;
+        let Some(gt) = lower[open..].find('>').map(|g| open + g) else { break };
+        let name = tag_attr(&canon[open..gt], "name").unwrap_or_default();
+        let body_start = gt + 1;
+        let body_end = [lower[body_start..].find("</invoke"), lower[body_start..].find("<invoke")]
+            .into_iter()
+            .flatten()
+            .min()
+            .map(|e| body_start + e)
+            .unwrap_or(lower.len());
+        from = body_end.max(body_start);
+        let name = name.trim();
+        if name.is_empty() {
+            continue;
+        }
+        let body = &canon[body_start..body_end];
+        let body_lower = &lower[body_start..body_end];
+        let mut params = serde_json::Map::new();
+        let mut whole: Option<Value> = None;
+        let mut p = 0;
+        while let Some(j) = body_lower[p..].find("<parameter") {
+            let popen = p + j;
+            let Some(pgt) = body_lower[popen..].find('>').map(|g| popen + g) else { break };
+            let tag = &body[popen..pgt];
+            let vstart = pgt + 1;
+            let vend = body_lower[vstart..].find("</parameter").map(|e| vstart + e).unwrap_or(body.len());
+            p = vend.max(vstart);
+            let Some(key) = tag_attr(tag, "name") else { continue };
+            let raw = body[vstart..vend].trim();
+            let as_string = tag_attr(tag, "string").map(|s| s.eq_ignore_ascii_case("true"));
+            let value = if as_string == Some(true) {
+                Value::String(raw.to_string())
+            } else {
+                serde_json::from_str::<Value>(raw).unwrap_or_else(|_| Value::String(raw.to_string()))
+            };
+            if key == "params" {
+                // The shape our prompt teaches: one `params` object.
+                whole = Some(match value {
+                    Value::Object(_) => value,
+                    _ => json!({}),
+                });
+            } else {
+                params.insert(key, value);
+            }
+        }
+        let params = match whole {
+            Some(Value::Object(mut obj)) => {
+                obj.extend(params);
+                Value::Object(obj)
+            }
+            _ => Value::Object(params),
+        };
+        actions.push((name.to_string(), params));
+    }
+    actions
+}
+
+/// Remove markup tool calls (DSML / `<invoke>` / `<tool_call>`) from a reply,
+/// parseable or not, so they never show up in the chat.
+fn strip_markup_blocks(text: &str) -> String {
+    const TAGS: [&str; 6] = ["function_calls", "tool_calls", "tool_call", "calls", "invoke", "parameter"];
+    let canon = canonical_markup(text);
+    let lower = canon.to_ascii_lowercase();
+    let mut out = String::with_capacity(canon.len());
+    let mut i = 0;
+    while i < canon.len() {
+        let Some(lt) = lower[i..].find('<').map(|l| i + l) else {
+            out.push_str(&canon[i..]);
+            break;
+        };
+        out.push_str(&canon[i..lt]);
+        let after = lower[lt + 1..].trim_start_matches('/');
+        let tag = TAGS.iter().find(|t| {
+            after.starts_with(*t)
+                && !after[t.len()..].starts_with(|c: char| c.is_ascii_alphanumeric() || c == '_')
+        });
+        match tag {
+            Some(&"invoke") if !lower[lt + 1..].starts_with('/') => {
+                // Drop the whole call, up to and including `</invoke>` (or the end).
+                i = match lower[lt..].find("</invoke") {
+                    Some(c) => lower[lt + c..].find('>').map(|g| lt + c + g + 1).unwrap_or(lower.len()),
+                    None => lower.len(),
+                };
+            }
+            Some(_) => {
+                i = lower[lt..].find('>').map(|g| lt + g + 1).unwrap_or(lower.len());
+            }
+            None => {
+                out.push('<');
+                i = lt + 1;
+            }
+        }
+    }
+    out
 }
 
 fn find_json_end(s: &str) -> Option<usize> {
@@ -1015,6 +1182,7 @@ pub fn strip_action_blocks(text: &str) -> String {
     // formula, an unquoted key, …) that serde_json rejects, so `parse_actions`
     // misses it and the raw tool call would leak into the visible reply. Strip
     // any remaining brace-balanced `{…}` block regardless of whether it parses.
+    result = strip_markup_blocks(&result);
     result = strip_balanced_braces(&result);
 
     result = result
@@ -1117,5 +1285,67 @@ mod tests {
         assert!(core_msg.contains("desktop action"), "{core_msg}");
         assert!(core_msg.contains("files, word"), "{core_msg}");
         assert!(core_msg.contains("web search"), "says what still works: {core_msg}");
+    }
+}
+
+#[cfg(test)]
+mod markup_tests {
+    use super::{parse_actions, strip_action_blocks};
+    use serde_json::json;
+
+    #[test]
+    fn dsml_with_a_params_object_is_a_tool_call() {
+        let text = "<｜DSML｜function_calls>\n<｜DSML｜invoke name=\"terminal_exec\">\n<｜DSML｜parameter name=\"params\" string=\"false\">{\"command\":\"ls\"}</｜DSML｜parameter>\n</｜DSML｜invoke>\n</｜DSML｜function_calls>";
+        assert_eq!(parse_actions(text), vec![("terminal_exec".into(), json!({"command": "ls"}))]);
+        assert_eq!(strip_action_blocks(text), "");
+    }
+
+    #[test]
+    fn dsml_with_one_key_per_parameter() {
+        let text = "<｜DSML｜invoke name=\"web_search\"><｜DSML｜parameter name=\"query\" string=\"true\">42</｜DSML｜parameter><｜DSML｜parameter name=\"limit\" string=\"false\">3</｜DSML｜parameter></｜DSML｜invoke>";
+        assert_eq!(parse_actions(text), vec![("web_search".into(), json!({"query": "42", "limit": 3}))]);
+    }
+
+    /// The exact (mangled) form a user saw printed in the chat.
+    #[test]
+    fn the_mangled_form_from_the_chat_still_runs() {
+        let text = "<｜｜DSML｜｜ calls> <｜｜DSML｜｜ invoke name=\"terminal_exec\"> <｜｜DSML｜｜ parameter name=\"params\" string=\"false\"></｜｜DSML｜｜ parameter> </｜｜DSML｜｜ invoke> </｜｜DSML｜｜ calls>";
+        assert_eq!(parse_actions(text), vec![("terminal_exec".into(), json!({}))]);
+        assert_eq!(strip_action_blocks(text), "");
+    }
+
+    #[test]
+    fn several_invokes_keep_their_order_and_text_survives() {
+        let text = "Ok, ci penso io. <function_calls><invoke name=\"a\"><parameter name=\"x\">1</parameter></invoke><invoke name=\"b\"></invoke></function_calls>";
+        let names: Vec<String> = parse_actions(text).into_iter().map(|(n, _)| n).collect();
+        assert_eq!(names, ["a", "b"]);
+        assert_eq!(strip_action_blocks(text), "Ok, ci penso io.");
+    }
+
+    #[test]
+    fn truncated_invoke_is_parsed_and_hidden() {
+        let text = "Vado. <|DSML|invoke name=\"terminal_exec\"><|DSML|parameter name=\"command\" string=\"true\">ls -la";
+        assert_eq!(parse_actions(text), vec![("terminal_exec".into(), json!({"command": "ls -la"}))]);
+        assert_eq!(strip_action_blocks(text), "Vado.");
+    }
+
+    #[test]
+    fn hermes_tool_call_json() {
+        let text = "<tool_call>{\"name\":\"x\",\"arguments\":{\"a\":1}}</tool_call>";
+        assert_eq!(parse_actions(text), vec![("x".into(), json!({"a": 1}))]);
+        assert_eq!(strip_action_blocks(text), "");
+    }
+
+    #[test]
+    fn plain_text_with_angle_brackets_is_untouched() {
+        let text = "Usa a < b e <b>grassetto</b>, oppure <invoker> no.";
+        assert!(parse_actions(text).is_empty());
+        assert_eq!(strip_action_blocks(text), text);
+    }
+
+    #[test]
+    fn json_actions_still_work() {
+        let text = "{\"action\":\"web_search\",\"params\":{\"query\":\"q\"}}";
+        assert_eq!(parse_actions(text), vec![("web_search".into(), json!({"query": "q"}))]);
     }
 }
