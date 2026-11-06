@@ -74,8 +74,9 @@ assert.ok(/detail: \{ message: text, action: String\(action \|\| ''\) \}/.test(d
 const appearance = read('../settings/appearance.js');
 assert.ok(/orb_effect/.test(appearance) && /orb_react/.test(appearance) && /mountVoiceDots\(dotsPreview/.test(appearance),
   'the panel offers the effect and what it follows, with a live preview');
-assert.ok(/theme: 'bar', dark: 'dark', light: 'light'/.test(appearance) && /orb_style: 'accent', orb_color: value/.test(appearance),
-  'one colour control: theme, dark, light, accent or every accent');
+assert.ok(/setImmersive\(\{ orb_style: value \}\)/.test(appearance) && /setImmersive\(\{ orb_color: value \}\)/.test(appearance)
+  && /orbStyle\.select\.value !== 'accent'/.test(appearance),
+  'style and colour are two controls, the colour shown with the accent plate alone');
 assert.ok(/data-orb-style='dark'\] \{[\s\S]{0,200}?--voice-plate-ink: #f2f2f0/.test(sphere),
   'the dark plate draws light dots, whatever the theme');
 

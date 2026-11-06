@@ -328,26 +328,37 @@ export function createAppearancePanelSection({ on, cleanups, resources }) {
     });
     orbPosition.select.value = immersive.orb_position;
 
-    /* The bar's colour: the theme's own plate (the default — the dots take the
-       theme's text), a dark or light plate whatever the theme, the accent body,
-       or every accent at once. Two stored choices behind one control:
-       `orb_style` and, for the accent body, `orb_color`. */
-    const PLATES = { theme: 'bar', dark: 'dark', light: 'light' };
-    const colourOf = (s) => (s.orb_style === 'accent' ? s.orb_color
-      : Object.keys(PLATES).find((k) => PLATES[k] === s.orb_style));
+    /* The bar's plate: the top bar's own (the default — the dots take the
+       theme's text), a dark or light plate whatever the theme, or the accent.
+       The colour only means something on the accent plate (the accent, or
+       every accent at once), so it shows there alone. */
+    const orbStyle = select({
+      options: [
+        { value: 'bar', label: t('settings.appearance.orbStyle.bar', null, 'Top bar') },
+        { value: 'dark', label: t('settings.appearance.orbStyle.dark', null, 'Dark') },
+        { value: 'light', label: t('settings.appearance.orbStyle.light', null, 'Light') },
+        { value: 'accent', label: t('settings.appearance.orbStyle.accent', null, 'Accent') },
+      ],
+      onChange: (value) => {
+        setImmersive({ orb_style: value });
+        syncColour();
+      },
+    });
+    orbStyle.select.value = immersive.orb_style;
+
     const orbColor = select({
       options: [
-        { value: 'theme', label: t('settings.appearance.orbColor.theme', null, 'Theme') },
-        { value: 'dark', label: t('settings.appearance.orbColor.dark', null, 'Dark') },
-        { value: 'light', label: t('settings.appearance.orbColor.light', null, 'Light') },
         { value: 'accent', label: t('settings.appearance.orbColor.accent', null, 'Theme accent') },
         { value: 'palette', label: t('settings.appearance.orbColor.palette', null, 'All accents together') },
       ],
-      onChange: (value) => setImmersive(PLATES[value]
-        ? { orb_style: PLATES[value] }
-        : { orb_style: 'accent', orb_color: value }),
+      onChange: (value) => setImmersive({ orb_color: value }),
     });
-    orbColor.select.value = colourOf(immersive);
+    orbColor.select.value = immersive.orb_color;
+    const orbColorField = field(t('settings.appearance.orbColor', null, 'Voice bar colour'), orbColor);
+    function syncColour() {
+      orbColorField.classList.toggle('hidden', orbStyle.select.value !== 'accent');
+    }
+    syncColour();
 
     const orbWidthControl = slider({
       min: 64, max: 400, step: 4, value: immersive.orb_width,
@@ -450,7 +461,8 @@ export function createAppearancePanelSection({ on, cleanups, resources }) {
           + 'and moves and hides with it — even when the top bar is docked to the bottom edge. '
           + 'Width, height and the voice bar\'s own autohide apply only in the other positions.'),
       })),
-      field(t('settings.appearance.orbColor', null, 'Voice bar colour'), orbColor),
+      field(t('settings.appearance.orbStyle', null, 'Voice bar style'), orbStyle),
+      orbColorField,
       field(t('settings.appearance.orbEffect', null, 'Voice bar effect'), orbEffectRow),
       field(t('settings.appearance.orbReact', null, 'Dots react to'), orbReact),
       orbWidth.wrap,

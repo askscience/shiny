@@ -10,9 +10,10 @@
   how: Glyph (the default — a dot-matrix display where the voice scrolls by
   and each tool draws its own little mark), Equaliser, Ripple or Fireflies,
   with a live preview beside the choice. "Dots react to" picks Voice, Tools
-  or Both. "Voice bar colour" now follows the theme by default, and can be
-  a dark plate with light dots, a light one with dark dots, the accent or
-  every accent at once.
+  or Both. "Voice bar style" keeps the top bar's plate by default (the dots
+  in the theme's text) and gains Dark (light dots) and Light (dark dots),
+  whatever the theme; "Voice bar colour" shows with the Accent style, for
+  the accent or every accent at once.
 
 - On a phone every window now reads like a phone app. A window's panes — a
   list and what it opens, a detail and its editor — come one at a time: the
