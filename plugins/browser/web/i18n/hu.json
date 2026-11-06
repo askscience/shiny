@@ -118,5 +118,14 @@
   "plugin.browser.passwords.saveFailed": "Nem sikerült menteni ezt a jelszót.",
   "plugin.browser.passwords.deleteConfirm": "Törli a(z) {site} webhelyhez mentett jelszót?",
   "plugin.browser.menu.news": "Hírek a kezdőlapon",
-  "plugin.browser.home.searchesAndSites": "A keresései és a leggyakrabban látogatott webhelyei alapján"
+  "plugin.browser.home.searchesAndSites": "A keresései és a leggyakrabban látogatott webhelyei alapján",
+  "plugin.browser.passwords.generate": "Erős jelszó javaslása",
+  "plugin.browser.passwords.notNow": "Most nem",
+  "plugin.browser.passwords.offerSave": "Menti a jelszót ehhez: {site}?",
+  "plugin.browser.passwords.offerUpdate": "Frissíti a mentett jelszót ehhez: {site}?",
+  "plugin.browser.passwords.update": "Frissítés",
+  "plugin.browser.passwords.never": "Soha",
+  "plugin.browser.passwords.offerSuggest": "Erős jelszót használ ehhez a fiókhoz? Regisztráláskor mentésre kerül.",
+  "plugin.browser.passwords.useStrong": "Használom",
+  "plugin.browser.passwords.offerUnlock": "Oldja fel a mentett jelszavakat a bejelentkezéshez: {site}."
 }

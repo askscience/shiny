@@ -122,5 +122,14 @@
   "plugin.browser.passwords.saveFailed": "Nevarēja saglabāt šo paroli.",
   "plugin.browser.passwords.deleteConfirm": "Dzēst saglabāto paroli vietnei {site}?",
   "plugin.browser.menu.news": "Jaunumi sākumlapā",
-  "plugin.browser.home.searchesAndSites": "No jūsu meklējumiem un visbiežāk apmeklētajām vietnēm"
+  "plugin.browser.home.searchesAndSites": "No jūsu meklējumiem un visbiežāk apmeklētajām vietnēm",
+  "plugin.browser.passwords.generate": "Ieteikt drošu paroli",
+  "plugin.browser.passwords.notNow": "Ne tagad",
+  "plugin.browser.passwords.offerSave": "Saglabāt paroli vietnei {site}?",
+  "plugin.browser.passwords.offerUpdate": "Atjaunināt saglabāto paroli vietnei {site}?",
+  "plugin.browser.passwords.update": "Atjaunināt",
+  "plugin.browser.passwords.never": "Nekad",
+  "plugin.browser.passwords.offerSuggest": "Izmantot šim kontam drošu paroli? Tā tiek saglabāta reģistrējoties.",
+  "plugin.browser.passwords.useStrong": "Izmantot",
+  "plugin.browser.passwords.offerUnlock": "Atbloķējiet saglabātās paroles, lai pieteiktos vietnē {site}."
 }

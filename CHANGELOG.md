@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+### Added
+
+- The Browser's password manager works on its own, like a browser's: after
+  a sign-in it offers to save the login ("Save", "Not now", "Never" for the
+  site), or to update it when the password changed; on a login page it fills
+  the site's saved login into empty fields (with the vault locked it offers
+  to unlock, once per site); on a sign-up form it offers a strong generated
+  password (20 characters, every class, no look-alike characters) and puts
+  it in the password and its confirmation. "Save" with the vault locked
+  opens the unlock prompt and then the editor, prefilled. Incognito tabs
+  fill but never save. The editor has the same strong-password suggestion.
+
+### Changed
+
+- The Browser's tabs look like the Terminal's — flat mono capitals, the
+  active tab a pill, a tab's close on hover — because both windows now use
+  one shared tab strip from the UI library (`tabStrip` and `tab` in
+  `web/ui`), with the touch sizes in the shared responsive rules.
+
 ## [0.2.0] - 2026-11-06
 
 ### Fixed

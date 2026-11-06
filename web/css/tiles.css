@@ -5967,95 +5967,8 @@ textarea.impress-field-input { min-height: 56px; line-height: 1.5; }
   --terminal-line: color-mix(in srgb, var(--text) 9%, transparent);
 }
 
-/* The strip is the window's top bar (`data-window-bar`), so it merges with
-   the window controls like the browser's — same geometry, terminal names.
-   Tabs are flat mono capitals; the active one is a grey pill. */
-.terminal-tabstrip {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  height: 34px;
-  padding: 0 8px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  border-bottom: 1px solid var(--terminal-line);
-  background: transparent;
-  scrollbar-width: none;
-}
-
-/* Inside the merged header it reads as a single row with the close/fullscreen
-   controls (core drops the duplicate border). */
-.tile-header--merged > .terminal-tabstrip {
-  height: 100%;
-  background: transparent;
-}
-
-.terminal-tab {
-  flex: 0 1 auto;
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  min-width: 0;
-  max-width: 200px;
-  height: 24px;
-  padding: 0 2px 0 10px;
-  border: 0;
-  border-radius: 999px;
-  color: var(--muted);
-  transition: background var(--motion-feedback) var(--motion-ease, ease),
-              color var(--motion-feedback) var(--motion-ease, ease);
-}
-
-.terminal-tab:hover { color: var(--text); }
-
-.terminal-tab.is-active {
-  background: var(--ed-pill, var(--glass-strong));
-  color: var(--text);
-}
-
-.terminal-tab-label {
-  min-width: 0;
-  max-width: 160px;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  background: none;
-  border: 0;
-  padding: 0;
-  color: inherit;
-  font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 10.5px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  cursor: pointer;
-}
-
-.terminal-tab-close {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: inherit;
-  opacity: 0;
-  cursor: pointer;
-}
-
-.terminal-tab:hover .terminal-tab-close,
-.terminal-tab.is-active .terminal-tab-close,
-.terminal-tab-close:focus-visible { opacity: 0.6; }
-
-.terminal-tab-close:hover {
-  opacity: 1;
-  background: var(--ed-pill-hover, var(--glass-hover));
-}
-
+/* The tab strip is the shared one (`.ui-tabstrip`, web/ui/ui.css) — the same
+   strip as the Browser's. Only the Terminal styles below reshape its active tab. */
 .terminal-newtab { flex: none; }
 
 /* The surface: the host paints the theme's paper (`--terminal-bg`, set by
@@ -6128,7 +6041,7 @@ textarea.impress-field-input { min-height: 56px; line-height: 1.5; }
 /* Minimal: bare text with generous margins; tabs underline instead of a
    pill; no status bar — a small pill shows on hover and while resizing. */
 .terminal-tile[data-terminal-style='smear'] .terminal-host .xterm { padding: 10px 18px 14px; }
-.terminal-tabstrip[data-terminal-style='smear'] .terminal-tab.is-active {
+.terminal-tabstrip[data-terminal-style='smear'] .ui-tab.is-active {
   background: transparent;
   border-radius: 0;
   box-shadow: inset 0 -1.5px 0 var(--accent);
@@ -6161,7 +6074,7 @@ textarea.impress-field-input { min-height: 56px; line-height: 1.5; }
   background: color-mix(in srgb, var(--terminal-bg, #0b0b0c) 58%, transparent);
 }
 .terminal-tile[data-terminal-style='glass'] .terminal-host .xterm { padding: 8px 16px 6px; }
-.terminal-tabstrip[data-terminal-style='glass'] .terminal-tab.is-active {
+.terminal-tabstrip[data-terminal-style='glass'] .ui-tab.is-active {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 12%, transparent);
 }
 .terminal-tile[data-terminal-style='glass'] .terminal-status {
@@ -8290,33 +8203,13 @@ button.files-path-crumb:hover { color: var(--text); }
   background: transparent;
 }
 
-/* Tab strip: flat, a grey pill for the active tab, mono labels. */
-.browser-tile .browser-tabstrip {
-  border-bottom: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
-  background: transparent;
-}
-.browser-tile .tile-header--merged > .browser-tabstrip { border-bottom: 0; }
-.browser-tile .browser-tab {
-  border-color: transparent;
-  border-radius: 999px;
-  color: var(--muted);
-  transition: background var(--motion-feedback) var(--motion-ease),
-              color var(--motion-feedback) var(--motion-ease);
-}
-.browser-tile .browser-tab:hover { background: var(--glass-hover); color: var(--text-secondary); }
-.browser-tile .browser-tab.is-active { background: var(--ed-pill); color: var(--text); }
-.browser-tile .browser-tab-label {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.02em;
-}
-.browser-tile .browser-tab-close { opacity: 0.6; border-radius: 999px; }
-.browser-tile .browser-tab-close:hover {
+/* Tab strip: the shared `.ui-tabstrip` (web/ui/ui.css), as in the Terminal. */
+.browser-tile .browser-tabs-row > .browser-tab-close { opacity: 0.6; }
+.browser-tile .browser-tabs-row > .browser-tab-close:hover {
   opacity: 1;
   background: color-mix(in srgb, var(--text) 10%, transparent);
 }
 .browser-tile .browser-tab.is-incognito { color: var(--text-secondary); }
-.browser-tile .browser-tab-mask { opacity: 0.85; }
 .browser-tile .browser-tabcount {
   border: 1.5px solid currentColor;
   color: var(--text-secondary);
@@ -8471,8 +8364,6 @@ button.files-path-crumb:hover { color: var(--text); }
 .browser-tile .browser-pw-status[data-kind='error'] { color: var(--danger); }
 
 @media (pointer: coarse) {
-  .browser-tile .browser-tab-label { font-size: 12px; }
-  .browser-tile .browser-tab-close { opacity: 0.8; }
   .browser-tile .browser-tabcount { font-size: 13px; }
 }
 

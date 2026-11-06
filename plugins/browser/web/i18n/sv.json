@@ -118,5 +118,14 @@
   "plugin.browser.passwords.saveFailed": "Kunde inte spara lösenordet.",
   "plugin.browser.passwords.deleteConfirm": "Ta bort det sparade lösenordet för {site}?",
   "plugin.browser.menu.news": "Nyheter på startsidan",
-  "plugin.browser.home.searchesAndSites": "Från dina sökningar och webbplatserna du besöker mest"
+  "plugin.browser.home.searchesAndSites": "Från dina sökningar och webbplatserna du besöker mest",
+  "plugin.browser.passwords.generate": "Föreslå ett starkt lösenord",
+  "plugin.browser.passwords.notNow": "Inte nu",
+  "plugin.browser.passwords.offerSave": "Spara lösenordet för {site}?",
+  "plugin.browser.passwords.offerUpdate": "Uppdatera det sparade lösenordet för {site}?",
+  "plugin.browser.passwords.update": "Uppdatera",
+  "plugin.browser.passwords.never": "Aldrig",
+  "plugin.browser.passwords.offerSuggest": "Använda ett starkt lösenord för kontot? Det sparas när du registrerar dig.",
+  "plugin.browser.passwords.useStrong": "Använd",
+  "plugin.browser.passwords.offerUnlock": "Lås upp dina sparade lösenord för att logga in på {site}."
 }

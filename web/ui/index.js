@@ -55,3 +55,4 @@ export { dial } from './components/dial.js';
 export { mediaCard } from './components/media.js';
 export { confirmDialog, promptDialog } from './components/dialog.js';
 export { menuSurface, menuItem } from './components/menu.js';
+export { tabStrip, tab } from './components/tabs.js';

@@ -17,8 +17,9 @@ import { openWithPlugin, pluginForFile, revealInFiles } from '../../js/files.js'
 import { onOpenUrl } from '../../js/linkRouter.js';
 import { nativeOccluderHoles, watchNativeOccluders } from '../../js/nativeOccluders.js';
 import { createPasswordsPanel, fillScript, readScript } from './passwords.js';
+import { createLoginAssist } from './login-assist.js';
 import { openCoreWindow } from '../../js/tiles.js';
-import { icon, iconButton, searchBar, themeMode } from '../../ui/index.js';
+import { icon, iconButton, searchBar, tabStrip, tab, themeMode } from '../../ui/index.js';
 ```
 
 ## Exports
@@ -126,10 +127,11 @@ re-pushes (and reloads the open page) when that save lands.
 
 - Root: `<section class="tile browser-tile" data-plugin="browser">`.
 - Every style is scoped under `.browser-tile`; class prefix is **`browser-`**:
-  `browser-tabstrip`, `browser-tab`, `browser-tab-label`, `browser-tab-text`,
-  `browser-tab-close`, `browser-tab-mask`, `browser-newtab`, `browser-tabcount`,
-  `browser-tabs-panel`, `browser-tabs-row`, `browser-passwords-panel`,
-  `browser-passwords-btn`, `browser-pw-*`, `browser-bar`,
+  `browser-tabstrip`, `browser-tab` (hooks on the shared `.ui-tabstrip` /
+  `.ui-tab`), `browser-tab-mask`, `browser-newtab`, `browser-tabcount`,
+  `browser-tabs-panel`, `browser-tabs-row`, `browser-tab-close` (the switcher
+  row's), `browser-passwords-panel`, `browser-passwords-btn`, `browser-pw-*`
+  (`browser-pw-offer` is the save / fill offer), `browser-bar`,
   `browser-address`, `browser-nav--forward`, `browser-frames`, `browser-frame`,
   `browser-shield` (`.is-on`/`.is-off`), `browser-downloads-panel`,
   `browser-downloads-head`, `browser-downloads-title`, `browser-downloads-clear`,
@@ -256,7 +258,9 @@ above the page.
 ## Tab model
 
 Each tab is `{ id, sessionId, title, url, home, incognito, native, history,
-historyIndex, loaded, watchdog, frameEl }`; a home tab also keeps
+historyIndex, loaded, watchdog, frameEl }`, plus `pageLoading` (between the
+`load` events), `loginWatch` (`{ origin, kind }` of the watched form) and
+`loginOffer` (a pending save / fill offer) for `login-assist.js`; a home tab also keeps
 `homeData` (`{ news, saved }`, so a theme change repaints without
 refetching) and `homePalette` (the resolved tokens it was drawn with).
 
@@ -311,8 +315,10 @@ window events listed above. `stopBoundsSync()` tears them all down.
 
 ## Tab strip and switcher
 
-The strip lives in the window's title bar. Each tab is a label and a close
-button; the active one scrolls into view when the strip overflows. A
+The strip lives in the window's title bar and is the shared one
+(`tabStrip` / `tab` from `web/ui`, the Terminal's too): flat mono capitals,
+the active tab a pill, a tab's close on hover, on the active tab and on focus.
+The active tab scrolls into view when the strip overflows. A
 `.browser-tabcount` button (the open-tab count, as phone browsers show it) opens
 the **tab switcher** (`.browser-tabs-panel`): one large row per tab (title,
 address, close), plus New tab / New incognito tab.
@@ -328,8 +334,8 @@ address, close), plus New tab / New incognito tab.
   Passwords row steps aside while the lock is there.
 - The popovers hang under the toolbar wherever the title row put it
   (`--browser-pop-top`, measured on resize and before a panel opens).
-- On touch (`pointer: coarse`) tabs are 36 px tall and close buttons, rows and
-  popover actions grow to finger size.
+- On touch (`pointer: coarse`) tabs are 36 px tall (the shared component's
+  rule) and close buttons, rows and popover actions grow to finger size.
 
 ## Passwords
 
@@ -354,7 +360,28 @@ Views: locked (login-password prompt; first use creates the vault; after a
 login-password change it asks once for the previous one; Reset deletes
 everything), list (this site first, then all; click fills, copy uses
 `copyText(…, { sensitive: true })`), edit (site, username, password with a
-show toggle, note).
+show toggle and a strong-password suggestion, note). `openWith(values)` opens
+the editor prefilled — after the unlock prompt when the vault is locked.
+
+### On its own: save, fill, suggest
+
+`web/login-assist.js` does what a browser's password manager does without
+being asked, from the tab's view events:
+
+| Event | What happens |
+|---|---|
+| `load` `finished` | `takeScript` hands over a login the previous page of the same origin kept in `sessionStorage` (a form that posted to itself); `watchScript` installs the form watcher and answers the form's kind. A **login** form gets the site's saved login filled in when there is exactly one for that very host (not a parent domain's, which the panel still offers on a click) and its fields are empty (`fillScript(…, { onlyEmpty: true })`, once more after 1.5 s for a form drawn late); with the vault locked it offers "Unlock" once per site. A **sign-up** form (`autocomplete="new-password"`, or two password fields) gets "Use a strong password?": `generatePassword()` (20 characters, every class, no look-alikes, `crypto.getRandomValues`) goes into the password and its confirmation (`suggestScript`). |
+| `load` `started` | The page is being left: `takeScript` reads what the watcher kept (a submit, a click on a form button, Enter in a field, `pagehide`). |
+| `url` without a load | A single-page app moved on: the same, then the form is watched again. |
+
+A login is offered only for the origin the window had loaded (a page's own
+claim must match it), only when it is new or its password changed ("Save" /
+"Update" — the server updates the entry with the same origin and username),
+never from an incognito tab and never for a site marked "Never" (kept in
+`localStorage`, `browser.passwords.never`). "Save" with the vault locked opens
+the unlock prompt and then the editor, prefilled. A background tab keeps its
+offer until the user switches to it. The vault still locks after its idle
+time and with the server: the fill waits for an unlock.
 
 ## Right-click inside a page
 

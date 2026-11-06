@@ -118,5 +118,14 @@
   "plugin.browser.passwords.saveFailed": "Δεν ήταν δυνατή η αποθήκευση αυτού του κωδικού.",
   "plugin.browser.passwords.deleteConfirm": "Διαγραφή του αποθηκευμένου κωδικού για το {site};",
   "plugin.browser.menu.news": "Ειδήσεις στην αρχική σελίδα",
-  "plugin.browser.home.searchesAndSites": "Από τις αναζητήσεις σας και τους ιστότοπους που επισκέπτεστε συχνότερα"
+  "plugin.browser.home.searchesAndSites": "Από τις αναζητήσεις σας και τους ιστότοπους που επισκέπτεστε συχνότερα",
+  "plugin.browser.passwords.generate": "Πρόταση ισχυρού κωδικού",
+  "plugin.browser.passwords.notNow": "Όχι τώρα",
+  "plugin.browser.passwords.offerSave": "Αποθήκευση του κωδικού για το {site};",
+  "plugin.browser.passwords.offerUpdate": "Ενημέρωση του αποθηκευμένου κωδικού για το {site};",
+  "plugin.browser.passwords.update": "Ενημέρωση",
+  "plugin.browser.passwords.never": "Ποτέ",
+  "plugin.browser.passwords.offerSuggest": "Χρήση ισχυρού κωδικού για αυτόν τον λογαριασμό; Αποθηκεύεται κατά την εγγραφή.",
+  "plugin.browser.passwords.useStrong": "Χρήση",
+  "plugin.browser.passwords.offerUnlock": "Ξεκλειδώστε τους αποθηκευμένους κωδικούς για να συνδεθείτε στο {site}."
 }

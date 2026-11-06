@@ -118,5 +118,14 @@
   "plugin.browser.passwords.saveFailed": "Kunne ikke gemme adgangskoden.",
   "plugin.browser.passwords.deleteConfirm": "Vil du slette den gemte adgangskode til {site}?",
   "plugin.browser.menu.news": "Nyheder på startsiden",
-  "plugin.browser.home.searchesAndSites": "Fra dine søgninger og de websteder, du besøger mest"
+  "plugin.browser.home.searchesAndSites": "Fra dine søgninger og de websteder, du besøger mest",
+  "plugin.browser.passwords.generate": "Foreslå en stærk adgangskode",
+  "plugin.browser.passwords.notNow": "Ikke nu",
+  "plugin.browser.passwords.offerSave": "Gem adgangskoden til {site}?",
+  "plugin.browser.passwords.offerUpdate": "Opdater den gemte adgangskode til {site}?",
+  "plugin.browser.passwords.update": "Opdater",
+  "plugin.browser.passwords.never": "Aldrig",
+  "plugin.browser.passwords.offerSuggest": "Brug en stærk adgangskode til denne konto? Den gemmes, når du tilmelder dig.",
+  "plugin.browser.passwords.useStrong": "Brug den",
+  "plugin.browser.passwords.offerUnlock": "Lås dine gemte adgangskoder op for at logge ind på {site}."
 }

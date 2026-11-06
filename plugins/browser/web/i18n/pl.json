@@ -126,5 +126,14 @@
   "plugin.browser.passwords.saveFailed": "Nie udało się zapisać tego hasła.",
   "plugin.browser.passwords.deleteConfirm": "Usunąć zapisane hasło dla {site}?",
   "plugin.browser.menu.news": "Wiadomości na stronie startowej",
-  "plugin.browser.home.searchesAndSites": "Na podstawie Twoich wyszukiwań i najczęściej odwiedzanych witryn"
+  "plugin.browser.home.searchesAndSites": "Na podstawie Twoich wyszukiwań i najczęściej odwiedzanych witryn",
+  "plugin.browser.passwords.generate": "Zaproponuj silne hasło",
+  "plugin.browser.passwords.notNow": "Nie teraz",
+  "plugin.browser.passwords.offerSave": "Zapisać hasło do {site}?",
+  "plugin.browser.passwords.offerUpdate": "Zaktualizować zapisane hasło do {site}?",
+  "plugin.browser.passwords.update": "Aktualizuj",
+  "plugin.browser.passwords.never": "Nigdy",
+  "plugin.browser.passwords.offerSuggest": "Użyć silnego hasła dla tego konta? Zostanie zapisane przy rejestracji.",
+  "plugin.browser.passwords.useStrong": "Użyj",
+  "plugin.browser.passwords.offerUnlock": "Odblokuj zapisane hasła, aby zalogować się do {site}."
 }

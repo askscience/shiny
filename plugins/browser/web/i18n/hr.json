@@ -122,5 +122,14 @@
   "plugin.browser.passwords.saveFailed": "Nije moguće spremiti ovu lozinku.",
   "plugin.browser.passwords.deleteConfirm": "Izbrisati spremljenu lozinku za {site}?",
   "plugin.browser.menu.news": "Vijesti na početnoj stranici",
-  "plugin.browser.home.searchesAndSites": "Iz vaših pretraga i stranica koje najčešće posjećujete"
+  "plugin.browser.home.searchesAndSites": "Iz vaših pretraga i stranica koje najčešće posjećujete",
+  "plugin.browser.passwords.generate": "Predloži jaku lozinku",
+  "plugin.browser.passwords.notNow": "Ne sada",
+  "plugin.browser.passwords.offerSave": "Spremiti lozinku za {site}?",
+  "plugin.browser.passwords.offerUpdate": "Ažurirati spremljenu lozinku za {site}?",
+  "plugin.browser.passwords.update": "Ažuriraj",
+  "plugin.browser.passwords.never": "Nikad",
+  "plugin.browser.passwords.offerSuggest": "Koristiti jaku lozinku za ovaj račun? Sprema se pri registraciji.",
+  "plugin.browser.passwords.useStrong": "Koristi",
+  "plugin.browser.passwords.offerUnlock": "Otključajte spremljene lozinke za prijavu na {site}."
 }

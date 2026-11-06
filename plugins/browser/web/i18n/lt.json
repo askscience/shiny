@@ -126,5 +126,14 @@
   "plugin.browser.passwords.saveFailed": "Nepavyko išsaugoti šio slaptažodžio.",
   "plugin.browser.passwords.deleteConfirm": "Ištrinti išsaugotą svetainės {site} slaptažodį?",
   "plugin.browser.menu.news": "Naujienos pradžios puslapyje",
-  "plugin.browser.home.searchesAndSites": "Pagal jūsų paieškas ir dažniausiai lankomas svetaines"
+  "plugin.browser.home.searchesAndSites": "Pagal jūsų paieškas ir dažniausiai lankomas svetaines",
+  "plugin.browser.passwords.generate": "Pasiūlyti saugų slaptažodį",
+  "plugin.browser.passwords.notNow": "Ne dabar",
+  "plugin.browser.passwords.offerSave": "Įrašyti {site} slaptažodį?",
+  "plugin.browser.passwords.offerUpdate": "Atnaujinti įrašytą {site} slaptažodį?",
+  "plugin.browser.passwords.update": "Atnaujinti",
+  "plugin.browser.passwords.never": "Niekada",
+  "plugin.browser.passwords.offerSuggest": "Naudoti saugų slaptažodį šiai paskyrai? Jis įrašomas registruojantis.",
+  "plugin.browser.passwords.useStrong": "Naudoti",
+  "plugin.browser.passwords.offerUnlock": "Atrakinkite įrašytus slaptažodžius, kad prisijungtumėte prie {site}."
 }

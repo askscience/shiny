@@ -789,6 +789,83 @@
 .ui-menu-item:disabled { opacity: .5; cursor: default; }
 @media (pointer: coarse) { .ui-menu-item { min-height: 44px; } }
 
+/* ── Tab strip (components/tabs.js) ─────────────────────────
+   A window's tabs (Terminal, Browser) as its top bar: flat mono capitals, the
+   active tab a pill, a hairline under the strip unless it sits in the merged
+   title row. A tab's close shows on hover, on the active tab and on focus. */
+.ui-tabstrip {
+  --tabstrip-line: color-mix(in srgb, var(--text) 9%, transparent);
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  height: 34px;
+  padding: 0 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-bottom: 1px solid var(--tabstrip-line);
+  background: transparent;
+  scrollbar-width: none;
+}
+.tile-header--merged > .ui-tabstrip { height: 100%; border-bottom: 0; background: transparent; }
+.ui-tab {
+  flex: 0 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  max-width: 200px;
+  height: 24px;
+  padding: 0 2px 0 10px;
+  border: 0;
+  border-radius: 999px;
+  color: var(--muted);
+  transition: background var(--motion-feedback) var(--motion-ease, ease),
+              color var(--motion-feedback) var(--motion-ease, ease);
+}
+.ui-tab:hover { color: var(--text); }
+.ui-tab.is-active { background: var(--ed-pill, var(--glass-strong)); color: var(--text); }
+.ui-tab-label {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 160px;
+  overflow: hidden;
+  white-space: nowrap;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.ui-tab-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ui-tab-leading { flex: none; margin-right: 5px; opacity: 0.85; }
+.ui-tab-label:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.ui-tab-close {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  opacity: 0;
+  cursor: pointer;
+}
+.ui-tab:hover .ui-tab-close,
+.ui-tab.is-active .ui-tab-close,
+.ui-tab-close:focus-visible { opacity: 0.6; }
+.ui-tab-close:hover { opacity: 1; background: var(--ed-pill-hover, var(--glass-hover)); }
+
 /* ── Editorial pieces (components/editorial.js) ───────────────
    Mono labels and metadata, the large title that hands over to the
    window bar, hairline lists, and the arrow pill. Tokens only. */

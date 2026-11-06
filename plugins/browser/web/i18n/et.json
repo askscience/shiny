@@ -118,5 +118,14 @@
   "plugin.browser.passwords.saveFailed": "Seda parooli ei saanud salvestada.",
   "plugin.browser.passwords.deleteConfirm": "Kas kustutada saidi {site} salvestatud parool?",
   "plugin.browser.menu.news": "Uudised avalehel",
-  "plugin.browser.home.searchesAndSites": "Sinu otsingutest ja enim külastatud saitidelt"
+  "plugin.browser.home.searchesAndSites": "Sinu otsingutest ja enim külastatud saitidelt",
+  "plugin.browser.passwords.generate": "Soovita tugevat parooli",
+  "plugin.browser.passwords.notNow": "Mitte praegu",
+  "plugin.browser.passwords.offerSave": "Kas salvestada saidi {site} parool?",
+  "plugin.browser.passwords.offerUpdate": "Kas uuendada saidi {site} salvestatud parooli?",
+  "plugin.browser.passwords.update": "Uuenda",
+  "plugin.browser.passwords.never": "Mitte kunagi",
+  "plugin.browser.passwords.offerSuggest": "Kas kasutada sellel kontol tugevat parooli? See salvestatakse registreerumisel.",
+  "plugin.browser.passwords.useStrong": "Kasuta",
+  "plugin.browser.passwords.offerUnlock": "Saidile {site} sisselogimiseks ava salvestatud paroolid."
 }

@@ -122,5 +122,14 @@
   "plugin.browser.passwords.saveFailed": "Impossibile salvare questa password.",
   "plugin.browser.passwords.deleteConfirm": "Eliminare la password salvata per {site}?",
   "plugin.browser.menu.news": "Notizie nella pagina iniziale",
-  "plugin.browser.home.searchesAndSites": "Dalle tue ricerche e dai siti che visiti di più"
+  "plugin.browser.home.searchesAndSites": "Dalle tue ricerche e dai siti che visiti di più",
+  "plugin.browser.passwords.generate": "Suggerisci una password sicura",
+  "plugin.browser.passwords.notNow": "Non ora",
+  "plugin.browser.passwords.offerSave": "Salvare la password per {site}?",
+  "plugin.browser.passwords.offerUpdate": "Aggiornare la password salvata per {site}?",
+  "plugin.browser.passwords.update": "Aggiorna",
+  "plugin.browser.passwords.never": "Mai",
+  "plugin.browser.passwords.offerSuggest": "Usare una password sicura per questo account? Viene salvata quando ti registri.",
+  "plugin.browser.passwords.useStrong": "Usala",
+  "plugin.browser.passwords.offerUnlock": "Sblocca le password salvate per accedere a {site}."
 }

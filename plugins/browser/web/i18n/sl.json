@@ -126,5 +126,14 @@
   "plugin.browser.passwords.saveFailed": "Tega gesla ni bilo mogoče shraniti.",
   "plugin.browser.passwords.deleteConfirm": "Izbrišem shranjeno geslo za {site}?",
   "plugin.browser.menu.news": "Novice na domači strani",
-  "plugin.browser.home.searchesAndSites": "Iz vaših iskanj in najpogosteje obiskanih spletnih mest"
+  "plugin.browser.home.searchesAndSites": "Iz vaših iskanj in najpogosteje obiskanih spletnih mest",
+  "plugin.browser.passwords.generate": "Predlagaj močno geslo",
+  "plugin.browser.passwords.notNow": "Ne zdaj",
+  "plugin.browser.passwords.offerSave": "Shranim geslo za {site}?",
+  "plugin.browser.passwords.offerUpdate": "Posodobim shranjeno geslo za {site}?",
+  "plugin.browser.passwords.update": "Posodobi",
+  "plugin.browser.passwords.never": "Nikoli",
+  "plugin.browser.passwords.offerSuggest": "Uporabim močno geslo za ta račun? Shrani se ob registraciji.",
+  "plugin.browser.passwords.useStrong": "Uporabi",
+  "plugin.browser.passwords.offerUnlock": "Odklenite shranjena gesla za prijavo v {site}."
 }

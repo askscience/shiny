@@ -118,5 +118,14 @@
   "plugin.browser.passwords.saveFailed": "Could not save this password.",
   "plugin.browser.passwords.deleteConfirm": "Delete the saved password for {site}?",
   "plugin.browser.menu.news": "News on the home page",
-  "plugin.browser.home.searchesAndSites": "From your searches and the sites you visit most"
+  "plugin.browser.home.searchesAndSites": "From your searches and the sites you visit most",
+  "plugin.browser.passwords.generate": "Suggest a strong password",
+  "plugin.browser.passwords.notNow": "Not now",
+  "plugin.browser.passwords.offerSave": "Save the password for {site}?",
+  "plugin.browser.passwords.offerUpdate": "Update the saved password for {site}?",
+  "plugin.browser.passwords.update": "Update",
+  "plugin.browser.passwords.never": "Never",
+  "plugin.browser.passwords.offerSuggest": "Use a strong password for this account? It is saved when you sign up.",
+  "plugin.browser.passwords.useStrong": "Use it",
+  "plugin.browser.passwords.offerUnlock": "Unlock your saved passwords to sign in to {site}."
 }

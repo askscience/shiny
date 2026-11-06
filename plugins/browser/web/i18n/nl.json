@@ -118,5 +118,14 @@
   "plugin.browser.passwords.saveFailed": "Kon dit wachtwoord niet opslaan.",
   "plugin.browser.passwords.deleteConfirm": "Het opgeslagen wachtwoord voor {site} verwijderen?",
   "plugin.browser.menu.news": "Nieuws op de startpagina",
-  "plugin.browser.home.searchesAndSites": "Uit je zoekopdrachten en de sites die je het vaakst bezoekt"
+  "plugin.browser.home.searchesAndSites": "Uit je zoekopdrachten en de sites die je het vaakst bezoekt",
+  "plugin.browser.passwords.generate": "Sterk wachtwoord voorstellen",
+  "plugin.browser.passwords.notNow": "Niet nu",
+  "plugin.browser.passwords.offerSave": "Wachtwoord voor {site} opslaan?",
+  "plugin.browser.passwords.offerUpdate": "Opgeslagen wachtwoord voor {site} bijwerken?",
+  "plugin.browser.passwords.update": "Bijwerken",
+  "plugin.browser.passwords.never": "Nooit",
+  "plugin.browser.passwords.offerSuggest": "Een sterk wachtwoord voor dit account gebruiken? Het wordt opgeslagen wanneer je je registreert.",
+  "plugin.browser.passwords.useStrong": "Gebruiken",
+  "plugin.browser.passwords.offerUnlock": "Ontgrendel je opgeslagen wachtwoorden om in te loggen bij {site}."
 }

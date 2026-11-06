@@ -126,5 +126,14 @@
   "plugin.browser.passwords.saveFailed": "Toto heslo se nepodařilo uložit.",
   "plugin.browser.passwords.deleteConfirm": "Smazat uložené heslo pro {site}?",
   "plugin.browser.menu.news": "Novinky na domovské stránce",
-  "plugin.browser.home.searchesAndSites": "Podle vašich hledání a nejnavštěvovanějších webů"
+  "plugin.browser.home.searchesAndSites": "Podle vašich hledání a nejnavštěvovanějších webů",
+  "plugin.browser.passwords.generate": "Navrhnout silné heslo",
+  "plugin.browser.passwords.notNow": "Teď ne",
+  "plugin.browser.passwords.offerSave": "Uložit heslo pro {site}?",
+  "plugin.browser.passwords.offerUpdate": "Aktualizovat uložené heslo pro {site}?",
+  "plugin.browser.passwords.update": "Aktualizovat",
+  "plugin.browser.passwords.never": "Nikdy",
+  "plugin.browser.passwords.offerSuggest": "Použít pro tento účet silné heslo? Uloží se při registraci.",
+  "plugin.browser.passwords.useStrong": "Použít",
+  "plugin.browser.passwords.offerUnlock": "Odemkněte uložená hesla a přihlaste se k {site}."
 }

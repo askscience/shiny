@@ -118,5 +118,14 @@
   "plugin.browser.passwords.saveFailed": "Тази парола не можа да се запази.",
   "plugin.browser.passwords.deleteConfirm": "Да се изтрие ли запазената парола за {site}?",
   "plugin.browser.menu.news": "Новини на началната страница",
-  "plugin.browser.home.searchesAndSites": "От търсенията ви и най-посещаваните ви сайтове"
+  "plugin.browser.home.searchesAndSites": "От търсенията ви и най-посещаваните ви сайтове",
+  "plugin.browser.passwords.generate": "Предложи силна парола",
+  "plugin.browser.passwords.notNow": "Не сега",
+  "plugin.browser.passwords.offerSave": "Да се запази ли паролата за {site}?",
+  "plugin.browser.passwords.offerUpdate": "Да се обнови ли запазената парола за {site}?",
+  "plugin.browser.passwords.update": "Обнови",
+  "plugin.browser.passwords.never": "Никога",
+  "plugin.browser.passwords.offerSuggest": "Да се използва ли силна парола за този профил? Запазва се при регистрацията.",
+  "plugin.browser.passwords.useStrong": "Използвай",
+  "plugin.browser.passwords.offerUnlock": "Отключете запазените пароли, за да влезете в {site}."
 }

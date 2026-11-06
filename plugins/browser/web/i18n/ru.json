@@ -126,5 +126,14 @@
   "plugin.browser.passwords.saveFailed": "Не удалось сохранить этот пароль.",
   "plugin.browser.passwords.deleteConfirm": "Удалить сохранённый пароль для {site}?",
   "plugin.browser.menu.news": "Новости на главной странице",
-  "plugin.browser.home.searchesAndSites": "По вашим запросам и сайтам, которые вы посещаете чаще всего"
+  "plugin.browser.home.searchesAndSites": "По вашим запросам и сайтам, которые вы посещаете чаще всего",
+  "plugin.browser.passwords.generate": "Предложить надёжный пароль",
+  "plugin.browser.passwords.notNow": "Не сейчас",
+  "plugin.browser.passwords.offerSave": "Сохранить пароль для {site}?",
+  "plugin.browser.passwords.offerUpdate": "Обновить сохранённый пароль для {site}?",
+  "plugin.browser.passwords.update": "Обновить",
+  "plugin.browser.passwords.never": "Никогда",
+  "plugin.browser.passwords.offerSuggest": "Использовать надёжный пароль для этой учётной записи? Он сохранится при регистрации.",
+  "plugin.browser.passwords.useStrong": "Использовать",
+  "plugin.browser.passwords.offerUnlock": "Разблокируйте сохранённые пароли, чтобы войти на {site}."
 }

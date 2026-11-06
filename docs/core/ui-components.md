@@ -10,7 +10,7 @@ Import relatively from a served plugin entry point:
 ```js
 import {
   element, toolbar, toolButton, menuButton, input, field, select,
-  controlGrid, controlCard, dial, mediaCard, modal, placePopover,
+  controlGrid, controlCard, dial, mediaCard, modal, placePopover, tabStrip, tab,
 } from '../../ui/index.js';
 ```
 
@@ -31,6 +31,7 @@ not always identical.
 | Layout | `toolbar`, `row`, `stack`, `controlGrid`, `controlCard`, `controlGroup` | Shared arrangement; callers supply content and translated labels. `toolbar(children, { className, label })` supports domain layout hooks. |
 | Selection | `chip`, `segmented` | Chip state has `aria-pressed`; segmented choices support roving keyboard focus and a selection indicator. |
 | Surfaces | `card`, `panel`, `section`, `divider`, `modal`, `sheet`, `tooltip`, `confirmDialog`, `promptDialog`, `menuSurface`, `menuItem` | Reuse shared surfaces and dialog focus/lifecycle handling. |
+| Tabs | `tabStrip`, `tab` | A window's tab strip (Terminal, Browser): `tabStrip({ label, className })` is the window's top bar (`data-window-bar`, `data-compact="off"`); `tab({ label, title, active, onSelect, onClose, closeLabel, leading, className })` is one tab — flat mono capitals, the active one a pill, its close shown on hover, on the active tab and on focus (always on touch). The owner re-renders the strip from its tab list; domain classes go in `className` as layout hooks. |
 | Media lists | `mediaCard` | Shared keyboard-activatable artwork card used by Radio and YouTube; accepts title, subtitle, source, position, duration and action. Optional `prefix` retains domain layout hooks. |
 | Data and feedback | `list`, `listItem`, `stat`, `badge`, `avatar`, `keyValue`, `toast`, `notify`, `spinner`, `skeleton`, `progress`, `emptyState` | Reuse these instead of introducing independent status, loading or empty-state systems. |
 | Popover geometry | `placePopover(popup, anchor)` | Measures the visible viewport, clamps width, chooses above/below placement and limits scrolling height, including a soft keyboard. Call after showing the popup; placement follows scrolling/rotation and releases its observers on close. |

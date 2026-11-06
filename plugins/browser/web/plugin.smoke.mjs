@@ -254,6 +254,43 @@ const searchBar = ({ placeholder = 'Search…', value } = {}) => {
   return wrap;
 };
 
+/** The shared tab strip (web/ui/components/tabs.js), with the same classes. */
+const tabStrip = ({ label, className = '' } = {}) => {
+  const strip = makeElement('div');
+  strip.className = `ui-tabstrip ${className}`.trim();
+  strip.setAttribute('role', 'tablist');
+  if (label) strip.setAttribute('aria-label', label);
+  strip.dataset.windowBar = '';
+  strip.dataset.compact = 'off';
+  return strip;
+};
+const tabItem = ({ label, title, active, onSelect, onClose, closeLabel, leading, className = '' } = {}) => {
+  const el = makeElement('div');
+  el.className = `ui-tab ${className}${active ? ' is-active' : ''}`.trim();
+  el.setAttribute('role', 'tab');
+  el.setAttribute('aria-selected', String(!!active));
+  const name = makeElement('button');
+  name.type = 'button';
+  name.className = 'ui-tab-label';
+  if (leading) name.appendChild(leading);
+  const text = makeElement('span');
+  text.className = 'ui-tab-text';
+  text.textContent = label || '';
+  name.appendChild(text);
+  name.title = title || label || '';
+  if (onSelect) name.addEventListener('click', () => onSelect());
+  el.appendChild(name);
+  if (onClose) {
+    const close = makeElement('button');
+    close.type = 'button';
+    close.className = 'ui-tab-close';
+    close.setAttribute('aria-label', closeLabel || label || '');
+    close.addEventListener('click', (e) => { e?.stopPropagation?.(); onClose(); });
+    el.appendChild(close);
+  }
+  return el;
+};
+
 /** Files-plugin helpers imported by the window. */
 const openWithPlugin = async () => {};
 const pluginForFile = () => null;
@@ -284,6 +321,24 @@ const createPasswordsPanel = (deps) => {
   return { element, open: async () => { passwordOpens += 1; } };
 };
 const fillScript = (origin, username, password) => `FILL ${origin} ${username} ${password}`;
+/** The automatic save/fill (login-assist.js, tested on its own): the window
+ *  must feed it the tab's load and address events. */
+const assistEvents = [];
+let assistDeps = null;
+const createLoginAssist = (deps) => {
+  assistDeps = deps;
+  const record = (name) => (tab) => { assistEvents.push({ name, id: tab?.id }); };
+  return {
+    element: deps.popover('browser-pw-offer'),
+    pageLoaded: record('loaded'),
+    pageLeaving: record('leaving'),
+    addressChanged: record('address'),
+    tabActivated: record('activated'),
+    tabClosed: record('closed'),
+    refill: record('refill'),
+    hide: () => {},
+  };
+};
 const readScript = () => 'READ';
 
 function findAll(root, predicate, out = []) {
@@ -303,7 +358,7 @@ const moduleSource = source
 
 const context = vm.createContext({
   console, document: documentStub, window: windowStub,
-  apiFetch, icon, iconButton, searchBar, openWithPlugin, pluginForFile, revealInFiles,
+  apiFetch, icon, iconButton, searchBar, tabStrip, tabItem, openWithPlugin, pluginForFile, revealInFiles,
   toolbar: (children = [], { className = '' } = {}) => { const node = makeElement('div'); node.className = `ui-toolbar ${className}`; node.append(...children); return node; },
   controlButton: () => { const node = makeElement('button'); node.type = 'button'; return node; },
   onOpenUrl,
@@ -319,6 +374,7 @@ const context = vm.createContext({
   nativeOccluderHoles,
   watchNativeOccluders,
   createPasswordsPanel,
+  createLoginAssist,
   fillScript,
   readScript,
   // The i18n runtime: resolve to the inline English fallback, as the catalog does.
@@ -516,6 +572,24 @@ check(
   (mod.namespace.browserContextMenu?.() || []).some((e) => e.label === 'New incognito tab'),
 );
 
+/* Passwords on their own: the load events reach login-assist.js. */
+const assistTab = lastView('open')?.id;
+windowStub.__liteauraViewEvent({ id: assistTab, type: 'load', phase: 'started' });
+windowStub.__liteauraViewEvent({ id: assistTab, type: 'url', url: 'https://login.example/' });
+windowStub.__liteauraViewEvent({ id: assistTab, type: 'load', phase: 'finished' });
+await tick(10);
+check('a starting load lets the form hand over its login',
+  assistEvents.some((e) => e.name === 'leaving' && e.id === assistTab));
+check('a finished load lets it watch, fill and offer',
+  assistEvents.some((e) => e.name === 'loaded' && e.id === assistTab));
+check('an address change during a load is not taken for a single-page app',
+  !assistEvents.some((e) => e.name === 'address'));
+windowStub.__liteauraViewEvent({ id: assistTab, type: 'url', url: 'https://login.example/home' });
+await tick(10);
+check('an address change after it is', assistEvents.some((e) => e.name === 'address' && e.id === assistTab));
+check('the offer is one of the window popovers', !!findAll(tile, (el) => String(el.className).includes('browser-pw-offer'))[0]);
+check('the assist sees the loaded origin', assistDeps?.originOf({ native: true, url: 'https://a.example/x' }) === 'https://a.example');
+
 /* Downloads: shell events feed the panel and get persisted. */
 windowStub.__liteauraViewEvent({
   type: 'download',
@@ -631,7 +705,7 @@ byLabel('Passwords')?.dispatch('click', {});
 await tick(20);
 
 /* Closing a tab tells the server. */
-const firstTabClose = findAll(tile, (el) => String(el.className).includes('browser-tab-close'))[0];
+const firstTabClose = findAll(tile, (el) => String(el.className).includes('ui-tab-close'))[0];
 firstTabClose.dispatch('click', { stopPropagation() {} });
 await tick(40);
 check('closing a tab tells the server', calls.sessionClose.length >= 1);

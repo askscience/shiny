@@ -122,5 +122,14 @@
   "plugin.browser.passwords.saveFailed": "Parola nu a putut fi salvată.",
   "plugin.browser.passwords.deleteConfirm": "Ștergi parola salvată pentru {site}?",
   "plugin.browser.menu.news": "Știri pe pagina de start",
-  "plugin.browser.home.searchesAndSites": "Din căutările tale și site-urile pe care le vizitezi cel mai des"
+  "plugin.browser.home.searchesAndSites": "Din căutările tale și site-urile pe care le vizitezi cel mai des",
+  "plugin.browser.passwords.generate": "Sugerează o parolă puternică",
+  "plugin.browser.passwords.notNow": "Nu acum",
+  "plugin.browser.passwords.offerSave": "Salvezi parola pentru {site}?",
+  "plugin.browser.passwords.offerUpdate": "Actualizezi parola salvată pentru {site}?",
+  "plugin.browser.passwords.update": "Actualizează",
+  "plugin.browser.passwords.never": "Niciodată",
+  "plugin.browser.passwords.offerSuggest": "Folosești o parolă puternică pentru acest cont? Se salvează la înregistrare.",
+  "plugin.browser.passwords.useStrong": "Folosește-o",
+  "plugin.browser.passwords.offerUnlock": "Deblochează parolele salvate pentru a te conecta la {site}."
 }

@@ -118,5 +118,14 @@
   "plugin.browser.passwords.saveFailed": "Salasanaa ei voitu tallentaa.",
   "plugin.browser.passwords.deleteConfirm": "Poistetaanko sivuston {site} tallennettu salasana?",
   "plugin.browser.menu.news": "Uutiset kotisivulla",
-  "plugin.browser.home.searchesAndSites": "Hakujesi ja useimmin käyttämiesi sivustojen perusteella"
+  "plugin.browser.home.searchesAndSites": "Hakujesi ja useimmin käyttämiesi sivustojen perusteella",
+  "plugin.browser.passwords.generate": "Ehdota vahvaa salasanaa",
+  "plugin.browser.passwords.notNow": "Ei nyt",
+  "plugin.browser.passwords.offerSave": "Tallennetaanko salasana sivustolle {site}?",
+  "plugin.browser.passwords.offerUpdate": "Päivitetäänkö tallennettu salasana sivustolle {site}?",
+  "plugin.browser.passwords.update": "Päivitä",
+  "plugin.browser.passwords.never": "Ei koskaan",
+  "plugin.browser.passwords.offerSuggest": "Käytetäänkö tälle tilille vahvaa salasanaa? Se tallennetaan rekisteröityessä.",
+  "plugin.browser.passwords.useStrong": "Käytä",
+  "plugin.browser.passwords.offerUnlock": "Avaa tallennetut salasanat kirjautuaksesi sivustolle {site}."
 }

@@ -130,5 +130,14 @@
   "plugin.browser.passwords.saveFailed": "Din il-password ma setgħetx tiġi salvata.",
   "plugin.browser.passwords.deleteConfirm": "Tħassar il-password salvata għal {site}?",
   "plugin.browser.menu.news": "Aħbarijiet fil-paġna ewlenija",
-  "plugin.browser.home.searchesAndSites": "Mit-tiftixiet tiegħek u mis-siti li żżur l-aktar"
+  "plugin.browser.home.searchesAndSites": "Mit-tiftixiet tiegħek u mis-siti li żżur l-aktar",
+  "plugin.browser.passwords.generate": "Ipproponi password b'saħħitha",
+  "plugin.browser.passwords.notNow": "Mhux issa",
+  "plugin.browser.passwords.offerSave": "Issejvja l-password għal {site}?",
+  "plugin.browser.passwords.offerUpdate": "Taġġorna l-password issejvjata għal {site}?",
+  "plugin.browser.passwords.update": "Aġġorna",
+  "plugin.browser.passwords.never": "Qatt",
+  "plugin.browser.passwords.offerSuggest": "Tuża password b'saħħitha għal dan il-kont? Tiġi ssejvjata meta tirreġistra.",
+  "plugin.browser.passwords.useStrong": "Użaha",
+  "plugin.browser.passwords.offerUnlock": "Iftaħ il-passwords issejvjati biex tidħol f'{site}."
 }

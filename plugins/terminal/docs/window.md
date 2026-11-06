@@ -25,9 +25,11 @@ export default {
   new-tab `+` sit next to the window controls. A tab is labelled with the
   shell's OSC title, falling back to `Terminal 1`, `Terminal 2`…; its tooltip
   names the shell and start directory.
-- Look: the tabs are flat mono uppercase labels; the active one is a grey
-  pill, and its close control is the catalog `ui/close` icon (shown on hover /
-  for the active tab). The status line under the terminal is a mono uppercase
+- Look: the strip and tabs are the shared `tabStrip` / `tab` from `web/ui`
+  (the Browser's too): flat mono uppercase labels, the active one a grey
+  pill, its close the catalog `ui/close` icon (shown on hover / for the active
+  tab / always on touch). The terminal styles only reshape the active tab
+  (`.terminal-tabstrip[data-terminal-style] .ui-tab.is-active`). The status line under the terminal is a mono uppercase
   meta line — `SHELL · ~/CWD · STATE` (e.g. `ZSH · ~/SHINY · CONNECTED`),
   built from the session's `ready` frame and decoded (`decodeText`) when it
   changes.

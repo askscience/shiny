@@ -118,5 +118,14 @@
   "plugin.browser.passwords.saveFailed": "Dieses Passwort konnte nicht gespeichert werden.",
   "plugin.browser.passwords.deleteConfirm": "Das gespeicherte Passwort für {site} löschen?",
   "plugin.browser.menu.news": "Nachrichten auf der Startseite",
-  "plugin.browser.home.searchesAndSites": "Aus Ihren Suchanfragen und den am häufigsten besuchten Websites"
+  "plugin.browser.home.searchesAndSites": "Aus Ihren Suchanfragen und den am häufigsten besuchten Websites",
+  "plugin.browser.passwords.generate": "Sicheres Passwort vorschlagen",
+  "plugin.browser.passwords.notNow": "Nicht jetzt",
+  "plugin.browser.passwords.offerSave": "Passwort für {site} speichern?",
+  "plugin.browser.passwords.offerUpdate": "Gespeichertes Passwort für {site} aktualisieren?",
+  "plugin.browser.passwords.update": "Aktualisieren",
+  "plugin.browser.passwords.never": "Nie",
+  "plugin.browser.passwords.offerSuggest": "Ein sicheres Passwort für dieses Konto verwenden? Es wird bei der Registrierung gespeichert.",
+  "plugin.browser.passwords.useStrong": "Verwenden",
+  "plugin.browser.passwords.offerUnlock": "Entsperre deine gespeicherten Passwörter, um dich bei {site} anzumelden."
 }

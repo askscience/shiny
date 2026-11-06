@@ -35,7 +35,7 @@
  * and replays recent output.
  */
 
-import { controlButton, icon, iconButton, toast, decodeText } from '../../ui/index.js';
+import { controlButton, iconButton, toast, decodeText, tabStrip, tab as tabItem } from '../../ui/index.js';
 import * as coreApi from '../../js/api.js';
 import { t, tp } from '../../js/i18n.js';
 import { copyText, readClipboardText } from '../../js/clipboard.js';
@@ -433,16 +433,14 @@ function withCtrl(data) {
 }
 
 function buildTabStrip() {
-  const strip = document.createElement('div');
-  strip.className = 'terminal-tabstrip';
-  strip.setAttribute('role', 'tablist');
-  strip.setAttribute('aria-label', t('plugin.terminal.tabs.label', null, 'Terminal tabs'));
-  // Nominate the strip as the window's top bar: the shared chrome folds it into
-  // the header row next to the close/fullscreen controls (see `data-window-bar`
-  // in web/js/tiles.js), so the tabs and the new-tab `+` live in the title bar
-  // and the centered "Terminal" label is dropped — the browser's arrangement.
-  strip.dataset.windowBar = '';
-  strip.dataset.compact = 'off';
+  // The window's top bar (the shared strip carries `data-window-bar`, so the
+  // core chrome folds it into the header row next to the close/fullscreen
+  // controls and drops the centered "Terminal" label — the browser's
+  // arrangement).
+  const strip = tabStrip({
+    label: t('plugin.terminal.tabs.label', null, 'Terminal tabs'),
+    className: 'terminal-tabstrip',
+  });
   strip.dataset.terminalStyle = terminalStyle;
   return strip;
 }
@@ -461,33 +459,15 @@ function renderTabs() {
   if (!tabstripEl) return;
   const nodes = [];
   for (const tab of tabs) {
-    const el = document.createElement('div');
-    el.className = 'terminal-tab' + (tab.id === activeTabId ? ' is-active' : '');
-    el.setAttribute('role', 'tab');
-    el.setAttribute('aria-selected', String(tab.id === activeTabId));
-
-    const label = controlButton();
-    label.type = 'button';
-    label.className = 'terminal-tab-label';
-    const text = document.createElement('span');
-    text.className = 'terminal-tab-text';
-    text.textContent = tabLabel(tab);
-    label.appendChild(text);
-    label.title = tab.shell ? `${tab.shell} — ${tab.cwd}` : tabLabel(tab);
-    label.addEventListener('click', () => setActiveTab(tab.id));
-
-    const close = controlButton();
-    close.type = 'button';
-    close.className = 'terminal-tab-close';
-    close.setAttribute('aria-label', t('plugin.terminal.tab.close', { name: tabLabel(tab) }, 'Close {name}'));
-    close.appendChild(icon('ui/close', { size: 12 }));
-    close.addEventListener('click', (e) => {
-      e.stopPropagation();
-      closeTab(tab.id);
-    });
-
-    el.append(label, close);
-    nodes.push(el);
+    nodes.push(tabItem({
+      label: tabLabel(tab),
+      title: tab.shell ? `${tab.shell} — ${tab.cwd}` : tabLabel(tab),
+      active: tab.id === activeTabId,
+      onSelect: () => setActiveTab(tab.id),
+      onClose: () => closeTab(tab.id),
+      closeLabel: t('plugin.terminal.tab.close', { name: tabLabel(tab) }, 'Close {name}'),
+      className: 'terminal-tab',
+    }));
   }
   const add = iconButton({
     icon: 'ui/plus',

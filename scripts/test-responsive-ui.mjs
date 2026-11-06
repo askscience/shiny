@@ -130,7 +130,8 @@ try{
    });
    assert.ok(visible,'Image knobs are visible initially with a document and looks loaded');
  }
- const wrongFonts=await page.locator('.tile button,.tile input,.tile select,.tile textarea,.tile .ui-dial').evaluateAll(nodes=>nodes.filter(e=>e.getClientRects().length && !getComputedStyle(e).fontFamily.includes('DejaVu Serif')).map(e=>({className:e.className,font:getComputedStyle(e).fontFamily})).slice(0,25));
+ // Tab names (`.ui-tab-label`, Terminal and Browser) are mono capitals by design.
+  const wrongFonts=await page.locator('.tile button:not(.ui-tab-label),.tile input,.tile select,.tile textarea,.tile .ui-dial').evaluateAll(nodes=>nodes.filter(e=>e.getClientRects().length && !getComputedStyle(e).fontFamily.includes('DejaVu Serif')).map(e=>({className:e.className,font:getComputedStyle(e).fontFamily})).slice(0,25));
  assert.deepEqual(wrongFonts,[],'controls honor the font selected in Preferences');
  const searches=await page.locator('.tile .ui-search').evaluateAll(nodes=>nodes.map(e=>{
    const s=getComputedStyle(e.querySelector('input'));

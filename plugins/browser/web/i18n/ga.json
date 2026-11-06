@@ -130,5 +130,14 @@
   "plugin.browser.passwords.saveFailed": "Níorbh fhéidir an pasfhocal seo a shábháil.",
   "plugin.browser.passwords.deleteConfirm": "Scrios an pasfhocal sábháilte do {site}?",
   "plugin.browser.menu.news": "Nuacht ar an leathanach baile",
-  "plugin.browser.home.searchesAndSites": "Ó do chuardaigh agus ó na suíomhanna is mó a dtugann tú cuairt orthu"
+  "plugin.browser.home.searchesAndSites": "Ó do chuardaigh agus ó na suíomhanna is mó a dtugann tú cuairt orthu",
+  "plugin.browser.passwords.generate": "Mol pasfhocal láidir",
+  "plugin.browser.passwords.notNow": "Ní anois",
+  "plugin.browser.passwords.offerSave": "Sábháil an pasfhocal do {site}?",
+  "plugin.browser.passwords.offerUpdate": "Nuashonraigh an pasfhocal sábháilte do {site}?",
+  "plugin.browser.passwords.update": "Nuashonraigh",
+  "plugin.browser.passwords.never": "Choíche",
+  "plugin.browser.passwords.offerSuggest": "Pasfhocal láidir a úsáid don chuntas seo? Sábháiltear é nuair a chláraíonn tú.",
+  "plugin.browser.passwords.useStrong": "Úsáid é",
+  "plugin.browser.passwords.offerUnlock": "Díghlasáil do phasfhocail shábháilte chun síniú isteach ar {site}."
 }

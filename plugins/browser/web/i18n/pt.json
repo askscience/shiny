@@ -122,5 +122,14 @@
   "plugin.browser.passwords.saveFailed": "Não foi possível salvar esta senha.",
   "plugin.browser.passwords.deleteConfirm": "Excluir a senha salva de {site}?",
   "plugin.browser.menu.news": "Notícias na página inicial",
-  "plugin.browser.home.searchesAndSites": "Com base nas suas pesquisas e nos sites que você mais visita"
+  "plugin.browser.home.searchesAndSites": "Com base nas suas pesquisas e nos sites que você mais visita",
+  "plugin.browser.passwords.generate": "Sugerir uma palavra-passe forte",
+  "plugin.browser.passwords.notNow": "Agora não",
+  "plugin.browser.passwords.offerSave": "Guardar a palavra-passe de {site}?",
+  "plugin.browser.passwords.offerUpdate": "Atualizar a palavra-passe guardada de {site}?",
+  "plugin.browser.passwords.update": "Atualizar",
+  "plugin.browser.passwords.never": "Nunca",
+  "plugin.browser.passwords.offerSuggest": "Usar uma palavra-passe forte nesta conta? É guardada quando se registar.",
+  "plugin.browser.passwords.useStrong": "Usar",
+  "plugin.browser.passwords.offerUnlock": "Desbloqueie as palavras-passe guardadas para entrar em {site}."
 }

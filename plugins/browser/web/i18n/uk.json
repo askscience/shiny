@@ -126,5 +126,14 @@
   "plugin.browser.passwords.saveFailed": "Не вдалося зберегти цей пароль.",
   "plugin.browser.passwords.deleteConfirm": "Видалити збережений пароль для {site}?",
   "plugin.browser.menu.news": "Новини на головній сторінці",
-  "plugin.browser.home.searchesAndSites": "За вашими пошуками та сайтами, які ви відвідуєте найчастіше"
+  "plugin.browser.home.searchesAndSites": "За вашими пошуками та сайтами, які ви відвідуєте найчастіше",
+  "plugin.browser.passwords.generate": "Запропонувати надійний пароль",
+  "plugin.browser.passwords.notNow": "Не зараз",
+  "plugin.browser.passwords.offerSave": "Зберегти пароль для {site}?",
+  "plugin.browser.passwords.offerUpdate": "Оновити збережений пароль для {site}?",
+  "plugin.browser.passwords.update": "Оновити",
+  "plugin.browser.passwords.never": "Ніколи",
+  "plugin.browser.passwords.offerSuggest": "Використати надійний пароль для цього облікового запису? Він збережеться під час реєстрації.",
+  "plugin.browser.passwords.useStrong": "Використати",
+  "plugin.browser.passwords.offerUnlock": "Розблокуйте збережені паролі, щоб увійти на {site}."
 }

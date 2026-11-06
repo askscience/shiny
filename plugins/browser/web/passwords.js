@@ -22,6 +22,11 @@
  *
  * The page itself is reached only through the callbacks the window passes in
  * (`fillPage`, `readPage`), which run in the active tab's native view.
+ *
+ * The page scripts at the end (`watchScript`, `takeScript`, `suggestScript`,
+ * `fillScript`) are what `login-assist.js` runs to offer saving a login the
+ * user submitted, to fill a saved one in on its own and to suggest a strong
+ * password on a sign-up form; `generatePassword` makes that password.
  */
 import { apiFetch } from '../../js/api.js';
 import { copyText } from '../../js/clipboard.js';
@@ -103,7 +108,9 @@ function isLockedError(err) {
  * @param {() => void} deps.onLayout  the panel changed size or opened/closed
  * @param {() => void} deps.closePanels  close every popover of the window
  */
-export function createPasswordsPanel({ popover, pageUrl, fillPage, readPage, onLayout, closePanels }) {
+export function createPasswordsPanel({
+  popover, pageUrl, fillPage, readPage, onLayout, closePanels, onUnlocked = () => {},
+}) {
   const panel = popover('browser-passwords-panel');
   panel.setAttribute('role', 'dialog');
   panel.setAttribute('aria-label', t('plugin.browser.passwords.title', null, 'Passwords'));
@@ -121,6 +128,8 @@ export function createPasswordsPanel({ popover, pageUrl, fillPage, readPage, onL
   let entries = [];
   let matching = new Set();
   let changed = false;
+  /** A login to show in the editor once the vault is open (`openWith`). */
+  let pendingEdit = null;
 
   function say(message, kind = '') {
     status.textContent = message || '';
@@ -194,6 +203,14 @@ export function createPasswordsPanel({ popover, pageUrl, fillPage, readPage, onL
         changed = false;
         state = { exists: true, unlocked: true };
         say('');
+        onUnlocked();
+        if (pendingEdit) {
+          const values = pendingEdit;
+          pendingEdit = null;
+          await loadList();
+          renderEdit(null, values);
+          return;
+        }
         await loadList();
         return;
       }
@@ -408,8 +425,14 @@ export function createPasswordsPanel({ popover, pageUrl, fillPage, readPage, onL
     const show = iconAction('ui/eye', t('plugin.browser.passwords.show', null, 'Show password'), () => {
       password.type = password.type === 'password' ? 'text' : 'password';
     });
+    const generate = iconAction('ui/magic-wand',
+      t('plugin.browser.passwords.generate', null, 'Suggest a strong password'), () => {
+        password.value = generatePassword();
+        password.type = 'text';
+        password.focus();
+      });
     const passwordRow = el('div', 'browser-pw-inline');
-    passwordRow.append(password, show);
+    passwordRow.append(password, show, generate);
 
     const form = el('form', 'browser-pw-form');
     form.append(
@@ -507,7 +530,55 @@ export function createPasswordsPanel({ popover, pageUrl, fillPage, readPage, onL
     onLayout();
   }
 
-  return { element: panel, open };
+  /**
+   * Show the editor prefilled with `values` ({ site, username, password }):
+   * at once when the vault is open, after the unlock prompt otherwise.
+   */
+  async function openWith(values) {
+    pendingEdit = values;
+    await open();
+    if (state.unlocked && pendingEdit) {
+      pendingEdit = null;
+      renderEdit(null, values);
+    }
+  }
+
+  return { element: panel, open, openWith };
+}
+
+/* ── Strong passwords ─────────────────────────────────────────── */
+
+const LOWER = 'abcdefghijkmnopqrstuvwxyz';
+const UPPER = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+const DIGITS = '23456789';
+const SYMBOLS = '-_.!?@#$%*+=';
+
+/** A uniform random index below `n` (rejection sampling: no modulo bias). */
+function randomBelow(n) {
+  const limit = Math.floor(0x100000000 / n) * n;
+  const buf = new Uint32Array(1);
+  for (;;) {
+    crypto.getRandomValues(buf);
+    if (buf[0] < limit) return buf[0] % n;
+  }
+}
+
+/**
+ * A strong random password: `length` characters (at least 12) with at least
+ * one lower-case letter, capital, digit and symbol. Look-alike characters
+ * (0/O, 1/l/I) are left out, so it can be read off the screen. ~6 bits per
+ * character: 20 characters are about 120 bits.
+ */
+export function generatePassword(length = 20) {
+  const n = Math.max(12, length | 0);
+  const all = LOWER + UPPER + DIGITS + SYMBOLS;
+  const chars = [LOWER, UPPER, DIGITS, SYMBOLS].map((set) => set[randomBelow(set.length)]);
+  while (chars.length < n) chars.push(all[randomBelow(all.length)]);
+  for (let i = chars.length - 1; i > 0; i -= 1) {
+    const j = randomBelow(i + 1);
+    [chars[i], chars[j]] = [chars[j], chars[i]];
+  }
+  return chars.join('');
 }
 
 /**
@@ -517,11 +588,13 @@ export function createPasswordsPanel({ popover, pageUrl, fillPage, readPage, onL
  * checked inside the page, so a navigation between the user's click and the
  * fill can never hand the password to another site.
  */
-export function fillScript(origin, username, password) {
+export function fillScript(origin, username, password, { onlyEmpty = false } = {}) {
   return `(() => {
   if (location.origin !== ${JSON.stringify(origin)}) return 'origin';
   ${FIELD_HELPERS}
   const { user, pass } = loginFields();
+  // Filling on its own never overwrites what the user already typed.
+  if (${onlyEmpty ? 'true' : 'false'} && ((pass && pass.value) || (!pass && user && user.value))) return 'typed';
   const set = (el, value) => {
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
     el.focus();
@@ -546,13 +619,101 @@ export function readScript() {
 })()`;
 }
 
-/** Shared by both page scripts: find the visible username and password fields. */
+/**
+ * The page script that watches the login form so a submitted login can be
+ * offered for saving. Installed once per document; on a submit, a click on a
+ * button of the form or Enter in one of its fields it keeps what was typed in
+ * `window.__liteauraLogin` and in `sessionStorage` (a same-origin page that
+ * replaces this one still finds it). Returns the form on the page as JSON:
+ * `{ kind: 'login' | 'signup' | 'none' }` — 'signup' when a field asks for a
+ * new password (`autocomplete="new-password"`, or two password fields).
+ */
+export function watchScript() {
+  return `(() => {
+  ${FIELD_HELPERS}
+  const kind = () => {
+    const passes = passwordFields();
+    if (!passes.length) return 'none';
+    if (passes.some((el) => (el.autocomplete || '').includes('new-password')) || passes.length === 2) return 'signup';
+    return 'login';
+  };
+  if (!window.__liteauraLoginWatch) {
+    window.__liteauraLoginWatch = true;
+    const snap = () => {
+      const passes = passwordFields();
+      if (!passes.length) return;
+      const { user } = loginFields();
+      // A change-password form: current, new, confirm — keep the new one.
+      const fresh = passes.find((el) => (el.autocomplete || '').includes('new-password'));
+      const pass = fresh || (passes.length >= 3 ? passes[1] : passes[0]);
+      if (!pass.value) return;
+      const login = { origin: location.origin, username: user ? user.value : '', password: pass.value };
+      window.__liteauraLogin = login;
+      try { sessionStorage.setItem('__liteauraLogin', JSON.stringify(login)); } catch (_) {}
+    };
+    document.addEventListener('submit', snap, true);
+    document.addEventListener('click', (e) => {
+      const b = e.target && e.target.closest && e.target.closest('button, input[type=submit], input[type=image], [role=button]');
+      if (b) snap();
+    }, true);
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && e.target && e.target.tagName === 'INPUT') snap();
+    }, true);
+    window.addEventListener('pagehide', snap, true);
+  }
+  return JSON.stringify({ kind: kind() });
+})()`;
+}
+
+/**
+ * The page script that hands over (and forgets) a login `watchScript` kept,
+ * as JSON, or '' when there is none.
+ */
+export function takeScript() {
+  return `(() => {
+  let login = window.__liteauraLogin || null;
+  window.__liteauraLogin = null;
+  try {
+    const kept = sessionStorage.getItem('__liteauraLogin');
+    sessionStorage.removeItem('__liteauraLogin');
+    if (!login && kept) login = JSON.parse(kept);
+  } catch (_) {}
+  return login && login.password ? JSON.stringify(login) : '';
+})()`;
+}
+
+/**
+ * The page script that puts a suggested password into every new-password
+ * field of a sign-up form (the password and its confirmation). Returns 'ok',
+ * 'nofield', or 'origin' when the page left `origin`.
+ */
+export function suggestScript(origin, password) {
+  return `(() => {
+  if (location.origin !== ${JSON.stringify(origin)}) return 'origin';
+  ${FIELD_HELPERS}
+  const passes = passwordFields();
+  const fresh = passes.filter((el) => (el.autocomplete || '').includes('new-password'));
+  const targets = fresh.length ? fresh : passes.length === 2 ? passes : [];
+  if (!targets.length) return 'nofield';
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+  for (const el of targets) {
+    el.focus();
+    setter.call(el, ${JSON.stringify(password)});
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  return 'ok';
+})()`;
+}
+
+/** Shared by the page scripts: find the visible username and password fields. */
 const FIELD_HELPERS = `
   const visible = (el) => !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
   const textual = 'input:not([type]),input[type=text],input[type=email],input[type=tel]';
+  const passwordFields = () => [...document.querySelectorAll('input[type=password]')]
+    .filter((el) => visible(el) && !el.disabled && !el.readOnly);
   const loginFields = () => {
-    const pass = [...document.querySelectorAll('input[type=password]')]
-      .find((el) => visible(el) && !el.disabled && !el.readOnly) || null;
+    const pass = passwordFields()[0] || null;
     const scope = (pass && pass.form) || document;
     const candidates = [...scope.querySelectorAll(textual)].filter((el) => visible(el) && !el.disabled);
     let user = null;

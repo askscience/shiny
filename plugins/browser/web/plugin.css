@@ -68,66 +68,8 @@
 
 /* ── Tab strip ──────────────────────────────────────────────── */
 
-.browser-tabstrip {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  height: 34px;
-  padding: 0 8px;
-  overflow-x: auto;
-  overflow-y: hidden;
-}
-
-/* The strip is the window's top bar (see `data-window-bar` in plugin.js), so
-   inside the merged header it drops its own plate and bottom border and reads
-   as a single row with the close/fullscreen controls. */
-.tile-header--merged > .browser-tabstrip {
-  height: 100%;
-  background: transparent;
-}
-
-.browser-tab {
-  flex: 0 1 auto;
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  min-width: 0;
-  max-width: 190px;
-  height: 26px;
-  padding: 0 4px 0 8px;
-  border: 1px solid transparent;
-  border-radius: 8px;
-}
-
-.browser-tab-label {
-  min-width: 0;
-  max-width: 150px;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  background: none;
-  border: 0;
-  padding: 0;
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-}
-
-.browser-tab-close {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  border: 0;
-  border-radius: 5px;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-}
+/* The strip and its tabs are the shared ones (`.ui-tabstrip`, `.ui-tab`,
+   web/ui/ui.css), as in the Terminal; only their arrangement lives here. */
 
 .browser-newtab {
   flex: none;
@@ -495,10 +437,21 @@
   min-width: 0;
 }
 
+/* The switcher row's close (the strip's own is `.ui-tab-close`). */
 .browser-tabs-row > .browser-tab-close {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 28px;
   height: 28px;
   margin-right: 4px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
 }
 
 /* A narrow (phone-sized) window: the strip keeps only the active tab, at full
@@ -513,7 +466,7 @@
     max-width: none;
   }
 
-  .browser-tab.is-active .browser-tab-label {
+  .browser-tab.is-active .ui-tab-label {
     flex: 1 1 auto;
     max-width: none;
     text-align: start;
@@ -533,12 +486,6 @@
 
 /* Touch: finger-sized tabs, close buttons and rows. */
 @media (pointer: coarse) {
-  .browser-tab {
-    height: 36px;
-    padding-left: 10px;
-  }
-
-  .browser-tab-close,
   .browser-tabs-row > .browser-tab-close {
     width: 36px;
     height: 36px;
@@ -626,6 +573,25 @@
 
 .browser-pw-reset {
   margin: 4px 6px;
+}
+
+/* The offer (login-assist.js): save / update a submitted login, use a strong
+   password on a sign-up form, unlock to sign in. */
+.browser-pw-offer {
+  width: min(320px, calc(100% - 16px));
+  padding: 10px 10px 8px;
+  gap: 4px;
+}
+
+.browser-pw-offer > .browser-popover-sub {
+  margin: -6px 6px 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.browser-pw-offer > .browser-pw-buttons {
+  flex-wrap: wrap;
 }
 
 .browser-pw-row {

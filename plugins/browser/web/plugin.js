@@ -1,5 +1,6 @@
 import {
   toolbar, controlButton, icon, iconButton, searchBar, themeMode, listReveal, COMPACT_MAX,
+  tabStrip, tab as tabItem,
 } from '../../ui/index.js';
 /**
  * browser.js — the Browser plugin's window.
@@ -31,6 +32,7 @@ import { t, tp } from '../../js/i18n.js';
 import { onOpenUrl } from '../../js/linkRouter.js';
 import { nativeOccluderHoles, watchNativeOccluders } from '../../js/nativeOccluders.js';
 import { createPasswordsPanel, fillScript, readScript } from './passwords.js';
+import { createLoginAssist } from './login-assist.js';
 import { openCoreWindow } from '../../js/tiles.js';
 
 export const BROWSER_PLUGIN = 'browser';
@@ -273,12 +275,15 @@ let bookmarksListEl = null;
 let tabsPanel = null;
 let tabsListEl = null;
 let passwordsPanel = null;
+/** Save / fill / suggest on its own (login-assist.js) and its offer popover. */
+let loginAssist = null;
+let loginOfferEl = null;
 /** The password manager behind `passwordsPanel` (see passwords.js). */
 let passwords = null;
 
 /** Every popover this window owns, open or not. */
 function browserPopovers() {
-  return [downloadsPanel, browserMenu, historyPanel, bookmarksPanel, tabsPanel, passwordsPanel]
+  return [downloadsPanel, browserMenu, historyPanel, bookmarksPanel, tabsPanel, passwordsPanel, loginOfferEl]
     .filter(Boolean);
 }
 
@@ -444,6 +449,7 @@ function closeTab(id) {
     }).catch(() => {});
   }
   const wasActive = activeTabId === id;
+  loginAssist?.tabClosed(tab);
   destroyTab(tab);
 
   if (wasActive) {
@@ -487,6 +493,7 @@ function setActiveTab(id) {
   renderTabs();
   updateNavButtons();
   updateBookmarkButton();
+  loginAssist?.tabActivated(tab);
 }
 
 /** The tab strip: one button per tab, plus a new-tab action. */
@@ -494,45 +501,24 @@ function renderTabs() {
   if (!tabstripEl) return;
   const nodes = [];
   for (const tab of tabs) {
-    const el = document.createElement('div');
-    el.className = 'browser-tab' + (tab.id === activeTabId ? ' is-active' : '')
-      + (tab.incognito ? ' is-incognito' : '');
-    el.setAttribute('role', 'tab');
-    el.setAttribute('aria-selected', String(tab.id === activeTabId));
-
-    const label = controlButton();
-    label.type = 'button';
-    label.className = 'browser-tab-label';
-    if (tab.incognito) {
-      const mask = icon('ui/incognito', { size: 12 });
-      mask.classList.add('browser-tab-mask');
-      label.appendChild(mask);
-    }
-    const text = document.createElement('span');
-    text.className = 'browser-tab-text';
-    text.textContent = tabTitle(tab);
-    label.appendChild(text);
     const tabName = tab.url || t('plugin.browser.tabs.newTab', null, 'New tab');
-    label.title = tab.incognito
-      ? t('plugin.browser.tabs.incognito', { url: tabName }, `Incognito — ${tabName}`)
-      : tabName;
-    label.addEventListener('click', () => setActiveTab(tab.id));
-
-    const close = controlButton();
-    close.type = 'button';
-    close.className = 'browser-tab-close';
-    close.setAttribute(
-      'aria-label',
-      t('plugin.browser.tabs.close', { title: tabTitle(tab) }, `Close ${tabTitle(tab)}`),
-    );
-    close.appendChild(icon('ui/close', { size: 12 }));
-    close.addEventListener('click', (e) => {
-      e.stopPropagation();
-      closeTab(tab.id);
-    });
-
-    el.append(label, close);
-    nodes.push(el);
+    let leading = null;
+    if (tab.incognito) {
+      leading = icon('ui/incognito', { size: 12 });
+      leading.classList.add('browser-tab-mask');
+    }
+    nodes.push(tabItem({
+      label: tabTitle(tab),
+      title: tab.incognito
+        ? t('plugin.browser.tabs.incognito', { url: tabName }, `Incognito — ${tabName}`)
+        : tabName,
+      active: tab.id === activeTabId,
+      onSelect: () => setActiveTab(tab.id),
+      onClose: () => closeTab(tab.id),
+      closeLabel: t('plugin.browser.tabs.close', { title: tabTitle(tab) }, `Close ${tabTitle(tab)}`),
+      leading,
+      className: 'browser-tab' + (tab.incognito ? ' is-incognito' : ''),
+    }));
   }
   // The tab switcher's trigger: the open-tab count, as phone browsers show it.
   // CSS only reveals it in a narrow window, where the strip keeps just the
@@ -799,17 +785,10 @@ function updateNavButtons() {
 }
 
 function buildTabStrip() {
-  const strip = document.createElement('div');
-  strip.className = 'browser-tabstrip';
-  strip.setAttribute('role', 'tablist');
-  strip.setAttribute('aria-label', t('plugin.browser.tabs.label', null, 'Tabs'));
-  // Nominate the strip as the window's top bar: the shared chrome folds it into
-  // the header row next to the close/fullscreen controls (see `data-window-bar`
-  // in web/js/tiles.js), so the tabs and the new-tab `+` live in the title bar
-  // and the centered "Browser" label is dropped.
-  strip.dataset.windowBar = '';
-  strip.dataset.compact = 'off';
-  return strip;
+  // The window's top bar, the same shared strip as the Terminal's: it carries
+  // `data-window-bar`, so the core chrome folds it into the header row next to
+  // the close/fullscreen controls and the centered "Browser" label is dropped.
+  return tabStrip({ label: t('plugin.browser.tabs.label', null, 'Tabs'), className: 'browser-tabstrip' });
 }
 
 function buildToolbar() {
@@ -1696,8 +1675,52 @@ function buildPasswords() {
     readPage: readActivePage,
     onLayout: () => requestSync(),
     closePanels: () => closeAllBrowserPanels(),
+    onUnlocked: () => loginAssist?.refill(activeTab()),
   });
   return passwords.element;
+}
+
+/** The http(s) origin a tab has loaded, or ''. */
+function tabOrigin(tab) {
+  if (!tab?.native || !/^https?:/i.test(tab.url || '')) return '';
+  try {
+    return new URL(tab.url).origin;
+  } catch (_) {
+    return '';
+  }
+}
+
+function buildLoginAssist() {
+  loginAssist = createLoginAssist({
+    popover,
+    runPageJs,
+    originOf: tabOrigin,
+    isActive: (tab) => tab?.id === activeTabId,
+    openPanel: (values) => {
+      if (values) {
+        closeAllBrowserPanels();
+        if (!passwordsPanel || !passwords) return;
+        passwordsPanel.classList.remove('hidden');
+        requestSync();
+        void passwords.openWith(values);
+      } else {
+        void openPasswordsPanel();
+      }
+    },
+    onShow: (shown) => {
+      if (shown) {
+        placePopovers();
+        for (const el of browserPopovers()) {
+          if (el !== loginOfferEl) el.classList.add('hidden');
+        }
+      }
+      requestSync();
+    },
+    focusPage: (tab) => {
+      if (tab?.native && tab.id === activeTabId) nativeSend({ op: 'focus', id: tab.id });
+    },
+  });
+  return loginAssist.element;
 }
 
 async function openPasswordsPanel() {
@@ -2637,8 +2660,16 @@ window.__liteauraViewEvent = function (event) {
     renderTabs();
   } else if (event.type === 'url' && typeof event.url === 'string' && event.url) {
     recordLocation(tab, event.url);
+    // No load around it: a single-page app moved on (a login it posted itself).
+    if (!tab.pageLoading) void loginAssist?.addressChanged(tab);
   } else if (event.type === 'load') {
+    if (event.phase === 'started') {
+      tab.pageLoading = true;
+      void loginAssist?.pageLeaving(tab);
+    }
     if (event.phase === 'finished') {
+      tab.pageLoading = false;
+      void loginAssist?.pageLoaded(tab);
       tab.loaded = true;
       clearWatchdog(tab);
       recordVisit(tab);
@@ -2939,9 +2970,10 @@ export function mountBrowserTile() {
   bookmarksPanel = buildBookmarksPanel();
   tabsPanel = buildTabsPanel();
   passwordsPanel = buildPasswords();
+  loginOfferEl = buildLoginAssist();
   tileEl.append(
     tabstripEl, buildToolbar(), viewportEl,
-    downloadsPanel, browserMenu, historyPanel, bookmarksPanel, tabsPanel, passwordsPanel,
+    downloadsPanel, browserMenu, historyPanel, bookmarksPanel, tabsPanel, passwordsPanel, loginOfferEl,
   );
 
   document.addEventListener('pointerdown', onBrowserPointerDown, true);
@@ -3027,6 +3059,8 @@ export function unmountBrowserTile() {
   tabsPanel = null;
   tabsListEl = null;
   passwordsPanel = null;
+  loginOfferEl = null;
+  loginAssist = null;
   passwords = null;
   passwordsBtn = null;
   for (const resolve of pageJsWaiters.values()) resolve('');
