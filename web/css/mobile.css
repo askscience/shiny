@@ -200,7 +200,11 @@ html[data-mobile='1'] .settings-desktop-only {
 
 html[data-phone='1'] {
   --phone-dock-h: max(24px, calc(env(safe-area-inset-bottom) + 16px));
+  /* The soft keyboard, where the browser does not resize the page for it
+     (js/phoneShell.js syncKeyboardInset). */
+  --keyboard-inset: 0px;
 }
+html[data-phone='1'] .phone-dock { bottom: var(--keyboard-inset, 0px); }
 
 /* The bar is the assistant here (a swipe up types, a swipe up and hold
    listens): no second bar for it. */
@@ -269,7 +273,7 @@ html[data-phone='1'] #tile-grid {
   top: var(--hud-header-total);
   left: 0;
   right: 0;
-  bottom: var(--phone-dock-h);
+  bottom: calc(var(--phone-dock-h) + var(--keyboard-inset, 0px));
   gap: 0;
 }
 html[data-phone='1'] #tile-grid.tile-grid--phone .tile {
@@ -313,6 +317,15 @@ html[data-phone='1'] .lg-grid {
 /* Window chrome: finger-high. */
 html[data-phone='1'] .tile .tile-header { min-height: 44px; }
 
+/* No title bar on a phone: the screen is the app's. A window whose toolbar
+   merged into the title row keeps the toolbar and loses the window buttons;
+   a window with a title-only bar loses the row. Close and Focus live on the
+   switcher's cards (js/overview.js); full screen is a no-op here. Settings →
+   Appearance can put the title bars back (`data-phone-titles`). */
+html[data-phone='1']:not([data-phone-titles='1']) .tile > .tile-header:not(.tile-header--merged) { display: none; }
+html[data-phone='1']:not([data-phone-titles='1']) .tile > .tile-header--merged > .tile-header-controls { display: none; }
+html[data-phone='1'] .tile > .tile-header--merged > [data-window-bar] { padding-left: max(8px, env(safe-area-inset-left)); }
+
 /* Status lines: the desktop's running commentary, not the phone's. */
 html[data-phone='1'] .tile :is(.word-status, .calc-status, .pdf-status, .mail-footer, .terminal-status, .files-statusline, .settings-footer) { display: none; }
 
@@ -345,8 +358,14 @@ html[data-phone='1'] .terminal-key {
 html[data-phone='1'] .terminal-key:active { background: var(--glass-hover); }
 html[data-phone='1'] .terminal-key.is-armed { background: var(--accent); border-color: var(--accent); color: var(--accent-contrast, #000); }
 
-/* ── Calendar: the month on top, the day under it with room to read ── */
-html[data-phone='1'] .calendar-detail { max-height: 42%; }
+/* ── The soft keyboard ─────────────────────────────────────────
+   Where the browser does not resize the page for it, the chat's composer
+   lifts above it by the measured inset (js/phoneShell.js). */
+html[data-phone='1'] body.compose-active .compose-conversation {
+  bottom: calc(max(14px, env(safe-area-inset-bottom)) + var(--keyboard-inset, 0px));
+}
 
-/* ── Studio: the arranger first; the detail panel opens as a sheet over it ── */
-html[data-phone='1'] .studio-detail { max-height: 50%; }
+/* Settings: its window bar holds only a title and a status, both resting
+   on a phone, so the empty row goes; the sections list is its own title
+   and a section's pane bar carries the name and Back. */
+html[data-phone='1']:not([data-phone-titles='1']) .settings-tile > .tile-header--merged { display: none; }

@@ -1,7 +1,7 @@
 import {
   confirmDialog, controlButton, button, emptyState, field, input, modal, notify, textarea, toast,
   toggleRow, setTileGlow, glowGradient, largeTitle, metaLine, hairlineList, hairlineRow,
-  listReveal,
+  listReveal, paneStack, actionBar, toolButton,
 } from '../../ui/index.js';
 /**
  * calendar.js — the Calendar plugin's window (month grid + day detail).
@@ -14,6 +14,12 @@ import {
  * rows (mono time column, title, mono location). Events live in the
  * plugin-owned `calendar_events` table; the window lists/creates/updates/
  * deletes them via /api/calendar/events.
+ *
+ * The body is a pane stack (ui paneStack): the month is the floor and the
+ * day's detail a pane over it. Wide, both scroll together under the bar as
+ * one column; narrow or on a phone, tapping a day slides the detail in and
+ * Back (the pane's arrow, Escape, the edge swipe) returns to the month. The
+ * phone also gets a bottom action bar with "New event".
  *
  * AI wiring: `calendar_*` tool outcomes arrive via `agent:actions` — the
  * window reloads its month and selects the date the AI touched.
@@ -37,7 +43,9 @@ const MONTH_KEYS = ['plugin.calendar.month.january', 'plugin.calendar.month.febr
 let tileEl = null;
 let barEl = null;
 let monthLabelEl = null;   // the bar's title (fades in as the large title scrolls away)
-let scrollEl = null;
+let scrollEl = null;       // the body: the pane stack root, the scroller while wide
+let monthEl = null;        // the floor pane (large title, weekdays, grid): the scroller while stacked
+let nav = null;            // paneStack() handle
 let hero = null;           // largeTitle() handle
 let detailMetaEl = null;
 let lastRevealKey = '';    // listReveal the day's rows once per (date, events) load
@@ -226,7 +234,7 @@ function renderGrid() {
 
       if (date === todayIso) cell.classList.add('is-today');
       if (date === selectedDate) cell.classList.add('is-selected');
-      cell.addEventListener('click', () => selectDate(date));
+      cell.addEventListener('click', () => selectDate(date, { open: true }));
       gridEl.appendChild(cell);
     }
   }
@@ -258,11 +266,14 @@ function renderDetail() {
     const actions = document.createElement('div');
     actions.className = 'calendar-detail-actions';
     const editLabel = t('plugin.calendar.detail.edit', null, 'Edit');
-    const editBtn = button({ label: editLabel, variant: 'ghost', size: 'sm', onClick: () => openEdit(ev) });
+    const editBtn = button({ icon: 'ui/pencil', variant: 'ghost', size: 'sm', onClick: () => openEdit(ev) });
+    editBtn.classList.add('ui-btn--icon');
     editBtn.title = editLabel;
+    editBtn.setAttribute('aria-label', editLabel);
     const delBtn = button({ icon: 'ui/trash', variant: 'ghost', size: 'sm', onClick: () => removeEvent(ev) });
     delBtn.classList.add('ui-btn--icon', 'calendar-tool--danger');
     delBtn.title = t('plugin.calendar.detail.delete', null, 'Delete');
+    delBtn.setAttribute('aria-label', delBtn.title);
     actions.append(editBtn, delBtn);
 
     // Hairline row (the Mail pattern): mono time column, title + notes,
@@ -286,11 +297,14 @@ function renderDetail() {
   }
 }
 
-function selectDate(date) {
+/** Select a day; `open` (the user tapped it) also brings the day pane up
+ *  while the window is stacked — a no-op while wide. */
+function selectDate(date, { open = false } = {}) {
   selectedDate = date;
   updateCalendarGlow();
   renderGrid();
   renderDetail();
+  if (open) nav?.show('day');
 }
 
 /* ── Load / navigation ──────────────────────────────────────── */
@@ -341,8 +355,8 @@ function ensureModal() {
 
   const actions = document.createElement('div');
   actions.className = 'ui-row calendar-dialog-actions';
-  const cancelBtn = button({ label: t('plugin.calendar.dialog.cancel', null, 'Cancel'), variant: 'ghost', size: 'sm' });
-  const saveBtn = button({ label: t('plugin.calendar.dialog.save', null, 'Save event'), variant: 'primary', size: 'sm', arrow: true });
+  const cancelBtn = button({ icon: 'ui/close', label: t('plugin.calendar.dialog.cancel', null, 'Cancel'), variant: 'ghost', size: 'sm' });
+  const saveBtn = button({ icon: 'ui/check', label: t('plugin.calendar.dialog.save', null, 'Save event'), variant: 'primary', size: 'sm' });
   actions.append(cancelBtn, saveBtn);
 
   eventModal = modal({
@@ -517,37 +531,54 @@ export function mountCalendarTile() {
   monthLabelEl = document.createElement('div');
   monthLabelEl.className = 'calendar-month-label';
 
-  const todayBtn = button({ label: t('plugin.calendar.toolbar.today', null, 'Today'), variant: 'ghost', size: 'sm', onClick: gotoToday });
-  const newBtn = button({ label: t('plugin.calendar.toolbar.newEvent', null, 'New event'), variant: 'primary', size: 'sm', arrow: true, onClick: openNew });
+  const todayLabel = t('plugin.calendar.toolbar.today', null, 'Today');
+  const newLabel = t('plugin.calendar.toolbar.newEvent', null, 'New event');
+  const todayBtn = button({ icon: 'ui/calendar', label: todayLabel, variant: 'ghost', size: 'sm', onClick: gotoToday });
+  const newBtn = button({ icon: 'ui/plus', label: newLabel, variant: 'primary', size: 'sm', onClick: openNew });
 
   barEl.append(prevBtn, nextBtn, monthLabelEl, todayBtn, newBtn);
   tileEl.appendChild(barEl);
 
-  /* Scrolling body: large month title, weekday header, day grid, day detail. */
+  /* Body: the pane stack root. Wide it is the one scrolling column (large
+     month title, weekday header, day grid, then the day's detail); stacked,
+     the month pane scrolls on its own and the detail slides in over it. */
   scrollEl = document.createElement('div');
   scrollEl.className = 'calendar-scroll';
   tileEl.appendChild(scrollEl);
 
-  hero = largeTitle({ title: monthName(), meta: [String(viewYear)], scroller: scrollEl });
+  monthEl = document.createElement('div');
+  monthEl.className = 'calendar-month';
+  scrollEl.appendChild(monthEl);
+
+  // largeTitle() listens to one scroller; the calendar has two, one per
+  // layout. Scroll does not bubble but it is captured, so this proxy hears
+  // both from the root and reports the one in force.
+  const heroScroller = {
+    addEventListener: (type, fn, opts) => scrollEl?.addEventListener(type, fn, { ...(opts || {}), capture: true }),
+    removeEventListener: (type, fn) => scrollEl?.removeEventListener(type, fn, { capture: true }),
+    get scrollTop() { return (nav?.isStacked() ? monthEl?.scrollTop : scrollEl?.scrollTop) || 0; },
+  };
+  hero = largeTitle({ title: monthName(), meta: [String(viewYear)], scroller: heroScroller });
   hero.el.classList.add('calendar-hero');
-  scrollEl.appendChild(hero.el);
+  monthEl.appendChild(hero.el);
 
   /* Weekday header */
   weekdaysEl = document.createElement('div');
   weekdaysEl.className = 'calendar-weekdays';
-  scrollEl.appendChild(weekdaysEl);
+  monthEl.appendChild(weekdaysEl);
   renderWeekdays();
 
   /* Day grid */
   gridEl = document.createElement('div');
   gridEl.className = 'calendar-grid';
-  scrollEl.appendChild(gridEl);
+  monthEl.appendChild(gridEl);
 
-  /* Day detail */
+  /* Day detail: its head is the pane's bar (the stack prepends Back to it). */
   const detail = document.createElement('div');
   detail.className = 'calendar-detail';
   const detailHead = document.createElement('div');
   detailHead.className = 'calendar-detail-head';
+  detailHead.dataset.paneBar = '';
   detailHeadEl = document.createElement('span');
   detailHeadEl.className = 'calendar-detail-date';
   detailMetaEl = metaLine([]);
@@ -557,6 +588,20 @@ export function mountCalendarTile() {
   detailEl.className = 'calendar-detail-list';
   detail.appendChild(detailEl);
   scrollEl.appendChild(detail);
+
+  nav = paneStack(scrollEl, {
+    panes: [
+      { id: 'month', el: monthEl },
+      { id: 'day', el: detail },
+    ],
+    // The scroller changed hands: the bar title follows the one in force.
+    onChange: () => hero?.sync(),
+  });
+
+  /* Phone: the primary action at the thumb. */
+  tileEl.appendChild(actionBar([
+    toolButton('ui/plus', newLabel, openNew),
+  ], { label: t('plugin.calendar.actions', null, 'Calendar actions') }));
 
   renderBar();
   renderGrid();
@@ -570,6 +615,8 @@ export function mountCalendarTile() {
 export function unmountCalendarTile() {
   stopReminders();
   eventModal?.close();
+  nav?.destroy();
+  nav = null;
   hero?.dispose();
   hero = null;
   tileEl?.remove();
@@ -577,6 +624,7 @@ export function unmountCalendarTile() {
   barEl = null;
   monthLabelEl = null;
   scrollEl = null;
+  monthEl = null;
   detailMetaEl = null;
   lastRevealKey = '';
   shownMonthKey = '';

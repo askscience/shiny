@@ -5,7 +5,7 @@
  * panel lists them so a conversation can be resumed, and offers a "New chat".
  */
 
-import { button, emptyState, icon, modal, toast } from '../ui/index.js';
+import { button, emptyState, iconButton, modal, toast, confirmDialog, paneStack } from '../ui/index.js';
 import { setIcon } from '../ui/index.js';
 import {
   currentConversationId, setCurrentConversation, newChat,
@@ -15,6 +15,11 @@ import { t } from './i18n.js';
 import { renderToolCard, insertToolCard } from './toolCards.js';
 
 let panel = null;
+/** The list pane and the messages pane: one at a time on a phone or in a
+ *  narrow dialog, the messages sliding over the list (ui/components/panes.js). */
+let panes = null;
+let listPane = null;
+let messagesPane = null;
 let view = 'list'; // 'list' | 'messages'
 let conversations = [];
 // Bumped on every view switch so a slow `loadConversationMessages` can
@@ -41,7 +46,9 @@ function fmtWhen(iso) {
 function renderList() {
   renderToken += 1; // any in-flight message render is obsolete now
   view = 'list';
-  panel.body.textContent = '';
+  panes.reset();
+  listPane.textContent = '';
+  messagesPane.textContent = '';
 
   const head = h('div', 'chat-history-head');
   const title = h('h3', 'chat-history-title', t('chat.chats', null, 'Chats'));
@@ -54,7 +61,7 @@ function renderList() {
     toast(t('ctx.chatStarted', null, 'Started a new chat'), { type: 'info' });
   });
   head.append(title, newBtn);
-  panel.body.appendChild(head);
+  listPane.appendChild(head);
 
   const list = h('div', 'chat-history-list');
   if (!conversations.length) {
@@ -62,7 +69,7 @@ function renderList() {
       title: t('chat.noChatsYet', null, 'No chats yet'),
       body: t('chat.historyEmptyBody', null, "Your conversations with LiteAura will appear here."),
     }));
-    panel.body.appendChild(list);
+    listPane.appendChild(list);
     return;
   }
 
@@ -79,15 +86,13 @@ function renderList() {
 
     const right = h('div', 'chat-history-side');
     right.appendChild(h('span', 'chat-history-item-time', fmtWhen(c.updated_at)));
-    const del = h('button', 'chat-history-del');
-    del.type = 'button';
-    del.title = t('chat.deleteChat', null, 'Delete chat');
-    const ic = h('span', 'chat-history-del-icon');
-    del.appendChild(ic);
-    void setIcon(ic, 'ui/trash', { size: 14 });
+    const del = iconButton({
+      icon: 'ui/trash', iconSize: 14, size: 'sm', variant: 'quiet',
+      label: t('chat.deleteChat', null, 'Delete chat'), className: 'chat-history-del',
+    });
     del.addEventListener('click', async (e) => {
       e.stopPropagation();
-      if (!window.confirm(t('chat.deleteChatConfirm', null, 'Delete this chat?'))) return;
+      if (!await confirmDialog(t('chat.deleteChatConfirm', null, 'Delete this chat?'))) return;
       if (await removeConversation(c.id)) {
         toast(t('chat.deleted', null, 'Chat deleted'), { type: 'info' });
         await refreshList();
@@ -99,22 +104,16 @@ function renderList() {
     row.addEventListener('click', () => void openMessages(c));
     list.appendChild(row);
   }
-  panel.body.appendChild(list);
+  listPane.appendChild(list);
 }
 
 async function openMessages(c) {
   const token = ++renderToken;
   view = 'messages';
-  panel.body.textContent = '';
-
-  const back = button({
-    icon: 'ui/arrow-left', label: t('common.back', null, 'Back'), variant: 'ghost', size: 'sm',
-  });
-  back.classList.add('ui-btn--icon');
-  back.addEventListener('click', () => { renderList(); });
+  messagesPane.textContent = '';
 
   const cont = button({
-    label: t('chat.continueChat', null, 'Continue this chat'), variant: 'primary', size: 'sm',
+    icon: 'ui/send', label: t('chat.continueChat', null, 'Continue this chat'), variant: 'primary', size: 'sm',
   });
   cont.addEventListener('click', () => {
     setCurrentConversation(c.id);
@@ -122,13 +121,13 @@ async function openMessages(c) {
     toast(t('chat.resumed', null, 'Resumed chat'), { type: 'info' });
   });
 
+  // The pane's bar: the shared Back lands at its start (panes.js).
   const head = h('div', 'chat-history-head');
-  const meta = h('div', 'chat-history-meta');
-  meta.appendChild(h('div', 'chat-history-title', c.title || t('chat.newChat', null, 'New chat')));
-  meta.appendChild(back);
-  head.appendChild(meta);
+  head.dataset.paneBar = '';
+  head.appendChild(h('div', 'chat-history-title', c.title || t('chat.newChat', null, 'New chat')));
   head.appendChild(cont);
-  panel.body.appendChild(head);
+  messagesPane.appendChild(head);
+  panes.show('messages');
 
   const msgs = h('div', 'chat-history-messages');
   const entries = await loadConversationMessages(c.id);
@@ -171,7 +170,7 @@ async function openMessages(c) {
     bubble.appendChild(h('div', 'chat-history-bubble-text', text));
     msgs.appendChild(bubble);
   }
-  panel.body.appendChild(msgs);
+  messagesPane.appendChild(msgs);
 }
 
 async function refreshList() {
@@ -184,10 +183,22 @@ function ensurePanel() {
   panel = modal({ title: null, label: t('chat.history'), wide: true });
   panel.el.classList.add('chat-history-panel');
   panel.body.style.gap = '0'; // title bar + padded content, like a plugin window
+  listPane = h('div', 'chat-history-pane chat-history-pane--list');
+  messagesPane = h('div', 'chat-history-pane chat-history-pane--messages');
+  panel.body.append(listPane, messagesPane);
+  // The dialog is one pane at a time everywhere: the messages slide over
+  // the list and Back (the pane's arrow, Escape, the phone's Back) returns.
+  panes = paneStack(panel.body, {
+    panes: [{ id: 'list', el: listPane }, { id: 'messages', el: messagesPane }],
+    compactWhen: () => true,
+    onChange: ({ id }) => { if (id === 'list' && view === 'messages') renderList(); },
+  });
 }
 
 export function openChatHistory() {
   ensurePanel();
+  // Always from the list, whatever was on screen when it was closed.
+  view = 'list';
   panel.open();
   void refreshList();
 }

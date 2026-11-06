@@ -472,7 +472,7 @@
     text-align: start;
   }
 
-  .browser-tabcount {
+  .browser-tabstrip > .browser-tabcount {
     display: inline-flex;
   }
 
@@ -508,9 +508,52 @@
 }
 
 /* A popover head with several actions keeps its title left and the actions
-   together on the right. */
-.browser-popover-head > :first-child {
+   together on the right (the stack's Back, a button, may come before it). */
+.browser-popover-head > span:first-of-type {
   margin-right: auto;
+}
+
+/* ── Phone ──────────────────────────────────────────────────── */
+
+/* One header row: the window bar is the address row (plugin.js `placeBar`
+   moves it into the merged header), the tab strip steps aside and the
+   open-tab count in the row opens the switcher. */
+html[data-phone='1'] .browser-tile .browser-tabstrip {
+  display: none;
+}
+
+html[data-phone='1'] .browser-tile > .tile-header--merged > .browser-bar {
+  border-bottom: 0;
+}
+
+/* The row never scrolls sideways: the address gives way (the merged bar's
+   own rule pins every child, ui/responsive.css) while the icons keep their
+   finger size. */
+html[data-phone='1'] .browser-tile > .tile-header--merged > .browser-bar > .browser-address {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+html[data-phone='1'] .browser-tile .browser-tabcount--bar {
+  display: inline-flex;
+}
+
+/* The panels are full-height panes over the page (`paneStack`, plugin.js):
+   no popover geometry, the head holds the shared Back, the list fills the
+   pane. The menu and the login offer stay popovers. */
+html[data-phone='1'] .browser-tile.browser-stacked :is(.browser-popover, .browser-downloads-panel):not(.browser-menu, .browser-pw-offer) {
+  max-height: none;
+  border-radius: 0;
+}
+
+html[data-phone='1'] .browser-tile.browser-stacked :is(.browser-popover-head, .browser-downloads-head) {
+  min-height: 52px;
+  padding: 6px 10px 6px max(6px, env(safe-area-inset-left));
+}
+
+html[data-phone='1'] .browser-tile.browser-stacked :is(.browser-popover-list, .browser-downloads-list) {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 /* ── Passwords ──────────────────────────────────────────────── */

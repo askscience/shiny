@@ -112,6 +112,8 @@ export function pageTabs({ id, label, pages }) {
     if (pages.some((p) => p.value === saved)) current = saved;
   } catch (_) { /* storage unavailable: first page */ }
   const bar = el('div', 'settings-raw settings-page-tabs');
+  // True tabs: their names stay text on a phone (the bar scrolls sideways).
+  bar.dataset.textOk = '';
   const show = (value) => {
     const section = bar.closest('.settings-panel');
     if (!section) return;

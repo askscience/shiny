@@ -74,8 +74,20 @@ screen.
   the AI off a swipe up goes home and a swipe up and hold opens the switcher.
   The assistant's actions come from `app.js` (`setPhoneBarActions`); the line
   takes the assistant's colour while `<html data-voice>` is busy.
+- **No title bar** — `css/mobile.css` hides a title-only `.tile-header`
+  and the window controls of a merged one, so the window's own toolbar is
+  the top row and a title-only window gains the row. Close and Focus live on
+  the switcher's cards (below); full screen is a no-op on a phone. Settings →
+  Appearance → "Window titles on a phone" (`phone_titles`, `data-phone-titles`)
+  puts the bars back.
 - **Back** — with a window up, the browser's Back (Android's back gesture)
-  goes home: one history entry is held and given back on the way home.
+  first closes whatever is open on top — a pushed pane, a sheet, a dialog,
+  the switcher — through the back registry (`web/ui/backStack.js`), and only
+  then goes home: one history entry is held and given back on the way home.
+  A swipe in from the left edge (`EDGE_PX`, `EDGE_BACK_PX`) is the same Back.
+- **Phone apps** — one pane at a time, icon-only actions, the bottom action
+  row: see [ui-components.md](ui-components.md#phone) and
+  [Panes](ui-components.md#panes).
 - **Compact app bars** — see `compactToolbar` in
   [ui-components.md](ui-components.md#responsive-layout).
 
@@ -617,9 +629,10 @@ rides the same top-edge reveal. `build(name)` renders **Close** and
 
 `fullscreen.js` also owns the desktop-wide bar/voice-bar autohide. Cached
 immersion settings (`getImmersive()`: `autohide_bar`, `bar_position`,
-`autohide_orb`, `orb_position`) are published to `<html>` by
+`autohide_orb`, `orb_position`, `phone_titles`) are published to `<html>` by
 `applyImmersive()` as `data-bar-pos`, `data-orb-pos`, `data-orb-attached`,
-`data-autohide-bar`, `data-autohide-orb`.
+`data-autohide-bar`, `data-autohide-orb` and `data-phone-titles` (Settings →
+Appearance → "Window titles on a phone": the phone's title bars back).
 
 The top bar docks at `top` (the default), `left`, `right`, `bottom` or `center`.
 The side docks fill the edge — the rail is `flex: 1 1 auto` and the control
@@ -804,9 +817,13 @@ a desktop the column count that gives the biggest cards with every window on
 screen, capped at 42% of the width, and a 200 px minimum past which the grid
 scrolls (wheel, or a drag on a touch screen). Rows are centred and a grid that
 fits is centred vertically. Under each card a small `.overview-label` carries
-the title, the workspace number (only with more than one workspace) and a
-close button (`.overview-label-close`), which closes that window and lets the
-others close ranks.
+the app's icon, the title, the workspace number (only with more than one
+workspace) and the window's buttons, round on a plate
+(`.overview-label-btn`): Focus (`.overview-label-focus`, the eye —
+`togglePluginFocus`, `is-active` while focused) and Close
+(`.overview-label-close`), which closes that window and lets the others close
+ranks. On a phone — where the title bar is gone and these are the window's
+only buttons — the label is taller (`LABEL_H_PHONE`) and the buttons 38px.
 
 How the cards travel follows the motion language (`<html data-motion>`,
 `MOTION` in `overviewGrid.js`): `kinetic` arrives fast and exponentially in a
@@ -825,7 +842,10 @@ blurs focus so typing cannot reach a window behind it.
 **Launcher** (`web/js/launcher.js`) is a full-screen app grid over the blurred
 desktop — the top-bar tray at full size, same `/api/plugins` list and same
 activate/focus paths. Tapping an inactive plugin activates it; tapping an active
-one focuses its window. A running app gets a dot under its name. It follows
+one focuses its window. A running app gets a dot under its name. An app that
+has something waiting (unread mail, updates to install) announces the count
+with a `plugin:badge` event (`{ name, count }`, 0 clears it) and its icon
+wears it in the corner (`.launcher-badge`). It follows
 the fingers too: `--launcher-p` (and `--launcher-over` past the ends) drives
 the panel's fade and drop, with `data-launcher="opening|open|closing"`.
 

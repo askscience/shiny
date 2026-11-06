@@ -18,6 +18,8 @@
 
 /** Height (px) of the label line under each card. */
 export const LABEL_H = 30;
+/** …and on a phone, where the label holds finger-sized round buttons. */
+export const LABEL_H_PHONE = 46;
 
 /** The spacing for a stage: outer padding, gutter and edge room. */
 function spacing(W, H, phone) {
@@ -38,9 +40,10 @@ const heightFor = (w, aspect) => w / aspect;
  * @returns {{ cols: number, rows: number, cards: {x:number,y:number,w:number,h:number}[],
  *             contentH: number, maxScroll: number }}
  *   `cards[i]` is the thumbnail box of window `i` (the label sits under it,
- *   `LABEL_H` tall); `maxScroll` is how far the grid can scroll.
+ *   `labelH` tall — `LABEL_H`, or `LABEL_H_PHONE` on a phone); `maxScroll`
+ *   is how far the grid can scroll.
  */
-export function gridLayout(n, W, H, { phone = false } = {}) {
+export function gridLayout(n, W, H, { phone = false, labelH = phone ? LABEL_H_PHONE : LABEL_H } = {}) {
   const count = Math.max(0, n | 0);
   const { padX, padY, gap } = spacing(W, H, phone);
   const aspect = Math.max(0.3, Math.min(3, W / Math.max(1, H)));
@@ -63,7 +66,7 @@ export function gridLayout(n, W, H, { phone = false } = {}) {
     for (let c = 1; c <= Math.max(1, count); c += 1) {
       const rows = rowsOf(c);
       const byW = widthFor(c);
-      const byH = ((availH - (rows - 1) * gap) / rows - LABEL_H) * aspect;
+      const byH = ((availH - (rows - 1) * gap) / rows - labelH) * aspect;
       const w = Math.min(maxW, byW, byH);
       if (w > cardW + 0.5) { cardW = w; cols = c; }
     }
@@ -77,7 +80,7 @@ export function gridLayout(n, W, H, { phone = false } = {}) {
   cols = Math.max(1, Math.min(cols, Math.max(1, count)));
   const cardH = heightFor(cardW, aspect);
   const rows = rowsOf(cols);
-  const rowH = cardH + LABEL_H;
+  const rowH = cardH + labelH;
   const gridH = rows * rowH + (rows - 1) * gap;
   const contentH = gridH + padY * 2;
   const top = contentH <= H ? Math.round((H - gridH) / 2) : padY;

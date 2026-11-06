@@ -1,15 +1,24 @@
 import {
-  mediaCard, controlButton, button, chip, searchBar, emptyState, spinner, setTileGlow, glowUrl,
-  glowFromImageUrl, metaLine, listReveal, cardEnter, decodeText,
+  mediaCard, controlButton, toolButton, chip, searchBar, emptyState, spinner, setTileGlow, glowUrl,
+  glowFromImageUrl, metaLine, listReveal, cardEnter, decodeText, paneStack,
 } from '../../ui/index.js';
 /**
  * youtube.js — the YouTube plugin's window.
  *
- * Editorial surface: ambient thumbnail glow behind everything, a hero (the
- * embedded player, a large display title and a mono "channel · duration"
- * meta line, shown only while a video plays), a flat search pill (in-tile,
- * works with the keyboard plugin), category chips and a 16:9 thumbnail grid
- * captioned below in body + mono meta, under a mono uppercase label.
+ * Editorial surface: ambient thumbnail glow behind everything, a window bar
+ * (the flat search pill — in-tile, works with the keyboard plugin — plus
+ * Home and Refresh; the tile manager merges it with the title row), a hero
+ * (the embedded player, a large display title and a mono "channel ·
+ * duration" meta line, shown only while a video plays), category chips and
+ * a 16:9 thumbnail grid captioned below in body + mono meta, under a mono
+ * uppercase label.
+ *
+ * The body is a pane stack (ui paneStack): the browse pane (chips + grid)
+ * is the floor and the hero is the player pane. Wide, the hero sits above
+ * the grid as before; narrow or on a phone, playing a video slides the
+ * player in over the grid, its info row is the pane bar (the shared Back
+ * leads it) and the "Up next" grid moves in under the player so it stays
+ * reachable. Back stops the video, as the old Back pill did.
  *
  * The grid has three sources, all rendered the same way:
  *   • the in-tile search      → GET  /api/youtube/search
@@ -26,10 +35,17 @@ export const YOUTUBE_PLUGIN = 'youtube';
 const BG_KEY = 'youtube.background';
 
 let tileEl = null;
+let barEl = null;        // window bar: search + Home + Refresh (merged with the title row)
+let homeBtn = null;
+let refreshBtn = null;
+let shellEl = null;      // pane stack root (hero + browse)
+let browseEl = null;     // the floor pane: chips + grid label + grid
+let nav = null;          // paneStack() handle
+let paneStacked = false; // the stack's layout in force (to tell a flip from a pop)
 let heroEl = null;       // hero container (idle view or player + info)
 let playerWrapEl = null; // embed player wrapper (16:9)
 let frameEl = null;      // embed iframe
-let infoEl = null;       // playing info row (title + channel + back)
+let infoEl = null;       // playing info row (title + channel + close) — the pane bar
 let infoTitleEl = null;
 let infoSubEl = null;
 let gridEl = null;
@@ -68,12 +84,16 @@ function renderHero() {
   const playing = !!current;
 
   // The hero only exists while a video plays (player + info). With nothing
-  // playing there is no hero at all — the search bar sits directly under the
-  // window title bar, and the brand mark/name are not repeated.
-  heroEl?.classList.toggle('hidden', !playing);
+  // playing there is no hero at all — the chips and grid sit directly under
+  // the window bar. Stacked, the hero is a pane the stack keeps off-screen
+  // until shown, so it stays in flow and can slide in.
+  const stacked = !!nav?.isStacked();
+  heroEl?.classList.toggle('hidden', !playing && !stacked);
   playerWrapEl?.classList.toggle('hidden', !playing);
   infoEl?.classList.toggle('hidden', !playing);
   frameEl?.classList.toggle('hidden', !playing);
+  if (homeBtn) homeBtn.disabled = playing;
+  placeGrid();
 
   if (playing) {
     if (infoTitleEl) {
@@ -89,6 +109,29 @@ function renderHero() {
   applyBackground();
 
   renderGridCurrent();
+}
+
+/** Stacked and playing, the grid label and grid live in the player pane
+ *  (under the player: "Up next"); otherwise in the browse pane. The same two
+ *  nodes move, so a render never has to know where they are. */
+function placeGrid() {
+  if (!gridEl || !gridLabelEl || !browseEl || !heroEl) return;
+  const host = nav?.isStacked() && current ? heroEl : browseEl;
+  if (gridEl.parentElement !== host) host.append(gridLabelEl, gridEl);
+}
+
+/** The stack changed: Back (Escape, the edge swipe, the phone's Back)
+ *  popped the player, which stops the video as the Back pill did; or the
+ *  layout flipped while a video plays and the player slides in. */
+function onPaneChange({ id, stacked }) {
+  const flipped = stacked !== paneStacked;
+  paneStacked = stacked;
+  if (flipped) {
+    renderHero();
+    if (stacked && current) nav?.show('player');
+    return;
+  }
+  if (stacked && current && id !== 'player') reset();
 }
 
 /** Paint the remembered background — null clears to the Tier 0 colour glow. */
@@ -126,7 +169,9 @@ function playVideo(v) {
   frameEl.src = `https://www.youtube.com/embed/${v.video_id}?autoplay=1&rel=0`;
   setCategoriesVisible(false);
   renderHero();
-  void cardEnter(heroEl);
+  nav?.show('player');
+  // Stacked, the pane's own slide is the entry; wide, the hero arrives.
+  if (!nav?.isStacked()) void cardEnter(heroEl);
   void setBackground(current);
   void loadSuggestions(current);
 }
@@ -161,6 +206,7 @@ function reset() {
   current = null;
   suggestSeq++; // drop any in-flight suggestions render
   if (frameEl) frameEl.src = 'about:blank';
+  nav?.reset();
   renderHero();
   // Back to whatever the grid held before playback, or the homepage.
   if (lastResults.length) renderGrid(lastResults, null);
@@ -443,6 +489,34 @@ export function mountYoutubeTile() {
   tileEl.className = 'tile yt-tile';
   tileEl.dataset.plugin = YOUTUBE_PLUGIN;
 
+  /* Window bar (merged with the window controls): the search pill, Home
+     and Refresh. Narrow, the tile manager folds the actions (compactToolbar). */
+  barEl = document.createElement('div');
+  barEl.className = 'yt-bar';
+  barEl.dataset.windowBar = '';
+  searchEl = searchBar({ placeholder: t('plugin.youtube.search.placeholder', null, 'Search YouTube…') });
+  let searchTimer = null;
+  searchEl.input.addEventListener('input', (e) => {
+    window.clearTimeout(searchTimer);
+    const v = e.target.value;
+    setCategoriesVisible(v.trim() === '' && !current);
+    searchTimer = window.setTimeout(() => void runSearch(v), 350);
+  });
+  homeBtn = toolButton('ui/home', t('plugin.youtube.menu.home', null, 'Home'), () => {
+    if (searchEl?.input) searchEl.input.value = '';
+    lastResults = [];
+    void loadHomepage();
+  });
+  refreshBtn = toolButton('ui/refresh', t('plugin.youtube.menu.refresh', null, 'Refresh results'),
+    () => void runSearch(searchEl?.input?.value || ''));
+  barEl.append(searchEl, homeBtn, refreshBtn);
+  tileEl.appendChild(barEl);
+
+  /* Pane stack: the hero (player) over the browse floor. */
+  shellEl = document.createElement('div');
+  shellEl.className = 'yt-shell';
+  tileEl.appendChild(shellEl);
+
   /* Hero */
   heroEl = document.createElement('div');
   heroEl.className = 'yt-hero hidden';
@@ -458,45 +532,34 @@ export function mountYoutubeTile() {
   frameEl.setAttribute('title', t('plugin.youtube.player.title', null, 'YouTube player'));
   playerWrapEl.appendChild(frameEl);
 
+  // The info row is the player pane's bar: stacked, the stack leads it with
+  // the shared Back; wide, its own arrow returns to the grid (tiles.css
+  // hides that one while the panes are stacked).
   infoEl = document.createElement('div');
   infoEl.className = 'yt-hero-info hidden';
+  infoEl.dataset.paneBar = '';
   const infoText = document.createElement('div');
   infoText.className = 'yt-hero-text';
   infoTitleEl = document.createElement('div');
   infoTitleEl.className = 'yt-hero-info-title';
   infoSubEl = metaLine([], 'yt-hero-sub');
   infoText.append(infoTitleEl, infoSubEl);
-  // Back to the grid: a grey pill led by an arrow, not a close cross.
-  const backBtn = button({
-    label: t('plugin.youtube.hero.back', null, 'Back'),
-    icon: 'ui/arrow-left',
-    iconSize: 15,
-    variant: 'ghost',
-    size: 'sm',
-    className: 'yt-hero-back',
-    onClick: reset,
-  });
-  backBtn.setAttribute('aria-label', t('plugin.youtube.hero.backLabel', null, 'Back to YouTube search'));
+  const backBtn = toolButton('ui/arrow-left',
+    t('plugin.youtube.hero.backLabel', null, 'Back to YouTube search'), reset, { className: 'yt-hero-back' });
   infoEl.append(infoText, backBtn);
 
   heroEl.append(playerWrapEl, infoEl);
-  tileEl.appendChild(heroEl);
+  shellEl.appendChild(heroEl);
 
-  /* Search */
-  searchEl = searchBar({ placeholder: t('plugin.youtube.search.placeholder', null, 'Search YouTube…') });
-  let searchTimer = null;
-  searchEl.input.addEventListener('input', (e) => {
-    window.clearTimeout(searchTimer);
-    const v = e.target.value;
-    setCategoriesVisible(v.trim() === '' && !current);
-    searchTimer = window.setTimeout(() => void runSearch(v), 350);
-  });
-  tileEl.appendChild(searchEl);
+  /* Browse pane (the floor): category chips, grid label, grid */
+  browseEl = document.createElement('div');
+  browseEl.className = 'yt-browse';
+  shellEl.appendChild(browseEl);
 
   /* Category chips (idle homepage) */
   categoriesEl = document.createElement('div');
   categoriesEl.className = 'yt-categories hidden';
-  tileEl.appendChild(categoriesEl);
+  browseEl.appendChild(categoriesEl);
 
   /* Grid */
   gridLabelEl = document.createElement('div');
@@ -506,14 +569,14 @@ export function mountYoutubeTile() {
   gridLabelCountEl = document.createElement('span');
   gridLabelCountEl.className = 'yt-grid-label-count';
   gridLabelEl.append(gridLabelTextEl, gridLabelCountEl);
-  tileEl.appendChild(gridLabelEl);
+  browseEl.appendChild(gridLabelEl);
   gridEl = document.createElement('div');
   gridEl.className = 'yt-grid';
-  tileEl.appendChild(gridEl);
+  browseEl.appendChild(gridEl);
 
   // Cap the 16:9 player at ~half the window height, otherwise a wide window
-  // makes it taller than the tile and pushes the search bar and the results /
-  // "Up next" grid out of view. Recomputed whenever the window resizes.
+  // makes it taller than the tile and pushes the results / "Up next" grid
+  // out of view. Recomputed whenever the window resizes.
   const fitPlayer = () => {
     const h = tileEl?.clientHeight || 0;
     if (h) {
@@ -530,6 +593,15 @@ export function mountYoutubeTile() {
     if (saved) bgCss = saved;
   } catch (_) { /* ignore */ }
 
+  paneStacked = false;
+  nav = paneStack(shellEl, {
+    panes: [
+      { id: 'browse', el: browseEl },
+      { id: 'player', el: heroEl },
+    ],
+    onChange: onPaneChange,
+  });
+
   renderHero();
   renderGrid([], null);
   void loadHomepage();
@@ -539,10 +611,18 @@ export function mountYoutubeTile() {
 /** Deactivated mid-playback: stop the video, drop the window. */
 export function unmountYoutubeTile() {
   reset();
+  nav?.destroy();
+  nav = null;
+  paneStacked = false;
   tileObserver?.disconnect();
   tileObserver = null;
   tileEl?.remove();
   tileEl = null;
+  barEl = null;
+  homeBtn = null;
+  refreshBtn = null;
+  shellEl = null;
+  browseEl = null;
   heroEl = null;
   playerWrapEl = null;
   frameEl = null;

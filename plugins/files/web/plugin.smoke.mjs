@@ -320,6 +320,12 @@ const context = vm.createContext({
     el.append(...children);
     return el;
   },
+  actionBar: (children = [], { className = '' } = {}) => {
+    const el = makeElement('div');
+    el.className = `ui-actionbar ${className}`;
+    el.append(...children);
+    return el;
+  },
   searchBar: ({ placeholder, value, onInput } = {}) => {
     const wrap = makeElement('div');
     wrap.className = 'ui-search';
@@ -372,6 +378,7 @@ const context = vm.createContext({
 // The real overlay lifecycle (modal + shared motion/resources), minus imports.
 vm.runInContext(coreSource('ui/motion.js'), context);
 vm.runInContext(coreSource('js/resources.js'), context);
+vm.runInContext(coreSource('ui/backStack.js'), context);
 vm.runInContext(coreSource('ui/components/overlay.js'), context);
 
 const mod = new vm.SourceTextModule(moduleSource, { context });

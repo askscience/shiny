@@ -181,6 +181,8 @@
 }
 
 .settings-nav-label {
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
   color: inherit;
   font-size: 13px;
@@ -188,6 +190,14 @@
   line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* The drill-down chevron belongs to the stacked list only. */
+.settings-nav-chevron {
+  display: none;
+  flex: 0 0 auto;
+  align-self: center;
+  color: var(--muted);
 }
 
 /* ── Panel stage ───────────────────────────────────────────── */
@@ -198,6 +208,33 @@
   min-width: 0;
   min-height: 0;
   background: transparent;
+}
+
+/* The pane bar (settingsWindow.js, `data-pane-bar`): Back, the pane's name
+   and the manifest's info button, on the hairline. Only the stack shows it. */
+.settings-pane-bar {
+  display: none;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  min-width: 0;
+  min-height: 46px;
+  padding: 4px 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
+}
+
+.settings-pane-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  padding-inline: 4px;
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .settings-scroll {
@@ -433,13 +470,20 @@
 .settings-manifest {
   display: flex;
   flex-direction: column;
-  gap: 22px;
   min-width: 0;
   min-height: 0;
-  padding: 20px 18px;
   overflow: auto;
   border-inline-start: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
   background: transparent;
+}
+
+.settings-manifest-body {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  flex: 1 0 auto;
+  min-width: 0;
+  padding: 20px 18px;
 }
 
 .settings-manifest-head {
@@ -828,96 +872,71 @@ html[data-orb-style='bar'] .orb-preview {
 }
 
 @container settings (max-width: 1080px) {
-  .settings-layout {
+  .settings-layout:not(.is-stacked) {
     grid-template-columns: var(--settings-rail) minmax(0, 1fr);
   }
 
-  .settings-manifest {
+  .settings-layout:not(.is-stacked) .settings-manifest {
     display: none;
   }
 }
 
-@container settings (max-width: 820px) {
-  .settings-layout {
-    --settings-gutter: 20px;
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr);
-  }
+/* ── Stacked (ui/components/panes.js): a phone, or a window up to 820px ──
+   The sections list is the floor — the numbered rows, taller for a finger,
+   each with a chevron — and the stage slides over it with its pane bar
+   naming the section; the manifest slides over the stage from the bar's
+   info button. The stage's editorial head and footer step aside: the bar
+   and the list already say where you are. */
+.settings-layout.is-stacked {
+  --settings-gutter: 18px;
+}
 
-  .settings-nav {
-    display: block;
-    padding: 8px 10px;
-    overflow-x: auto;
-    overflow-y: hidden;
-    border-inline-end: 0;
-    border-bottom: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
-    scrollbar-width: none;
-  }
+.settings-layout.is-stacked .settings-nav {
+  padding: 12px 10px;
+  border-inline-end: 0;
+}
 
-  .settings-nav-head {
-    display: none;
-  }
+.settings-layout.is-stacked .settings-nav-head {
+  padding: 4px 10px 14px;
+}
 
-  .settings-nav-list {
-    flex-direction: row;
-    gap: 2px;
-  }
+.settings-layout.is-stacked .settings-nav-item {
+  align-items: center;
+  min-height: 46px;
+  padding: 10px 12px;
+}
 
-  .settings-nav-item {
-    flex: 0 0 auto;
-    align-items: center;
-    width: auto;
-    gap: 8px;
-    padding: 7px 12px;
-  }
+.settings-layout.is-stacked .settings-nav-label {
+  font-size: 14px;
+}
 
-  .settings-nav-label {
-    font-size: 12.5px;
-    white-space: nowrap;
-  }
+.settings-layout.is-stacked .settings-nav-chevron {
+  display: inline-flex;
+}
 
-  .settings-scroll {
-    padding: 22px 20px 18px;
-  }
+.settings-layout.is-stacked .settings-pane-bar {
+  display: flex;
+}
 
-  .settings-footer {
-    padding: 10px 18px;
-  }
+.settings-layout.is-stacked .settings-panel-head,
+.settings-layout.is-stacked .settings-footer {
+  display: none;
+}
+
+.settings-layout.is-stacked .settings-scroll {
+  padding: 18px var(--settings-gutter) 22px;
+}
+
+.settings-layout.is-stacked .settings-manifest {
+  border-inline-start: 0;
+}
+
+.settings-layout.is-stacked .settings-manifest-head {
+  display: none;
 }
 
 @container settings (max-width: 620px) {
   .settings-chrome-title {
-    display: none;
-  }
-}
-
-@container settings (max-width: 560px) {
-  .settings-nav-kicker {
-    display: none;
-  }
-
-  .settings-panel-head {
-    margin-bottom: 20px;
-  }
-
-  .settings-panel-title {
-    font-size: 28px;
-  }
-
-  .settings-panel-subtitle {
-    font-size: 12px;
-  }
-
-  .settings-scroll {
-    padding: 18px 16px 14px;
-  }
-
-  .settings-footer {
-    gap: 8px;
-    padding: 10px 14px;
-  }
-
-  .settings-footer-note {
     display: none;
   }
 }

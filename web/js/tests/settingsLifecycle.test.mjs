@@ -56,9 +56,18 @@ class Element extends Target {
     nodes.forEach((child) => { child.parentElement = this; });
     this.children.unshift(...nodes);
   }
+  // `.class`, `tag` and `[data-attr]` — enough for the window and the pane stack.
+  matches(selector) {
+    if (selector.startsWith('.')) return this.classList.contains(selector.slice(1));
+    if (selector.startsWith('[data-')) {
+      const name = selector.slice(6, -1).replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+      return this.dataset[name] !== undefined;
+    }
+    return this.tagName === selector.toUpperCase();
+  }
+  hasAttribute(name) { return this.attributes.has(name); }
   closest(selector) {
-    const matches = (node) => selector.startsWith('.') ? node.classList?.contains(selector.slice(1)) : node.tagName === selector.toUpperCase();
-    for (let node = this; node; node = node.parentElement) if (matches(node)) return node;
+    for (let node = this; node; node = node.parentElement) if (node.matches?.(selector)) return node;
     return null;
   }
   replaceChildren(...children) { this.children = []; this.append(...children); }
@@ -69,8 +78,7 @@ class Element extends Target {
   get isConnected() { return true; }
   get options() { return this.children; }
   querySelectorAll(selector) {
-    const matches = (node) => selector.startsWith('.') ? node.classList.contains(selector.slice(1)) : node.tagName === selector.toUpperCase();
-    return this.children.flatMap((child) => [...(matches(child) ? [child] : []), ...child.querySelectorAll(selector)]);
+    return this.children.flatMap((child) => [...(child.matches(selector) ? [child] : []), ...child.querySelectorAll(selector)]);
   }
   querySelector(selector) { return this.querySelectorAll(selector)[0] || null; }
   getBoundingClientRect() { return { top: 0, left: 0, width: 1000, height: 800, right: 1000, bottom: 800 }; }
@@ -149,6 +157,11 @@ for (let mount = 0; mount < 3; mount++) {
   desktopItem.dispatchEvent(new Event('click'));
   assert.equal(element.querySelectorAll('.settings-panel').find((panel) => panel.dataset.panel === 'desktop').classList.contains('is-active'), true);
   assert.equal(element.querySelectorAll('.settings-panel').find((panel) => panel.dataset.panel === 'music').classList.contains('is-active'), false);
+  const layout = element.querySelector('.settings-layout');
+  assert.equal(layout.classList.contains('ui-panes'), true, 'the layout is the pane stack');
+  assert.equal(layout.__panes.open().at(-1), 'main', 'a section pick (or the requested section) opens the stage pane');
+  assert.equal(element.querySelector('.settings-pane-title').textContent, 'Desktop', 'the pane bar names the section');
+  assert.equal(element.querySelector('.settings-pane-bar').querySelectorAll('.ui-pane-back').length, 1, 'the stage pane bar carries the shared Back');
   settings.unmount();
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(window.count(), baseline, 'unmount restores the original listener count');

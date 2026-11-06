@@ -467,6 +467,22 @@ async function runWizardIntegration() {
     return node;
   };
   const uiControlButton = () => uiButton();
+  const uiIconButton = (options = {}) => {
+    const node = uiButton({ ...options, label: '' });
+    node.className = 'ui-btn ui-btn--icon';
+    return node;
+  };
+  // The pane stack and the compact toolbar are layout: the smoke test only
+  // needs their shape (plugin.js shows the manifest and destroys them).
+  const uiPaneStack = (root, { panes = [] } = {}) => {
+    root.classList.add('ui-panes');
+    for (const pane of panes) pane.el.classList.add('ui-pane');
+    return { show: () => true, back: () => false, reset: () => false, isStacked: () => false, refresh: () => {}, destroy: () => {} };
+  };
+  const uiCompactToolbar = (bar) => {
+    bar.classList.add('ui-compact-bar');
+    return { refresh: () => {}, isCompact: () => false, destroy: () => {} };
+  };
   const uiInput = ({ type = 'text', value = '', placeholder = '', autocomplete = '', onInput } = {}) => {
     const node = integrationElement('input');
     node.type = type;
@@ -539,6 +555,9 @@ async function runWizardIntegration() {
     badge: uiBadge,
     button: uiButton,
     controlButton: uiControlButton,
+    iconButton: uiIconButton,
+    paneStack: uiPaneStack,
+    compactToolbar: uiCompactToolbar,
     emptyState: uiEmpty,
     field: uiField,
     icon: uiIcon,

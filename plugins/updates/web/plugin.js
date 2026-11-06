@@ -1,7 +1,7 @@
 import {
   toolbar, element as el, button, chip, emptyState, field, icon, iconButton,
   input, modal, notify, row, spinner, largeTitle, hairlineList, hairlineRow,
-  listReveal, rollNumber, progress as progressBar,
+  listReveal, rollNumber, progress as progressBar, paneStack,
 } from '../../ui/index.js';
 
 /**
@@ -17,11 +17,15 @@ import {
  * left and its mono "1.2 → 1.3 · MAIN" on the right. Progress is a bar with
  * the phase and percent when the package manager reports structured progress
  * (apt's status-fd, the Ollama installer's steps and download bar), else
- * the last log line; the only spinner is the action button's. A Details
- * toggle shows the mono log. While an install runs every package row shows its
- * own state (queued · unpacking · configuring · done), updated in place. Ollama and the
- * audit trail live in their own tabs. Styles: the "Updates plugin window"
- * section of web/css/tiles.css.
+ * the last log line; the only spinner is the action button's. Details opens
+ * the mono log as a pane (`paneStack`): narrow, or on a phone, it slides in
+ * over the content with the shared Back; wide, it is a column beside the
+ * content that the same button hides again. While an install runs every
+ * package row shows its own state (queued · unpacking · configuring · done),
+ * updated in place. Ollama and the audit trail live in their own tabs. On a
+ * phone every action is its icon (the library rule) and the install button
+ * wears the count as a badge. Styles: the "Updates plugin window" section of
+ * web/css/tiles.css.
  *
  * The persistent top-bar chip lives in `hud.js`; this file is only the window.
  */
@@ -41,15 +45,20 @@ const TABS = [
 ];
 
 let tileEl = null;
+/** The pane root: the content column (floor) and the log pane. */
+let shellEl = null;
 let contentEl = null;
 let checkBtn = null;
+/** `paneStack` over `shellEl`: `content` (the floor) and `log`. */
+let nav = null;
+/** The Details toggle of the current render, relabelled when the pane opens or closes. */
+let detailsBtn = null;
 const tabChips = {};
 
 let activeTab = 'updates';
 let status = null;
 let history = null;
 let busy = false;
-let detailsOpen = false;
 let lastLine = '';
 let logLines = [];
 /** The job's structured progress (`{ phase, percent, message, current, packages, failed }`). */
@@ -62,6 +71,7 @@ let barLabelEl = null;
 let lastResult = null; // 'ok' | 'error' | null
 let logFrom = 0;
 let lastLineEl = null;
+/** The log pane's `pre`, built once at mount; lines are appended in place. */
 let detailsPreEl = null;
 /** The window's large title (`largeTitle()`), kept across renders. */
 let hero = null;
@@ -80,6 +90,10 @@ async function loadStatus(force = false) {
     if (res?.data) {
       status = res.data;
       revealPackages = true;
+      // The home screen's badge: updates waiting to be installed.
+      window.dispatchEvent(new CustomEvent('plugin:badge', {
+        detail: { name: 'updates', count: status.error ? 0 : Number(status.count) || 0 },
+      }));
     }
   } catch (err) {
     if (tileEl) {
@@ -114,9 +128,18 @@ export function mountUpdatesTile() {
 
   tileEl.appendChild(buildBar());
 
+  shellEl = el('div', 'updates-shell');
   contentEl = document.createElement('div');
   contentEl.className = 'updates-content';
-  tileEl.appendChild(contentEl);
+  shellEl.append(contentEl, buildLogPane());
+  tileEl.appendChild(shellEl);
+  nav = paneStack(shellEl, {
+    panes: [
+      { id: 'content', el: contentEl },
+      { id: 'log', el: shellEl.querySelector('.updates-log-pane') },
+    ],
+    onChange: () => syncDetailsButton(),
+  });
   hero = largeTitle({ scroller: contentEl, eyebrow: ' ' });
   heroCount = null;
   revealPackages = true;
@@ -143,6 +166,7 @@ function buildBar() {
       active: activeTab === id,
       onClick: () => {
         activeTab = id;
+        nav?.reset();
         render();
       },
     });
@@ -163,13 +187,72 @@ function buildBar() {
   return bar;
 }
 
+/**
+ * The log pane: a head the stack prepends its Back to, and the mono log
+ * that follows the job. It lives beside the content for the window's whole
+ * life, so appending lines never rebuilds it.
+ */
+function buildLogPane() {
+  const pane = el('section', 'updates-log-pane');
+  const title = t('plugin.updates.action.details', null, 'Details');
+  pane.setAttribute('aria-label', title);
+  const head = el('div', 'updates-log-head');
+  head.dataset.paneBar = '';
+  head.appendChild(el('span', 'updates-log-title', title));
+  detailsPreEl = el('pre', 'updates-log');
+  pane.append(head, detailsPreEl);
+  return pane;
+}
+
+/** Start a fresh log for a new job and come back to the content. */
+function resetLog() {
+  lastLine = '';
+  logLines = [];
+  jobProgress = null;
+  lastResult = null;
+  logFrom = 0;
+  if (detailsPreEl) detailsPreEl.textContent = '';
+  nav?.reset();
+}
+
+function detailsOpen() {
+  return !!nav?.isOpen('log');
+}
+
+function toggleDetails() {
+  if (!nav) return;
+  if (detailsOpen()) {
+    nav.back();
+    return;
+  }
+  if (detailsPreEl && !detailsPreEl.textContent) detailsPreEl.textContent = logLines.length ? logLines.join('\n') : (lastLine || '');
+  nav.show('log');
+  if (detailsPreEl) detailsPreEl.scrollTop = detailsPreEl.scrollHeight;
+}
+
+function detailsLabel() {
+  return detailsOpen()
+    ? t('plugin.updates.action.hideDetails', null, 'Hide details')
+    : t('plugin.updates.action.details', null, 'Details');
+}
+
+function syncDetailsButton() {
+  if (!detailsBtn?.isConnected) return;
+  detailsBtn.setLabel(detailsLabel());
+  detailsBtn.setAttribute('aria-expanded', String(detailsOpen()));
+}
+
 export function unmountUpdatesTile() {
   hero?.dispose();
   hero = null;
+  nav?.destroy();
+  nav = null;
   tileEl?.remove();
   tileEl = null;
+  shellEl = null;
   contentEl = null;
   checkBtn = null;
+  detailsBtn = null;
   for (const id of Object.keys(tabChips)) delete tabChips[id];
   lastLineEl = null;
   detailsPreEl = null;
@@ -368,16 +451,22 @@ function versionLine(p) {
 
 function installAction() {
   const wrap = el('div', 'updates-actions');
-  wrap.appendChild(button({
+  const install = button({
     label: busy
       ? t('plugin.updates.action.installing', null, 'Installing…')
       : tp('plugin.updates.action.install', status.count, null, 'Install {count} updates'),
+    icon: 'ui/download',
     variant: 'primary',
     arrow: !busy,
     loading: busy,
     disabled: busy,
+    className: 'updates-install',
     onClick: () => void startInstallAll(),
-  }));
+  });
+  // On a phone the label folds into the icon; the count stays as a badge
+  // drawn by the window's CSS (layout only, never a second text node).
+  if (!busy && status.count > 0) install.dataset.count = status.count > 99 ? '99+' : String(status.count);
+  wrap.appendChild(install);
   wrap.appendChild(refreshButton());
   return wrap;
 }
@@ -409,26 +498,16 @@ function progressLine() {
   line.appendChild(lastLineEl);
   wrap.appendChild(line);
 
-  wrap.appendChild(button({
-    label: detailsOpen ? t('plugin.updates.action.hideDetails', null, 'Hide details') : t('plugin.updates.action.details', null, 'Details'),
+  detailsBtn = button({
+    label: detailsLabel(),
+    icon: 'ui/info',
     variant: 'quiet',
     size: 'sm',
-    onClick: () => {
-      detailsOpen = !detailsOpen;
-      render();
-    },
-  }));
-
-  if (detailsOpen) {
-    detailsPreEl = el('pre', 'updates-log');
-    detailsPreEl.textContent = logLines.length ? logLines.join('\n') : (lastLine || '');
-    wrap.appendChild(detailsPreEl);
-    requestAnimationFrame(() => {
-      if (detailsPreEl) detailsPreEl.scrollTop = detailsPreEl.scrollHeight;
-    });
-  } else {
-    detailsPreEl = null;
-  }
+    className: 'updates-details',
+    onClick: toggleDetails,
+  });
+  detailsBtn.setAttribute('aria-expanded', String(detailsOpen()));
+  wrap.appendChild(detailsBtn);
   return wrap;
 }
 
@@ -493,7 +572,7 @@ function appendLog(lines) {
   }
   if (lastLineEl && !(busy && jobProgress?.message)) lastLineEl.textContent = lastLine;
   if (detailsPreEl) {
-    const pinned = detailsPreEl.scrollHeight - detailsPreEl.scrollTop - detailsPreEl.clientHeight < 24;
+    const pinned = !detailsOpen() || detailsPreEl.scrollHeight - detailsPreEl.scrollTop - detailsPreEl.clientHeight < 24;
     const prefix = detailsPreEl.textContent ? '\n' : '';
     detailsPreEl.appendChild(document.createTextNode(prefix + lines.join('\n')));
     if (pinned) detailsPreEl.scrollTop = detailsPreEl.scrollHeight;
@@ -532,6 +611,7 @@ function renderOllama() {
         : (installed
           ? t('plugin.updates.ollama.update', null, 'Update Ollama')
           : t('plugin.updates.ollama.install', null, 'Install Ollama')),
+      icon: 'ui/download',
       variant: 'primary',
       arrow: !busy,
       loading: busy,
@@ -593,12 +673,7 @@ async function startJob(path, body, label) {
     return;
   }
   busy = true;
-  detailsOpen = false;
-  lastLine = '';
-  logLines = [];
-  jobProgress = null;
-  lastResult = null;
-  logFrom = 0;
+  resetLog();
   render();
 
   let jobId;
@@ -633,12 +708,7 @@ async function reattach() {
   }
   if (!data?.job || data.done || busy) return;
   busy = true;
-  detailsOpen = false;
-  lastLine = '';
-  logLines = [];
-  jobProgress = null;
-  lastResult = null;
-  logFrom = 0;
+  resetLog();
   render();
   await pollJob(data.job);
 }
@@ -742,7 +812,7 @@ function askPassword({ title, message }) {
     pw.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') submit();
     });
-    const cancel = button({ label: t('plugin.updates.dialog.cancel', null, 'Cancel'), variant: 'quiet', onClick: () => { api.close(); resolve(null); } });
+    const cancel = button({ label: t('plugin.updates.dialog.cancel', null, 'Cancel'), icon: 'ui/close', variant: 'quiet', onClick: () => { api.close(); resolve(null); } });
     const go = button({ label: t('plugin.updates.dialog.continue', null, 'Continue'), icon: 'ui/check', onClick: submit });
 
     const api = modal({

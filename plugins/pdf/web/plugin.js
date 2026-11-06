@@ -1,7 +1,7 @@
 import {
   menuSurface, menuItem, confirmDialog, promptDialog, menuButton, toolbar, input as uiInput,
   toolButton, placePopover, controlButton, icon, button, emptyState, toast, spinner, setTileGlow,
-  glowFromDrawable, setIcon, listReveal, cardEnter, modal, segmented, compactToolbar,
+  glowFromDrawable, setIcon, listReveal, cardEnter, modal, segmented, compactToolbar, paneStack,
 } from '../../ui/index.js';
 
 /**
@@ -65,6 +65,11 @@ let railEl = null;
 let canvasEl = null;
 let mainEl = null;
 let panelEl = null;
+let panelHeadEl = null;
+let panelBodyEl = null;
+/** paneStack over the body: the page is the floor, the comments slide over it. */
+let nav = null;
+let paneStacked = false;
 let pageLabelEl = null;
 let zoomLabelEl = null;
 let modeStripEl = null;
@@ -336,6 +341,7 @@ function setMode(next) {
 
 function renderModeStrip() {
   if (!modeStripEl) return;
+  modeStripEl.__compact?.destroy();
   modeStripEl.innerHTML = '';
   modeStripEl.hidden = mode === 'select' || view !== 'pdf';
   if (modeStripEl.hidden) return;
@@ -356,13 +362,15 @@ function renderModeStrip() {
     const kinds = segmented({
       label: t('plugin.pdf.mode.shapeKind', null, 'Shape'),
       options: [
-        { value: 'box', label: t('plugin.pdf.annot.box', null, 'Box') },
-        { value: 'oval', label: t('plugin.pdf.annot.oval', null, 'Oval') },
+        { value: 'box', label: t('plugin.pdf.annot.box', null, 'Box'), icon: 'ui/marquee-rect' },
+        { value: 'oval', label: t('plugin.pdf.annot.oval', null, 'Oval'), icon: 'ui/marquee-ellipse' },
       ],
       value: shapeKind,
       onChange: (v) => { shapeKind = v; },
     });
     kinds.classList.add('pdf-mode-tools');
+    // The switch folds whole into the strip's More menu when the line is short.
+    kinds.dataset.foldable = '';
     modeStripEl.appendChild(kinds);
   }
   if (mode === 'draw' || mode === 'shape') {
@@ -376,10 +384,14 @@ function renderModeStrip() {
   }
   const spacer = document.createElement('span');
   spacer.className = 'pdf-mode-spacer';
-  const done = button({ label: t('plugin.pdf.mode.done', null, 'Done'), variant: 'ghost', size: 'sm', onClick: () => setMode('select') });
+  const done = button({ label: t('plugin.pdf.mode.done', null, 'Done'), icon: 'ui/check', iconSize: 14, variant: 'ghost', size: 'sm', onClick: () => setMode('select') });
   done.classList.add('pdf-mode-done');
   done.title = 'Esc';
+  done.dataset.keep = '';
   modeStripEl.append(spacer, done);
+  // One line, like the window bar: the hint wraps in place and the mode's
+  // options fold into a More menu before anything else has to.
+  compactToolbar(modeStripEl);
 }
 
 /* ── Rendering ──────────────────────────────────────────────── */
@@ -577,8 +589,14 @@ function pillButton(label, kind, onClick, { iconName, title, on } = {}) {
   b.type = 'button';
   b.className = kind === 'apply' ? 'pdf-edit-apply' : kind === 'cancel' ? 'pdf-edit-cancel' : 'pdf-edit-pill';
   if (iconName) b.appendChild(icon(iconName, { size: 14 }));
-  else b.textContent = label;
-  if (title || iconName) { b.title = title || label; b.setAttribute('aria-label', title || label); }
+  if (label) {
+    const text = document.createElement('span');
+    text.className = 'pdf-edit-pill-text';
+    text.textContent = label;
+    b.appendChild(text);
+  }
+  b.title = title || label;
+  b.setAttribute('aria-label', title || label);
   if (on) b.classList.add('is-on');
   b.addEventListener('mousedown', (e) => e.preventDefault());
   b.addEventListener('click', (e) => { e.preventDefault(); onClick(b); });
@@ -597,10 +615,14 @@ function showFloatBar(anchor, nodes) {
   bar.append(...nodes);
   bar.addEventListener('pointerdown', (e) => e.stopPropagation());
   document.body.appendChild(bar);
+  // Kept within the window, not the screen: a tiled window is not the viewport.
+  const tr = tileEl?.getBoundingClientRect();
+  const box = tr?.width ? tr : { left: 0, top: 0, right: window.innerWidth, width: window.innerWidth };
+  bar.style.maxWidth = `${Math.max(120, box.width - 16)}px`;
   const r = anchor.getBoundingClientRect ? anchor.getBoundingClientRect() : anchor;
   const top = r.top - bar.offsetHeight - 8;
-  bar.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - bar.offsetWidth - 8))}px`;
-  bar.style.top = `${top < 8 ? r.bottom + 8 : top}px`;
+  bar.style.left = `${Math.max(box.left + 8, Math.min(r.left, box.right - bar.offsetWidth - 8))}px`;
+  bar.style.top = `${top < box.top + 8 ? r.bottom + 8 : top}px`;
   floatBar = bar;
   return bar;
 }
@@ -680,23 +702,23 @@ function offerSelectionMarks() {
   const r = sel.getRangeAt(0).getBoundingClientRect();
   const picked = sel.toString().replace(/\s+/g, ' ').trim();
   const nodes = [
-    pillButton(markLabel('highlight'), 'pill', () => { closeFloatBar(); void addMark('highlight', rects); }),
-    pillButton(markLabel('underline'), 'pill', () => { closeFloatBar(); void addMark('underline', rects); }),
-    pillButton(markLabel('strikeout'), 'pill', () => { closeFloatBar(); void addMark('strikeout', rects); }),
+    pillButton(markLabel('highlight'), 'pill', () => { closeFloatBar(); void addMark('highlight', rects); }, { iconName: 'ui/highlight' }),
+    pillButton(markLabel('underline'), 'pill', () => { closeFloatBar(); void addMark('underline', rects); }, { iconName: 'ui/underline' }),
+    pillButton(markLabel('strikeout'), 'pill', () => { closeFloatBar(); void addMark('strikeout', rects); }, { iconName: 'ui/strikethrough' }),
     separator(),
     pillButton(markLabel('note'), 'pill', async () => {
       closeFloatBar();
       const v = await promptDialog(t('plugin.pdf.dialog.noteText', null, 'Comment:'), '');
       if (v == null || !v.trim()) return;
       void addMark('highlight', rects, { text: v.trim() });
-    }),
-    pillButton(markLabel('link'), 'pill', () => { closeFloatBar(); void addMark('link', [unionRect(rects)]); }),
+    }, { iconName: 'ui/message-circle' }),
+    pillButton(markLabel('link'), 'pill', () => { closeFloatBar(); void addMark('link', [unionRect(rects)]); }, { iconName: 'ui/link' }),
   ];
   if (picked) {
     nodes.push(separator(), pillButton(t('plugin.pdf.annot.copy', null, 'Copy'), 'pill', () => {
       void navigator.clipboard?.writeText(picked);
       closeFloatBar();
-    }));
+    }, { iconName: 'ui/copy' }));
   }
   showFloatBar(r, nodes);
 }
@@ -766,8 +788,8 @@ function placeTextBox(e) {
     pillButton('', 'pill', () => { textSize = Math.max(6, textSize - 1); sync(); }, { iconName: 'ui/minus', title: t('plugin.pdf.edit.smaller', null, 'Smaller') }),
     pillButton('', 'pill', () => { textSize = Math.min(72, textSize + 1); sync(); }, { iconName: 'ui/plus', title: t('plugin.pdf.edit.larger', null, 'Larger') }),
     separator(), color, separator(),
-    pillButton(t('plugin.pdf.edit.addText', null, 'Add text'), 'apply', () => void commitText()),
-    pillButton(t('plugin.pdf.edit.cancel', null, 'Cancel'), 'cancel', () => closeFloatBar()),
+    pillButton(t('plugin.pdf.edit.addText', null, 'Add text'), 'apply', () => void commitText(), { iconName: 'ui/check' }),
+    pillButton(t('plugin.pdf.edit.cancel', null, 'Cancel'), 'cancel', () => closeFloatBar(), { iconName: 'ui/close' }),
   ]);
   sync();
   box.focus();
@@ -848,8 +870,8 @@ function offerInkBar() {
   if (!inkStrokes.length || !pageEl) return;
   const r = pageEl.getBoundingClientRect();
   showFloatBar({ left: r.left + 12, top: r.top + 12, bottom: r.top + 12 }, [
-    pillButton(t('plugin.pdf.draw.keep', null, 'Save drawing'), 'apply', () => commitInk()),
-    pillButton(t('plugin.pdf.draw.discard', null, 'Discard'), 'cancel', () => { inkStrokes = []; setupInkLayer(); closeFloatBar(); }),
+    pillButton(t('plugin.pdf.draw.keep', null, 'Save drawing'), 'apply', () => commitInk(), { iconName: 'ui/check' }),
+    pillButton(t('plugin.pdf.draw.discard', null, 'Discard'), 'cancel', () => { inkStrokes = []; setupInkLayer(); closeFloatBar(); }, { iconName: 'ui/close' }),
   ]);
 }
 
@@ -927,10 +949,29 @@ async function loadComments() {
 
 function togglePanel(on = !showPanel) {
   showPanel = on;
-  commentsBtn?.classList.toggle('is-active', on);
-  commentsBtn?.setAttribute('aria-pressed', String(on));
-  if (panelEl) panelEl.hidden = !on;
+  syncPanel();
   if (on) void loadComments();
+}
+
+/** The panel follows `showPanel`: wide, the window shows and hides it beside
+ *  the page; stacked, the pane stack slides it over the page. */
+function syncPanel() {
+  commentsBtn?.classList.toggle('is-active', showPanel);
+  commentsBtn?.setAttribute('aria-pressed', String(showPanel));
+  if (!panelEl) return;
+  const stacked = !!nav?.isStacked();
+  panelEl.hidden = stacked ? false : !showPanel;
+  if (!nav) return;
+  if (showPanel && !nav.isOpen('comments')) nav.show('comments');
+  else if (!showPanel && nav.isOpen('comments')) nav.back();
+}
+
+function onPaneChange({ id, stacked }) {
+  const flipped = stacked !== paneStacked;
+  paneStacked = stacked;
+  // Back (Escape, the edge swipe, the pane's own button) closed the comments.
+  if (stacked && !flipped && showPanel && id !== 'comments') showPanel = false;
+  syncPanel();
 }
 
 const KIND_OF = {
@@ -940,12 +981,10 @@ const KIND_OF = {
 
 function renderPanel() {
   if (!panelEl) return;
-  panelEl.innerHTML = '';
-  const head = document.createElement('div');
-  head.className = 'pdf-panel-head';
+  const panel = panelBodyEl;
+  panel.innerHTML = '';
   const top = comments.filter((x) => !x.parent);
-  head.textContent = tp('plugin.pdf.panel.count', top.length, null, `${top.length} comments`);
-  panelEl.appendChild(head);
+  panelHeadEl.textContent = tp('plugin.pdf.panel.count', top.length, null, `${top.length} comments`);
 
   if (marks.length) {
     const box = document.createElement('div');
@@ -955,18 +994,18 @@ function renderPanel() {
       row.className = 'pdf-panel-mark';
       const label = document.createElement('span');
       label.textContent = m === 'watermark' ? t('plugin.pdf.panel.watermark', null, 'Watermark') : m === 'header_footer' ? t('plugin.pdf.panel.headerFooter', null, 'Header & footer') : m;
-      const rm = pillButton(t('plugin.pdf.panel.remove', null, 'Remove'), 'pill', () => void edit('marks/remove', { kind: m }, { okMsg: t('plugin.pdf.toast.markRemoved', null, 'Removed') }));
+      const rm = pillButton(t('plugin.pdf.panel.remove', null, 'Remove'), 'pill', () => void edit('marks/remove', { kind: m }, { okMsg: t('plugin.pdf.toast.markRemoved', null, 'Removed') }), { iconName: 'ui/trash' });
       row.append(label, rm);
       box.appendChild(row);
     }
-    panelEl.appendChild(box);
+    panel.appendChild(box);
   }
 
   if (!top.length) {
     const empty = document.createElement('p');
     empty.className = 'pdf-panel-empty';
     empty.textContent = t('plugin.pdf.panel.empty', null, 'No comments yet. Select text to highlight it, or use the comment tool.');
-    panelEl.appendChild(empty);
+    panel.appendChild(empty);
     return;
   }
   const list = document.createElement('div');
@@ -982,7 +1021,7 @@ function renderPanel() {
     }
     list.appendChild(commentCard(c));
   }
-  panelEl.appendChild(list);
+  panel.appendChild(list);
 }
 
 function commentCard(c) {
@@ -1002,27 +1041,25 @@ function commentCard(c) {
   const replies = comments.filter((x) => x.parent && x.parent[0] === c.page && x.parent[1] === c.index);
   const actions = document.createElement('div');
   actions.className = 'pdf-comment-actions';
-  const act = (label, fn) => {
-    const b = controlButton();
-    b.type = 'button';
-    b.className = 'pdf-comment-btn';
-    b.textContent = label;
+  const act = (label, iconName, fn) => {
+    const b = button({ label, icon: iconName, iconSize: 14, variant: 'ghost', size: 'sm' });
+    b.classList.add('pdf-comment-btn');
     b.addEventListener('click', (e) => { e.stopPropagation(); fn(); });
     actions.appendChild(b);
   };
   if (c.kind !== 'Link') {
-    act(t('plugin.pdf.panel.edit', null, 'Edit'), async () => {
+    act(t('plugin.pdf.panel.edit', null, 'Edit'), 'ui/pencil', async () => {
       const v = await promptDialog(t('plugin.pdf.dialog.noteText', null, 'Comment:'), c.text || '');
       if (v == null) return;
       void edit('comments/edit', { page: c.page, index: c.index, action: 'text', text: v }, { page: c.page });
     });
-    act(t('plugin.pdf.panel.reply', null, 'Reply'), async () => {
+    act(t('plugin.pdf.panel.reply', null, 'Reply'), 'ui/reply', async () => {
       const v = await promptDialog(t('plugin.pdf.dialog.reply', null, 'Reply:'), '');
       if (v == null || !v.trim()) return;
       void edit('comments/edit', { page: c.page, index: c.index, action: 'reply', text: v.trim() }, { page: c.page });
     });
   }
-  act(t('plugin.pdf.panel.delete', null, 'Delete'), () => void edit('comments/edit', { page: c.page, index: c.index, action: 'delete' }, {
+  act(t('plugin.pdf.panel.delete', null, 'Delete'), 'ui/trash', () => void edit('comments/edit', { page: c.page, index: c.index, action: 'delete' }, {
     page: c.page, okMsg: t('plugin.pdf.toast.commentDeleted', null, 'Comment deleted — Ctrl+Z to undo'),
   }));
   card.append(swatch, kind, text);
@@ -1083,8 +1120,8 @@ function openFindReplace(prefill = '') {
   actions.className = 'ui-row ui-dialog-actions';
   const dlg = modal({ title: t('plugin.pdf.find.title', null, 'Find & replace'), body: form, removeOnClose: true });
   actions.append(
-    button({ label: t('plugin.pdf.edit.cancel', null, 'Cancel'), variant: 'ghost', onClick: () => dlg.close() }),
-    button({ label: t('plugin.pdf.find.go', null, 'Replace'), type: 'submit' }),
+    button({ label: t('plugin.pdf.edit.cancel', null, 'Cancel'), icon: 'ui/close', variant: 'ghost', onClick: () => dlg.close() }),
+    button({ label: t('plugin.pdf.find.go', null, 'Replace'), icon: 'ui/search', type: 'submit' }),
   );
   form.append(find, repl, scope, note, actions);
   form.addEventListener('submit', async (ev) => {
@@ -1147,8 +1184,8 @@ function openHeaderFooter() {
   actions.className = 'ui-row ui-dialog-actions';
   const dlg = modal({ title: t('plugin.pdf.hf.title', null, 'Header & footer'), body: form, wide: true, removeOnClose: true });
   actions.append(
-    button({ label: t('plugin.pdf.edit.cancel', null, 'Cancel'), variant: 'ghost', onClick: () => dlg.close() }),
-    button({ label: t('plugin.pdf.hf.apply', null, 'Apply to all pages'), type: 'submit' }),
+    button({ label: t('plugin.pdf.edit.cancel', null, 'Cancel'), icon: 'ui/close', variant: 'ghost', onClick: () => dlg.close() }),
+    button({ label: t('plugin.pdf.hf.apply', null, 'Apply to all pages'), icon: 'ui/check', type: 'submit' }),
   );
   form.append(preset, grid, note, actions);
   form.addEventListener('submit', (ev) => {
@@ -1310,11 +1347,7 @@ function renderThumbs({ reveal = false } = {}) {
       e.stopPropagation();
       const from = dragIndex;
       dragIndex = null;
-      if (from === i) return;
-      const order = [...Array(n).keys()];
-      order.splice(from, 1);
-      order.splice(i, 0, from);
-      void edit('reorder', { order }, { page: i });
+      void movePage(from, i);
     });
     railEl.appendChild(thumb);
     thumbObserver.observe(thumb);
@@ -1328,6 +1361,16 @@ function renderThumbs({ reveal = false } = {}) {
   add.addEventListener('click', () => void insertBlank(n - 1));
   railEl.appendChild(add);
   if (reveal) void listReveal(railEl.children);
+}
+
+/** Page `from` takes position `to` (the drag's drop, the menu's move). */
+function movePage(from, to) {
+  const n = currentPdf?.page_count ?? 0;
+  if (from === to || to < 0 || to >= n) return null;
+  const order = [...Array(n).keys()];
+  order.splice(from, 1);
+  order.splice(to, 0, from);
+  return edit('reorder', { order }, { page: to });
 }
 
 function markActiveThumb() {
@@ -1350,6 +1393,10 @@ function openPageMenu(page, anchor) {
   item(t('plugin.pdf.page.rotateRight', null, 'Rotate right'), 'ui/rotate-right', () => void edit('rotate', { pages: [page], degrees: 90 }, { page }));
   item(t('plugin.pdf.page.duplicate', null, 'Duplicate page'), 'ui/copy', () => void edit('duplicate-page', { page }, { page: page + 1 }));
   item(t('plugin.pdf.page.insertBlank', null, 'Insert blank page after'), 'ui/plus', () => void insertBlank(page));
+  // Reordering without a drag (a finger on the rail).
+  const n = currentPdf?.page_count ?? 0;
+  if (page > 0) item(t('plugin.pdf.page.moveEarlier', null, 'Move earlier'), 'ui/chevron-up', () => void movePage(page, page - 1));
+  if (page < n - 1) item(t('plugin.pdf.page.moveLater', null, 'Move later'), 'ui/chevron-down', () => void movePage(page, page + 1));
   item(t('plugin.pdf.page.extract', null, 'Extract to new PDF'), 'ui/upload', () => void extractPages([page]));
   item(t('plugin.pdf.page.delete', null, 'Delete page'), 'ui/trash', () => void removePage(page), true);
   menu.classList.remove('hidden');
@@ -1407,7 +1454,7 @@ function showEmptyWindow() {
   const actions = document.createElement('div');
   actions.className = 'ui-row pdf-empty-actions';
   actions.append(
-    button({ label: t('plugin.pdf.empty.create', null, 'Write a document'), icon: 'ui/plus', onClick: openNewDocument }),
+    button({ label: t('plugin.pdf.empty.create', null, 'Write a document'), icon: 'ui/doc', onClick: openNewDocument }),
     button({ label: t('plugin.pdf.empty.import', null, 'Open a PDF'), icon: 'ui/folder-open', variant: 'ghost', onClick: pickPdfFile }),
   );
   canvasEl.appendChild(emptyState({
@@ -1735,14 +1782,18 @@ export function mountPdfTile() {
   commentsBtn = toolbarButton('ui/message-circle', t('plugin.pdf.toolbar.comments', null, 'Comments panel'), () => togglePanel());
   commentsBtn.classList.add('pdf-tool--panel');
   commentsBtn.setAttribute('aria-pressed', 'false');
+  // Stacked, the comments are a pane the bar opens: the button stays out of More.
+  commentsBtn.dataset.keep = '';
   // Narrow windows and phones: the window bar is a compact toolbar
-  // (ui/compact.js). New, history, the comments panel, the modes, zoom and
-  // the page arrows fold into the shared "More" menu from the end, so the
-  // Documents menu and the title keep the front. `data-fold` lets the
+  // (ui/compact.js). New, history, the modes, zoom and the page arrows fold
+  // into the shared "More" menu from the end, so the Documents menu, the
+  // title and the comments button keep the front. `data-fold` lets the
   // folding reach the clusters nested in this one.
   const navTools = cluster('pdf-cluster--nav', prevBtn, pageLabelEl, nextBtn);
   const zoomTools = cluster('pdf-cluster--zoom', zoomOut, zoomLabelEl, zoomIn);
-  navTools.dataset.fold = '';
+  // The page arrows and their readout fold whole, as one row of the More
+  // menu, never leaving a lone arrow in the bar.
+  navTools.dataset.foldable = '';
   zoomTools.dataset.fold = '';
   pdfTools = cluster('pdf-cluster--pdf',
     navTools,
@@ -1759,7 +1810,7 @@ export function mountPdfTile() {
 
   freshnessEl = document.createElement('span');
   freshnessEl.className = 'pdf-freshness';
-  exportBtn = button({ label: t('plugin.pdf.editor.export', null, 'Update PDF'), icon: 'ui/upload', iconSize: 14, size: 'sm', onClick: () => void exportCurrentDoc() });
+  exportBtn = button({ label: t('plugin.pdf.editor.export', null, 'Update PDF'), icon: 'ui/refresh', iconSize: 14, size: 'sm', onClick: () => void exportCurrentDoc() });
   exportBtn.classList.add('pdf-export');
   writeTools = cluster('pdf-cluster--write', freshnessEl, exportBtn);
   writeTools.dataset.fold = '';
@@ -1800,8 +1851,28 @@ export function mountPdfTile() {
   panelEl.className = 'pdf-panel';
   panelEl.hidden = true;
   panelEl.setAttribute('aria-label', t('plugin.pdf.toolbar.comments', null, 'Comments'));
+  // The head is the pane's bar: stacked, the stack puts its Back there.
+  const panelBar = document.createElement('div');
+  panelBar.className = 'pdf-panel-bar';
+  panelBar.dataset.paneBar = '';
+  panelHeadEl = document.createElement('span');
+  panelHeadEl.className = 'pdf-panel-head';
+  panelBar.appendChild(panelHeadEl);
+  panelBodyEl = document.createElement('div');
+  panelBodyEl.className = 'pdf-panel-body';
+  panelEl.append(panelBar, panelBodyEl);
   mainEl.append(railEl, canvasEl, panelEl);
   tileEl.appendChild(mainEl);
+  // Narrow or on a phone the body is a stack: the page is the floor, the
+  // rail a strip above it, the comments a pane that slides over the page.
+  nav = paneStack(mainEl, {
+    panes: [
+      { id: 'document', el: canvasEl },
+      { id: 'comments', el: panelEl },
+    ],
+    onChange: onPaneChange,
+  });
+  paneStacked = nav.isStacked();
 
   tileEl.addEventListener('dragover', (e) => {
     if (dragIndex != null || !e.dataTransfer?.types?.includes('Files')) return;
@@ -1833,6 +1904,10 @@ export function unmountPdfTile() {
   closePageMenu();
   closeFloatBar();
   closeEditor();
+  modeStripEl?.__compact?.destroy();
+  nav?.destroy();
+  nav = null;
+  paneStacked = false;
   thumbObserver?.disconnect();
   thumbObserver = null;
   tileEl?.remove();
@@ -1844,6 +1919,8 @@ export function unmountPdfTile() {
   canvasEl = null;
   mainEl = null;
   panelEl = null;
+  panelHeadEl = null;
+  panelBodyEl = null;
   pageLabelEl = null;
   zoomLabelEl = null;
   modeStripEl = null;

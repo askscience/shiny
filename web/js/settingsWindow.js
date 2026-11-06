@@ -24,7 +24,7 @@
  */
 import {
   avatar, disposeMotion, eyebrow, FONT_THEME, getAccent, getActiveTheme, getFont,
-  getThemeManifest, listReveal,
+  getThemeManifest, icon, iconButton, listReveal, paneStack,
 } from '../ui/index.js';
 import { t, getAvailableLocales, getLocale } from './i18n.js';
 import { getTraveler, getVoiceLang } from './api.js';
@@ -319,16 +319,32 @@ function mountSettings() {
   const panels = el('div', 'settings-panels');
   const footer = el('footer', 'settings-footer');
   const manifest = el('aside', 'settings-manifest');
+  const manifestBody = el('div', 'settings-manifest-body');
 
   nav.setAttribute('aria-label', t('settings.nav.sections', null, 'Settings sections'));
   manifest.setAttribute('aria-label', t('settings.manifest.navLabel', null, 'Settings overview'));
 
+  // Slim pane bars, shown only while the panes are stacked (a phone, a narrow
+  // window): the stage's carries the section title and opens the manifest;
+  // the manifest's names itself. The shared Back lands at their start.
+  const paneBar = el('header', 'settings-pane-bar');
+  paneBar.dataset.paneBar = '';
+  const paneTitle = el('span', 'settings-pane-title');
+  const infoBtn = iconButton({
+    icon: 'ui/info', size: 'sm',
+    label: t('settings.manifest.title', null, 'At a glance'),
+    onClick: () => panes.show('manifest'),
+  });
+  paneBar.append(paneTitle, infoBtn);
+  const manifestBar = el('header', 'settings-pane-bar');
+  manifestBar.dataset.paneBar = '';
+  manifestBar.appendChild(el('span', 'settings-pane-title', t('settings.manifest.title', null, 'At a glance')));
+
   const sections = SECTION_DEFS.filter((section) => section.id !== 'touchbar'
     || document.documentElement.dataset.touchbarHost === '1');
 
-  let activePanel = (pendingSection && sections.some((section) => section.id === pendingSection))
-    ? pendingSection
-    : 'account';
+  const requested = pendingSection && sections.some((section) => section.id === pendingSection);
+  let activePanel = requested ? pendingSection : 'account';
   pendingSection = null;
   let manifestQueued = false;
 
@@ -382,14 +398,14 @@ function mountSettings() {
   function renderManifest() {
     const section = activeSection();
     if (!section) return;
-    clear(manifest);
+    clear(manifestBody);
 
     const head = el('div', 'settings-manifest-head');
     head.append(
       eyebrow(t('settings.manifest.eyebrow', null, 'Active section')),
       el('h2', 'settings-manifest-title', t('settings.manifest.title', null, 'At a glance')),
     );
-    manifest.appendChild(head);
+    manifestBody.appendChild(head);
 
     const current = manifestSection(t('settings.manifest.section', {
       current: sectionNumber(),
@@ -401,13 +417,13 @@ function mountSettings() {
       el('span', 'settings-manifest-sub', t(section.descKey)),
     );
     current.appendChild(currentCopy);
-    manifest.appendChild(current);
+    manifestBody.appendChild(current);
 
     const details = sectionDetails(section.id);
     if (details.length) {
       const values = manifestSection(t('settings.manifest.values', null, 'Current values'));
       for (const row of details) values.appendChild(row);
-      manifest.appendChild(values);
+      manifestBody.appendChild(values);
     }
 
     const profile = manifestSection(t('settings.manifest.profile', null, 'Profile'));
@@ -432,22 +448,25 @@ function mountSettings() {
         el('span', 'settings-manifest-sub', t('settings.manifest.noProfileSub', null, 'Not signed in')),
       );
     }
-    manifest.appendChild(profile);
+    manifestBody.appendChild(profile);
 
     const iface = manifestSection(t('settings.manifest.interface', null, 'Interface'));
     iface.append(
       manifestRow(t('settings.manifest.theme', null, 'Theme'), themeLabel()),
       manifestRow(t('settings.manifest.language', null, 'Language'), interfaceLanguageLabel()),
     );
-    manifest.appendChild(iface);
+    manifestBody.appendChild(iface);
 
-    manifest.appendChild(el('p', 'settings-manifest-note', t('settings.manifest.note', null,
+    manifestBody.appendChild(el('p', 'settings-manifest-note', t('settings.manifest.note', null,
       'Every change is saved as you make it. Close the window when you are done.')));
   }
 
-  function show(id, animate = true) {
+  // `open` brings the stage over the sections list while the panes are
+  // stacked (a pick from the list, a request from outside the window).
+  function show(id, { animate = true, open = false } = {}) {
     if (!sections.some((section) => section.id === id)) return;
     activePanel = id;
+    paneTitle.textContent = t(activeSection().labelKey);
     nav.querySelectorAll('.settings-nav-item').forEach((item) => {
       const selected = item.dataset.panelTarget === id;
       item.classList.toggle('is-active', selected);
@@ -467,6 +486,7 @@ function mountSettings() {
     renderChrome();
     renderFooter();
     renderManifest();
+    if (open) panes.show('main');
   }
 
   windowResources.on(window, 'locale:change', () => render());
@@ -502,13 +522,15 @@ function mountSettings() {
       const label = t(section.labelKey);
       const desc = t(section.descKey);
       // Flat rail: a mono number and the label; the active row wears the grey pill.
+      // The chevron shows only while the list is the floor of the stack.
       btn.append(
         el('span', 'settings-nav-kicker', String(index + 1).padStart(2, '0')),
         el('span', 'settings-nav-label', label),
+        icon('ui/chevron-right', { size: 14, className: 'settings-nav-chevron' }),
       );
       btn.title = label;
       btn.setAttribute('aria-label', `${label} — ${desc}`);
-      sectionResources.on(btn, 'click', () => show(section.id));
+      sectionResources.on(btn, 'click', () => show(section.id, { open: true }));
       list.appendChild(btn);
 
       const sectionPanel = panel(section.id, section.icon, label, section.build(context), {
@@ -524,19 +546,32 @@ function mountSettings() {
     sectionResources.on(panels, 'change', scheduleManifest);
     sectionResources.on(panels, 'click', scheduleManifest);
 
-    show(activePanel, false);
+    show(activePanel, { animate: false });
   }
 
-  render();
   scroll.appendChild(panels);
-  main.append(scroll, footer);
+  main.append(paneBar, scroll, footer);
+  manifest.append(manifestBar, manifestBody);
   layout.append(nav, main, manifest);
   windowEl.appendChild(layout);
   // The bar is a direct child of the tile so `tiles.js` merges it into the
   // core window title row (`data-window-bar`). The layout below is a sibling.
   tileEl.append(chrome, windowEl);
+  // Rail · stage · manifest side by side while wide; on a phone, or in a
+  // window up to 820px, the sections list is the floor and the stage slides
+  // over it when a section is picked, the manifest over the stage from the
+  // bar's info button.
+  const panes = paneStack(layout, {
+    panes: [{ id: 'nav', el: nav }, { id: 'main', el: main }, { id: 'manifest', el: manifest }],
+    compactWhen: ({ width, phone }) => phone || width <= 820,
+  });
+  windowResources.add(() => panes.destroy());
   windowResources.add(() => disposeMotion(tileEl));
-  selectSectionFn = show;
+  render();
+  // A section asked for before the window opened (the battery menu's "Power
+  // settings") is what the window shows, over the list on a phone.
+  if (requested) panes.show('main');
+  selectSectionFn = (id) => show(id, { open: true });
   return tileEl;
 }
 

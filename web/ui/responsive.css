@@ -49,83 +49,23 @@
   .tile-header--merged > [data-window-bar] { flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; height: auto; min-height: 44px; }
   .tile-header--merged > [data-window-bar] > :not(input,.ui-input,.ui-select-wrap) { flex-shrink: 0; }
   .tile-header--merged > [data-window-bar] > input { flex: 1 0 100px; width: 100px; }
-  .mail-shell,
-  .mail-shell.has-reader {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr);
-  }
-  .mail-shell.has-reader { grid-template-rows: auto minmax(0, 40%) minmax(0, 60%); }
-  .mail-rail {
-    flex-direction: row;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 10px;
-    overflow-x: auto;
-    overflow-y: hidden;
-    border-inline-end: 0;
-    border-bottom: 1px solid var(--mail-line, var(--glass-border));
-    scrollbar-width: none;
-  }
-  .mail-rail-head,
-  .mail-rail-foot { display: none; }
-  .mail-rail-list { flex-direction: row; gap: 4px; }
-  .mail-folder {
-    flex: 0 0 auto;
-    grid-template-columns: 16px auto auto;
-    gap: 8px;
-    width: auto;
-    min-height: 32px;
-  }
-  .mail-reader {
-    min-width: 0;
-    min-height: 0;
-    border-inline-start: 0;
-    border-top: 1px solid var(--mail-line, var(--glass-border));
-  }
+  /* Mail's rail strip, list floor and reader pane: the pane stack
+     (`.mail-shell.is-stacked`, tiles.css). */
   .mail-onboarding { min-width: 0; padding: 18px 16px 24px; }
   .mail-form-grid,
   .mail-form-grid--server { grid-template-columns: minmax(0, 1fr); }
-  .impress-body { flex-direction: column; }
-  .impress-strip { width: auto; flex-direction: row; overflow-x: auto; overflow-y: hidden; padding: 6px; gap: 6px; border-right: 0; }
-  .impress-thumb { width: 88px; }
-  .impress-stage-wrap { overflow-y: auto; }
-  .impress-inspector { overflow: visible; }
+  /* Studio's detail, browser and AI panels are panes of its shell here
+     (`.studio-shell.is-stacked`, tiles.css). */
   .studio-body { flex-direction: column; }
   .studio-panel { flex: 1 1 50%; }
-  .studio-browser { left: 4px; max-width: calc(100% - 8px); }
-  .studio-detail { max-height: 42%; min-height: 0; }
-  .studio-detail-body { overflow: auto; }
 }
 @container plugin-window (max-width: 560px) {
   .mail-chrome-status { display: none; }
   .mail-footer-note { display: none; }
-  /* One message at a time: the open message takes the whole window and its
-     actions ride the window bar (plugin.js placeReaderActions). */
-  .mail-shell.has-reader { grid-template-rows: minmax(0, 1fr); }
-  .mail-shell.has-reader :is(.mail-rail, .mail-stage) { display: none; }
-  .mail-shell.has-reader .mail-reader { border: 0; }
   .mail-hero { padding-top: 12px; }
-  .mail-reader-head { padding-top: 16px; }
-  .files-shell { flex-direction: column; }
-  .files-sidebar { display: flex; flex-direction: row; width: auto; max-width: 100%; overflow-x: auto; overflow-y: hidden; border-right: 0; border-bottom: 1px solid var(--glass-border); }
-  .files-sidebar-head { flex-shrink: 0; }
-  .files-places { flex-direction: row; padding: 4px; }
-  .files-place { width: auto; flex-shrink: 0; }
-  .files-place-sep { display: none; }
-  .files-main { min-height: 0; }
-  /* Phone header: back · forward · path · view on one row, the search on
-     its own full-width row under it. */
-  .files-header { flex-wrap: wrap; row-gap: 8px; }
-  .files-pathbar { flex: 1 1 0; min-width: 0; overflow-x: auto; scrollbar-width: none; }
-  .files-search.ui-search { flex: 1 1 100%; order: 1; margin-left: 0; min-width: 0; }
-  .pdf-main { flex-direction: column; }
-  .pdf-rail { flex-direction: row; width: auto; max-height: 88px; overflow-x: auto; overflow-y: hidden; padding: 6px; }
-  .pdf-thumb { width: 60px; }
-  .pdf-thumb canvas { max-width: 100%; height: auto; }
   .calendar-month-label { min-width: 0; white-space: nowrap; }
   .calendar-grid,.calendar-weekdays { grid-template-columns: repeat(7,minmax(0,1fr)); }
   .calendar-day { min-width: 0; padding: 4px 2px; }
-  .calendar-detail { max-height: 30%; }
   .calendar-detail-item { flex-wrap: wrap; gap: 6px; }
   .calendar-detail-actions { margin-inline-start: auto; }
   .word-editor { padding: 16px; }
@@ -155,14 +95,13 @@
 @media (max-height: 500px) {
   .tile .tile-header--merged > [data-window-bar] { flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; min-height: 44px; }
   .tile .tile-header--merged > [data-window-bar] > * { flex-shrink: 0; }
-  .calculator-tile { overflow-y: auto; }
-  .calculator-tile > :not(.tile-header) { flex-shrink: 0; }
+  .calculator-pad { overflow-y: auto; }
+  .calculator-tile .calculator-pad > .calculator-display,
+  .calculator-tile .calculator-pad > .calculator-sci,
+  .calculator-tile .calculator-pad > .calculator-keys { flex: none; }
   .calculator-keys { overflow: visible; }
   .calculator-display { min-height: 0; padding: 8px 12px; }
-  .calendar-detail { max-height: 30%; }
   .image-dock { max-height: 40%; }
-  .impress-stage-wrap { overflow-y: auto; }
-  .impress-inspector { overflow: visible; }
 }
 @media (pointer: coarse) {
   .ui-btn,.ui-tool.ui-btn,.ui-chip,.ui-select-option,.settings-nav-item { min-height: 44px; }
@@ -197,10 +136,6 @@
   .tile-header--merged > .ui-toolbar > .ui-input:is([type="text"],[type="search"]) { flex: 1 0 100px; }
   /* A compact window bar: the document title gives way before the actions. */
   .tile-header--merged > .ui-compact-bar.is-compact > .ui-input:is([type="text"],[type="search"]) { flex: 1 1 40px; min-width: 40px; }
-}
-@media (pointer: coarse) {
-  .files-pathbar { height: auto; min-height: 44px; }
-  .files-path-crumb { min-height: 44px; }
 }
 .ui-dialog-form { gap: 16px; }
 .ui-dialog-actions { gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
@@ -254,9 +189,9 @@
 .word-format.is-compact .word-select--size { width: 74px; }
 .word-format.is-compact { overflow: hidden; }
 
-/* PDF's window bar: once the page arrows have folded, the page readout goes
-   with them; the zoom readout folds as "100%  Fit to width". */
-.ui-compact-bar.is-compact .pdf-cluster--nav:not(:has(> button)) { display: none; }
+/* PDF's window bar: the page arrows fold with their readout as one row of the
+   menu; the zoom readout folds as "100%  Fit to width". */
+.ui-overflow-list > .pdf-cluster--nav { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 4px 8px; }
 .ui-overflow-list > .pdf-zoom-label {
   display: flex; align-items: center; width: 100%; height: auto; min-height: 40px; padding: 8px 12px;
   justify-content: flex-start; gap: 10px; border-radius: var(--radius-sm); text-align: start;
@@ -276,6 +211,29 @@
 .ui-overflow-list > .pdfed-btn::after { content: attr(aria-label); font-weight: 500; font-size: 13.5px; color: var(--text); }
 .ui-overflow-list > .pdfed-btn:hover, .ui-overflow-list > .pdfed-btn:focus-visible { background: var(--glass-hover); }
 
-/* Mail's message actions on the window bar: a plain group, Close first. */
-.mail-reader-actions--bar { display: flex; flex: none; align-items: center; gap: 2px; padding: 0; margin: 0 2px; flex-wrap: nowrap; }
-.mail-reader-actions--bar .mail-reader-close { order: -1; margin-inline-start: 0; }
+/* ── Phone button policy ─────────────────────────────────────────
+   On a phone an action is an icon: a button given both an icon and a label
+   (`.ui-btn--labelled`, components/button.js) shows the icon alone, round,
+   its label staying the accessible name; a segmented option with an icon
+   does the same; a menu trigger drops its caption everywhere. The text
+   buttons that remain (no icon to show) are the small size — a window may
+   mark one `data-text-ok` to keep it as it is (a key, a tab). */
+html[data-phone='1'] .ui-btn--labelled > span:not(.ui-icon,.ui-spinner),
+html[data-phone='1'] .ui-btn--labelled > .ui-btn-arrow { display: none; }
+html[data-phone='1'] .ui-btn--labelled:not(.ui-menu-trigger,.ui-btn--block) {
+  width: 44px; height: 44px; min-width: 44px; min-height: 44px; padding: 0; gap: 0;
+  justify-content: center; border-radius: 50%;
+}
+html[data-phone='1'] .ui-btn--labelled.ui-btn--block { min-height: 44px; padding: 0 16px; gap: 0; }
+html[data-phone='1'] .ui-btn:not(.ui-btn--icon,.ui-btn--labelled,.ui-tool,.ui-menu-trigger,[data-text-ok]) {
+  position: relative; min-height: 36px; padding: 6px 12px; font-size: 12.5px; border-radius: var(--radius-xs);
+}
+/* …with the finger's 44px kept as an invisible margin around the small plate. */
+html[data-phone='1'] .ui-btn:not(.ui-btn--icon,.ui-btn--labelled,.ui-tool,.ui-menu-trigger,[data-text-ok])::before {
+  content: ''; position: absolute; inset: -4px; border-radius: inherit;
+}
+html[data-phone='1'] .ui-menu-trigger .ui-menu-trigger-label { display: none; }
+html[data-phone='1'] .ui-segmented > button.has-icon > span:not(.ui-icon) { display: none; }
+html[data-phone='1'] .ui-segmented > button.has-icon { padding: 8px 10px; min-width: 44px; justify-content: center; }
+.ui-segmented > button.has-icon { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+html[data-phone='1'] .ui-dialog-actions { justify-content: flex-end; gap: 12px; }

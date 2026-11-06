@@ -1,7 +1,7 @@
 import {
   searchBar, menuSurface, menuItem, confirmDialog, menuButton, element as h,
   toolButton, placePopover, button, emptyState, field, icon, iconButton, input,
-  listReveal, modal, notify, select, textarea, toast,
+  listReveal, modal, notify, select, textarea, toast, paneStack, actionBar,
 } from '../../ui/index.js';
 
 /**
@@ -9,7 +9,11 @@ import {
  *
  * A mail surface backed by io-email routes (`/api/mail/*`): a folder rail and
  * the message list, plus a reader that opens beside the list when a message is
- * selected, under a window chrome with the account menu and live status. The
+ * selected, under a window chrome with the account menu and live status. In a
+ * narrow window or on a phone the list and the reader are a pane stack
+ * (`paneStack`): the rail is a strip across the top, the list the floor, and
+ * the open message slides in over it with the shared Back; a bottom action
+ * bar carries Compose for the thumb. The
  * list opens on a large folder title that hands over to the window bar as it
  * scrolls (a scroll-linked `--sc` 0…1 on the window element); rows cascade in
  * through the shared `listReveal()` motion. A compose modal and an account
@@ -79,8 +83,6 @@ const PROVIDER_HELP = {
 
 let tileEl = null;
 let chromeStatusEl = null;
-let chromeEl = null;          // the window bar (data-window-bar)
-let readerActionsEl = null;   // the open message's actions, wherever they sit
 /** The folder name in the window bar — fades in as the large title scrolls away. */
 let chromeTitleEl = null;
 let barAccountBtn = null;
@@ -96,6 +98,14 @@ let listEl = null;
 let readerEl = null;
 /** The reader's HTML-message frame, or null when the message is plain text. */
 let readerFrameEl = null;
+/** The reader's top row (`data-pane-bar`): the stack's Back lands at its
+ *  start; the open message's actions follow. Built once per shell so it
+ *  survives the reader's re-renders. */
+let readerBarEl = null;
+let readerActionBtns = null;
+/** The pane stack over the shell — the list (floor) and the reader. */
+let paneNav = null;
+let paneStacked = false;
 
 let accounts = [];
 let presets = [];
@@ -388,6 +398,7 @@ async function loadFolders() {
   try {
     const r = await listFolders(account.id);
     folders = r?.folders || [];
+    announceUnread();
     if (!folders.some((f) => f.name === currentFolder)) {
       currentFolder = folders.find((f) => /^inbox$/i.test(f.name))?.name || folders[0]?.name || 'INBOX';
       selectedMessageId = null;
@@ -409,6 +420,7 @@ async function loadFoldersAndMessages() {
   try {
     const r = await listFolders(account.id);
     folders = r?.folders || [];
+    announceUnread();
     renderFolders();
   } catch (e) { /* folder refresh failure is non-fatal */ }
   await loadMessages();
@@ -441,7 +453,8 @@ async function openMessage(id) {
   currentMessage = null;
   renderMessages();
   if (!readerEl) return;
-  readerEl.textContent = '';
+  clearReader();
+  syncReaderActions();
   const loading = h('div', 'mail-reader-empty');
   loading.appendChild(emptyState({ icon: 'ui/mail', title: t('plugin.mail.empty.loading', null, 'Loading…') }));
   readerEl.appendChild(loading);
@@ -461,7 +474,8 @@ async function openMessage(id) {
   } catch (e) {
     if (token !== openToken) return;
     currentMessage = null;
-    readerEl.textContent = '';
+    clearReader();
+    syncReaderActions();
     const failed = h('div', 'mail-reader-empty');
     failed.appendChild(emptyState({ icon: 'ui/warning', title: t('plugin.mail.empty.openFailed', null, 'Could not open message'), body: e.message }));
     readerEl.appendChild(failed);
@@ -495,6 +509,13 @@ function renderChrome() {
   if (configured && unread > 0) {
     chromeStatusEl.appendChild(statusPill(unreadLabel(unread), 'accent'));
   }
+}
+
+/** The home screen's badge: unread mail in the inbox (0 clears it). */
+function announceUnread() {
+  const inbox = folders.find((f) => /^inbox$/i.test(String(f?.name || ''))) || currentFolderInfo();
+  const count = Number(inbox?.unread) || 0;
+  window.dispatchEvent(new CustomEvent('plugin:badge', { detail: { name: 'mail', count } }));
 }
 
 function renderRailHead() {
@@ -539,27 +560,57 @@ function onListScroll() {
   if (!scrollFrame) scrollFrame = window.requestAnimationFrame(syncScroll);
 }
 
-/** The reader only takes room while a message is selected. */
+/** The reader only takes room while a message is selected; while the panes
+ *  are stacked it is the pane over the list. */
 function syncReaderOpen() {
   shellEl?.classList.toggle('has-reader', !!selectedMessageId);
-  placeReaderActions();
+  if (!paneNav) return;
+  if (selectedMessageId) {
+    if (!paneNav.isOpen('reader')) paneNav.show('reader');
+  } else {
+    paneNav.reset();
+  }
 }
 
-/** Where the open message's actions live: in a narrow window on the window
- *  bar (right after the account menu, in place of the title), otherwise in
- *  the reader under its head. */
-function placeReaderActions() {
-  if (!readerActionsEl || !chromeEl || !readerEl) return;
-  const compact = !!chromeEl.__compact?.isCompact?.();
-  const inBar = readerActionsEl.parentNode === chromeEl;
-  if (compact && !inBar) {
-    readerActionsEl.classList.add('mail-reader-actions--bar');
-    chromeEl.insertBefore(readerActionsEl, chromeStatusEl);
-  } else if (!compact && inBar) {
-    readerActionsEl.classList.remove('mail-reader-actions--bar');
-    const head = readerEl.querySelector('.mail-reader-head');
-    if (head) head.after(readerActionsEl); else readerEl.prepend(readerActionsEl);
-  }
+/** The stack changed: Back (Escape, the edge swipe) popped the reader, so
+ *  the message closes; or the layout flipped — a message open while the
+ *  window narrows slides its reader in. */
+function onPaneChange({ id, stacked }) {
+  const flipped = stacked !== paneStacked;
+  paneStacked = stacked;
+  if (!stacked) return;
+  if (flipped) { syncReaderOpen(); return; }
+  if (id !== 'reader' && selectedMessageId) closeReader();
+}
+
+/** The reader's top row: the open message's actions (icons on a phone,
+ *  named by their labels) and, while wide, Close — Back covers it while
+ *  the panes are stacked (tiles.css hides it there). */
+function buildReaderBar() {
+  const bar = h('div', 'mail-reader-actions');
+  bar.dataset.paneBar = '';
+  const reply = button({ icon: 'ui/reply', label: t('plugin.mail.reader.reply', null, 'Reply'), variant: 'ghost', size: 'sm', onClick: () => { if (currentMessage) openReply(currentMessage); } });
+  const forward = button({ icon: 'ui/forward', label: t('plugin.mail.reader.forward', null, 'Forward'), variant: 'ghost', size: 'sm', onClick: () => { if (currentMessage) openForward(currentMessage); } });
+  const remove = button({ icon: 'ui/trash', label: t('plugin.mail.reader.delete', null, 'Delete'), variant: 'ghost', size: 'sm', onClick: () => { if (currentMessage) void deleteCurrent(currentMessage); } });
+  const close = toolButton('ui/close', t('plugin.mail.reader.close', null, 'Close message'), closeReader, { className: 'mail-reader-close' });
+  bar.append(withArrow(reply), forward, remove, close);
+  // Named for when a narrow reader shows them as icons only.
+  for (const b of [reply, forward, remove]) b.title = b.getAttribute('aria-label') || '';
+  readerActionBtns = { reply, forward, remove };
+  syncReaderActions();
+  return bar;
+}
+
+/** The actions only work on an open message. */
+function syncReaderActions() {
+  const on = !!currentMessage;
+  for (const b of Object.values(readerActionBtns || {})) b.disabled = !on;
+}
+
+/** Empty the reader but for its bar. */
+function clearReader() {
+  if (!readerEl) return;
+  for (const node of [...readerEl.children]) if (node !== readerBarEl) node.remove();
 }
 
 function closeReader() {
@@ -662,7 +713,7 @@ function openAccountMenu() {
     }
   }
   const foot = h('div', 'mail-account-menu-foot');
-  const manage = button({ icon: 'ui/settings', label: t('plugin.mail.toolbar.accounts', null, 'Mail accounts'), variant: 'ghost', size: 'sm', onClick: () => { closeAccountMenu(); openSettings(); } });
+  const manage = button({ icon: 'ui/user', label: t('plugin.mail.toolbar.accounts', null, 'Mail accounts'), variant: 'ghost', size: 'sm', onClick: () => { closeAccountMenu(); openSettings(); } });
   manage.classList.add('ui-btn--icon');
   foot.appendChild(manage);
   accountPopup.appendChild(foot);
@@ -681,6 +732,9 @@ function render() {
   if (!tileEl || !bodyEl) return;
   renderChrome();
   bodyEl.textContent = '';
+  paneNav?.destroy();
+  paneNav = null;
+  paneStacked = false;
   footerEl = h('footer', 'mail-footer');
   shellEl = null;
   scrollEl = null;
@@ -703,7 +757,7 @@ function render() {
   foldersEl = h('div', 'mail-rail-list');
   const railFoot = h('div', 'mail-rail-foot');
   const manage = button({
-    icon: 'ui/settings',
+    icon: 'ui/user',
     label: t('plugin.mail.toolbar.accounts', null, 'Mail accounts'),
     variant: 'ghost',
     size: 'sm',
@@ -729,8 +783,19 @@ function render() {
   stage.appendChild(scrollEl);
 
   readerEl = h('aside', 'mail-reader');
+  readerBarEl = buildReaderBar();
+  readerEl.appendChild(readerBarEl);
   shell.append(rail, stage, readerEl);
   bodyEl.append(shell, footerEl);
+
+  // The list and the reader are the panes; the rail is the strip above the
+  // list while stacked. Picking a message slides the reader over the list
+  // in a narrow window or on a phone; Back, Escape and the edge swipe pop it.
+  paneNav = paneStack(shell, {
+    panes: [{ id: 'stage', el: stage }, { id: 'reader', el: readerEl }],
+    onChange: onPaneChange,
+  });
+  paneStacked = paneNav.isStacked();
 
   if (currentMessage) renderMessage(currentMessage);
   else renderReaderEmpty();
@@ -884,7 +949,7 @@ function buildAccountForm({ onboarding }) {
   const statusLine = h('span', 'mail-form-status');
   const testBtn = button({ icon: 'ui/refresh', label: t('plugin.mail.form.testConnection', null, 'Test connection'), variant: 'ghost', size: 'sm' });
   testBtn.setAttribute('aria-label', t('plugin.mail.form.testConnection', null, 'Test connection'));
-  const addBtn = withArrow(button({ label: t('plugin.mail.form.addAccount', null, 'Add account'), variant: 'primary', size: 'sm' }));
+  const addBtn = withArrow(button({ icon: 'ui/plus', label: t('plugin.mail.form.addAccount', null, 'Add account'), variant: 'primary', size: 'sm' }));
   addBtn.setAttribute('aria-label', t('plugin.mail.form.addAccount', null, 'Add account'));
   actions.append(statusLine, testBtn, addBtn);
   form.appendChild(actions);
@@ -1056,7 +1121,8 @@ function renderMessages() {
 
 function renderReaderEmpty() {
   if (!readerEl) return;
-  readerEl.textContent = '';
+  clearReader();
+  syncReaderActions();
   const wrap = h('div', 'mail-reader-empty');
   wrap.appendChild(emptyState({
     icon: 'ui/mail',
@@ -1068,15 +1134,13 @@ function renderReaderEmpty() {
 
 function resetReader() {
   currentMessage = null;
-  readerActionsEl?.remove();
-  readerActionsEl = null;
   renderReaderEmpty();
   syncReaderOpen();
 }
 
 function renderMessage(msg) {
   if (!readerEl) return;
-  readerEl.textContent = '';
+  clearReader();
   const from = (msg.from || []).join(', ');
   const to = (msg.to || []).join(', ');
 
@@ -1087,24 +1151,6 @@ function renderMessage(msg) {
     h('p', 'mail-reader-sub', [from || '—', msg.date ? fmtWhen(msg.date) : ''].filter(Boolean).join(' · ')),
   );
 
-  const actions = h('div', 'mail-reader-actions');
-  const replyBtn = button({ icon: 'ui/reply', label: t('plugin.mail.reader.reply', null, 'Reply'), variant: 'ghost', size: 'sm', onClick: () => openReply(msg) });
-  const fwdBtn = button({ icon: 'ui/forward', label: t('plugin.mail.reader.forward', null, 'Forward'), variant: 'ghost', size: 'sm', onClick: () => openForward(msg) });
-  const delBtn = button({ icon: 'ui/trash', label: t('plugin.mail.reader.delete', null, 'Delete'), variant: 'ghost', size: 'sm', onClick: () => deleteCurrent(msg) });
-  const closeBtn = toolButton('ui/close', t('plugin.mail.reader.close', null, 'Close message'), closeReader, { className: 'mail-reader-close' });
-  actions.append(withArrow(replyBtn), fwdBtn, delBtn, closeBtn);
-  // Named for when a narrow reader shows them as icons only.
-  for (const b of [replyBtn, fwdBtn, delBtn]) {
-    const name = b.textContent.trim();
-    if (name && !b.title) { b.title = name; b.setAttribute('aria-label', name); }
-  }
-  // On the window bar Reply and Close stay; the bar's own tools fold away
-  // first, then Delete and Forward (`data-fold` lets the folding reach them).
-  for (const b of [replyBtn, closeBtn]) b.dataset.keep = '';
-  actions.dataset.fold = '';
-  readerActionsEl?.remove();
-  readerActionsEl = actions;
-
   const details = h('div', 'mail-reader-details');
   details.append(
     detailRow(t('plugin.mail.reader.fromLabel', null, 'From'), from || '—'),
@@ -1112,8 +1158,8 @@ function renderMessage(msg) {
   );
   if (msg.date) details.appendChild(detailRow(t('plugin.mail.reader.dateLabel', null, 'Date'), fmtDate(msg.date)));
 
-  readerEl.append(head, actions, details);
-  placeReaderActions();
+  readerEl.append(head, details);
+  syncReaderActions();
 
   const content = h('div', 'mail-reader-content');
   const hasHtml = !!msg.html && msg.html.trim();
@@ -1259,9 +1305,9 @@ function openCompose(prefill = {}) {
 
     composeAttachList = h('div', 'mail-attachments mail-compose-attachments');
     const actions = h('div', 'mail-compose-actions');
-    const sendBtn = withArrow(button({ label: t('plugin.mail.compose.send', null, 'Send'), variant: 'primary', size: 'sm' }));
-    const attachBtn = button({ label: t('plugin.mail.compose.attach', null, 'Attach files…'), icon: 'ui/plus', variant: 'quiet', size: 'sm' });
-    const closeBtn = button({ label: t('plugin.mail.compose.discard', null, 'Discard'), variant: 'ghost', size: 'sm' });
+    const sendBtn = withArrow(button({ icon: 'ui/send', label: t('plugin.mail.compose.send', null, 'Send'), variant: 'primary', size: 'sm' }));
+    const attachBtn = button({ label: t('plugin.mail.compose.attach', null, 'Attach files…'), icon: 'ui/upload', variant: 'quiet', size: 'sm' });
+    const closeBtn = button({ icon: 'ui/trash', label: t('plugin.mail.compose.discard', null, 'Discard'), variant: 'ghost', size: 'sm' });
     actions.append(sendBtn, attachBtn, closeBtn);
     attachBtn.addEventListener('click', async () => {
       const files = await pickFiles({ multiple: true });
@@ -1501,7 +1547,7 @@ function openSettings() {
     add.appendChild(h('h4', 'mail-form-section-title', t('plugin.mail.form.addAnother', null, 'Add another account')));
     add.appendChild(buildAccountForm({ onboarding: false }));
     const actions = h('div', 'mail-settings-actions');
-    const doneBtn = withArrow(button({ label: t('plugin.mail.settings.done', null, 'Done'), variant: 'primary', size: 'sm' }));
+    const doneBtn = withArrow(button({ icon: 'ui/check', label: t('plugin.mail.settings.done', null, 'Done'), variant: 'primary', size: 'sm' }));
     actions.appendChild(doneBtn);
 
     body.append(head, settingsListEl, add, actions);
@@ -1610,10 +1656,6 @@ export function mountMailTile() {
   /* Window chrome: account menu, live status and window actions. */
   const chrome = h('div', 'mail-chrome');
   chrome.dataset.windowBar = '';
-  chromeEl = chrome;
-  // Narrow window: the open message's actions ride the window bar (icon
-  // only); the bar's own trailing tools fold into "More" (ui/compact.js).
-  chrome.addEventListener('compact:change', () => placeReaderActions());
 
   barAccountBtn = menuButton({
     label: t('plugin.mail.bar.accounts', null, 'Accounts'),
@@ -1629,14 +1671,19 @@ export function mountMailTile() {
     barAccountBtn,
     chromeTitleEl,
     chromeStatusEl,
-    toolButton('ui/plus', t('plugin.mail.toolbar.newMessage', null, 'New message'), openCompose),
+    toolButton('ui/plus', t('plugin.mail.toolbar.newMessage', null, 'New message'), () => openCompose()),
     toolButton('ui/refresh', t('plugin.mail.toolbar.sync', null, 'Sync mail'), () => void syncNow()),
-    toolButton('ui/settings', t('plugin.mail.toolbar.accounts', null, 'Mail accounts'), openSettings),
+    toolButton('ui/user', t('plugin.mail.toolbar.accounts', null, 'Mail accounts'), openSettings),
   );
   tileEl.appendChild(chrome);
 
   bodyEl = h('div', 'mail-body');
   tileEl.appendChild(bodyEl);
+
+  // The thumb's row on a phone (hidden anywhere else): compose.
+  tileEl.appendChild(actionBar([
+    toolButton('ui/pencil', t('plugin.mail.toolbar.newMessage', null, 'New message'), () => openCompose()),
+  ], { label: t('plugin.mail.actions.label', null, 'Mail actions') }));
 
   void refreshStatus().finally(() => checkNewMail());
   startMailPolling();
@@ -1650,6 +1697,9 @@ export function unmountMailTile() {
   composeModal?.close();
   settingsModal?.close();
   window.removeEventListener('message', onReaderFrameMessage);
+  paneNav?.destroy();
+  paneNav = null;
+  paneStacked = false;
   tileEl?.remove();
   tileEl = null;
   chromeStatusEl = null;
@@ -1668,6 +1718,8 @@ export function unmountMailTile() {
   listEl = null;
   readerEl = null;
   readerFrameEl = null;
+  readerBarEl = null;
+  readerActionBtns = null;
   accounts = [];
   folders = [];
   messages = [];

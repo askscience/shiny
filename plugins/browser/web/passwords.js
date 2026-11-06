@@ -43,13 +43,28 @@ function el(tag, className, text) {
   return node;
 }
 
-function button(className, label, onClick) {
+/**
+ * A button with its icon and label: on a phone the icon stands alone and the
+ * label is its name (`ui-btn--labelled`, ui/responsive.css).
+ */
+function button(className, label, onClick, iconName = '') {
   const b = controlButton();
   b.type = 'button';
   b.className = className;
-  b.textContent = label;
+  if (iconName) {
+    b.classList.add('ui-btn--labelled');
+    b.setAttribute('aria-label', label);
+    b.append(icon(iconName, { size: 16 }), el('span', null, label));
+  } else {
+    b.textContent = label;
+  }
   b.addEventListener('click', onClick);
   return b;
+}
+
+/** An action in the panel's head: a small ghost pill. */
+function headAction(label, onClick, iconName) {
+  return button('ui-btn ui-btn--ghost ui-btn--sm browser-popover-action', label, onClick, iconName);
 }
 
 function iconAction(iconName, label, onClick) {
@@ -116,6 +131,8 @@ export function createPasswordsPanel({
   panel.setAttribute('aria-label', t('plugin.browser.passwords.title', null, 'Passwords'));
 
   const head = el('div', 'browser-popover-head');
+  // The stack prepends its Back here while the panel is a pane (a phone).
+  head.setAttribute('data-pane-bar', '');
   const title = el('span', null, t('plugin.browser.passwords.title', null, 'Passwords'));
   const actions = el('div', 'browser-pw-actions');
   head.append(title, actions);
@@ -166,7 +183,7 @@ export function createPasswordsPanel({
       state.exists
         ? t('plugin.browser.passwords.unlock', null, 'Unlock')
         : t('plugin.browser.passwords.create', null, 'Turn on'),
-      () => {});
+      () => {}, state.exists ? 'ui/lock' : 'ui/check');
     submit.type = 'submit';
     form.append(field(t('plugin.browser.passwords.loginPassword', null, 'Login password'), password),
       previousField, submit);
@@ -175,9 +192,9 @@ export function createPasswordsPanel({
       void unlock(password.value, changed ? previous.value : '', submit);
     });
 
-    const reset = button('browser-popover-action browser-pw-reset',
+    const reset = button('ui-btn ui-btn--quiet ui-btn--sm browser-pw-reset',
       t('plugin.browser.passwords.reset', null, 'Forgot the previous password? Reset'),
-      () => void resetVault(password.value));
+      () => void resetVault(password.value), 'ui/trash');
     reset.hidden = !changed;
 
     body.replaceChildren(intro, form, reset);
@@ -280,16 +297,16 @@ export function createPasswordsPanel({
   }
 
   function renderList() {
-    const fromPage = button('browser-popover-action',
+    const fromPage = headAction(
       t('plugin.browser.passwords.saveFromPage', null, 'Save from page'),
-      () => void saveFromPage());
+      () => void saveFromPage(), 'ui/download');
     fromPage.disabled = !pageUrl();
     setActions(
       fromPage,
-      button('browser-popover-action', t('plugin.browser.passwords.add', null, 'Add'),
-        () => renderEdit(null, { site: pageUrl() })),
-      button('browser-popover-action', t('plugin.browser.passwords.lock', null, 'Lock'),
-        () => void lockVault()),
+      headAction(t('plugin.browser.passwords.add', null, 'Add'),
+        () => renderEdit(null, { site: pageUrl() }), 'ui/plus'),
+      headAction(t('plugin.browser.passwords.lock', null, 'Lock'),
+        () => void lockVault(), 'ui/lock'),
     );
 
     if (!entries.length) {
@@ -443,16 +460,16 @@ export function createPasswordsPanel({
     );
     const buttons = el('div', 'browser-pw-buttons');
     const save = button('ui-btn ui-btn--primary browser-pw-primary',
-      t('plugin.browser.passwords.save', null, 'Save'), () => {});
+      t('plugin.browser.passwords.save', null, 'Save'), () => {}, 'ui/check');
     save.type = 'submit';
     buttons.append(
       button('ui-btn ui-btn--quiet', t('plugin.browser.passwords.cancel', null, 'Cancel'),
-        () => { say(''); renderList(); }),
+        () => { say(''); renderList(); }, 'ui/close'),
       save,
     );
     if (entry) {
       buttons.prepend(button('ui-btn ui-btn--quiet browser-pw-danger',
-        t('plugin.browser.passwords.delete', null, 'Delete'), () => void remove(entry)));
+        t('plugin.browser.passwords.delete', null, 'Delete'), () => void remove(entry), 'ui/trash'));
     }
     form.appendChild(buttons);
     form.addEventListener('submit', (e) => {

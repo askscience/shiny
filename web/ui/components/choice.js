@@ -1,8 +1,14 @@
 import { controlButton } from './button.js';
+import { icon } from '../icon.js';
 import { transition, disposeMotion } from '../motion.js';
 import { createResources } from '../../js/resources.js';
 
-/** Small labeled choices with a moving indicator and roving keyboard focus. */
+/**
+ * Small labeled choices with a moving indicator and roving keyboard focus.
+ * An option with an `icon` shows it before its label; on a phone the label
+ * steps back and the icon stands alone (ui/responsive.css), the text staying
+ * its accessible name.
+ */
 export function segmented({ label, options = [], value, onChange } = {}) {
   const node = document.createElement('div');
   node.className = 'ui-segmented';
@@ -16,7 +22,17 @@ export function segmented({ label, options = [], value, onChange } = {}) {
   let selected = value ?? options[0]?.value;
   const buttons = options.map(option => {
     const button = controlButton();
-    button.textContent = option.label;
+    if (option.icon) {
+      button.classList.add('has-icon');
+      button.appendChild(typeof option.icon === 'string' ? icon(option.icon, { size: option.iconSize || 16 }) : option.icon);
+      const text = document.createElement('span');
+      text.textContent = option.label;
+      button.appendChild(text);
+      button.setAttribute('aria-label', option.label);
+      button.title = option.label;
+    } else {
+      button.textContent = option.label;
+    }
     button.setAttribute('role', 'radio');
     button.disabled = !!option.disabled;
     resources.on(button, 'click', () => { if (!button.disabled) node.setValue(option.value); });

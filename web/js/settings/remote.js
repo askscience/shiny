@@ -42,11 +42,13 @@ export function createRemoteSection({ on, cleanups, resources }) {
 
     const revealBtn = button({
       label: t('settings.remote.revealLink', null, 'Reveal link'),
+      icon: 'ui/eye',
       variant: 'ghost',
       onClick: () => { revealed = !revealed; render(); },
     });
     const copyBtn = button({
       label: t('common.copy'),
+      icon: 'ui/copy',
       variant: 'ghost',
       onClick: async () => {
         if (!state.ticket) return;
@@ -55,9 +57,9 @@ export function createRemoteSection({ on, cleanups, resources }) {
         toast(ok ? t('settings.remote.linkCopied', null, 'Link copied') : t('settings.remote.copyFailed', null, 'Could not copy the link'), ok ? undefined : { type: 'error' });
       },
     });
-    const rotateBtn = button({ label: t('settings.remote.rotateKey', null, 'New link'), variant: 'danger', onClick: rotate });
-    const pairBtn = button({ label: t('settings.remote.pairDevice', null, 'Pair a new device'), variant: 'ghost', onClick: pair });
-    const unpairBtn = button({ label: t('settings.remote.forgetDevices', null, 'Forget devices'), variant: 'quiet', onClick: unpair });
+    const rotateBtn = button({ label: t('settings.remote.rotateKey', null, 'New link'), icon: 'ui/refresh', variant: 'danger', onClick: rotate });
+    const pairBtn = button({ label: t('settings.remote.pairDevice', null, 'Pair a new device'), icon: 'ui/plus', variant: 'ghost', onClick: pair });
+    const unpairBtn = button({ label: t('settings.remote.forgetDevices', null, 'Forget devices'), icon: 'ui/trash', variant: 'quiet', onClick: unpair });
 
     const actions = el('div', 'settings-inline-actions');
     actions.append(revealBtn, copyBtn, rotateBtn, pairBtn, unpairBtn);
@@ -80,7 +82,7 @@ export function createRemoteSection({ on, cleanups, resources }) {
     tsQrEl.alt = t('settings.remote.tailscaleQrAlt', null, 'Tailscale URL QR code');
     const tsUrlBox = el('div', 'remote-link');
     tsUrlBox.append(tsUrlEl, tsQrEl);
-    const tsCopyBtn = button({ label: t('settings.remote.copyUrl', null, 'Copy URL'), variant: 'ghost', onClick: copyTailscale });
+    const tsCopyBtn = button({ label: t('settings.remote.copyUrl', null, 'Copy URL'), icon: 'ui/copy', variant: 'ghost', onClick: copyTailscale });
     const tsActions = el('div', 'settings-inline-actions');
     tsActions.append(tsCopyBtn);
 
@@ -114,7 +116,7 @@ export function createRemoteSection({ on, cleanups, resources }) {
       statusLine.textContent = line;
       linkBox.classList.remove('hidden');
       actions.classList.remove('hidden');
-      revealBtn.textContent = revealed ? t('settings.remote.hideLink', null, 'Hide link') : t('settings.remote.revealLink', null, 'Reveal link');
+      revealBtn.setLabel(revealed ? t('settings.remote.hideLink', null, 'Hide link') : t('settings.remote.revealLink', null, 'Reveal link'));
       if (revealed) {
         ticketEl.textContent = state.ticket || '';
         qrEl.src = `/api/remote/qr?t=${Date.now()}`;

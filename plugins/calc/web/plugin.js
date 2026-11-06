@@ -1,7 +1,7 @@
 import {
   menuSurface, menuItem, confirmDialog, toolButton, menuButton, toolbar, input as uiInput,
   placePopover, toast, setTileGlow, glowFromDrawable, button, emptyState, listReveal,
-  setIcon,
+  setIcon, iconButton,
 } from '../../ui/index.js';
 
 /**
@@ -42,8 +42,17 @@ let bodyEl = null;          // formula bar + grid + status (hidden with no sheet
 let emptyEl = null;
 let formulaRefEl = null;
 let formulaInputEl = null;
+let gridWrapEl = null;      // the scroll container around the grid (pinch surface)
 let gridEl = null;
 let editorInputEl = null;   // overlay input for in-cell editing
+
+/* Grid zoom: a CSS `zoom` on the grid, from a pinch, Ctrl+wheel or the
+   bar's zoom tools. */
+const ZOOM_MIN = 0.5;
+const ZOOM_MAX = 2;
+const ZOOM_STEP = 1.2;
+let zoom = 1;
+let pinchedAt = 0;          // when a pinch last started (its taps are not edits)
 
 let sheets = [];
 let current = null;         // { id, title, rows, cols, cells: Map, updated_at }
@@ -604,8 +613,8 @@ function renderSheetMenuItems() {
     close: closeSheetMenu,
     items: [
       { icon: 'ui/plus', label: t('plugin.calc.toolbar.newSheet', null, 'New spreadsheet'), onClick: () => void newSheet() },
-      { icon: 'ui/download', label: t('plugin.calc.toolbar.importOds', null, 'Import .ods'), onClick: pickOdsFile },
-      { icon: 'ui/download', label: t('plugin.calc.toolbar.importCsv', null, 'Import CSV'), onClick: pickCsvFile },
+      { icon: 'ui/upload', label: t('plugin.calc.toolbar.importOds', null, 'Import .ods'), onClick: pickOdsFile },
+      { icon: 'ui/upload', label: t('plugin.calc.toolbar.importCsv', null, 'Import CSV'), onClick: pickCsvFile },
       { icon: 'ui/save', label: t('plugin.calc.toolbar.saveToDocuments', null, 'Save to Documents'), onClick: () => void exportOds() },
       { icon: 'ui/trash', label: t('plugin.calc.toolbar.deleteSheet', null, 'Delete spreadsheet'), danger: true, onClick: () => void removeCurrent() },
     ],
@@ -769,11 +778,26 @@ function renderGrid() {
         cell.classList.add('is-formula');
       }
       // Select on pointerdown (before any blur-triggered work) so a click
-      // always lands on the cell under the pointer.
-      cell.addEventListener('pointerdown', () => selectCell(r, c));
-      cell.addEventListener('dblclick', () => {
+      // always lands on the cell under the pointer. A finger has no double
+      // click: a second tap on the selected cell opens the editor (a long
+      // press is swallowed by the context menu and never reaches `click`).
+      cell.addEventListener('pointerdown', (e) => {
+        const again = e.pointerType !== 'mouse' && e.isPrimary
+          && sel.row === r && sel.col === c && !editing;
         selectCell(r, c);
-        startEditing();
+        cell.__editOnTap = again;
+      });
+      cell.addEventListener('click', () => {
+        if (!cell.__editOnTap) return;
+        cell.__editOnTap = false;
+        if (Date.now() - pinchedAt < 600) return;
+        showEditor();
+      });
+      cell.addEventListener('dblclick', () => {
+        // Two quick taps already opened the editor through `click`.
+        if (editing && sel.row === r && sel.col === c) return;
+        selectCell(r, c);
+        showEditor();
       });
       gridEl.appendChild(cell);
     }
@@ -835,15 +859,107 @@ function showEditor(prefill = null) {
   editorInputEl.value = prefill != null
     ? prefill
     : (current.cells.get(cellRef(sel.row, sel.col)) ?? '');
-  editorInputEl.style.display = '';
-  const r = cell.getBoundingClientRect();
-  const g = gridEl.getBoundingClientRect();
-  editorInputEl.style.left = `${r.left - g.left}px`;
-  editorInputEl.style.top = `${r.top - g.top}px`;
-  editorInputEl.style.width = `${r.width}px`;
-  editorInputEl.style.height = `${r.height}px`;
+  // The stylesheet keeps the overlay at `display: none` between edits, so
+  // showing it needs a value of its own, not a cleared inline style.
+  editorInputEl.style.display = 'block';
+  placeEditor(cell);
   editorInputEl.focus();
   editorInputEl.select();
+}
+
+/** Lay the overlay over a cell. The grid is zoomed, and the overlay lives
+ *  inside it, so screen distances convert back to the grid's own pixels. */
+function placeEditor(cell = cellElFor(sel.row, sel.col)) {
+  if (!cell || !editorInputEl) return;
+  const r = cell.getBoundingClientRect();
+  const g = gridEl.getBoundingClientRect();
+  editorInputEl.style.left = `${(r.left - g.left) / zoom}px`;
+  editorInputEl.style.top = `${(r.top - g.top) / zoom}px`;
+  editorInputEl.style.width = `${r.width / zoom}px`;
+  editorInputEl.style.height = `${r.height / zoom}px`;
+}
+
+/* ── Zoom ───────────────────────────────────────────────────── */
+
+/** Set the grid zoom, keeping the content under (x, y) — a screen point,
+ *  the wrapper's centre by default — where it is. */
+function setZoom(value, focal = null) {
+  const next = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(value * 100) / 100));
+  if (!gridEl || next === zoom) return;
+  const wrap = gridWrapEl;
+  const box = wrap?.getBoundingClientRect();
+  const fx = focal ? focal.x - box.left : (box?.width || 0) / 2;
+  const fy = focal ? focal.y - box.top : (box?.height || 0) / 2;
+  const cx = (wrap ? wrap.scrollLeft + fx : 0) / zoom;
+  const cy = (wrap ? wrap.scrollTop + fy : 0) / zoom;
+  zoom = next;
+  gridEl.style.setProperty('--calc-zoom', String(zoom));
+  if (wrap) {
+    wrap.scrollLeft = cx * zoom - fx;
+    wrap.scrollTop = cy * zoom - fy;
+  }
+  if (editing) placeEditor();
+}
+
+function zoomBy(factor) {
+  setZoom(zoom * factor);
+}
+
+/** Pinch (two pointers), Ctrl+wheel (a trackpad pinch) and WebKit's gesture
+ *  events on the grid's scroll container. One finger still pans (the
+ *  wrapper's `touch-action`); two fingers are kept from the browser's own
+ *  scroll so their pointers survive. */
+function wirePinch(wrap) {
+  const pts = new Map();
+  let startDist = 0;
+  let startZoom = 1;
+  const dist = () => {
+    const [a, b] = [...pts.values()];
+    return Math.hypot(a.x - b.x, a.y - b.y);
+  };
+  const mid = () => {
+    const [a, b] = [...pts.values()];
+    return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  };
+  wrap.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse') return;
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pts.size === 2) {
+      startDist = dist();
+      startZoom = zoom;
+      pinchedAt = Date.now();
+    }
+  });
+  wrap.addEventListener('pointermove', (e) => {
+    if (!pts.has(e.pointerId)) return;
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pts.size === 2 && startDist > 0) {
+      setZoom(startZoom * (dist() / startDist), mid());
+    }
+  });
+  const end = (e) => {
+    pts.delete(e.pointerId);
+    if (pts.size < 2) startDist = 0;
+  };
+  wrap.addEventListener('pointerup', end);
+  wrap.addEventListener('pointercancel', end);
+  wrap.addEventListener('touchmove', (e) => {
+    if (e.touches.length >= 2) e.preventDefault();
+  }, { passive: false });
+  wrap.addEventListener('wheel', (e) => {
+    if (!e.ctrlKey) return;
+    e.preventDefault();
+    setZoom(zoom * (e.deltaY < 0 ? 1.1 : 1 / 1.1), { x: e.clientX, y: e.clientY });
+  }, { passive: false });
+  wrap.addEventListener('gesturestart', (e) => {
+    e.preventDefault();
+    startZoom = zoom;
+    pinchedAt = Date.now();
+  });
+  wrap.addEventListener('gesturechange', (e) => {
+    e.preventDefault();
+    setZoom(startZoom * (e.scale || 1));
+  });
 }
 
 function hideEditor() {
@@ -915,11 +1031,15 @@ export function mountCalcTile() {
 
   const saveBtn = toolButton('ui/save', t('plugin.calc.toolbar.saveNow', null, 'Save now'), () => void persist(), { className: 'calc-tool' });
   const newLabel = t('plugin.calc.toolbar.newSheet', null, 'New spreadsheet');
-  const newBtn = button({ label: t('plugin.calc.bar.new', null, 'New'), variant: 'ghost', size: 'sm', className: 'calc-new-btn', onClick: () => void newSheet() });
+  const newBtn = button({ icon: 'ui/plus', label: t('plugin.calc.bar.new', null, 'New'), variant: 'ghost', size: 'sm', className: 'calc-new-btn', onClick: () => void newSheet() });
   newBtn.title = newLabel;
   newBtn.setAttribute('aria-label', newLabel);
+  // Grid zoom for the mouse (a finger pinches); they fold into the bar's
+  // "More" menu first, being last.
+  const zoomOutBtn = toolButton('ui/zoom-out', t('plugin.calc.toolbar.zoomOut', null, 'Zoom out'), () => zoomBy(1 / ZOOM_STEP), { className: 'calc-tool calc-zoom-out' });
+  const zoomInBtn = toolButton('ui/zoom-in', t('plugin.calc.toolbar.zoomIn', null, 'Zoom in'), () => zoomBy(ZOOM_STEP), { className: 'calc-tool calc-zoom-in' });
 
-  bar.append(sheetMenuBtn, titleInput, saveStateEl, saveBtn, newBtn);
+  bar.append(sheetMenuBtn, titleInput, saveStateEl, saveBtn, newBtn, zoomOutBtn, zoomInBtn);
   tileEl.appendChild(bar);
 
   /* Body (formula bar, grid, status) — swapped for the empty state when
@@ -928,12 +1048,26 @@ export function mountCalcTile() {
   bodyEl.className = 'calc-body';
   tileEl.appendChild(bodyEl);
 
+  /* Three icon tiles, each named by a caption under it: the caption is plain
+     text, so a phone keeps reading what each does while the button is an
+     icon. */
   const emptyActions = document.createElement('div');
   emptyActions.className = 'calc-empty-actions';
+  const emptyTile = (icon, label, onClick, variant = 'ghost') => {
+    const tile = document.createElement('div');
+    tile.className = 'calc-empty-tile';
+    const btn = iconButton({ icon, label, onClick, variant, iconSize: 20 });
+    const caption = document.createElement('span');
+    caption.className = 'calc-empty-caption';
+    caption.textContent = label;
+    caption.addEventListener('click', () => btn.click());
+    tile.append(btn, caption);
+    return tile;
+  };
   emptyActions.append(
-    button({ label: newLabel, variant: 'primary', size: 'sm', arrow: true, onClick: () => void newSheet() }),
-    button({ label: t('plugin.calc.toolbar.importCsv', null, 'Import CSV'), variant: 'ghost', size: 'sm', onClick: pickCsvFile }),
-    button({ label: t('plugin.calc.toolbar.importOds', null, 'Import .ods'), variant: 'ghost', size: 'sm', onClick: pickOdsFile }),
+    emptyTile('ui/plus', newLabel, () => void newSheet(), 'primary'),
+    emptyTile('ui/upload', t('plugin.calc.toolbar.importCsv', null, 'Import CSV'), pickCsvFile),
+    emptyTile('ui/upload', t('plugin.calc.toolbar.importOds', null, 'Import .ods'), pickOdsFile),
   );
   emptyEl = emptyState({
     icon: 'ui/calc',
@@ -984,9 +1118,12 @@ export function mountCalcTile() {
     syncFormulaBar();
   }
 
-  /* Grid */
+  /* Grid, inside its scroll container (the pinch surface). */
+  gridWrapEl = document.createElement('div');
+  gridWrapEl.className = 'calc-grid-wrap';
   gridEl = document.createElement('div');
   gridEl.className = 'calc-grid';
+  gridEl.style.setProperty('--calc-zoom', String(zoom));
   gridEl.addEventListener('keydown', (e) => {
     if (editing) return;
     if (e.key === 'ArrowUp') { e.preventDefault(); moveSel(-1, 0); }
@@ -1000,7 +1137,9 @@ export function mountCalcTile() {
       startEditing(e.key);
     }
   });
-  bodyEl.appendChild(gridEl);
+  gridWrapEl.appendChild(gridEl);
+  wirePinch(gridWrapEl);
+  bodyEl.appendChild(gridWrapEl);
 
   /* Status line */
   const status = document.createElement('div');
@@ -1030,6 +1169,7 @@ export function unmountCalcTile() {
   tileEl?.remove();
   tileEl = null;
   gridEl = null;
+  gridWrapEl = null;
   editorInputEl = null;
   sheetMenuBtn = null;
   titleInput = null;
@@ -1124,7 +1264,22 @@ export function wireCalcEvents() {
  *  Core supplies the surrounding separators + window management. */
 export function calcContextMenu(ctx) {
   const hasSheet = !!current;
+  // Opened on a cell (right-click, or a long press on a touchscreen): that
+  // cell's own entries come first.
+  const cellEl = hasSheet ? ctx?.target?.closest?.('.calc-cell--data') : null;
+  const cellItems = [];
+  if (cellEl) {
+    const row = Number(cellEl.dataset.row);
+    const col = Number(cellEl.dataset.col);
+    const ref = cellRef(row, col);
+    cellItems.push(
+      { type: 'item', label: t('plugin.calc.cell.edit', null, 'Edit cell'), icon: 'ui/pencil', onClick: () => { selectCell(row, col); showEditor(); } },
+      { type: 'item', label: t('plugin.calc.cell.clear', null, 'Clear cell'), icon: 'ui/eraser', disabled: !current.cells.has(ref), onClick: () => { selectCell(row, col); setCellValue(ref, '', { refresh: true }); } },
+      { type: 'separator' },
+    );
+  }
   return [
+    ...cellItems,
     { type: 'item', label: t('plugin.calc.toolbar.newSheet', null, 'New spreadsheet'), icon: 'ui/plus', onClick: () => void newSheet() },
     { type: 'item', label: t('plugin.calc.toolbar.saveNow', null, 'Save now'), icon: 'ui/save', disabled: !hasSheet || !dirty, onClick: () => void persist() },
     { type: 'item', label: t('plugin.calc.toolbar.saveToDocuments', null, 'Save to Documents'), icon: 'ui/save', disabled: !hasSheet, onClick: () => void exportOds() },

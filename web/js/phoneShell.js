@@ -22,8 +22,10 @@
  *    With the AI switched off a swipe up goes home and a swipe up and hold
  *    opens the switcher.
  *  - Back: with a window on screen the browser's Back (Android's back
- *    gesture) goes home instead of leaving the page — one history entry is
- *    held while a window is up and given back on the way home.
+ *    gesture) first closes what is open on top — a pushed pane, a sheet, a
+ *    dialog (ui/backStack.js) — and only then goes home instead of leaving
+ *    the page: one history entry is held while a window is up and given
+ *    back on the way home. A swipe in from the left edge is the same Back.
  *
  * The assistant's actions come from app.js (`setPhoneBarActions`), which owns
  * the voice bar's own. Everything is keyed to the phone breakpoint
@@ -36,6 +38,7 @@ import { showPhoneHome, stepPhoneWindow, beginPhoneSlide } from './tiles.js';
 import { openLauncher, closeLauncher, isLauncherActive } from './launcher.js';
 import { openOverview, closeOverview, isOverviewActive } from './overview.js';
 import { closeControlCenter } from './controlCenter.js';
+import { popBack } from '../ui/backStack.js';
 import { t } from './i18n.js';
 
 /** Finger travel (px) that makes a swipe. */
@@ -53,6 +56,10 @@ const LONG_PRESS_MS = 450;
 const HOME_RECOVER_MS = 1500;
 /** Voice states in which a tap on the bar stops listening. */
 const LISTENING = new Set(['listening', 'conversation']);
+/** A touch this close (px) to the left edge may be a swipe back. */
+const EDGE_PX = 22;
+/** Travel (px) from the edge that makes it a Back. */
+const EDGE_BACK_PX = 72;
 
 let dock = null;
 /** A history entry is held for the window on screen (Back goes home). */
@@ -283,7 +290,67 @@ function syncHistory() {
 function onPopState() {
   if (!heldEntry) return;
   heldEntry = false;
+  // Something open on top of the window takes the Back and the window stays:
+  // the entry goes back on the stack for the next one.
+  if (back()) {
+    heldEntry = true;
+    history.pushState({ liteauraWindow: true }, '');
+    return;
+  }
   goHome();
+}
+
+/** One Back: the topmost surface (a pane, a sheet, the switcher) closes;
+ *  with nothing on top the window goes home. True when something closed. */
+function back() {
+  closeControlCenter();
+  if (isOverviewActive()) { closeOverview(); return true; }
+  return popBack();
+}
+
+/* ── Edge swipe: Back ─────────────────────────────────────────── */
+
+let edge = null;
+
+function onEdgeDown(e) {
+  if (!isPhone() || isHome() || e.pointerType === 'mouse' || e.button > 0) return;
+  if (e.clientX > EDGE_PX) return;
+  // A control at the edge keeps its own touch.
+  if (e.target.closest?.('button, a, input, textarea, select, [role="slider"], .phone-dock')) return;
+  edge = { id: e.pointerId, x: e.clientX, y: e.clientY, done: false };
+}
+
+function onEdgeMove(e) {
+  if (!edge || e.pointerId !== edge.id || edge.done) return;
+  const dx = e.clientX - edge.x;
+  const dy = Math.abs(e.clientY - edge.y);
+  if (dy > dx && dy > STILL_PX * 2) { edge = null; return; }
+  if (dx >= EDGE_BACK_PX) {
+    edge.done = true;
+    navigator.vibrate?.(8);
+    if (!back()) goHome();
+  }
+}
+
+function onEdgeEnd(e) {
+  if (edge && e.pointerId === edge.id) edge = null;
+}
+
+/* ── The soft keyboard ─────────────────────────────────────── */
+
+/**
+ * Browsers that do not resize the page for the keyboard (the viewport meta
+ * asks them to; iOS does not) still report it through the visual viewport:
+ * `--keyboard-inset` is how much of the bottom it covers, and css/mobile.css
+ * lifts the window's bottom, the bar and the chat's composer by that much.
+ */
+function syncKeyboardInset() {
+  const vv = window.visualViewport;
+  if (!vv || !isPhone()) { root().style.removeProperty('--keyboard-inset'); return; }
+  const inset = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+  // A small difference is the browser's own chrome, not a keyboard.
+  if (inset > 80) root().style.setProperty('--keyboard-inset', `${inset}px`);
+  else root().style.removeProperty('--keyboard-inset');
 }
 
 /* ── Setup ─────────────────────────────────────────────────── */
@@ -326,6 +393,10 @@ export function initPhoneShell() {
   new MutationObserver(() => { syncHome(); syncHistory(); })
     .observe(root(), { attributes: true, attributeFilter: ['data-phone-home'] });
   window.addEventListener('popstate', onPopState);
+  document.addEventListener('pointerdown', onEdgeDown, { capture: true, passive: true });
+  document.addEventListener('pointermove', onEdgeMove, { capture: true, passive: true });
+  document.addEventListener('pointerup', onEdgeEnd, { capture: true, passive: true });
+  document.addEventListener('pointercancel', onEdgeEnd, { capture: true, passive: true });
   window.addEventListener('launcher:closed', () => {
     homeLaunched = false;
     clearTimeout(recoverTimer);
@@ -336,6 +407,8 @@ export function initPhoneShell() {
   window.addEventListener('overview:closed', () => setTimeout(syncHome, 0));
   window.addEventListener('locale:change', relabel);
   PHONE_QUERY.addEventListener('change', syncScreen);
+  window.visualViewport?.addEventListener('resize', syncKeyboardInset);
+  window.visualViewport?.addEventListener('scroll', syncKeyboardInset);
   syncScreen();
 
   // The first layout passes run before the remembered windows are back; the

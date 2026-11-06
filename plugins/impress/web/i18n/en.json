@@ -80,5 +80,8 @@
   "plugin.impress.toast.openFileFailed": "Could not open file",
   "plugin.impress.meta.description": "Presentation builder — decks stored as slides and exported as open .odp files",
   "plugin.impress.meta.summary": "Impress: build, edit and present OpenDocument (.odp) slide decks",
-  "plugin.impress.meta.category": "Office"
+  "plugin.impress.meta.category": "Office",
+  "plugin.impress.toolbar.inspector": "Slide settings",
+  "plugin.impress.inspector.title": "Slide",
+  "plugin.impress.actions": "Presentation actions"
 }

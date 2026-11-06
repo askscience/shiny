@@ -1,7 +1,8 @@
 import {
   menuSurface, menuItem, confirmDialog, menuButton, toolbar, field as uiField,
   textarea as uiTextarea, element as h, input as uiInput, selectControl,
-  button, emptyState, toast, setTileGlow, glowGradient,
+  button, iconButton, toolButton, actionBar, paneStack,
+  emptyState, toast, setTileGlow, glowGradient,
   setIcon, listReveal, cardEnter, metaLine,
 } from '../../ui/index.js';
 
@@ -17,6 +18,12 @@ import {
  * the deck menu, the title with its mono meta ("5 SLIDES · AURORA · SAVED
  * 14:02"), the theme, a grey "New" pill and the Present pill; the file
  * actions live in the deck menu's footer.
+ *
+ * The body is a pane stack (ui paneStack): wide, the strip is a column on
+ * the left and the inspector sits under the stage; narrow or on a phone the
+ * strip is a row of thumbnails above the stage (the floor) and the inspector
+ * slides in over it from the bar's properties button, closing with Back /
+ * Escape. A phone also gets an action bar with "Add slide" at the thumb.
  *
  * AI wiring: `slide_*` tool outcomes arrive via the `agent:actions` event —
  * the window refreshes its deck list and opens what the AI touched.
@@ -84,6 +91,8 @@ let stageEl = null;
 let presentEl = null;
 let stageWrapEl = null;
 let inspectorEl = null;
+let inspectorBtn = null;  // bar: opens the inspector pane while stacked
+let nav = null;           // paneStack() handle (stage floor, inspector pane)
 let stageSlideNode = null;
 let resizeObserver = null;
 
@@ -355,13 +364,19 @@ function renderStrip({ reveal = false } = {}) {
     items.push(item);
   });
   items.forEach((item) => stripEl.appendChild(item));
-  // Scale the 640px-wide logical slide to each thumbnail frame's real width.
-  items.forEach((item) => {
+  fitThumbs();
+  if (reveal) void listReveal(items);
+}
+
+/** Scale the 640px-wide logical slide to each thumbnail frame's real width
+ *  (again when the strip changes shape: a column wide, a row stacked). */
+function fitThumbs() {
+  if (!stripEl) return;
+  for (const item of stripEl.querySelectorAll('.impress-thumb')) {
     const frame = item.querySelector('.impress-thumb-frame');
     const mini = item.querySelector('.impress-slide');
     if (frame && mini) fitSlide(frame, mini);
-  });
-  if (reveal) void listReveal(items);
+  }
 }
 
 /** Scale a 640×360 logical slide to fill a container's width. */
@@ -370,16 +385,16 @@ function fitSlide(container, node) {
   node.style.transform = `scale(${container.clientWidth / 640})`;
 }
 
-/** Size the stage container to the largest 16:9 box that fits above the
- *  inspector (width- and height-constrained). The slide inside is then scaled
- *  by fitSlide to fill it exactly. */
+/** Size the stage container to the largest 16:9 box that fits its wrap
+ *  (width- and height-constrained; the inspector has its own row, or is a
+ *  pane over it). The slide inside is then scaled by fitSlide to fill it
+ *  exactly. */
 function resizeStage() {
   if (!stageEl || !stageWrapEl) return;
   const gutter = 24;           // 12px horizontal inset on each side
   const vgap = 12;             // vertical breathing room around the stage
-  const inspectorH = inspectorEl ? inspectorEl.offsetHeight : 0;
   const availW = stageWrapEl.clientWidth - gutter;
-  const availH = stageWrapEl.clientHeight - inspectorH - vgap * 2;
+  const availH = stageWrapEl.clientHeight - vgap * 2;
   if (availW <= 0 || availH <= 0) return;
   const scale = Math.min(availW / 640, availH / 360);
   stageEl.style.width = `${Math.floor(640 * scale)}px`;
@@ -391,9 +406,11 @@ function observeStageSize() {
   resizeObserver = new ResizeObserver(() => {
     resizeStage();
     if (stageSlideNode && stageEl) fitSlide(stageEl, stageSlideNode);
+    fitThumbs();
   });
   resizeObserver.observe(stageWrapEl);
   if (inspectorEl) resizeObserver.observe(inspectorEl);
+  if (stripEl) resizeObserver.observe(stripEl);
 }
 
 function currentSlide() {
@@ -964,13 +981,24 @@ export function mountImpressTile() {
   newBtn.classList.add('impress-new');
   newBtn.title = t('plugin.impress.toolbar.newDeck', null, 'New presentation');
 
-  presentBtn = button({ label: t('plugin.impress.toolbar.present', null, 'Present'), variant: 'ghost', size: 'sm', arrow: true, onClick: startPresent });
+  presentBtn = button({ label: t('plugin.impress.toolbar.present', null, 'Present'), icon: 'ui/present', iconSize: 14, variant: 'ghost', size: 'sm', arrow: true, onClick: startPresent });
   presentBtn.classList.add('impress-present-pill');
 
-  bar.append(deckMenuBtn, titleInput, metaEl, spacer, themeSelect, newBtn, presentBtn);
+  // Narrow: the inspector is a pane over the stage, opened from here. Wide,
+  // it sits under the stage and the button steps out of the bar.
+  inspectorBtn = iconButton({
+    icon: 'ui/properties', iconSize: 15, variant: 'ghost', size: 'sm',
+    label: t('plugin.impress.toolbar.inspector', null, 'Slide settings'),
+    className: 'impress-inspector-btn',
+    onClick: () => nav?.show('inspector'),
+  });
+  inspectorBtn.dataset.keep = '';
+  inspectorBtn.hidden = true;
+
+  bar.append(deckMenuBtn, titleInput, metaEl, spacer, themeSelect, newBtn, presentBtn, inspectorBtn);
   tileEl.appendChild(bar);
 
-  /* Body: strip + stage + inspector */
+  /* Body: strip + stage + inspector (a grid while wide, a stack while narrow) */
   const body = h('div', 'impress-body');
 
   stripEl = h('div', 'impress-strip');
@@ -986,10 +1014,22 @@ export function mountImpressTile() {
 
   const inspector = buildInspector();
   inspectorEl = inspector;
-  stageWrap.appendChild(inspector);
 
-  body.append(stripEl, stageWrap);
+  body.append(stripEl, stageWrap, inspector);
   tileEl.appendChild(body);
+
+  nav = paneStack(body, {
+    panes: [
+      { id: 'stage', el: stageWrap },
+      { id: 'inspector', el: inspector },
+    ],
+    onChange: ({ stacked }) => { if (inspectorBtn) inspectorBtn.hidden = !stacked; },
+  });
+
+  /* Phone: the slide action at the thumb. */
+  tileEl.appendChild(actionBar([
+    toolButton('ui/plus', t('plugin.impress.ops.addSlide', null, 'Add slide'), addSlide),
+  ], { label: t('plugin.impress.actions', null, 'Presentation actions') }));
 
   // Keyboard: left/right move slides (ignore when typing in a field). While
   // presenting, the overlay owns the keyboard (it lives on <body>).
@@ -1010,6 +1050,13 @@ export function mountImpressTile() {
 
 function buildInspector() {
   const panel = h('div', 'impress-inspector');
+
+  // The head is the pane's bar: the stack prepends Back to it while the
+  // inspector is a pane; a wide window never shows it.
+  const head = h('div', 'impress-inspector-head');
+  head.dataset.paneBar = '';
+  head.appendChild(h('span', 'impress-inspector-title', t('plugin.impress.inspector.title', null, 'Slide')));
+  panel.appendChild(head);
 
   const layoutField = field(t('plugin.impress.inspector.layout', null, 'Layout'), () => {
     layoutSelect = selectControl();
@@ -1096,7 +1143,8 @@ function buildInspector() {
   // Hint + slide operations.
   panel.appendChild(h('p', 'impress-hint', t('plugin.impress.inspector.hint', null, 'Click any text on the slide to edit it directly.')));
 
-  // Slide operations: small grey pills; "Add slide" carries its label.
+  // Slide operations: small grey pills; "Add slide" carries its label (on a
+  // phone the library shows the icon alone).
   const ops = h('div', 'impress-ops');
   const opBtn = (iconName, label, onClick, { danger = false, text = false } = {}) => {
     const btn = button({ icon: iconName, iconSize: 14, label: text ? label : undefined, variant: 'ghost', size: 'sm', onClick });
@@ -1140,6 +1188,8 @@ function addSlide() {
   renderStrip();
   renderStage();
   renderInspector();
+  // Stacked: the new slide is on the stage, under the inspector — show it.
+  nav?.back();
   if (stageEl) void cardEnter(stageEl);
 }
 
@@ -1177,6 +1227,9 @@ export function unmountImpressTile() {
   window.removeEventListener('resize', onPresentViewportChange);
   window.clearTimeout(thumbRefreshTimer);
   resizeObserver?.disconnect();
+  nav?.destroy();
+  nav = null;
+  inspectorBtn = null;
   tileEl?.remove();
   tileEl = null;
   stripEl = null;

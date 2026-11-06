@@ -930,3 +930,85 @@ button.ui-hairline-row:hover { background: var(--glass-hover); }
 .ui-hairline-title { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ui-hairline-sub { font-size: 12.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ui-hairline-row > .ui-meta { flex: none; }
+
+/* ── Pane stack (components/panes.js) ──────────────────────────
+   A window's panes side by side while wide; one at a time while stacked:
+   the floor stays in flow and every other pane slides in over it from the
+   edge when open. The slide follows the motion language. */
+.ui-panes { position: relative; min-width: 0; min-height: 0; }
+.ui-panes.is-stacked { display: flex; flex-direction: column; overflow: hidden; }
+/* The floor fills the root; a sibling that is not a pane (a strip of
+   folders or sections above it) keeps its own height in the column. */
+.ui-panes.is-stacked > .ui-pane.is-floor { flex: 1 1 auto; width: auto; max-width: none; min-width: 0; min-height: 0; }
+.ui-panes.is-stacked .ui-pane:not(.is-floor) {
+  position: absolute;
+  inset: 0;
+  z-index: calc(3 + var(--pane-depth, 0));
+  display: flex;
+  flex-direction: column;
+  width: auto;
+  max-width: none;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  box-sizing: border-box;
+  border: 0;
+  background: var(--bg-elevated, var(--surface, var(--bg)));
+  transform: translateX(100%);
+  visibility: hidden;
+  transition: transform var(--motion-connect, 0.28s) var(--motion-ease, ease-out), visibility 0s linear var(--motion-connect, 0.28s);
+}
+html[data-motion='fluid'] .ui-panes.is-stacked .ui-pane:not(.is-floor) { transition-timing-function: var(--spring-snappy, ease-out), linear; }
+html[data-motion='depth'] .ui-panes.is-stacked .ui-pane:not(.is-floor) { transition-timing-function: var(--spring-soft, ease-out), linear; }
+.ui-panes.is-stacked .ui-pane.is-open { transform: none; visibility: visible; transition-delay: 0s; }
+/* The pane's back arrow belongs to the stack: a wide window never shows it. */
+.ui-pane-back { display: none; flex: none; }
+.ui-panes.is-stacked .ui-pane-back { display: inline-flex; }
+@media (prefers-reduced-motion: reduce) {
+  .ui-panes.is-stacked .ui-pane:not(.is-floor) { transition: none !important; }
+}
+
+/* ── Action bar (components/actionbar.js) ──────────────────────
+   A window's bottom row of icon actions, for the thumb: only on a phone. */
+.ui-actionbar { display: none; }
+html[data-phone='1'] .ui-actionbar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-evenly;
+  gap: 4px;
+  min-height: 52px;
+  padding: 4px max(8px, env(safe-area-inset-right)) 4px max(8px, env(safe-area-inset-left));
+  border-top: 1px solid var(--glass-border);
+  background: var(--glass);
+}
+html[data-phone='1'] .ui-actionbar > .ui-btn { width: 44px; height: 44px; min-width: 44px; min-height: 44px; padding: 0; border-radius: 50%; }
+
+/* ── Pull to refresh (ui/pullRefresh.js) ───────────────────────
+   A spinner tucked above a list's top edge that follows a downward pull on
+   a touch screen and turns while the list reloads. */
+.ui-pull { position: relative; }
+.ui-pull-indicator {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--bg-elevated, var(--surface));
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-sm, 0 2px 8px rgba(0, 0, 0, 0.12));
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, calc(var(--pull, 0px) - 44px));
+  transition: opacity var(--motion-feedback, 0.12s), transform var(--motion-feedback, 0.12s);
+}
+.ui-pull-indicator.is-pulling { opacity: 1; transition: opacity var(--motion-feedback, 0.12s); }
+.ui-pull-indicator.is-busy { opacity: 1; transform: translate(-50%, 12px); }
+.ui-pull-indicator .ui-spinner { animation-play-state: paused; }
+.ui-pull-indicator.is-ready .ui-spinner,
+.ui-pull-indicator.is-busy .ui-spinner { animation-play-state: running; }
+.ui-pull-indicator.is-ready { border-color: var(--accent); }

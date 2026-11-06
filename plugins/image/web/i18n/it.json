@@ -9,6 +9,7 @@
   "plugin.image.toolbar.actualSize": "1:1",
   "plugin.image.status.look": "Stile: {name}",
   "plugin.image.dock.looks": "Look",
+  "plugin.image.sheet.label": "Look e regolazioni",
   "plugin.image.dock.adjust": "Regola",
   "plugin.image.dial.brightness": "Luminosità",
   "plugin.image.dial.contrast": "Contrasto",

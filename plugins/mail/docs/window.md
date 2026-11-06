@@ -35,7 +35,22 @@ capitals for labels and metadata, grey pill buttons with a trailing arrow.
 - **Reader**: takes a column only while a message is selected
   (`.mail-shell.has-reader`); subject head, Reply / Forward / Delete pills and a
   close button, mono From / To / Date keys, HTML or plain body, attachment pills.
+  Its actions row is built once per shell and is the reader's pane bar
+  (`data-pane-bar`), so it outlives the message re-renders.
 - **Footer**: mono folder + message count, cache note and connection status.
+- **Action bar** (`actionBar`, the window's last child): Compose, shown on a
+  phone only.
+
+### Narrow windows and phones
+
+The list and the reader are a `paneStack` over `.mail-shell` (the rail is a
+non-pane sibling). In a window up to 700px wide, or on a phone, the shell is a
+column (`.mail-shell.is-stacked`): the folder rail is a strip across the top,
+the list is the floor and picking a message slides the reader in over it with
+the shared Back at the start of its actions row (its own Close hides there);
+Back, Escape, Android's Back and the edge swipe close the message. Every
+button in the window, the composer and the account manager has an icon, so a
+phone shows icons alone.
 
 ### Large-title handover
 
@@ -54,8 +69,9 @@ re-renders for selection or read state do not replay it.
 
 Onboarding (while no account is verified), the account manager and the composer
 reuse the same grammar. Styles live in core's `web/css/tiles.css` (the Mail
-section, keyed by the `mail-*` prefix); responsive rules live in
-`web/ui/responsive.css`; strings in `web/i18n/{en,it}.json`.
+section, keyed by the `mail-*` prefix, the stacked layout included); the
+remaining narrow-window rules live in `web/ui/responsive.css`; strings in
+`web/i18n/{en,it}.json`.
 
 ## Notifications
 

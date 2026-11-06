@@ -1,6 +1,6 @@
 import {
   toolbar, toolButton, controlButton, emptyState, toast, setTileGlow, glowGradient,
-  icon, eyebrow, hairlineList, listReveal, rollNumber,
+  icon, eyebrow, hairlineList, listReveal, rollNumber, paneStack,
 } from '../../ui/index.js';
 
 /**
@@ -8,7 +8,11 @@ import {
  *
  * An editorial calculator: a display (a small mono expression line over a
  * large display-font result that rolls up when set), a keypad of flat grey
- * pills with `=` as the ink pill, and a collapsible hairline history. `=` sends the expression to POST
+ * pills with `=` as the ink pill, and a collapsible hairline history. The
+ * body is a pane stack (ui paneStack): the pad (display, scientific row,
+ * keypad) is the floor and the history is a pane that slides in over it in
+ * a narrow window or on a phone; a wide window keeps the history inline,
+ * under the keypad or beside it. `=` sends the expression to POST
  * /api/calculator/eval — the same Rust evaluator the AI tool uses — so the
  * window and the agent always agree. Results land in the shared
  * `calculator_history` log.
@@ -28,8 +32,11 @@ let resultEl = null;
 let keysEl = null;
 let sciEl = null;
 let historyEl = null;
+let historyBodyEl = null;
+let historyCountEl = null;
 let historyToggleBtn = null;
 let sciToggleBtn = null;
+let nav = null; // paneStack() handle: pad (floor) → history
 
 let expression = '';
 let lastResult = null; // number|null — "Ans" for chained calculations
@@ -258,19 +265,13 @@ function toggleSci() {
 /** Reload the history list. `reveal` plays listReveal on the rows — only
  *  when the panel opens, not on every refresh after `=`. */
 async function refreshHistory({ reveal = false } = {}) {
-  if (!historyEl) return;
+  if (!historyBodyEl) return;
   try {
     const { history } = await apiHistory();
-    historyEl.textContent = '';
-    const head = document.createElement('div');
-    head.className = 'calculator-history-head';
-    head.append(
-      eyebrow(t('plugin.calculator.toolbar.history', null, 'History')),
-      eyebrow(String(history?.length || 0)),
-    );
-    historyEl.appendChild(head);
+    historyBodyEl.textContent = '';
+    if (historyCountEl) historyCountEl.textContent = String(history?.length || 0);
     if (!history || !history.length) {
-      historyEl.appendChild(emptyState({
+      historyBodyEl.appendChild(emptyState({
         title: t('plugin.calculator.empty.noHistory', null, 'No history'),
         body: t('plugin.calculator.empty.noHistoryBody', null, 'Calculations you run here or ask the AI for appear here.'),
       }));
@@ -298,7 +299,7 @@ async function refreshHistory({ reveal = false } = {}) {
       });
       list.appendChild(row);
     }
-    historyEl.appendChild(list);
+    historyBodyEl.appendChild(list);
     if (reveal) void listReveal(list.children);
   } catch (e) {
     toast(e.message || t('plugin.calculator.toast.historyFailed', null, 'Could not load history'), { type: 'error' });
@@ -315,19 +316,42 @@ async function clearHistory() {
   }
 }
 
-function toggleHistory() {
-  historyOpen = !historyOpen;
-  historyEl?.classList.toggle('hidden', !historyOpen);
+/** Paint the history's open state: inline (`hidden` off/on) while the window
+ *  is wide, a pane the stack slides in while narrow — the stack owns its
+ *  visibility then, so `hidden` must be off. */
+function paintHistory() {
+  const stacked = !!nav?.isStacked();
+  historyEl?.classList.toggle('hidden', !stacked && !historyOpen);
   historyToggleBtn?.classList.toggle('is-active', historyOpen);
   historyToggleBtn?.setAttribute('aria-pressed', String(historyOpen));
-  if (historyOpen) void refreshHistory({ reveal: true });
+}
+
+function openHistory() {
+  if (historyOpen) return;
+  historyOpen = true;
+  paintHistory();
+  nav?.show('history');
+  void refreshHistory({ reveal: true });
 }
 
 function closeHistory() {
+  if (!historyOpen) return;
   historyOpen = false;
-  historyEl?.classList.add('hidden');
-  historyToggleBtn?.classList.remove('is-active');
-  historyToggleBtn?.setAttribute('aria-pressed', 'false');
+  paintHistory();
+  // While stacked the pane is on the stack: pop it (a no-op otherwise).
+  if (nav?.isOpen('history')) nav.back();
+}
+
+function toggleHistory() {
+  if (historyOpen) closeHistory();
+  else openHistory();
+}
+
+/** The stack changed its top or its layout (Back, Escape, a resize). */
+function onPaneChange({ stacked }) {
+  if (!nav) return; // the stack's first measure, before the handle is kept
+  if (stacked) historyOpen = nav.isOpen('history');
+  paintHistory();
 }
 
 /* ── Tile lifecycle ─────────────────────────────────────────── */
@@ -347,14 +371,22 @@ export function mountCalculatorTile() {
   const spacer = document.createElement('div');
   spacer.className = 'calculator-bar-spacer';
 
-  const barBtn = (iconName, label, onClick) => toolButton(iconName, label, onClick, { className: 'calculator-bar-btn' });
-  historyToggleBtn = barBtn('ui/list', t('plugin.calculator.toolbar.history', null, 'History'), toggleHistory);
+  const barBtn = (iconName, label, onClick, className = '') => toolButton(iconName, label, onClick, { className: `calculator-bar-btn ${className}`.trim() });
+  historyToggleBtn = barBtn('ui/history', t('plugin.calculator.toolbar.history', null, 'History'), toggleHistory, 'calculator-history-toggle');
   sciToggleBtn = barBtn('ui/scientific', t('plugin.calculator.toolbar.scientific', null, 'Scientific'), toggleSci);
-  const clearBtn = barBtn('ui/trash', t('plugin.calculator.toolbar.clearHistory', null, 'Clear history'), () => void clearHistory());
   historyToggleBtn.setAttribute('aria-pressed', 'false');
   sciToggleBtn.setAttribute('aria-pressed', 'false');
-  bar.append(spacer, historyToggleBtn, sciToggleBtn, clearBtn);
+  bar.append(spacer, historyToggleBtn, sciToggleBtn);
   tileEl.appendChild(bar);
+
+  /* Body: the pane stack's root — the pad is the floor, the history a pane. */
+  const body = document.createElement('div');
+  body.className = 'calculator-body';
+  tileEl.appendChild(body);
+
+  const pad = document.createElement('div');
+  pad.className = 'calculator-pad';
+  body.appendChild(pad);
 
   /* Display */
   const display = document.createElement('div');
@@ -364,24 +396,50 @@ export function mountCalculatorTile() {
   resultEl = document.createElement('div');
   resultEl.className = 'calculator-display-result';
   display.append(exprEl, resultEl);
-  tileEl.appendChild(display);
+  pad.appendChild(display);
 
   /* Scientific pad (collapsible) */
   sciEl = document.createElement('div');
   sciEl.className = 'calculator-sci hidden';
-  tileEl.appendChild(sciEl);
+  pad.appendChild(sciEl);
   buildSciPad();
 
   /* Keypad */
   keysEl = document.createElement('div');
   keysEl.className = 'calculator-keys';
-  tileEl.appendChild(keysEl);
+  pad.appendChild(keysEl);
   buildKeypad();
 
-  /* History (collapsible, below the keypad) */
+  /* History: inline under (or beside) the keypad while wide, a pane over
+     the pad while stacked. Its head is the pane's bar (the stack prepends
+     Back to it): title, count, and the clear action. */
   historyEl = document.createElement('div');
   historyEl.className = 'calculator-history hidden';
-  tileEl.appendChild(historyEl);
+  const historyHead = document.createElement('div');
+  historyHead.className = 'calculator-history-head';
+  historyHead.dataset.paneBar = '';
+  historyCountEl = eyebrow('0');
+  const historySpacer = document.createElement('div');
+  historySpacer.className = 'calculator-bar-spacer';
+  historyHead.append(
+    eyebrow(t('plugin.calculator.toolbar.history', null, 'History')),
+    historyCountEl,
+    historySpacer,
+    toolButton('ui/trash', t('plugin.calculator.toolbar.clearHistory', null, 'Clear history'), () => void clearHistory(), { className: 'calculator-bar-btn calculator-history-clear' }),
+  );
+  historyBodyEl = document.createElement('div');
+  historyBodyEl.className = 'calculator-history-body';
+  historyEl.append(historyHead, historyBodyEl);
+  body.appendChild(historyEl);
+
+  nav = paneStack(body, {
+    panes: [
+      { id: 'pad', el: pad },
+      { id: 'history', el: historyEl },
+    ],
+    onChange: onPaneChange,
+  });
+  paintHistory();
 
   renderDisplay();
   return tileEl;
@@ -389,6 +447,8 @@ export function mountCalculatorTile() {
 
 /** Deactivated: drop the window. */
 export function unmountCalculatorTile() {
+  nav?.destroy();
+  nav = null;
   tileEl?.remove();
   tileEl = null;
   exprEl = null;
@@ -396,8 +456,11 @@ export function unmountCalculatorTile() {
   keysEl = null;
   sciEl = null;
   historyEl = null;
+  historyBodyEl = null;
+  historyCountEl = null;
   historyToggleBtn = null;
   sciToggleBtn = null;
+  historyOpen = false;
 }
 
 /** The tile element (or null when the Calculator window is not mounted). */
@@ -440,7 +503,7 @@ export function calculatorContextMenu() {
     { type: 'item', label: t('plugin.calculator.menu.clearAll', null, 'Clear all'), icon: 'ui/close', onClick: clearAll },
     { type: 'separator' },
     { type: 'item', label: t('plugin.calculator.toolbar.scientific', null, 'Scientific'), icon: 'ui/scientific', checked: sciMode, onClick: toggleSci },
-    { type: 'item', label: t('plugin.calculator.toolbar.history', null, 'History'), icon: 'ui/list', checked: historyOpen, onClick: toggleHistory },
+    { type: 'item', label: t('plugin.calculator.toolbar.history', null, 'History'), icon: 'ui/history', checked: historyOpen, onClick: toggleHistory },
     { type: 'item', label: t('plugin.calculator.toolbar.clearHistory', null, 'Clear history'), icon: 'ui/trash', danger: true, onClick: () => void clearHistory() },
   ];
 }

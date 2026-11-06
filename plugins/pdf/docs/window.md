@@ -21,11 +21,12 @@ export default {
   Comments panel toggle; undo / redo; for documents, "PDF up to date / not
   updated" and **Update PDF**; the grey **New** pill (template picker).
   In a window up to 700px or on a phone it is a compact toolbar
-  (`compactToolbar`): the Documents menu and the title keep the front and
-  New, history, the Comments toggle, the markup tools, zoom and the page
-  arrows fold — from the end — into the shared **More** menu (⋯). The
+  (`compactToolbar`): the Documents menu, the title and the Comments toggle
+  (`data-keep`) keep the front and New, history, the markup tools, zoom and
+  the page arrows fold — from the end — into the shared **More** menu (⋯). The
   clusters carry `data-fold` so the folding reaches inside them; the zoom
-  readout is `data-foldable`; the page readout leaves with its arrows.
+  readout is `data-foldable`; the page arrows fold whole with their readout,
+  as one row of the menu.
 - **Editor** (Write): formatting row (paragraph style, bold/italic/underline/
   strike, colour, highlight, alignment, lists, link, image, table + row/column
   tools, line, page break, page numbers 1/n, theme) over A4 paper with dashed
@@ -34,12 +35,21 @@ export default {
   the More menu, as Word's formatting row does
   (`compactToolbar(toolbar, { fold: 'button.pdfed-btn' })`).
 - **Mode strip**: what a click does in the armed tool, its options, Done (Esc).
+  A compact row too (`compactToolbar`): the hint wraps in place and the shape
+  switch folds into its own More before Done has to.
 - **Selection bar**: selecting text offers highlight / underline / strike /
   comment / link / copy.
 - **Comments panel**: comments by page with Edit / Reply / Delete, and page
   marks (watermark, header & footer) with Remove. Clicking a comment on the page
-  focuses it in the panel.
+  focuses it in the panel. The body is a pane stack (`paneStack` over
+  `.pdf-main`): wide, the panel sits beside the page; in a window up to 700px
+  or on a phone the page is the floor, the rail a strip across the top of it,
+  and the panel a pane that slides over the page from the bar's Comments
+  button, with the shared Back in its head (`data-pane-bar`); Escape, the
+  phone's Back and the edge swipe close it.
 - **Rail**: lazy thumbnails, drag to reorder, `…` / right-click page menu, `+`.
+  On a touch screen the `…` stays visible on every page and the menu also
+  offers *Move earlier* / *Move later*, so pages reorder without a drag.
 
 ## How it renders
 

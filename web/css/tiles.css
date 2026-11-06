@@ -946,6 +946,9 @@ html body.tile-dock-active #artifact-dock:not(:has(> #artifact-dock-step:not(.hi
 }
 .word-nav[hidden] { display: none; }
 .word-nav-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   margin: 0 0 8px 6px;
   font-family: var(--font-mono);
   font-size: 10.5px;
@@ -953,6 +956,10 @@ html body.tile-dock-active #artifact-dock:not(:has(> #artifact-dock-step:not(.hi
   text-transform: uppercase;
   color: var(--muted);
 }
+/* Narrow or on a phone the outline is a pane over the desk (paneStack):
+   full width, the stack's Back at the head, the desk's edge is its own. */
+.word-main.is-stacked .word-nav { width: auto; padding: 8px 12px 14px; border-right: 0; }
+.word-main.is-stacked .word-nav-head { margin-left: 0; min-height: 34px; }
 .word-nav-list { display: flex; flex-direction: column; gap: 1px; }
 .word-nav-item {
   display: block;
@@ -1050,6 +1057,23 @@ html body.tile-dock-active #artifact-dock:not(:has(> #artifact-dock-step:not(.hi
 .word-swatch:hover, .word-swatch:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .word-swatch--auto { background: linear-gradient(135deg, transparent 45%, var(--error) 46%, var(--error) 54%, transparent 55%); }
 
+/* Phone: the formatting row is a bottom sheet behind the bar's Formatting
+   button (plugin.js placeFormatRow); its tools wrap into rows for a thumb. */
+.word-format-sheet .word-format {
+  flex-wrap: wrap;
+  gap: 8px 6px;
+  padding: 4px 0 0;
+  border-bottom: 0;
+  overflow: visible;
+}
+.word-format-sheet .word-format .word-cluster { padding-left: 0; border-left: 0; }
+.word-format-sheet .word-format .word-spacer { display: none; }
+/* Two pickers to a row, the size wide enough for its caption (over the
+   compact widths of ui/responsive.css). */
+.ui-sheet.word-format-sheet .word-format .word-select--block,
+.ui-sheet.word-format-sheet .word-format .word-select--font { width: calc(50% - 3px); }
+.ui-sheet.word-format-sheet .word-format .word-select--size { width: 104px; }
+
 /* Design dialog */
 .word-design-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: 12px 16px; }
 .word-design-toggles { display: flex; flex-direction: column; gap: 4px; }
@@ -1113,9 +1137,10 @@ html body.tile-dock-active #artifact-dock:not(:has(> #artifact-dock-step:not(.hi
   gap: 2px;
 }
 
-/* ── Narrow windows: rulers and outline step aside, nothing is hidden ── */
+/* ── Narrow windows: the rulers step aside, nothing is hidden ──
+   (the outline becomes a pane over the desk through paneStack, see
+   .word-main.is-stacked above) */
 @container plugin-window (max-width: 720px) {
-  .word-nav { position: absolute; z-index: 3; top: 0; bottom: 0; left: 0; background: var(--bg-elevated, var(--bg)); box-shadow: var(--shadow-md, var(--shadow-sm)); }
   .word-ruler { display: none; }
   .word-stage { padding: 14px 14px 56px; }
 }
@@ -1504,14 +1529,48 @@ html[data-window-background="0"] .tile-glow {
 
 /* ─────────────────────────────────────────────────────────────
    YouTube plugin window — editorial, thumbnail-driven.
-   Ambient thumbnail glow behind everything; hero (the embedded player, a
-   large display title + mono meta, only while a video plays) + flat search
-   pill + chips + 16:9 thumbnail grid captioned below (Files-style).
+   Ambient thumbnail glow behind everything; a window bar (flat search pill
+   + Home + Refresh, merged with the title row); hero (the embedded player,
+   a large display title + mono meta, only while a video plays) + chips +
+   16:9 thumbnail grid captioned below (Files-style). The hero and the
+   browse pane are a pane stack (ui paneStack): wide, the hero sits above
+   the grid; narrow or on a phone, the player slides in over it.
    ───────────────────────────────────────────────────────────── */
 .yt-tile {
   padding: 0;
   gap: 0;
   overflow: hidden;
+}
+
+/* ── Window bar ────────────────────────────────────────────── */
+/* Merged with the window controls, so it keeps to the title row's height.
+   Only the pill's wrapper is sized here — its metrics belong to the library. */
+.yt-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--tile-header-height, 36px);
+  padding: 2px 10px 2px 4px;
+}
+/* The pill takes the room the actions leave — also in a compact bar, where
+   the library pins a bar's children (ui/responsive.css). */
+.yt-tile .tile-header--merged > .yt-bar > .ui-search { flex: 1 1 auto; min-width: 0; max-width: 460px; margin-right: auto; }
+
+/* ── Pane stack: hero over the browse floor ────────────────── */
+.yt-shell {
+  position: relative;
+  z-index: 1;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.yt-browse {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Ambient glow is the shared `.tile-glow` layer (see the block above). */
@@ -1526,6 +1585,7 @@ html[data-window-background="0"] .tile-glow {
 .yt-hero {
   position: relative;
   z-index: 1;
+  flex: none;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -1591,16 +1651,37 @@ html[data-window-background="0"] .tile-glow {
   overflow: hidden;
 }
 
-.yt-hero-back { flex: none; border-radius: 999px; }
+.yt-hero-back { flex: none; }
 
-/* ── Search ────────────────────────────────────────────────── */
-/* A flat grey pill, no shadow. */
-.yt-tile .ui-search {
-  --search-size: 38px;
-  --search-shadow: none;
-  position: relative;
-  z-index: 1;
-  margin: 14px 20px 0;
+/* Stacked (a narrow window, a phone): the hero is the player pane. Its info
+   row is the pane bar — Back · title · meta — at the top, the player under
+   it, and the "Up next" grid (moved in by the window) scrolls below. The
+   stack's Back covers the hero's own arrow. */
+.yt-shell.is-stacked .yt-hero {
+  gap: 0;
+  padding: 0;
+  border-bottom: none;
+}
+.yt-shell.is-stacked .yt-hero-back { display: none; }
+.yt-shell.is-stacked .yt-hero-info {
+  order: -1;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px 6px 6px;
+  border-bottom: 1px solid var(--yt-line);
+}
+.yt-shell.is-stacked .yt-hero-text { gap: 2px; }
+.yt-shell.is-stacked .yt-hero-info-title {
+  font-size: 15px;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  -webkit-line-clamp: 1;
+}
+.yt-shell.is-stacked .yt-player {
+  flex: none;
+  margin: 12px 0 0;
+  width: min(calc(100% - 28px), calc(var(--yt-player-max, 46vh) * 16 / 9));
 }
 
 /* ── Category chips (idle homepage) — the shared ui chip ───── */
@@ -1810,7 +1891,6 @@ html[data-window-background="0"] .tile-glow {
 
 /* ── YouTube compact variant (narrow window) ───────────────── */
 @container (max-width: 460px) {
-  .yt-tile .ui-search { margin: 10px 14px 0; }
   .yt-grid {
     grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
     gap: 14px 8px;
@@ -2073,18 +2153,35 @@ body.compose-active #tile-overlay {
 .calc-formula-input.ui-input:focus { border-color: transparent; border-bottom-color: var(--text); box-shadow: none; }
 .calc-formula-input::placeholder { color: var(--muted); }
 
-/* Cell grid — CSS grid, sticky headers, overlay editor.
-   Column count is set inline by calc.js to the sheet's real width; this is
-   just the fallback (a default 26-column sheet). */
-.calc-grid {
+/* Cell grid — CSS grid, sticky headers, overlay editor, inside its own
+   scroll container (`.calc-grid-wrap`: one finger pans, two pinch the
+   `--calc-zoom` the grid applies as a CSS zoom; the bar's zoom tools and
+   Ctrl+wheel drive the same variable). Column count is set inline by
+   plugin.js to the sheet's real width; this is just the fallback (a
+   default 26-column sheet). */
+.calc-grid-wrap {
   position: relative;
   flex: 1;
   min-height: 0;
   overflow: auto;
+  touch-action: pan-x pan-y;
+  overscroll-behavior: contain;
+}
+
+.calc-grid {
+  position: relative;
   display: grid;
+  width: max-content;
+  min-width: 100%;
   grid-template-columns: 44px repeat(26, 110px);
   grid-auto-rows: 30px;
   background: transparent;
+  zoom: var(--calc-zoom, 1);
+}
+
+/* A finger needs a taller row. */
+@media (pointer: coarse) {
+  .calc-grid { grid-auto-rows: 36px; }
 }
 
 .calc-cell {
@@ -2190,7 +2287,8 @@ body.compose-active #tile-overlay {
   pointer-events: none;
 }
 
-/* Empty state (no sheets): the title and save tool step aside. */
+/* Empty state (no sheets): the title and the tools step aside; three icon
+   tiles — New, Import CSV, Import .ods — each named by a caption under it. */
 .calc-tile.is-empty .calc-title,
 .calc-tile.is-empty .calc-tool { visibility: hidden; }
 .calc-empty {
@@ -2201,8 +2299,23 @@ body.compose-active #tile-overlay {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 8px;
-  margin-top: 6px;
+  align-items: flex-start;
+  gap: 6px 14px;
+  margin-top: 10px;
+}
+.calc-empty-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 88px;
+}
+.calc-empty-caption {
+  font-size: 11.5px;
+  line-height: 1.25;
+  text-align: center;
+  color: var(--muted);
+  cursor: pointer;
 }
 
 /* Sheet menu popup (body-level). */
@@ -2332,17 +2445,21 @@ body.compose-active #tile-overlay {
 .impress-new,
 .impress-present-pill { flex: none; gap: 6px; }
 
-/* Body: strip + stage/inspector */
+/* Body: strip | stage over inspector while wide (a grid); a pane stack
+   (`.impress-body.is-stacked`, ui paneStack) while narrow: the strip a row
+   of thumbnails above the stage, the inspector a pane that slides over it. */
 .impress-body {
   flex: 1;
   min-height: 0;
-  display: flex;
+  display: grid;
+  grid-template-columns: 156px minmax(0, 1fr);
+  grid-template-rows: minmax(120px, 1fr) minmax(0, max-content);
   align-items: stretch;
 }
 
 .impress-strip {
-  flex: none;
-  width: 156px;
+  grid-row: 1 / -1;
+  min-width: 0;
   overflow-y: auto;
   scrollbar-width: none;
   display: flex;
@@ -2403,9 +2520,10 @@ body.compose-active #tile-overlay {
   outline-offset: 2px;
 }
 
-/* Stage + inspector column */
+/* Stage column */
 .impress-stage-wrap {
-  flex: 1;
+  grid-column: 2;
+  grid-row: 1;
   min-width: 0;
   min-height: 0;
   display: flex;
@@ -2428,7 +2546,8 @@ body.compose-active #tile-overlay {
 
 /* Inspector: mono labels over hairline-underlined controls. */
 .impress-inspector {
-  flex: 0 0 auto;
+  grid-column: 2;
+  grid-row: 2;
   min-height: 0;
   overflow-y: auto;
   display: flex;
@@ -2436,6 +2555,36 @@ body.compose-active #tile-overlay {
   gap: 14px;
   padding: 16px 20px 18px;
 }
+
+/* The pane's head (Back lands here while stacked); wide windows never show it. */
+.impress-inspector-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+}
+.impress-body:not(.is-stacked) .impress-inspector-head { display: none; }
+.impress-inspector-title {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Stacked: the strip is a row of thumbnails above the stage. */
+.impress-body.is-stacked .impress-strip {
+  flex: none;
+  flex-direction: row;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 6px;
+  gap: 6px;
+  border-right: 0;
+  border-bottom: 1px solid var(--impress-line);
+}
+.impress-body.is-stacked .impress-thumb { width: 88px; }
+html[data-phone='1'] .impress-body.is-stacked .impress-thumb { width: 104px; }
 
 .impress-field {
   display: flex;
@@ -2501,6 +2650,9 @@ textarea.impress-field-input { min-height: 56px; line-height: 1.5; }
 .impress-op { gap: 6px; height: 30px; min-height: 30px; }
 .impress-op--icon { width: 30px; padding: 0; }
 .impress-op--danger:hover { color: var(--error); }
+/* Phone: every pill is a 44px round, like the labelled ones the library turns. */
+html[data-phone='1'] .impress-op--icon,
+html[data-phone='1'] .impress-anim-apply { width: 44px; height: 44px; min-height: 44px; border-radius: 50%; }
 
 /* Deck menu popup (body-level). */
 
@@ -2870,8 +3022,7 @@ textarea.impress-field-input { min-height: 56px; line-height: 1.5; }
   color: color-mix(in srgb, var(--present-ink) 60%, transparent);
 }
 
-/* Phone: narrower strip, more room for the stage. */
-.tile-grid--phone .impress-strip { width: 112px; }
+/* Phone: a tighter bar. */
 .tile-grid--phone .impress-bar { padding: 9px 12px; }
 .tile-grid--phone .impress-meta { display: none; }
 
@@ -3475,11 +3626,15 @@ textarea.impress-field-input { min-height: 56px; line-height: 1.5; }
 /* A reader column too narrow for the labelled actions: icons, named by their
    tooltip, on one row — instead of a stack of rows that a short window cuts. */
 @container mail-reader (max-width: 380px) {
-  .mail-reader-actions:not(.mail-reader-actions--bar) .ui-btn:has(> .ui-icon) > :is(span:not(.ui-icon, .ui-spinner), .ui-btn-arrow) { display: none; }
-  .mail-reader-actions:not(.mail-reader-actions--bar) .ui-btn:has(> .ui-icon) { min-width: 34px; padding-inline: 8px; justify-content: center; }
+  .mail-reader-actions .ui-btn:has(> .ui-icon) > :is(span:not(.ui-icon, .ui-spinner), .ui-btn-arrow) { display: none; }
+  .mail-reader-actions .ui-btn:has(> .ui-icon) { min-width: 34px; padding-inline: 8px; justify-content: center; }
 }
 
+/* The actions row is built once (it is the reader's pane bar, so it has to
+   outlive the message re-renders) and sits first in the DOM; the editorial
+   order — subject, then the actions, then the rest — comes from `order`. */
 .mail-reader-actions {
+  order: 1;
   flex: 0 0 auto;
   display: flex;
   flex-wrap: wrap;
@@ -3489,8 +3644,71 @@ textarea.impress-field-input { min-height: 56px; line-height: 1.5; }
   border-bottom: 1px solid var(--mail-line);
 }
 
+.mail-reader > :not(.mail-reader-head, .mail-reader-actions) {
+  order: 2;
+}
+
 .mail-reader-close {
   margin-inline-start: auto;
+}
+
+/* ── Stacked panes (ui/components/panes.js) ────────────────────
+   In a narrow window or on a phone the shell is a column
+   (`.mail-shell.is-stacked`): the folder rail is a strip across the top,
+   the list is the floor and the reader slides in over it when a message is
+   picked. The reader's actions row becomes its top bar, the shared Back at
+   its start — so its own Close steps aside. */
+.mail-shell.is-stacked .mail-rail {
+  flex: none;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-inline-end: 0;
+  border-bottom: 1px solid var(--mail-line);
+  scrollbar-width: none;
+}
+
+.mail-shell.is-stacked .mail-rail::-webkit-scrollbar {
+  display: none;
+}
+
+.mail-shell.is-stacked :is(.mail-rail-head, .mail-rail-foot) {
+  display: none;
+}
+
+.mail-shell.is-stacked .mail-rail-list {
+  flex-direction: row;
+  gap: 4px;
+}
+
+.mail-shell.is-stacked .mail-folder {
+  flex: 0 0 auto;
+  grid-template-columns: 16px auto auto;
+  gap: 8px;
+  width: auto;
+  min-height: 32px;
+}
+
+.mail-shell.is-stacked .mail-reader-actions {
+  order: -1;
+  flex-wrap: nowrap;
+  gap: 4px;
+  padding: 6px 10px;
+}
+
+.mail-shell.is-stacked .mail-reader-actions .ui-pane-back {
+  margin-inline-end: auto;
+}
+
+.mail-shell.is-stacked .mail-reader-close {
+  display: none;
+}
+
+.mail-shell.is-stacked .mail-reader-head {
+  padding-top: 16px;
 }
 
 .mail-reader-details {
@@ -3946,13 +4164,42 @@ textarea.impress-field-input { min-height: 56px; line-height: 1.5; }
    Editorial: the bar melts into the window (history/scientific/clear
    tools, grey fill when on), a display with a small mono expression line
    over a large tight display-font result, a keypad of flat grey pills with
-   `=` as the ink pill, and a collapsible hairline history.
+   `=` as the ink pill, and a collapsible hairline history. The body is a
+   pane stack (ui paneStack): the pad is the floor and the history a pane
+   that slides in over it while narrow or on a phone; wide, the history
+   sits under the keypad, or beside it from 760px.
    ───────────────────────────────────────────────────────────── */
 .calculator-tile {
   --calc-line: color-mix(in srgb, var(--text) 9%, transparent);
   padding: 0;
   gap: 0;
   overflow: hidden;
+}
+
+.calculator-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.calculator-pad {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Wide enough: the history is a column beside the pad. */
+@container plugin-window (min-width: 760px) {
+  .calculator-body:not(.is-stacked) { flex-direction: row; }
+  .calculator-body:not(.is-stacked) > .calculator-history {
+    flex: 0 0 280px;
+    max-height: none;
+    border-top: 0;
+    border-left: 1px solid var(--calc-line);
+  }
 }
 
 .calculator-bar {
@@ -4077,25 +4324,47 @@ textarea.impress-field-input { min-height: 56px; line-height: 1.5; }
 }
 .calculator-key.is-equals:hover { background: var(--ed-pill-dark); opacity: 0.86; }
 
+/* Phone: the keys grow with the window, like a phone calculator; the
+   short-landscape rule in ui/responsive.css lets the pad scroll instead. */
+html[data-phone='1'] .calculator-keys {
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-rows: repeat(5, minmax(44px, 1fr));
+  gap: 6px;
+}
+html[data-phone='1'] .calculator-key { height: auto; min-height: 44px; }
+html[data-phone='1'] .calculator-sci .calculator-key { min-height: 38px; }
+
 .calculator-history {
   flex: none;
   max-height: 240px;
-  overflow-y: auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   border-top: 1px solid var(--calc-line);
   background: transparent;
 }
+/* On the stack the pane is full-size: the head stays, the list scrolls. */
+.calculator-body.is-stacked > .calculator-history { max-height: none; border-top: 0; }
 
 .calculator-history-head {
-  position: sticky;
-  top: 0;
-  z-index: 1;
+  flex: none;
   display: flex;
-  justify-content: space-between;
-  padding: 12px 22px 8px;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 6px 10px 6px 22px;
   border-bottom: 1px solid var(--calc-line);
   background: var(--surface-strong);
+}
+.calculator-history-head .ui-pane-back { margin-left: -8px; }
+
+.calculator-history-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
 }
 
 .calculator-history-item {
@@ -4181,6 +4450,10 @@ textarea.impress-field-input { min-height: 56px; line-height: 1.5; }
   pointer-events: none;
 }
 
+/* The body is the pane stack root (ui paneStack): wide, the one scrolling
+   column — the month pane, then the day's detail under it; stacked (a
+   narrow window, a phone), the month pane scrolls on its own and the
+   detail slides in over it. */
 .calendar-scroll {
   flex: 1 1 auto;
   min-height: 0;
@@ -4189,6 +4462,14 @@ textarea.impress-field-input { min-height: 56px; line-height: 1.5; }
   overflow-y: auto;
   overflow-x: hidden;
 }
+
+.calendar-month {
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.calendar-scroll.is-stacked > .calendar-month { overflow-y: auto; overflow-x: hidden; }
 
 .calendar-hero { flex: none; padding: 14px 18px 16px; }
 
@@ -4311,11 +4592,24 @@ textarea.impress-field-input { min-height: 56px; line-height: 1.5; }
 }
 
 .calendar-detail-head {
+  flex: none;
   display: flex;
   align-items: baseline;
   gap: 12px;
   padding: 22px 18px 10px;
   border-bottom: 1px solid var(--cal-line);
+}
+/* Stacked: the head is the pane's bar (Back · date · count) and the rows
+   scroll under it. */
+.calendar-scroll.is-stacked .calendar-detail-head {
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px 8px 8px;
+}
+.calendar-scroll.is-stacked .calendar-detail-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .calendar-detail-date {
@@ -4784,7 +5078,6 @@ textarea.impress-field-input { min-height: 56px; line-height: 1.5; }
 /* phone: stack browser above the grid */
 @media (max-width: 640px) {
   .studio-body { flex-direction: column; }
-  .studio-browser { width: auto; max-height: 140px; border-right: none; border-bottom: 1px solid var(--glass-border); }
 }
 
 /* device panel parameter sliders */
@@ -5637,6 +5930,9 @@ textarea.impress-field-input { min-height: 56px; line-height: 1.5; }
 .studio-tile .studio-views .ui-icon { width: 15px; height: 15px; }
 
 /* body: arranger + launcher side by side */
+/* The shell holds the body, the detail panel and the floating panels: the
+   pane stack's root (one pane at a time narrow or on a phone). */
+.studio-shell { flex: 1; min-width: 0; min-height: 0; position: relative; display: flex; flex-direction: column; }
 .studio-body { flex: 1; min-height: 0; display: flex; align-items: stretch; }
 .studio-panel { flex: 1 1 0; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 .studio-panel--lch { border-left: 1px solid var(--studio-line); }
@@ -5655,6 +5951,27 @@ textarea.impress-field-input { min-height: 56px; line-height: 1.5; }
   text-transform: uppercase;
 }
 .studio-tile .studio-detail-collapse.ui-btn { align-self: center; }
+/* The bar's detail button, the pane's title and the page icons belong to the
+   stacked shell; wide, the bar and the rail stay as they are. */
+.studio-tile:not(.studio-tile--stacked) .studio-detail-btn { display: none; }
+.studio-detail-title { display: none; }
+.studio-shell:not(.is-stacked) .studio-detail-pages .ui-icon { display: none; }
+/* Stacked: the detail is a full pane whose rail is its head — Back, the
+   title, the Editor / Devices / Mixer switch in a row. */
+/* The floor is its own stacking context: the playhead (z-index 5 inside the
+   arranger) stays under the panes. */
+.studio-shell.is-stacked > .studio-body { isolation: isolate; }
+.studio-shell.is-stacked .studio-detail { max-height: none; min-height: 0; border-top: 0; }
+.studio-shell.is-stacked .studio-detail-rail { flex-direction: row; align-items: center; gap: 8px; padding: 6px 8px; border-right: 0; border-bottom: 1px solid var(--studio-line); }
+.studio-shell.is-stacked .studio-detail-title { display: block; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.06em; color: var(--muted); }
+.studio-tile .studio-shell.is-stacked .studio-detail-pages { flex-direction: row; }
+.studio-tile .studio-shell.is-stacked .studio-detail-pages > button { width: auto; height: 28px; padding: 0 10px; }
+.studio-shell.is-stacked .studio-detail-collapse { display: none; }
+.studio-shell.is-stacked .studio-detail-body { overflow: auto; }
+.studio-shell.is-stacked :is(.studio-browser, .studio-ai) { max-height: none; width: auto; border: 0; }
+/* Back covers the floating panels' Close. */
+.studio-shell.is-stacked .studio-browser-head > .studio-head-btn { display: none; }
+.studio-ai-body { flex: 1 1 auto; min-height: 0; overflow: auto; padding-bottom: 12px; }
 .studio-detail-body { flex: 1; min-width: 0; min-height: 0; display: flex; align-items: stretch; overflow: hidden; }
 .studio-editor-page { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .studio-editor-toolbar { flex: none; display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-bottom: 1px solid var(--studio-line); flex-wrap: wrap; }
@@ -5665,6 +5982,8 @@ textarea.impress-field-input { min-height: 56px; line-height: 1.5; }
 .studio-footer { flex: none; display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 4px 12px; border-top: 1px solid var(--studio-line); background: transparent; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
 .studio-footer-hint { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .studio-footer-param { flex: none; font-variant-numeric: tabular-nums; color: var(--text-secondary); }
+/* A phone has no hover: the hint row goes. */
+html[data-phone='1'] .studio-footer { display: none; }
 
 /* footer — live oscilloscope + spectrum analyser (Bitwig "analysis device" look) */
 
@@ -5773,7 +6092,7 @@ textarea.impress-field-input { min-height: 56px; line-height: 1.5; }
 
 /* pop-up browser — a flat sheet on a hairline: mono eyebrow, mono tabs,
    hairline rows (title + mono sub-label). */
-.studio-browser { position: absolute; top: 50px; left: 10px; z-index: 40; width: 320px; max-height: 72%; display: flex; flex-direction: column; gap: 0; padding: 0 0 4px; background: var(--bg-elevated, var(--bg)); border: 1px solid var(--studio-line); border-radius: 0; box-shadow: none; }
+.studio-browser { position: absolute; top: 6px; left: 10px; z-index: 40; width: 320px; max-height: 72%; display: flex; flex-direction: column; gap: 0; padding: 0 0 4px; background: var(--bg-elevated, var(--bg)); border: 1px solid var(--studio-line); border-radius: 0; box-shadow: none; }
 .studio-browser-head { flex: none; display: flex; align-items: center; justify-content: space-between; padding: 10px 8px 6px 14px; border-bottom: 0; color: var(--muted); }
 .studio-browser-head .ui-eyebrow { font-family: var(--font-mono); font-size: 10.5px; font-weight: 500; letter-spacing: 0.06em; color: var(--muted); }
 .studio-browser > .ui-search { margin: 0 10px 6px; }
@@ -6222,6 +6541,21 @@ textarea.impress-field-input { min-height: 56px; line-height: 1.5; }
   border-right: 1px solid var(--pdf-line);
 }
 .pdf-rail::-webkit-scrollbar { display: none; }
+/* The body as a pane stack (ui paneStack, narrow or on a phone): the page is
+   the floor, the rail a strip of pages across the top of it. */
+.pdf-main.is-stacked .pdf-rail {
+  flex-direction: row;
+  width: auto;
+  max-height: 88px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 6px 10px;
+  gap: 10px;
+  border-right: 0;
+  border-bottom: 1px solid var(--pdf-line);
+}
+.pdf-main.is-stacked .pdf-thumb { width: 60px; }
+.pdf-main.is-stacked .pdf-thumb-add { margin: 0 4px; align-self: center; }
 
 .pdf-thumb {
   position: relative;
@@ -6271,6 +6605,8 @@ textarea.impress-field-input { min-height: 56px; line-height: 1.5; }
   border-radius: 2px;
   pointer-events: none;
 }
+/* Until pdf.js has painted it: a blank sheet, not a broken-image glyph. */
+.pdf-thumb-img:not([src]) { visibility: hidden; aspect-ratio: 210 / 297; }
 
 .pdf-thumb-del {
   position: absolute;
@@ -6400,7 +6736,8 @@ textarea.impress-field-input { min-height: 56px; line-height: 1.5; }
   align-items: center;
   gap: 4px;
   padding: 4px;
-  border-radius: 999px;
+  flex-wrap: wrap;
+  border-radius: 20px;
   border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
   background: var(--bg-elevated, var(--surface-strong));
 }
@@ -6410,6 +6747,7 @@ textarea.impress-field-input { min-height: 56px; line-height: 1.5; }
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 5px;
   font: inherit;
   font-family: var(--font-body);
   font-size: 12.5px;
@@ -6426,8 +6764,11 @@ textarea.impress-field-input { min-height: 56px; line-height: 1.5; }
   transition: background var(--motion-feedback) var(--motion-ease),
     color var(--motion-feedback) var(--motion-ease);
 }
-.pdf-edit-pill .ui-icon { width: 14px; height: 14px; }
+.pdf-edit-pill .ui-icon, .pdf-edit-apply .ui-icon, .pdf-edit-cancel .ui-icon { width: 14px; height: 14px; flex: none; }
 .pdf-edit-pill:hover { background: var(--glass-hover); color: var(--text); }
+/* A phone: the icon alone, on a finger-sized pill. */
+html[data-phone='1'] .pdf-edit-pill-text { display: none; }
+html[data-phone='1'] :is(.pdf-edit-pill, .pdf-edit-apply, .pdf-edit-cancel) { min-width: 36px; height: 36px; padding: 0 10px; }
 .pdf-edit-pill.is-on {
   background: var(--ed-pill-hover, var(--glass-hover));
   color: var(--text);
@@ -6614,6 +6955,11 @@ textarea.impress-field-input { min-height: 56px; line-height: 1.5; }
 .pdf-mode-tools { font-size: 12px; }
 .pdf-mode-spacer { flex: 1; }
 .pdf-mode-done, .pdf-mode-action { flex: none; }
+/* Compact (ui/compact.js): one line; the hint wraps in place and keeps a
+   readable width, so the mode's options fold into More before it is crushed. */
+.pdf-mode-strip.is-compact { flex-wrap: nowrap; padding-inline: 10px; }
+.pdf-mode-strip.is-compact .pdf-mode-hint { flex: 1 1 auto; min-width: 120px; }
+.pdf-mode-strip.is-compact .pdf-mode-spacer { flex: 0 0 0; }
 
 /* Rail: page actions, add-page, drop indicators. */
 .pdf-thumb-more {
@@ -6636,6 +6982,11 @@ textarea.impress-field-input { min-height: 56px; line-height: 1.5; }
 .pdf-thumb:focus-visible .pdf-thumb-more { display: inline-flex; }
 .pdf-thumb-more:hover { color: var(--text); }
 .pdf-thumb-more .ui-icon { width: 12px; height: 12px; }
+/* A finger cannot hover: the page actions stay on every thumbnail. */
+@media (pointer: coarse) {
+  .pdf-thumb-more { display: inline-flex; width: 26px; height: 26px; }
+  .pdf-thumb-more .ui-icon { width: 14px; height: 14px; }
+}
 .pdf-thumb.is-drop-before .pdf-thumb-frame { box-shadow: 0 -3px 0 var(--accent); }
 .pdf-thumb.is-drop-after .pdf-thumb-frame { box-shadow: 0 3px 0 var(--accent); }
 .pdf-thumb-add {
@@ -6790,15 +7141,32 @@ textarea.impress-field-input { min-height: 56px; line-height: 1.5; }
 .pdf-panel {
   flex: none;
   width: 280px;
-  overflow-y: auto;
+  min-height: 0;
   border-left: 1px solid var(--pdf-line);
-  padding: 12px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
   font-family: var(--font-body);
 }
 .pdf-panel[hidden] { display: none; }
+/* The head is the pane's bar: stacked, the stack's Back lands at its start. */
+.pdf-panel-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 8px 12px 0;
+}
+.pdf-main.is-stacked .pdf-panel-bar { min-height: 44px; padding: 4px 8px; border-bottom: 1px solid var(--pdf-line); }
+.pdf-panel-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 10px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
 .pdf-panel-head, .pdf-panel-page {
   font-family: var(--font-mono);
   font-size: 10.5px;
@@ -6844,19 +7212,8 @@ textarea.impress-field-input { min-height: 56px; line-height: 1.5; }
   color: var(--text-secondary);
   white-space: pre-wrap;
 }
-.pdf-comment-actions { display: flex; gap: 4px; margin-top: 3px; }
-.pdf-comment-btn {
-  height: 24px;
-  padding: 0 9px;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--muted);
-  font: inherit;
-  font-size: 11.5px;
-  cursor: pointer;
-}
-.pdf-comment-btn:hover { background: var(--glass-hover); color: var(--text); }
+.pdf-comment-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
+.pdf-comment-btn { color: var(--muted); }
 .pdf-comment-flash {
   position: absolute;
   z-index: 5;
@@ -6896,10 +7253,8 @@ textarea.impress-field-input { min-height: 56px; line-height: 1.5; }
 /* ── PDF compact variant (narrow window / phone) ────────────── */
 .tile-grid--phone .pdf-bar { padding: 9px 12px; }
 .tile-grid--phone .pdf-title { font-size: 14px; min-width: 60px; }
-.tile-grid--phone .pdf-rail { width: 96px; padding: 10px; }
 .tile-grid--phone .pdf-cluster--quiet { padding-left: 0; margin-left: 0; border-left: 0; }
 .tile-grid--phone .pdf-canvas { padding: 14px; }
-.tile-grid--phone .pdf-panel { width: 220px; }
 .tile-grid--phone .pdfed-surface { padding: 12px; }
 
 /* ─────────────────────────────────────────────────────────────
@@ -7121,13 +7476,6 @@ textarea.impress-field-input { min-height: 56px; line-height: 1.5; }
   background: transparent;
 }
 .files-sidebar::-webkit-scrollbar { display: none; }
-
-.files-sidebar-head {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 12px 10px 6px 14px;
-}
 /* Toolbar buttons: a round-cornered grey square, the icon in plain ink. */
 .files-icon-btn {
   flex: none;
@@ -7144,15 +7492,18 @@ textarea.impress-field-input { min-height: 56px; line-height: 1.5; }
 .files-icon-btn.is-disabled,
 .files-icon-btn:disabled { opacity: 0.4; background: var(--files-btn); }
 .files-icon-btn--forward .ui-icon { transform: scaleX(-1); }
-/* The sidebar's menu button is flat: it sits beside the list, not in the toolbar. */
-.files-sidebar-head .files-icon-btn { background: transparent; color: var(--muted); }
-.files-sidebar-head .files-icon-btn:hover { background: var(--files-btn); color: var(--text); }
+/* The app menu and Done are flat: they sit at the end of the bar. */
+.files-header .files-menu-btn,
+.files-header .files-done-btn { background: transparent; color: var(--muted); }
+.files-header .files-menu-btn:hover,
+.files-header .files-done-btn:hover { background: var(--files-btn); color: var(--text); }
+.files-header .files-done-btn { color: var(--accent); }
 
 .files-places {
   display: flex;
   flex-direction: column;
   gap: 1px;
-  padding: 0 10px 12px;
+  padding: 12px 10px;
 }
 .files-place {
   display: flex;
@@ -7188,13 +7539,26 @@ textarea.impress-field-input { min-height: 56px; line-height: 1.5; }
   flex-direction: column;
 }
 
-/* Toolbar: back/forward · breadcrumb · search · view switcher */
+/* The window bar: back/forward · breadcrumb · search · view switcher · menu.
+   The tile manager merges it with the title row (`data-window-bar`), so it
+   keeps to the title row's height. */
 .files-header {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 12px 14px;
+  min-height: var(--tile-header-height, 36px);
+  padding: 2px 10px 2px 14px;
 }
+/* Compact (a narrow window, a phone): the view switch lives in the menu
+   (View, Show hidden files), and the search gives way to the path until it
+   is tapped. */
+.files-header.is-compact .files-header-actions { display: none; }
+.files-header.is-compact .files-search.ui-search { flex: 0 0 40px; width: 40px; min-width: 40px; }
+.files-header.is-compact .files-search.ui-search:focus-within { flex: 4 1 160px; width: auto; }
+.files-header.is-compact .files-pathbar { flex: 1 1 60px; min-width: 60px; }
+/* The current folder's name gives way (an ellipsis) before the chevron
+   beside it would be cut off. */
+.files-header.is-compact .files-path-crumb.is-current { flex-shrink: 1; min-width: 2ch; }
 .files-header > .files-icon-btn + .files-icon-btn { margin-left: -2px; }
 .files-pathbar {
   flex: 1 1 auto;
@@ -7240,31 +7604,15 @@ button.files-path-crumb:hover { color: var(--text); }
 }
 .files-pathbar .files-path-menu:hover { background: var(--files-btn); color: var(--text); }
 
-/* Search: a flat grey field, the glyph quietly on its right. */
+/* Search: the shared pill on the toolbar's grey plate. Only the wrapper is
+   sized here — the pill's own metrics, font and ring belong to the library. */
 .files-search.ui-search {
-  --search-size: 32px;
   --search-plate: var(--files-btn);
   flex: 0 1 200px;
   min-width: 120px;
   margin-left: auto;
-  border-radius: var(--radius-sm, 10px);
-  outline-color: transparent;
-  transition: outline-color var(--motion-feedback) var(--motion-ease), background var(--motion-feedback);
 }
 .files-search.ui-search:hover { --search-plate: var(--files-btn-hover); }
-.files-search.ui-search:focus-within { outline-color: var(--accent); }
-.files-search .ui-input {
-  padding: 0 4px 0 12px;
-  font-size: 13px;
-  color: var(--text);
-}
-.files-search .ui-input::placeholder { color: var(--muted); }
-.files-search .ui-search-action,
-.files-search .ui-search-action:hover {
-  width: 32px;
-  background: transparent;
-  color: var(--muted);
-}
 
 .files-header-actions { flex: none; display: flex; align-items: center; gap: 2px; }
 /* The grid/list switch and its options read as one grey square group. */
@@ -7801,18 +8149,65 @@ button.files-path-crumb:hover { color: var(--text); }
 }
 .files-preview-unknown p { margin: 0; font-size: 13px; }
 
-/* Adaptive: fold the sidebar away in a narrow window. */
-@container (max-width: 560px) {
-  .files-sidebar { display: none; }
+/* Adaptive: in a narrow window, and on a phone, the places become a strip
+   that scrolls sideways above the content (nothing folds away). */
+@container plugin-window (max-width: 560px) {
+  .files-shell { flex-direction: column; }
+  .files-sidebar { flex-direction: row; width: auto; max-width: 100%; overflow-x: auto; overflow-y: hidden; border-right: 0; border-bottom: 1px solid var(--files-line); }
+  .files-places { flex-direction: row; gap: 2px; padding: 6px 8px; }
+  .files-place { width: auto; flex-shrink: 0; height: 30px; padding: 0 10px; }
+  .files-place-sep { display: none; }
+  .files-main { min-height: 0; }
   .files-content { padding: 4px 10px 16px; }
-  .files-header { padding: 10px; gap: 6px; }
-  .files-search.ui-search { flex-basis: 140px; min-width: 96px; }
+  .files-header { gap: 6px; }
   .files-grid { grid-template-columns: repeat(auto-fill, minmax(108px, 1fr)); }
   .files-col-head,
   .files-entry--row { grid-template-columns: 28px minmax(0, 1fr) 84px; }
   .files-col-when,
   .files-row-when { display: none; }
 }
+html[data-phone='1'] .files-shell { flex-direction: column; }
+html[data-phone='1'] .files-sidebar { flex-direction: row; width: auto; max-width: 100%; overflow-x: auto; overflow-y: hidden; border-right: 0; border-bottom: 1px solid var(--files-line); }
+html[data-phone='1'] .files-places { flex-direction: row; gap: 2px; padding: 6px max(8px, env(safe-area-inset-right)) 6px max(8px, env(safe-area-inset-left)); }
+html[data-phone='1'] .files-place { width: auto; flex-shrink: 0; height: 36px; padding: 0 12px; }
+html[data-phone='1'] .files-place-sep { display: none; }
+html[data-phone='1'] .files-main { min-height: 0; }
+/* Touch: taps land on tall enough crumbs, and the quick look's arrows show
+   without a pointer to hover them. */
+@media (pointer: coarse) {
+  .files-pathbar { height: auto; min-height: 44px; }
+  .files-path-crumb { height: 44px; line-height: 44px; }
+  /* The path-actions chevron is a 44px target here: room for it and two
+     letters of the folder's name beside the open search. */
+  .files-header.is-compact .files-pathbar { min-width: 80px; }
+  .files-look .files-look-arrow { opacity: 1; pointer-events: auto; }
+}
+
+/* Selection mode: every entry wears a check, filled for the selected ones. */
+.files-check {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 1;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 1.5px solid var(--glass-border);
+  border-radius: 50%;
+  background: var(--surface-strong, var(--glass-strong));
+  color: transparent;
+  pointer-events: none;
+}
+.files-tile.is-selecting .files-entry { position: relative; }
+.files-tile.is-selecting .files-check { display: inline-flex; }
+.files-tile.is-selecting .files-entry.is-selected .files-check {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-contrast, #fff);
+}
+.files-tile.is-selecting .files-entry--row .files-check { top: calc(50% - 10px); left: auto; right: 10px; }
 
 /* Office entries the server cannot render: the glyph and its extension. */
 .files-thumb--doc {
@@ -8181,7 +8576,25 @@ button.files-path-crumb:hover { color: var(--text); }
   .image-dock { max-height: 58%; }
   .image-appbar-title { font-size: 15px; }
 }
-.tile-grid--phone .image-dock { max-height: 54%; }
+
+/* Phone: the dock body moves into a bottom sheet (editor.js) and the canvas
+   keeps the whole screen; the two window-bar icons open it on a section. */
+.image-dock[hidden],
+.image-tools-btn[hidden] { display: none; }
+.image-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.image-sheet .image-sheet-tabs { align-self: center; }
+.image-sheet .image-dock-body { padding: 0; }
+.image-sheet .image-dock-eyebrow,
+.image-sheet .image-dock-divider { display: none; }
+.image-sheet[data-tab='looks'] .image-dock-section[data-section='adjust'],
+.image-sheet[data-tab='adjust'] .image-dock-section[data-section='looks'] { display: none; }
+.image-sheet .image-oneclicks { justify-content: center; }
+.image-sheet .image-oneclick--revert { margin-left: 0; }
 
 @media (prefers-reduced-motion: reduce) {
   .image-look-thumb { transition: none; }
@@ -8367,13 +8780,23 @@ button.files-path-crumb:hover { color: var(--text); }
   .browser-tile .browser-tabcount { font-size: 13px; }
 }
 
+/* Phone: a panel is a full pane over the page (plugin.css), on the island's
+   own ink — opaque, so the page under it never shows through. */
+html[data-phone='1'] .browser-tile.browser-stacked :is(.browser-popover, .browser-downloads-panel):not(.browser-menu, .browser-pw-offer) {
+  border: 0;
+  background: linear-gradient(var(--ed-bar-bg, #0b0b0c), var(--ed-bar-bg, #0b0b0c)) #0b0b0c;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
 /* ─────────────────────────────────────────────────────────────
    Updates plugin window — editorial style.
    Tabs in the window bar (flat, the active one on the grey pill);
    a large title ("4 updates" / "Up to date") under a mono eyebrow
    ("DEBIAN · APT"); one ink install pill; hairline package rows,
-   name left and mono "1.2 → 1.3 · MAIN" right; the job log in mono.
-   Theme tokens only.
+   name left and mono "1.2 → 1.3 · MAIN" right; the job log in mono, as
+   a pane (ui/panes.js): a column beside the content when wide, a slide-in
+   over it when narrow or on a phone. Theme tokens only.
    ───────────────────────────────────────────────────────────── */
 .updates-tile {
   --updates-line: color-mix(in srgb, var(--text) 9%, transparent);
@@ -8404,8 +8827,20 @@ button.files-path-crumb:hover { color: var(--text); }
 .updates-bar .ui-chip.is-active { background: var(--ed-pill, var(--glass-strong)); color: var(--text); }
 .updates-bar-spacer { flex: 1; min-width: 0; }
 
-.updates-content {
+.updates-shell {
   flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+/* Wide: Details opens the log as a column beside the content. */
+.updates-shell:not(.is-stacked):has(> .updates-log-pane.is-open) {
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 36%);
+}
+.updates-shell:not(.is-stacked) > .updates-log-pane:not(.is-open) { display: none; }
+.updates-content {
+  min-width: 0;
   min-height: 0;
   overflow: auto;
   display: flex;
@@ -8441,6 +8876,16 @@ button.files-path-crumb:hover { color: var(--text); }
 .updates-list .ui-hairline-row { min-height: 44px; }
 .updates-list .ui-hairline-title { font-size: 13.5px; }
 .updates-list .ui-hairline-row > .ui-meta { max-width: 55%; }
+/* Narrow or phone: the mono versions go under the name instead of being
+   squeezed beside it. */
+@container plugin-window (max-width: 420px) {
+  .updates-list .ui-hairline-row { flex-wrap: wrap; row-gap: 2px; }
+  .updates-list .ui-hairline-row > .ui-hairline-main { flex: 1 1 auto; }
+  .updates-list .ui-hairline-row > .ui-meta { flex: 1 1 100%; max-width: none; }
+}
+html[data-phone='1'] .updates-list .ui-hairline-row { flex-wrap: wrap; row-gap: 2px; }
+html[data-phone='1'] .updates-list .ui-hairline-row > .ui-hairline-main { flex: 1 1 auto; }
+html[data-phone='1'] .updates-list .ui-hairline-row > .ui-meta { flex: 1 1 100%; max-width: none; }
 .updates-list .ui-hairline-lead { color: var(--ok); }
 .updates-list .ui-hairline-row.is-error .ui-hairline-lead { color: var(--error); }
 
@@ -8481,13 +8926,36 @@ button.files-path-crumb:hover { color: var(--text); }
 .updates-pkg.is-working .ui-hairline-title { color: var(--text); font-weight: 600; }
 .updates-pkg.is-working .ui-hairline-lead { color: var(--text-secondary); }
 .updates-pkg.is-removed .ui-hairline-lead { color: var(--muted); }
+.updates-log-pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border-left: 1px solid var(--updates-line);
+}
+.updates-log-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  min-height: 44px;
+  padding: 0 14px 0 10px;
+  border-bottom: 1px solid var(--updates-line);
+}
+.updates-log-title {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
 .updates-log {
-  align-self: stretch;
-  max-height: 220px;
+  flex: 1;
+  min-height: 0;
   margin: 0;
-  padding: 10px 0;
+  padding: 10px 14px;
   overflow: auto;
-  border-top: 1px solid var(--updates-line);
   color: var(--muted);
   font-family: var(--font-mono);
   font-size: 11.5px;
@@ -8498,6 +8966,31 @@ button.files-path-crumb:hover { color: var(--text); }
 
 .updates-ollama { display: flex; align-items: center; gap: 14px; }
 .updates-ollama .updates-status + .updates-status { margin-top: 2px; }
+
+/* Phone: the install action is its icon; the count rides on it as a badge
+   (layout only — the label, hidden by the library, keeps the words). */
+html[data-phone='1'] .updates-install { position: relative; }
+html[data-phone='1'] .updates-install[data-count]::after {
+  content: attr(data-count);
+  position: absolute;
+  top: -3px;
+  right: -5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border: 2px solid var(--bg-elevated, var(--surface, var(--bg)));
+  border-radius: 999px;
+  background: var(--accent, var(--text));
+  color: var(--bg, #fff);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
 
 /* ════════════════════════════════════════════════════════════
    Studio — mixer console, peak meters, audio clips, AI panel

@@ -9,50 +9,42 @@
   "plugin.impress.toolbar.saveToDocuments": "Salva in Documenti",
   "plugin.impress.toolbar.saveNow": "Salva ora",
   "plugin.impress.toolbar.deleteDeck": "Elimina presentazione",
-
   "plugin.impress.menu.empty": "Ancora nessuna presentazione",
   "plugin.impress.menu.newDeck": "Nuova presentazione",
   "plugin.impress.menu.importOdp": "Importa .odp",
   "plugin.impress.menu.saveNow": "Salva ora",
   "plugin.impress.menu.saveToDocuments": "Salva in Documenti",
   "plugin.impress.menu.deleteDeck": "Elimina presentazione",
-
   "plugin.impress.ctx.newDeck": "Nuova presentazione",
   "plugin.impress.ctx.addSlide": "Aggiungi diapositiva",
   "plugin.impress.ctx.saveNow": "Salva ora",
   "plugin.impress.ctx.present": "Presenta",
   "plugin.impress.ctx.stopPresenting": "Interrompi la presentazione",
   "plugin.impress.ctx.deleteDeck": "Elimina presentazione",
-
   "plugin.impress.status.saving": "Salvataggio…",
   "plugin.impress.status.unsaved": "Modifiche non salvate",
   "plugin.impress.status.saved.one": "Salvato {time} · {count} diapositiva",
   "plugin.impress.status.saved.other": "Salvato {time} · {count} diapositive",
   "plugin.impress.status.saved.many": "Salvato {time} · {count} diapositive",
-
   "plugin.impress.state.saving": "Salvataggio",
   "plugin.impress.state.unsaved": "Non salvata",
   "plugin.impress.state.saved": "Salvata {time}",
   "plugin.impress.info.slides.one": "{count} diapositiva",
   "plugin.impress.info.slides.other": "{count} diapositive",
   "plugin.impress.info.slides.many": "{count} diapositive",
-
   "plugin.impress.theme.aurora": "Aurora",
   "plugin.impress.theme.slate": "Ardesia",
   "plugin.impress.theme.ocean": "Oceano",
   "plugin.impress.theme.mono": "Mono",
   "plugin.impress.theme.ember": "Brace",
-
   "plugin.impress.layout.title": "Titolo",
   "plugin.impress.layout.section": "Sezione",
   "plugin.impress.layout.content": "Contenuto",
   "plugin.impress.layout.twoColumn": "Due colonne",
   "plugin.impress.layout.quote": "Citazione",
   "plugin.impress.layout.blank": "Vuota",
-
   "plugin.impress.empty.noDeck": "Nessuna presentazione",
   "plugin.impress.empty.noDeckBody": "Creane una, oppure chiedi all'AI di costruire una presentazione",
-
   "plugin.impress.inspector.layout": "Layout",
   "plugin.impress.inspector.transition": "Transizione",
   "plugin.impress.inspector.bullets": "Elenchi",
@@ -60,34 +52,27 @@
   "plugin.impress.inspector.hint": "Clicca un testo sulla diapositiva per modificarlo direttamente.",
   "plugin.impress.inspector.applyAll": "Applica questa transizione e questo effetto elenco a tutte le diapositive",
   "plugin.impress.inspector.applyAllLabel": "Applica a tutte le diapositive",
-
   "plugin.impress.ops.addSlide": "Aggiungi diapositiva",
   "plugin.impress.ops.moveUp": "Sposta su",
   "plugin.impress.ops.moveDown": "Sposta giù",
   "plugin.impress.ops.deleteSlide": "Elimina diapositiva",
-
   "plugin.impress.transition.none": "Nessuna",
   "plugin.impress.transition.fade": "Dissolvenza",
   "plugin.impress.transition.slide": "Scorrimento",
   "plugin.impress.transition.push": "Spinta",
   "plugin.impress.transition.zoom": "Zoom",
-
   "plugin.impress.reveal.all": "Tutto insieme",
   "plugin.impress.reveal.bullets": "Uno alla volta",
-
   "plugin.impress.slide.addText": "Aggiungi testo",
   "plugin.impress.slide.addTitle": "Aggiungi un titolo",
   "plugin.impress.slide.addSubtitle": "Aggiungi un sottotitolo",
   "plugin.impress.slide.attribution": "Attribuzione",
   "plugin.impress.strip.thumbTitle": "{n}. {title}",
-
   "plugin.impress.present.backToEditor": "Torna all'editor",
   "plugin.impress.present.fullScreen": "Schermo intero",
   "plugin.impress.present.exitFullScreen": "Esci da schermo intero",
   "plugin.impress.present.blocked": "Lo schermo intero è stato bloccato dal browser",
-
   "plugin.impress.dialog.deleteDeck": "Eliminare \"{title}\"?",
-
   "plugin.impress.toast.saveFailed": "Salvataggio non riuscito",
   "plugin.impress.toast.openFailed": "Impossibile aprire la presentazione",
   "plugin.impress.toast.createFailed": "Impossibile creare la presentazione",
@@ -95,8 +80,10 @@
   "plugin.impress.toast.imported": "{name} importato",
   "plugin.impress.toast.importFailed": "Importazione non riuscita — è un file .odp valido?",
   "plugin.impress.toast.openFileFailed": "Impossibile aprire il file",
-
   "plugin.impress.meta.description": "Creatore di presentazioni — presentazioni salvate come diapositive ed esportate come file .odp aperti",
   "plugin.impress.meta.summary": "Impress: crea, modifica e presenta presentazioni OpenDocument (.odp)",
-  "plugin.impress.meta.category": "Ufficio"
+  "plugin.impress.meta.category": "Ufficio",
+  "plugin.impress.toolbar.inspector": "Impostazioni diapositiva",
+  "plugin.impress.inspector.title": "Diapositiva",
+  "plugin.impress.actions": "Azioni presentazione"
 }

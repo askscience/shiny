@@ -237,6 +237,27 @@ const iconButton = ({ icon: name = 'ui/info', label = '', size, onClick, disable
   return el;
 };
 
+/** `button` from the library: icon + label (the label is also the name). */
+const button = ({ icon: name = '', label = '', onClick, className = '', variant = 'primary', size } = {}) => {
+  const el = makeElement('button');
+  el.className = `ui-btn ui-btn--${variant}${size && size !== 'md' ? ` ui-btn--${size}` : ''}${className ? ` ${className}` : ''}`;
+  el.type = 'button';
+  if (name) el.appendChild(icon(name, { size: 16 }));
+  const span = makeElement('span');
+  span.textContent = label;
+  el.appendChild(span);
+  if (name && label) { el.classList.add('ui-btn--labelled'); el.setAttribute('aria-label', label); }
+  if (onClick) el.addEventListener('click', onClick);
+  return el;
+};
+
+/** The pane stack (ui/panes.js): never stacked here, as a desktop window. */
+const paneStack = () => ({
+  isStacked: () => false, isOpen: () => false, show: () => false, back: () => false,
+  reset: () => false, refresh() {}, destroy() {},
+});
+const loadIconSvg = () => Promise.resolve('<svg></svg>');
+
 const searchBar = ({ placeholder = 'Search…', value } = {}) => {
   const wrap = makeElement('div');
   wrap.className = 'ui-search';
@@ -366,7 +387,7 @@ const moduleSource = source
 
 const context = vm.createContext({
   console, document: documentStub, window: windowStub,
-  apiFetch, icon, iconButton, searchBar, tabStrip, tabItem, openWithPlugin, pluginForFile, revealInFiles,
+  apiFetch, icon, iconButton, button, paneStack, loadIconSvg, searchBar, tabStrip, tabItem, openWithPlugin, pluginForFile, revealInFiles,
   toolbar: (children = [], { className = '' } = {}) => { const node = makeElement('div'); node.className = `ui-toolbar ${className}`; node.append(...children); return node; },
   controlButton: () => { const node = makeElement('button'); node.type = 'button'; return node; },
   onOpenUrl,

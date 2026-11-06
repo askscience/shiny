@@ -33,6 +33,7 @@
   "plugin.calendar.toolbar.nextMonth": "Mese successivo",
   "plugin.calendar.toolbar.today": "Oggi",
   "plugin.calendar.toolbar.newEvent": "Nuovo evento",
+  "plugin.calendar.actions": "Azioni del calendario",
 
   "plugin.calendar.ctx.refresh": "Aggiorna",
 

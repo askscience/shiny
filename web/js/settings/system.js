@@ -67,6 +67,7 @@ export function createSystemSection({ on, cleanups, resources }) {
 
     const logoutBtn = button({
       label: t('settings.system.logOut', null, 'Sign out'),
+      icon: 'ui/power',
       variant: 'danger',
       onClick: async () => {
         try {

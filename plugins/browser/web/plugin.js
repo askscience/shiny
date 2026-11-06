@@ -1,6 +1,6 @@
 import {
-  toolbar, controlButton, icon, iconButton, searchBar, themeMode, listReveal, COMPACT_MAX,
-  tabStrip, tab as tabItem,
+  toolbar, button, controlButton, icon, iconButton, searchBar, themeMode, listReveal, COMPACT_MAX,
+  tabStrip, tab as tabItem, paneStack, loadIconSvg,
 } from '../../ui/index.js';
 /**
  * browser.js — the Browser plugin's window.
@@ -184,7 +184,7 @@ function occluderHoles() {
   // / passwords). They live inside the tile, but the native view still stacks
   // above them.
   for (const el of browserPopovers()) {
-    if (!el.classList.contains('hidden')) add(el.getBoundingClientRect());
+    if (panelOpen(el)) add(el.getBoundingClientRect());
   }
   // A higher floating window overlapping this one, in the "Windows" layout.
   // Compare by z-index, falling back to DOM order when equal (windows that
@@ -263,8 +263,17 @@ let incognitoBtn = null;
 let bookmarkBtn = null;
 let passwordsBtn = null;
 let menuBtn = null;
+/** The open-tab count in the address row: a phone's way to the switcher. */
+let tabsBtn = null;
 let homeBtn = null;
 let barEl = null;
+/** The address row sits in the window's header row on a phone (`placeBar`). */
+let barInHeader = false;
+let barRetries = 0;
+/** The panels as full-height panes over the page on a phone (ui/panes.js). */
+let panes = null;
+/** The theme's refresh glyph, for the start page's Refresh button. */
+let refreshSvg = '';
 /** The page actions' row at the top of the browser menu (compact only). */
 let menuActionsEl = null;
 /** The menu's own Passwords row, which the row's lock replaces while compact. */
@@ -294,6 +303,37 @@ let passwords = null;
 function browserPopovers() {
   return [downloadsPanel, browserMenu, historyPanel, bookmarksPanel, tabsPanel, passwordsPanel, loginOfferEl, importPanel]
     .filter(Boolean);
+}
+
+/**
+ * The panels that are full-height panes over the page on a phone (`panes`,
+ * ui/panes.js): the tab switcher, history, bookmarks, downloads, the password
+ * manager and the import. The menu and the login offer stay popovers.
+ */
+function panelPanes() {
+  return [
+    { id: 'tabs', el: tabsPanel },
+    { id: 'history', el: historyPanel },
+    { id: 'bookmarks', el: bookmarksPanel },
+    { id: 'downloads', el: downloadsPanel },
+    { id: 'passwords', el: passwordsPanel },
+    { id: 'import', el: importPanel },
+  ].filter((p) => p.el);
+}
+
+/** Is a panel showing? A stacked pane is open when it is on the stack. */
+function panelOpen(el) {
+  if (!el) return false;
+  if (panes?.isStacked() && el.dataset.pane) return panes.isOpen(el.dataset.pane);
+  return !el.classList.contains('hidden');
+}
+
+/** Show a panel: as a popover, or slid in over the page while stacked. */
+function showPanel(el) {
+  if (!el) return;
+  el.classList.remove('hidden');
+  if (panes?.isStacked() && el.dataset.pane) panes.show(el.dataset.pane);
+  onMenuChange();
 }
 
 /** The persisted history the panels show (newest first). */
@@ -542,6 +582,11 @@ function renderTabs() {
   count.setAttribute('aria-haspopup', 'dialog');
   count.addEventListener('click', () => toggleTabsPanel());
   nodes.push(count);
+  if (tabsBtn) {
+    tabsBtn.textContent = String(tabs.length);
+    tabsBtn.title = countLabel;
+    tabsBtn.setAttribute('aria-label', countLabel);
+  }
 
   const add = iconButton({
     icon: 'ui/plus',
@@ -555,7 +600,7 @@ function renderTabs() {
   // A strip wider than the window scrolls; keep the active tab on screen.
   tabstripEl.querySelector('.browser-tab.is-active')
     ?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
-  if (tabsPanel && !tabsPanel.classList.contains('hidden')) renderTabsPanel();
+  if (panelOpen(tabsPanel)) renderTabsPanel();
 }
 
 /* ── Tab switcher ─────────────────────────────────────────────── */
@@ -571,20 +616,14 @@ function buildTabsPanel() {
 
   const head = document.createElement('div');
   head.className = 'browser-popover-head';
+  // The stack prepends its Back here while the panel is a pane (a phone).
+  head.setAttribute('data-pane-bar', '');
   head.append(labelSpan(t('plugin.browser.tabs.label', null, 'Tabs')));
-  const incognito = controlButton();
-  incognito.type = 'button';
-  incognito.className = 'browser-popover-action';
-  incognito.textContent = t('plugin.browser.tabs.newIncognito', null, 'New incognito tab');
-  incognito.addEventListener('click', () => {
+  const incognito = panelAction('ui/incognito', t('plugin.browser.tabs.newIncognito', null, 'New incognito tab'), () => {
     closeAllBrowserPanels();
     createTab({ incognito: true });
   });
-  const fresh = controlButton();
-  fresh.type = 'button';
-  fresh.className = 'browser-popover-action';
-  fresh.textContent = t('plugin.browser.tabs.newTab', null, 'New tab');
-  fresh.addEventListener('click', () => {
+  const fresh = panelAction('ui/plus', t('plugin.browser.tabs.newTab', null, 'New tab'), () => {
     closeAllBrowserPanels();
     createTab({});
   });
@@ -652,12 +691,11 @@ function renderTabsPanel() {
 
 function toggleTabsPanel() {
   if (!tabsPanel) return;
-  const willOpen = tabsPanel.classList.contains('hidden');
+  const willOpen = !panelOpen(tabsPanel);
   closeAllBrowserPanels();
   if (willOpen) {
     renderTabsPanel();
-    tabsPanel.classList.remove('hidden');
-    requestSync();
+    showPanel(tabsPanel);
   }
 }
 
@@ -917,9 +955,18 @@ function buildToolbar() {
   });
   menuBtn.classList.add('browser-menu-btn');
 
+  // The open-tab count on a phone, where this row is the only header row and
+  // the strip is gone: it opens the tab switcher (plugin.css shows it under
+  // `html[data-phone='1']` only; `renderTabs` keeps the number).
+  tabsBtn = controlButton();
+  tabsBtn.type = 'button';
+  tabsBtn.className = 'browser-tabcount browser-tabcount--bar';
+  tabsBtn.setAttribute('aria-haspopup', 'dialog');
+  tabsBtn.addEventListener('click', () => toggleTabsPanel());
+
   bar.append(
     backBtn, forwardBtn, reloadBtn, homeBtn, addressEl,
-    bookmarkBtn, passwordsBtn, shieldBtn, downloadsBtn, incognitoBtn, menuBtn,
+    bookmarkBtn, passwordsBtn, shieldBtn, downloadsBtn, incognitoBtn, tabsBtn, menuBtn,
   );
   barEl = bar;
   return bar;
@@ -928,8 +975,42 @@ function buildToolbar() {
 /** The popovers hang under the bar, wherever the title row above put it. */
 function placePopovers() {
   if (!tileEl || !barEl) return;
-  const barBottom = (barEl.offsetTop || 0) + (barEl.offsetHeight || 0);
+  // Measured as rects: on a phone the bar sits inside the header row, whose
+  // offset box is not the tile's.
+  const bar = barEl.getBoundingClientRect?.();
+  const tile = tileEl.getBoundingClientRect?.();
+  const barBottom = bar && tile ? bar.bottom - tile.top : 0;
   if (barBottom > 0) tileEl.style?.setProperty?.('--browser-pop-top', `${barBottom}px`);
+}
+
+/**
+ * A phone has one header row: the window bar. The tab strip, which is that
+ * bar on the desktop, is hidden there (plugin.css) and the address row moves
+ * into the merged header in its place — back, address, reload, the tab count
+ * and the menu. The row comes back under the strip when the document stops
+ * being a phone's (the harness flips the flag; a desktop never does).
+ */
+function placeBar(phone) {
+  if (!tileEl || !barEl) return;
+  if (phone) {
+    if (barInHeader) return;
+    const header = tileEl.querySelector(':scope > .tile-header--merged');
+    if (!header) {
+      // Core adds the chrome right after mount; look again on the next frame.
+      if (typeof requestAnimationFrame === 'function' && barRetries < 10) {
+        barRetries += 1;
+        requestAnimationFrame(() => applyBrowserCompact());
+      }
+      return;
+    }
+    header.append(barEl);
+    barEl.dataset.windowBar = '';
+    barInHeader = true;
+  } else if (barInHeader) {
+    tileEl.insertBefore(barEl, viewportEl);
+    delete barEl.dataset.windowBar;
+    barInHeader = false;
+  }
 }
 
 /** The page actions that leave the bar for the menu in a compact window. */
@@ -946,8 +1027,9 @@ function compactActions() {
  */
 function applyBrowserCompact() {
   if (!tileEl || !barEl || !menuActionsEl) return;
-  placePopovers();
   const phone = document.documentElement?.dataset?.phone === '1';
+  placeBar(phone);
+  placePopovers();
   const width = tileEl.clientWidth || 0;
   const on = phone || (width > 0 && width <= COMPACT_MAX);
   if (on === browserCompact) return;
@@ -959,7 +1041,7 @@ function applyBrowserCompact() {
     barEl.insertBefore(forwardBtn, backBtn.nextSibling);
     barEl.insertBefore(homeBtn, addressEl);
     for (const btn of compactActions()) {
-      if (btn !== homeBtn && btn !== forwardBtn) barEl.insertBefore(btn, menuBtn);
+      if (btn !== homeBtn && btn !== forwardBtn) barEl.insertBefore(btn, tabsBtn || menuBtn);
     }
   }
   menuActionsEl.hidden = !on;
@@ -1150,14 +1232,13 @@ function buildDownloadsPanel() {
 
   const head = document.createElement('div');
   head.className = 'browser-downloads-head';
+  head.setAttribute('data-pane-bar', '');
   const title = document.createElement('span');
   title.className = 'browser-downloads-title';
   title.textContent = t('plugin.browser.downloads.title', null, 'Downloads');
-  const clear = controlButton();
-  clear.type = 'button';
-  clear.className = 'browser-downloads-clear';
-  clear.textContent = t('plugin.browser.downloads.clearFinished', null, 'Clear finished');
-  clear.addEventListener('click', () => downloadAction('', 'clear'));
+  const clear = panelAction('ui/trash', t('plugin.browser.downloads.clearFinished', null, 'Clear finished'),
+    () => downloadAction('', 'clear'));
+  clear.classList.add('browser-downloads-clear');
   head.append(title, clear);
 
   const list = document.createElement('div');
@@ -1170,11 +1251,10 @@ function buildDownloadsPanel() {
 
 function toggleDownloadsPanel() {
   if (!downloadsPanel) return;
-  const willOpen = downloadsPanel.classList.contains('hidden');
+  const willOpen = !panelOpen(downloadsPanel);
   closeAllBrowserPanels();
   if (willOpen) {
-    downloadsPanel.classList.remove('hidden');
-    requestSync();
+    showPanel(downloadsPanel);
     void loadDownloads().then(() => revealRows(downloadsPanel, downloadsListEl));
   }
 }
@@ -1435,8 +1515,18 @@ window.__liteauraDownloads = function (list) {
 /** A popover shell, hidden until its opener shows it. */
 /** A panel's rows have loaded: cascade them in (only while it is open). */
 function revealRows(panel, list) {
-  if (!panel || !list || panel.classList.contains('hidden')) return;
+  if (!panel || !list || !panelOpen(panel)) return;
   void listReveal(list.children);
+}
+
+/**
+ * An action in a panel's head: an icon with its label, which on a phone is
+ * the icon alone (ui/responsive.css), the label staying its name.
+ */
+function panelAction(iconName, label, onClick) {
+  return button({
+    icon: iconName, label, variant: 'ghost', size: 'sm', className: 'browser-popover-action', onClick,
+  });
 }
 
 function popover(className) {
@@ -1606,13 +1696,17 @@ function closeAllBrowserPanels() {
   // Every panel opens through here: measure where it will hang first.
   placePopovers();
   let changed = false;
+  const stacked = !!panes?.isStacked();
+  if (stacked && panes.reset()) changed = true;
   for (const el of browserPopovers()) {
+    // A pane's slide-out is the stack's; `hidden` is the popover's.
+    if (stacked && el.dataset.pane) continue;
     if (!el.classList.contains('hidden')) {
       el.classList.add('hidden');
       changed = true;
     }
   }
-  if (changed) requestSync();
+  if (changed) onMenuChange();
 }
 
 /* ── Page scripts ──────────────────────────────────────────────── */
@@ -1719,8 +1813,7 @@ function buildLoginAssist() {
       if (values) {
         closeAllBrowserPanels();
         if (!passwordsPanel || !passwords) return;
-        passwordsPanel.classList.remove('hidden');
-        requestSync();
+        showPanel(passwordsPanel);
         void passwords.openWith(values);
       } else {
         void openPasswordsPanel();
@@ -1729,11 +1822,13 @@ function buildLoginAssist() {
     onShow: (shown) => {
       if (shown) {
         placePopovers();
+        const stacked = !!panes?.isStacked();
+        if (stacked) panes.reset();
         for (const el of browserPopovers()) {
-          if (el !== loginOfferEl) el.classList.add('hidden');
+          if (el !== loginOfferEl && !(stacked && el.dataset.pane)) el.classList.add('hidden');
         }
       }
-      requestSync();
+      onMenuChange();
     },
     focusPage: (tab) => {
       if (tab?.native && tab.id === activeTabId) nativeSend({ op: 'focus', id: tab.id });
@@ -1755,21 +1850,19 @@ function buildImportPanel() {
 async function openImportPanel() {
   closeAllBrowserPanels();
   if (!importPanel || !importer) return;
-  importPanel.classList.remove('hidden');
-  requestSync();
+  showPanel(importPanel);
   await importer.open();
 }
 
 async function openPasswordsPanel() {
   closeAllBrowserPanels();
   if (!passwordsPanel || !passwords) return;
-  passwordsPanel.classList.remove('hidden');
-  requestSync();
+  showPanel(passwordsPanel);
   await passwords.open();
 }
 
 function togglePasswordsPanel() {
-  if (passwordsPanel && !passwordsPanel.classList.contains('hidden')) {
+  if (panelOpen(passwordsPanel)) {
     closeAllBrowserPanels();
     return;
   }
@@ -1785,12 +1878,9 @@ function buildHistoryPanel() {
 
   const head = document.createElement('div');
   head.className = 'browser-popover-head';
+  head.setAttribute('data-pane-bar', '');
   head.append(labelSpan(t('plugin.browser.history.title', null, 'History')));
-  const clear = controlButton();
-  clear.type = 'button';
-  clear.className = 'browser-popover-action';
-  clear.textContent = t('plugin.browser.history.clear', null, 'Clear');
-  clear.addEventListener('click', () => void clearHistory());
+  const clear = panelAction('ui/trash', t('plugin.browser.history.clear', null, 'Clear'), () => void clearHistory());
   head.appendChild(clear);
 
   const list = document.createElement('div');
@@ -1803,10 +1893,7 @@ function buildHistoryPanel() {
 
 async function openHistoryPanel() {
   closeAllBrowserPanels();
-  if (historyPanel) {
-    historyPanel.classList.remove('hidden');
-    requestSync();
-  }
+  showPanel(historyPanel);
   await loadHistory();
   revealRows(historyPanel, historyListEl);
 }
@@ -1883,6 +1970,7 @@ function buildBookmarksPanel() {
 
   const head = document.createElement('div');
   head.className = 'browser-popover-head';
+  head.setAttribute('data-pane-bar', '');
   head.append(labelSpan(t('plugin.browser.bookmarks.title', null, 'Bookmarks')));
 
   const list = document.createElement('div');
@@ -1895,10 +1983,7 @@ function buildBookmarksPanel() {
 
 async function openBookmarksPanel() {
   closeAllBrowserPanels();
-  if (bookmarksPanel) {
-    bookmarksPanel.classList.remove('hidden');
-    requestSync();
-  }
+  showPanel(bookmarksPanel);
   await loadBookmarks();
   revealRows(bookmarksPanel, bookmarksListEl);
 }
@@ -2161,7 +2246,7 @@ function homeDocument(news, saved = [], { palette = homePalette(), animate = tru
 
   const shelf = personal
     ? `<div class="section-head ${rv()}"><span class="eyebrow">${escapeHtml(recent)}</span>
-         <button type="button" class="again" data-refresh>${escapeHtml(refresh)}</button></div>
+         ${refreshButton(refresh)}</div>
        ${topics.length ? `<div class="chips ${rv()}">${topics
         .map((topic) => `<span class="chip">${escapeHtml(topic)}</span>`)
         .join('')}</div>` : ''}
@@ -2170,8 +2255,10 @@ function homeDocument(news, saved = [], { palette = homePalette(), animate = tru
 
   const root = Object.entries(palette.vars || {}).map(([k, v]) => `${k}:${v}`).join(';');
   const motion = animate ? palette.motion : 'none';
+  // On a phone the page's one button is its icon alone, as the window's are.
+  const phone = document.documentElement?.dataset?.phone === '1' ? ' data-phone="1"' : '';
 
-  return `<!doctype html><html data-motion="${escapeHtml(motion)}"><head><meta charset="utf-8">
+  return `<!doctype html><html data-motion="${escapeHtml(motion)}"${phone}><head><meta charset="utf-8">
 <style>
   :root{color-scheme:${palette.mode === 'light' ? 'light' : 'dark'};${root}}
   html,body{min-height:100%;margin:0}
@@ -2217,6 +2304,9 @@ function homeDocument(news, saved = [], { palette = homePalette(), animate = tru
   .again:hover{background:var(--ed-pill-hover)}
   .again:hover::after{transform:translateX(3px)}
   .again:disabled{cursor:default;color:var(--muted)}
+  .again svg{width:14px;height:14px;flex:none}
+  html[data-phone] .again{width:32px;height:32px;padding:0;justify-content:center}
+  html[data-phone] .again span,html[data-phone] .again::after{display:none}
   .again:focus-visible,a.card:focus-visible,a.bookmark:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   .cards{display:flex;flex-direction:column}
   a.card{display:flex;gap:16px;padding:16px 0;text-decoration:none;color:inherit;
@@ -2392,6 +2482,16 @@ function bookmarkCardHtml(bookmark, rv = () => '') {
   </a>`;
 }
 
+/**
+ * The shelf's Refresh: the theme's glyph (`ui/refresh`, fetched at mount) and
+ * its label, which the page hides on a phone. The glyph is the icon set's own
+ * markup, so the page keeps drawing from the theme.
+ */
+function refreshButton(label) {
+  const glyph = /^<svg[\s>]/.test(refreshSvg) ? refreshSvg : '<span aria-hidden="true">&#x21bb;</span>';
+  return `<button type="button" class="again" data-refresh title="${escapeHtml(label)}">${glyph}<span>${escapeHtml(label)}</span></button>`;
+}
+
 /** What to show when there is nothing to personalise from. */
 function emptyShelf(news, rv = () => '') {
   const reason = news?.error ? escapeHtml(news.error) : '';
@@ -2402,7 +2502,7 @@ function emptyShelf(news, rv = () => '') {
   return `<div class="section-head ${rv()}"><span class="eyebrow">${escapeHtml(
     t('plugin.browser.home.news', null, 'News'),
   )}</span>
-      <button type="button" class="again" data-refresh>${escapeHtml(t('plugin.browser.home.refresh', null, 'Refresh'))}</button></div>
+      ${refreshButton(t('plugin.browser.home.refresh', null, 'Refresh'))}</div>
     <div class="empty ${rv()}">
       <div class="t">${escapeHtml(t('plugin.browser.home.emptyTitle', null, 'No stories yet'))}</div>
       <div class="s">${body}</div>
@@ -3015,6 +3115,29 @@ export function mountBrowserTile() {
     importPanel,
   );
 
+  // On a phone every panel is a full-height pane over the page, with the
+  // shared Back in its head; wide windows keep the popovers.
+  panes = paneStack(tileEl, {
+    panes: [{ id: 'page', el: viewportEl }, ...panelPanes()],
+    compactWhen: ({ phone }) => phone,
+    onChange: ({ stacked }) => {
+      tileEl?.classList.toggle('browser-stacked', stacked);
+      // Back to popovers: whatever the stack had out is a closed popover.
+      if (!stacked) for (const { el } of panelPanes()) el.classList.add('hidden');
+      onMenuChange();
+    },
+  });
+  // A pane's slide has settled: the hole the page shows through is its
+  // final rect, not the one sampled mid-slide.
+  tileEl.addEventListener('transitionend', (e) => {
+    const cl = e.target?.classList;
+    if (cl?.contains?.('browser-popover') || cl?.contains?.('browser-downloads-panel')) requestSync();
+  });
+  // The start page's Refresh draws the theme's glyph.
+  void Promise.resolve(loadIconSvg('ui/refresh'))
+    .then((svg) => { refreshSvg = typeof svg === 'string' ? svg : ''; })
+    .catch(() => {});
+
   document.addEventListener('pointerdown', onBrowserPointerDown, true);
   document.addEventListener('keydown', onBrowserKeydown, true);
 
@@ -3052,8 +3175,13 @@ export function mountBrowserTile() {
 export function unmountBrowserTile() {
   compactObserver?.disconnect();
   compactObserver = null;
+  panes?.destroy();
+  panes = null;
   browserCompact = false;
+  barInHeader = false;
+  barRetries = 0;
   barEl = null;
+  tabsBtn = null;
   homeBtn = null;
   menuActionsEl = null;
   menuPasswordsItem = null;

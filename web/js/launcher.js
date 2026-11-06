@@ -254,6 +254,26 @@ function runDot() {
   return dot;
 }
 
+/* ── Badges: a count on an app's icon ──────────────────────────
+   An app announces what waits for the user (unread mail, updates to
+   install) with `window.dispatchEvent(new CustomEvent('plugin:badge',
+   { detail: { name, count } }))`; the home screen's icon wears the count. */
+const badges = new Map();
+
+function badgeFor(name) {
+  const count = badges.get(name) || 0;
+  if (!count) return null;
+  const badge = h('span', 'launcher-badge', count > 99 ? '99+' : String(count));
+  badge.setAttribute('aria-label', t('launcher.badge', { count }, `${count} waiting`));
+  return badge;
+}
+
+function paintBadge(btn) {
+  btn.querySelector(':scope > .launcher-plugin-icon > .launcher-badge')?.remove();
+  const badge = badgeFor(btn.dataset.plugin);
+  if (badge) btn.querySelector(':scope > .launcher-plugin-icon')?.appendChild(badge);
+}
+
 /** A plugin, as a big icon (`tile`) or a row with its description (`row`). */
 function pluginItem(p, variant) {
   const name = label(p.name);
@@ -269,6 +289,8 @@ function pluginItem(p, variant) {
     : name);
   const icon = h('span', 'launcher-plugin-icon');
   icon.appendChild(pluginIconEl(p.name, { size: variant === 'tile' ? 44 : 26, fallback: 'ui/puzzle' }));
+  const badge = badgeFor(p.name);
+  if (badge) icon.appendChild(badge);
   if (variant === 'tile') {
     btn.append(icon, h('span', 'launcher-plugin-name', name), runDot());
   } else {
@@ -794,4 +816,12 @@ export function initLauncher() {
   });
   // A file saved anywhere is a new recent file.
   window.addEventListener('files:changed', () => { recentsAt = 0; });
+  // An app's count changes: repaint its icons in place.
+  window.addEventListener('plugin:badge', (e) => {
+    const { name, count } = e.detail || {};
+    if (!name) return;
+    const n = Math.max(0, Number(count) || 0);
+    if (n) badges.set(name, n); else badges.delete(name);
+    document.querySelectorAll(`.launcher-plugin[data-plugin="${CSS.escape(name)}"]`).forEach(paintBadge);
+  });
 }

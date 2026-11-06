@@ -36,7 +36,7 @@ import { refreshActivePlugins, refreshPluginCatalog } from './activePlugins.js';
 import {
   element as el, chip as uiChip, listReveal, cardEnter, rollNumber, eyebrow,
   toast, button, iconButton, emptyState, searchBar, select, toggle, confirmDialog,
-  reducedMotion,
+  reducedMotion, paneStack, pullRefresh,
 } from '../ui/index.js';
 import { pluginIconEl } from './pluginIcon.js';
 import { pickFiles } from './files.js';
@@ -826,18 +826,16 @@ function renderManifest() {
   }
 }
 
-/** Show an app in the manifest; on a narrow window, open it as a panel. */
+/** Show an app in the manifest; on a narrow window, open it as a pane
+ *  over the stage (the shared pane stack, ui/components/panes.js). */
 function select_(next, { open = false } = {}) {
   selected = next;
-  if (open) refs.layout.dataset.manifestOpen = '1';
   render();
-  if (open && refs.layout.dataset.manifestOpen) refs.manifest.scrollTop = 0;
+  if (open) refs.nav?.show('manifest');
 }
 
 function closeManifest() {
-  if (!refs?.layout.dataset.manifestOpen) return false;
-  delete refs.layout.dataset.manifestOpen;
-  return true;
+  return !!refs?.nav?.reset();
 }
 
 /* ── Render ─────────────────────────────────────────────────── */
@@ -855,7 +853,7 @@ function signature() {
       a.update_available, a.mcp_pending, a.mcp_enabled, a.mcp_installed, a.waiting_for_network, a.error])
       : storeLoadFailed(),
     pluginsLoaded, plugins.map((p) => `${p.name}@${p.version}`), [...activeSet].sort(),
-    refs?.layout.dataset.manifestOpen || '',
+    refs?.nav?.top() || '',
   ]);
 }
 let lastSignature = '';
@@ -1047,12 +1045,12 @@ function mountPlugins() {
   // Manifest.
   const manifest = el('aside', 'pw-manifest');
   manifest.setAttribute('aria-label', t('plugins.atAGlance', null, 'At a glance'));
+  // Its top row is the pane bar: while the manifest is a pane over the
+  // stage, the shared Back lands at its start.
   const manifestTop = el('div', 'pw-manifest-top');
-  const back = iconButton({ icon: 'ui/chevron-left', variant: 'ghost', size: 'sm', label: t('plugins.back', null, 'Back') });
-  back.classList.add('pw-manifest-back');
-  back.addEventListener('click', () => closeManifest());
+  manifestTop.dataset.paneBar = '';
   const manifestName = el('span', 'pw-manifest-name');
-  manifestTop.append(back, eyebrow(t('plugins.atAGlance', null, 'At a glance'), 'pw-manifest-eyebrow'), manifestName);
+  manifestTop.append(eyebrow(t('plugins.atAGlance', null, 'At a glance'), 'pw-manifest-eyebrow'), manifestName);
   const manifestBody = el('div', 'pw-manifest-body');
   manifest.append(manifestTop, manifestBody);
 
@@ -1062,9 +1060,21 @@ function mountPlugins() {
   root.appendChild(layout);
   tileEl.append(bar, root);
 
+  // Rail · stage · manifest side by side while wide; under 1080px (or on a
+  // phone) the manifest is a pane that slides over the stage when an app is
+  // picked and closes with Back / Escape, the rail a strip above the stage.
+  const nav = paneStack(layout, {
+    panes: [{ id: 'stage', el: stage }, { id: 'manifest', el: manifest }],
+    compactWhen: ({ width, phone }) => phone || width <= 1080,
+    onChange: () => { if (refs) render(); },
+  });
+  cleanups.push(() => nav.destroy());
+  // A finger pulls the stage down to look again (the store, the plugins).
+  cleanups.push(pullRefresh(stage, () => Promise.all([loadPlugins(true), loadStoreAndRender()])));
+
   refs = {
     root, layout, stage, stageBody, manifest, manifestBody, manifestName, search, installBtn,
-    status, statusDot, railItems,
+    status, statusDot, railItems, nav,
   };
 
   // Drag a plugin archive anywhere over the window to install it.
@@ -1083,10 +1093,6 @@ function mountPlugins() {
     const f = e.dataTransfer?.files?.[0];
     if (f) void uploadArchive(f);
   });
-  on(tileEl, 'keydown', (e) => {
-    if (e.key === 'Escape' && closeManifest()) { e.preventDefault(); e.stopPropagation(); }
-  });
-
   on(window, 'plugins:changed', () => { void loadPlugins(true); void loadStoreAndRender(); });
   on(window, 'craft-store:changed', () => render());
   cleanups.push(() => {

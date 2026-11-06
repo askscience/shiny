@@ -50,7 +50,7 @@ export function createVoiceSection({ on, cleanups, resources }) {
       },
     });
     const whisperHint = el('p', 'settings-hint');
-    const whisperDownload = button({ label: t('common.download', null, 'Download'), variant: 'quiet', size: 'sm' });
+    const whisperDownload = button({ label: t('common.download', null, 'Download'), icon: 'ui/download', variant: 'quiet', size: 'sm' });
     whisperDownload.classList.add('hidden');
     const whisperRow = el('div', 'whisper-model-row');
     whisperRow.append(whisperHint, whisperDownload);
@@ -180,11 +180,11 @@ export function createVoiceSection({ on, cleanups, resources }) {
       },
     });
     const qwenHint = el('p', 'settings-hint');
-    const qwenDownload = button({ label: t('common.download', null, 'Download'), variant: 'quiet', size: 'sm' });
+    const qwenDownload = button({ label: t('common.download', null, 'Download'), icon: 'ui/download', variant: 'quiet', size: 'sm' });
     qwenDownload.classList.add('hidden');
     // Reload the sidecar after any pause (and for troubleshooting): kills the
     // process holding the port and re-runs the idempotent launcher.
-    const qwenReload = button({ label: t('settings.voice.reload', null, 'Reload'), variant: 'quiet', size: 'sm' });
+    const qwenReload = button({ label: t('settings.voice.reload', null, 'Reload'), icon: 'ui/refresh', variant: 'quiet', size: 'sm' });
     on(qwenReload, 'click', async () => {
       qwenReload.disabled = true;
       try {

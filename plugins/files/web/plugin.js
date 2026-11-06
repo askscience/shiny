@@ -1,18 +1,26 @@
 import {
   searchBar, confirmDialog, promptDialog, slider as uiSlider, toolbar, toolButton,
   controlButton, icon, setIcon, iconButton, button, emptyState, toast, notify, modal, setTileGlow,
-  setTileGlowFromUrl, glowGradient, listReveal,
+  setTileGlowFromUrl, glowGradient, listReveal, actionBar,
 } from '../../ui/index.js';
 
 /**
  * files.js — the Files plugin's window (GNOME Files / Nautilus style).
  *
- * Layout: a full-height Places sidebar, a toolbar (square back/forward
- * buttons, a plain breadcrumb, a search field and a grid/list switcher), a
+ * Layout: the window bar (square back/forward buttons, a plain breadcrumb,
+ * a search field, a grid/list switcher and the app menu — merged with the
+ * window's title row by the tile manager), a full-height Places sidebar
+ * (a horizontal strip above the content in a narrow window or on a phone), a
  * grid of rounded thumbnail boxes with a name and a small meta line, or a
- * column list, a Sushi-style Space quick-look, and a status line along the
- * bottom edge (item count · selection). Lazy thumbnails (server PNG / PDF.js / video frame /
+ * column list, a Sushi-style Space quick-look, a status line along the
+ * bottom edge (item count · selection) and, on a phone, a thumb row with
+ * New folder and Upload. Lazy thumbnails (server PNG / PDF.js / video frame /
  * text mini) and AI wiring (`file_*` outcomes) work as before.
+ *
+ * Touch: on a coarse pointer one tap opens an entry (a mouse keeps the
+ * double-click), a long press opens the item menu (core contextMenu.js), and
+ * "Select" — from the menus — enters a selection mode where taps toggle
+ * entries, each wearing a check, until Done.
  */
 
 import { openContextMenu } from '../../js/contextMenu.js';
@@ -41,6 +49,11 @@ let searchInput = null;
 let viewBtn = null;
 let navBack = null;
 let navFwd = null;
+let menuBtn = null;
+let doneBtn = null;
+let actionBarEl = null;
+/** Selection mode: taps toggle entries instead of opening them. */
+let selectMode = false;
 
 let cwd = '';
 let homeLabel = 'Home';
@@ -475,14 +488,6 @@ function buildSidebar() {
   sidebarEl = document.createElement('aside');
   sidebarEl.className = 'files-sidebar';
 
-  const head = document.createElement('div');
-  head.className = 'files-sidebar-head';
-  const spacer = document.createElement('span');
-  spacer.className = 'tile-bar-spacer';
-  const menuBtn = iconBtn('ui/more', t('plugin.files.toolbar.menu', null, 'Menu'), (e) => openAppMenu(e.currentTarget));
-  head.append(spacer, menuBtn);
-  sidebarEl.appendChild(head);
-
   placesEl = document.createElement('nav');
   placesEl.className = 'files-places';
   renderPlaces();
@@ -522,13 +527,29 @@ function iconBtn(iconName, label, onClick) {
   return btn;
 }
 
+/** A coarse (touch) pointer: one tap opens, a long press is the menu. */
+function coarsePointer() {
+  return !!window.matchMedia?.('(pointer: coarse)')?.matches;
+}
+
+/**
+ * The window bar: the tile manager merges it with the title row and folds it
+ * in a narrow window (`compactToolbar`). Back, Forward, Menu and Done are
+ * pinned; the view switch steps into the Menu while the bar is compact
+ * (tiles.css), so the folding never has to.
+ */
 function buildHeader() {
   headerEl = document.createElement('div');
   headerEl.className = 'files-header';
+  headerEl.dataset.windowBar = '';
+  headerEl.setAttribute('role', 'toolbar');
+  headerEl.setAttribute('aria-label', t('plugin.files.toolbar.label', null, 'Files toolbar'));
 
   navBack = iconBtn('ui/arrow-left', t('plugin.files.toolbar.back', null, 'Back'), goBack);
   navFwd = iconBtn('ui/arrow-left', t('plugin.files.toolbar.forward', null, 'Forward'), goForward);
   navFwd.classList.add('files-icon-btn--forward');
+  navBack.dataset.keep = '';
+  navFwd.dataset.keep = '';
 
   pathbarEl = document.createElement('nav');
   pathbarEl.className = 'files-pathbar';
@@ -558,7 +579,24 @@ function buildHeader() {
   split.append(viewBtn, viewChevron);
   actions.append(split);
 
-  headerEl.append(navBack, navFwd, pathbarEl, searchWrap, actions);
+  doneBtn = iconBtn('ui/check', t('plugin.files.toolbar.done', null, 'Done'), () => setSelectMode(false));
+  doneBtn.classList.add('files-done-btn');
+  doneBtn.dataset.keep = '';
+  doneBtn.hidden = true;
+  menuBtn = iconBtn('ui/more', t('plugin.files.toolbar.menu', null, 'Menu'), (e) => openAppMenu(e.currentTarget));
+  menuBtn.classList.add('files-menu-btn');
+  menuBtn.dataset.keep = '';
+  menuBtn.setAttribute('aria-haspopup', 'menu');
+
+  headerEl.append(navBack, navFwd, pathbarEl, searchWrap, actions, doneBtn, menuBtn);
+}
+
+/** The phone's thumb row: the two actions a folder is for. */
+function buildActionBar() {
+  actionBarEl = actionBar([
+    toolButton('ui/folder-plus', t('plugin.files.menu.newFolder', null, 'New folder'), () => void newFolder()),
+    toolButton('ui/upload', t('plugin.files.menu.uploadFiles', null, 'Upload files…'), pickUpload),
+  ], { label: t('plugin.files.toolbar.actions', null, 'Folder actions') });
 }
 
 /** A crumb: muted and clickable for an ancestor, plain text for the folder on screen. */
@@ -709,10 +747,22 @@ function baseEntry(entry, cls) {
 
   el.addEventListener('click', (e) => {
     e.stopPropagation();
+    if (selectMode) { toggleSelected(entry); return; }
     selectEntry(entry, e);
+    // A finger has no double-click: one tap opens, as on every phone. A
+    // modifier keeps the click a plain selection (a keyboard beside a touch
+    // screen); a long press became the menu and never reaches here.
+    if (coarsePointer() && !e.ctrlKey && !e.metaKey && !e.shiftKey) openEntry(entry);
   });
-  el.addEventListener('dblclick', () => openEntry(entry));
-  if (entry.kind !== 'dir') {
+  el.addEventListener('dblclick', () => { if (!selectMode) openEntry(entry); });
+  // The check worn while selecting (tiles.css shows it in selection mode).
+  const check = document.createElement('span');
+  check.className = 'files-check';
+  check.setAttribute('aria-hidden', 'true');
+  void setIcon(check, 'ui/check', { size: 12 });
+  el.appendChild(check);
+  // A touch drag is the platform's long press: it must stay the menu.
+  if (entry.kind !== 'dir' && !coarsePointer()) {
     // Drag a file into another window (e.g. a picture into Word). The payload
     // is the home-relative path; the target fetches the bytes itself.
     el.draggable = true;
@@ -868,6 +918,25 @@ function selectEntry(entry, e) {
   updateStatus();
 }
 
+/** Selection mode: one tap toggles an entry; the status line keeps count. */
+function toggleSelected(entry) {
+  if (selection.has(entry.path)) selection.delete(entry.path);
+  else selection.add(entry.path);
+  lastAnchor = entry.path;
+  syncSelectionDom();
+  updateStatus();
+}
+
+function setSelectMode(on) {
+  on = !!on;
+  if (on === selectMode) return;
+  selectMode = on;
+  tileEl?.classList.toggle('is-selecting', on);
+  if (doneBtn) doneBtn.hidden = !on;
+  if (menuBtn) menuBtn.hidden = on;
+  if (!on) { selection.clear(); syncSelectionDom(); updateStatus(); }
+}
+
 function openEntry(entry) {
   if (entry.kind === 'dir') { void navigate(entry.path); return; }
   // Desktop behaviour: double-click opens the file in the app that owns it.
@@ -955,6 +1024,7 @@ function openAppMenu(anchor) {
     { type: 'item', label: t('plugin.files.menu.newFolder', null, 'New folder'), icon: 'ui/folder-plus', onClick: () => void newFolder() },
     { type: 'item', label: t('plugin.files.menu.uploadFiles', null, 'Upload files…'), icon: 'ui/upload', onClick: pickUpload },
     { type: 'item', label: t('plugin.files.menu.sharedLinks', null, 'Shared links'), icon: 'ui/link', onClick: () => void openSharesDialog() },
+    { type: 'item', label: t('plugin.files.menu.select', null, 'Select'), icon: 'ui/select-all', onClick: () => setSelectMode(true) },
     { type: 'separator' },
     { type: 'item', label: t('plugin.files.menu.showHidden', null, 'Show hidden files'), icon: 'ui/eye', checked: showHidden, onClick: toggleHidden },
     { type: 'item', label: t('plugin.files.menu.view', null, 'View'), icon: view === 'grid' ? 'ui/grid' : 'ui/list', onClick: toggleView },
@@ -1658,12 +1728,12 @@ export function mountFilesTile() {
   shellEl = document.createElement('div');
   shellEl.className = 'files-shell';
 
+  buildHeader();
   buildSidebar();
+  buildActionBar();
 
   const main = document.createElement('div');
   main.className = 'files-main';
-  buildHeader();
-  main.appendChild(headerEl);
 
   contentEl = document.createElement('div');
   contentEl.className = 'files-content';
@@ -1677,7 +1747,9 @@ export function mountFilesTile() {
   main.appendChild(statusEl);
 
   shellEl.append(sidebarEl, main);
-  tileEl.appendChild(shellEl);
+  // The bar first (the tile manager merges it with the title row), the thumb
+  // row last (shown on a phone only).
+  tileEl.append(headerEl, shellEl, actionBarEl);
 
   contentEl.addEventListener('click', () => {
     selection.clear();
@@ -1716,7 +1788,8 @@ export function unmountFilesTile() {
   tileEl = null; shellEl = null; sidebarEl = null; placesEl = null;
   headerEl = null; pathbarEl = null; contentEl = null; statusEl = null;
   statusCountEl = null; statusSizeEl = null; searchWrap = null; searchInput = null;
-  viewBtn = null; navBack = null; navFwd = null; shownCount = 0; revealNext = false;
+  viewBtn = null; navBack = null; navFwd = null; menuBtn = null; doneBtn = null; actionBarEl = null;
+  selectMode = false; shownCount = 0; revealNext = false;
   allEntries = []; entries = []; selection.clear(); lastAnchor = null;
   history = []; forward = []; searchMode = false; query = '';
   textCache.clear(); thumbCache.clear(); renderCache.clear();
@@ -1774,6 +1847,7 @@ function onKeyDown(e) {
   const trashed = isTrashPath(cwd);
 
   switch (e.key) {
+    case 'Escape': { if (selectMode) { e.preventDefault(); setSelectMode(false); } return; }
     case 'Enter': {
       if (!selection.size) return;
       e.preventDefault();
@@ -1896,6 +1970,10 @@ export function filesContextMenu(ctx) {
   }
   items.push({ type: 'item', label: t('plugin.files.menu.newFolder', null, 'New folder'), icon: 'ui/folder-plus', onClick: () => void newFolder() });
   items.push({ type: 'item', label: t('plugin.files.menu.uploadFiles', null, 'Upload files…'), icon: 'ui/upload', onClick: pickUpload });
+  // A long press on an entry starts selecting from that entry.
+  items.push(selectMode
+    ? { type: 'item', label: t('plugin.files.toolbar.done', null, 'Done'), icon: 'ui/check', onClick: () => setSelectMode(false) }
+    : { type: 'item', label: t('plugin.files.menu.select', null, 'Select'), icon: 'ui/select-all', onClick: () => { setSelectMode(true); if (entry) { selection.add(entry.path); syncSelectionDom(); updateStatus(); } } });
   items.push({ type: 'separator' });
   if (trashed) {
     items.push({ type: 'item', label: t('plugin.files.ctx.restore', null, 'Restore'), icon: 'ui/refresh', disabled: !targets.length, onClick: () => void restoreEntries(targets) });

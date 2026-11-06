@@ -1582,6 +1582,11 @@ body.orb-speaking #artifact-dock {
 
 /* ── Chat history panel (core) ─────────────────────────────── */
 .chat-history-panel .ui-modal-card { max-width: 560px; padding: 0; overflow: hidden; }
+/* One pane at a time: the list is the floor, the messages slide over it. */
+.chat-history-panel .ui-stack.ui-panes { min-height: 240px; }
+.chat-history-pane { display: flex; flex-direction: column; min-height: 0; }
+.chat-history-pane--messages.ui-pane { overflow: hidden; }
+.chat-history-head .ui-pane-back { margin-inline-start: -6px; }
 .chat-history-head {
   display: flex;
   align-items: center;
@@ -1614,14 +1619,8 @@ body.orb-speaking #artifact-dock {
 .chat-history-item-preview { font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chat-history-side { flex: none; display: flex; align-items: center; gap: 8px; }
 .chat-history-item-time { font-size: 10.5px; color: var(--muted); }
-.chat-history-del {
-  width: 28px; height: 28px;
-  display: inline-flex; align-items: center; justify-content: center;
-  border: none; background: transparent; color: var(--muted); cursor: pointer;
-  border-radius: var(--radius-sm);
-}
-.chat-history-del:hover { color: var(--error); background: var(--error-soft, var(--glass-hover)); }
-.chat-history-del-icon { display: inline-flex; }
+.chat-history-del.ui-btn { width: 28px; height: 28px; min-width: 28px; min-height: 28px; color: var(--muted); }
+.chat-history-del.ui-btn:hover { color: var(--error); background: var(--error-soft, var(--glass-hover)); }
 
 .chat-history-messages { display: flex; flex-direction: column; gap: 10px; max-height: 52vh; overflow-y: auto; padding: 16px 18px 18px; }
 .chat-history-bubble { display: flex; flex-direction: column; gap: 4px; max-width: 82%; }

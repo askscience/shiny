@@ -1,5 +1,5 @@
 import { apiFetch, getTraveler } from '../api.js';
-import { toast, button, input, toggleRow, select, revealRegion, disposeMotion, controlCard } from '../../ui/index.js';
+import { toast, input, toggleRow, select, revealRegion, disposeMotion, controlCard } from '../../ui/index.js';
 import { t } from '../i18n.js';
 import { saveKnownUser, renderAvatarEl, readAvatarFile } from '../userProfiles.js';
 import { getLockScreen, setLockScreen, LOCK_IDLE_MIN, LOCK_IDLE_MAX } from '../preferences.js';
@@ -9,7 +9,6 @@ import { el, field, heading } from './controls.js';
 export function createAccountSection({ on, cleanups, resources }) {
   function buildAccount() {
     const traveler = getTraveler();
-    let pendingAvatar;
 
     const avatarPreview = el('div', 'profile-avatar profile-avatar--large');
     renderAvatarEl(avatarPreview, {
@@ -30,53 +29,42 @@ export function createAccountSection({ on, cleanups, resources }) {
       autocomplete: 'name',
     });
 
+    // The profile saves as it changes, like every other preference here.
+    async function save(body) {
+      try {
+        const res = await apiFetch('/api/travelers/me', { method: 'PUT', body: JSON.stringify(body) });
+        if (res?.data) {
+          localStorage.setItem('traveler', JSON.stringify(res.data));
+          saveKnownUser(res.data);
+          window.dispatchEvent(new CustomEvent('profile:change'));
+        }
+      } catch (e) {
+        toast(e.message || t('settings.account.saveFailed', null, 'Could not save profile'), { type: 'error' });
+      }
+    }
+
     on(avatarInput, 'change', async () => {
       const file = avatarInput.files?.[0];
       if (!file) return;
       try {
-        pendingAvatar = await readAvatarFile(file);
-        renderAvatarEl(avatarPreview, { name: nameInput.value || traveler?.name || '', avatar: pendingAvatar });
+        const avatar = await readAvatarFile(file);
+        renderAvatarEl(avatarPreview, { name: nameInput.value || traveler?.name || '', avatar });
+        await save({ avatar });
       } catch (e) {
         toast(e.message, { type: 'error' });
-        avatarInput.value = '';
       }
+      avatarInput.value = '';
     });
 
-    const saveBtn = button({
-      label: t('settings.account.save', null, 'Save profile'),
-      variant: 'primary',
-      size: 'sm',
-      onClick: async () => {
-        const name = nameInput.value.trim();
-        const body = {};
-        if (name && name !== traveler?.name) body.name = name;
-        if (pendingAvatar !== undefined) body.avatar = pendingAvatar;
-        if (!Object.keys(body).length) {
-          toast(t('settings.account.nothingToSave', null, 'Nothing to save'), { type: 'info' });
-          return;
-        }
-        try {
-          const res = await apiFetch('/api/travelers/me', { method: 'PUT', body: JSON.stringify(body) });
-          if (res?.data) {
-            localStorage.setItem('traveler', JSON.stringify(res.data));
-            saveKnownUser(res.data);
-            pendingAvatar = undefined;
-            window.dispatchEvent(new CustomEvent('profile:change'));
-            toast(t('settings.account.saved', null, 'Profile saved'), { type: 'info' });
-          }
-        } catch (e) {
-          toast(e.message || t('settings.account.saveFailed', null, 'Could not save profile'), { type: 'error' });
-        }
-      },
+    on(nameInput, 'change', () => {
+      const name = nameInput.value.trim();
+      if (!name || name === (getTraveler()?.name || '')) return;
+      void save({ name });
     });
-
-    const row = el('div', 'settings-inline-actions');
-    row.appendChild(saveBtn);
 
     return [
       upload,
       field(t('settings.account.displayName', null, 'Display name'), nameInput),
-      row,
       ...buildLock(),
     ];
   }

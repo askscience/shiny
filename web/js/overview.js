@@ -23,13 +23,14 @@
  * fit. Themes style the rest from `--overview-p` (0..1, every frame) and
  * `html[data-overview="opening|open|closing"]`.
  */
-import { focusWindow, getWorkspacesList, activeWorkspaceIndex } from './desktop.js';
+import { focusWindow, getWorkspacesList, activeWorkspaceIndex, togglePluginFocus, isPluginFocused } from './desktop.js';
 import { refreshTiles, showPhoneWindow, closePluginWindow } from './tiles.js';
 import { PHONE_QUERY } from './viewport.js';
 import { fullscreenWindow, exitWindowFullscreen } from './fullscreen.js';
 import { iconButton } from '../ui/components/button.js';
 import { createTransition, clamp01 } from './gestureTransition.js';
-import { gridLayout, motionFor, blurFor, LABEL_H } from './overviewGrid.js';
+import { gridLayout, motionFor, blurFor, LABEL_H, LABEL_H_PHONE } from './overviewGrid.js';
+import { pluginIconEl } from './pluginIcon.js';
 import { t } from './i18n.js';
 
 /** Pointer travel (px) that turns a tap into a scroll. */
@@ -106,7 +107,10 @@ function computeTargets() {
   });
 }
 
-/* ── Chrome: a label (and a close button) under each card ─────── */
+/* ── Chrome: a label (and the window's buttons) under each card ── */
+
+/** The label line's height: taller on a phone, for finger-sized buttons. */
+const labelHeight = () => (PHONE_QUERY.matches ? LABEL_H_PHONE : LABEL_H);
 
 function buildChrome() {
   if (!chrome) {
@@ -119,8 +123,18 @@ function buildChrome() {
   stage.items.forEach((it) => {
     const label = document.createElement('div');
     label.className = 'overview-label';
-    label.style.height = `${LABEL_H}px`;
+    label.style.height = `${labelHeight()}px`;
     const title = windowTitle(it.el);
+    const plugin = it.el.dataset.plugin;
+    // The app's icon: a window without its title bar (a phone) is still
+    // told apart at a glance.
+    if (plugin) {
+      try {
+        const glyph = pluginIconEl(plugin, { size: 16 });
+        glyph.classList.add('overview-label-icon');
+        label.appendChild(glyph);
+      } catch (_) { /* no icon for a core window */ }
+    }
     const name = document.createElement('span');
     name.className = 'overview-label-name';
     name.textContent = title;
@@ -132,12 +146,44 @@ function buildChrome() {
       ws.textContent = String(it.ws + 1);
       label.appendChild(ws);
     }
+    // The window's own buttons live here too — on a phone, where the title
+    // bar is gone, this is where they live at all: round, on a plate, for a
+    // finger. Focus (the eye) narrows the AI to this window (desktop.js).
+    if (plugin) {
+      const focus = iconButton({
+        icon: 'ui/eye',
+        size: 'sm',
+        iconSize: 14,
+        label: t('desktop.focusWindow', { name: title }, `Focus ${title}`),
+        className: 'overview-label-btn overview-label-focus',
+        onClick: (e) => {
+          e.stopPropagation();
+          togglePluginFocus(plugin);
+          const on = isPluginFocused(plugin);
+          focus.classList.toggle('is-active', on);
+          focus.setAttribute('aria-pressed', String(on));
+          const name = on ? t('desktop.unfocusWindow', { name: title }, `Unfocus ${title}`)
+            : t('desktop.focusWindow', { name: title }, `Focus ${title}`);
+          focus.title = name;
+          focus.setAttribute('aria-label', name);
+        },
+      });
+      const on = isPluginFocused(plugin);
+      focus.classList.toggle('is-active', on);
+      focus.setAttribute('aria-pressed', String(on));
+      if (on) {
+        const name = t('desktop.unfocusWindow', { name: title }, `Unfocus ${title}`);
+        focus.title = name;
+        focus.setAttribute('aria-label', name);
+      }
+      label.appendChild(focus);
+    }
     const close = iconButton({
       icon: 'ui/close',
       size: 'sm',
       iconSize: 14,
       label: t('desktop.closeWindow', { name: title }, `Close ${title}`),
-      className: 'overview-label-close',
+      className: 'overview-label-btn overview-label-close',
       onClick: (e) => { e.stopPropagation(); closeCard(it); },
     });
     label.appendChild(close);

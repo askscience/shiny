@@ -21,7 +21,7 @@
  */
 import { apiFetch } from '../../js/api.js';
 import { t } from '../../js/i18n.js';
-import { controlButton } from '../../ui/index.js';
+import { controlButton, icon } from '../../ui/index.js';
 import {
   fillScript, generatePassword, suggestScript, takeScript, watchScript,
 } from './passwords.js';
@@ -37,11 +37,21 @@ function el(tag, className, text) {
   return node;
 }
 
-function button(className, label, onClick) {
+/**
+ * A button with its icon and label: on a phone the icon stands alone and the
+ * label is its name (`ui-btn--labelled`, ui/responsive.css).
+ */
+function button(className, label, onClick, iconName = '') {
   const b = controlButton();
   b.type = 'button';
   b.className = className;
-  b.textContent = label;
+  if (iconName) {
+    b.classList.add('ui-btn--labelled');
+    b.setAttribute('aria-label', label);
+    b.append(icon(iconName, { size: 16 }), el('span', null, label));
+  } else {
+    b.textContent = label;
+  }
   b.addEventListener('click', onClick);
   return b;
 }
@@ -165,7 +175,7 @@ export function createLoginAssist({
       tab.loginOffer = null;
       hide();
       focusPage(tab);
-    });
+    }, 'ui/close');
     let primary;
     if (offer.type === 'save' || offer.type === 'update') {
       nodes.push(el('p', 'browser-pw-intro', offer.type === 'update'
@@ -174,20 +184,20 @@ export function createLoginAssist({
       if (offer.login.username) nodes.push(el('div', 'browser-popover-sub', offer.login.username));
       primary = button('ui-btn ui-btn--primary browser-pw-primary', offer.type === 'update'
         ? t('plugin.browser.passwords.update', null, 'Update')
-        : t('plugin.browser.passwords.save', null, 'Save'), () => void save(tab, offer));
+        : t('plugin.browser.passwords.save', null, 'Save'), () => void save(tab, offer), 'ui/check');
       if (offer.type === 'save') {
-        buttons.append(button('ui-btn ui-btn--quiet', t('plugin.browser.passwords.never', null, 'Never'), () => {
+        buttons.append(button('ui-btn ui-btn--quiet browser-pw-danger', t('plugin.browser.passwords.never', null, 'Never'), () => {
           addNever(offer.origin);
           tab.loginOffer = null;
           hide();
           focusPage(tab);
-        }));
+        }, 'ui/stop'));
       }
     } else if (offer.type === 'suggest') {
       nodes.push(el('p', 'browser-pw-intro', t('plugin.browser.passwords.offerSuggest', null,
         'Use a strong password for this account? It is saved when you sign up.')));
       primary = button('ui-btn ui-btn--primary browser-pw-primary',
-        t('plugin.browser.passwords.useStrong', null, 'Use it'), () => void suggest(tab, offer));
+        t('plugin.browser.passwords.useStrong', null, 'Use it'), () => void suggest(tab, offer), 'ui/check');
     } else if (offer.type === 'unlock') {
       nodes.push(el('p', 'browser-pw-intro', t('plugin.browser.passwords.offerUnlock', { site: host },
         `Unlock your saved passwords to sign in to ${host}.`)));
@@ -196,7 +206,7 @@ export function createLoginAssist({
           tab.loginOffer = null;
           hide();
           openPanel(null);
-        });
+        }, 'ui/lock');
     } else {
       return;
     }

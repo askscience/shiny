@@ -382,5 +382,5 @@
   scrollbar-width: none;
 }
 .settings-page-tabs::-webkit-scrollbar { display: none; }
-.settings-page-tabs .ui-segmented { min-width: max-content; }
+.settings-page-tabs .ui-segmented { flex-wrap: nowrap; min-width: max-content; }
 .settings-panel > .ui-control-group[hidden] { display: none; }

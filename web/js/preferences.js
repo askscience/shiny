@@ -607,6 +607,8 @@ export const BAR_SCALE_MIN = 80;
 export const BAR_SCALE_MAX = 160;
 
 const DEFAULT_IMMERSIVE = {
+  /** A phone shows no window title bar; this puts it back. */
+  phone_titles: false,
   autohide_bar: false,
   bar_position: 'bottom',
   bar_style: 'rail',
@@ -644,6 +646,7 @@ export function getImmersive() {
   const barScale = Number(src.bar_scale);
   const d = DEFAULT_IMMERSIVE;
   return {
+    phone_titles: src.phone_titles === true,
     autohide_bar: src.autohide_bar === undefined ? d.autohide_bar : src.autohide_bar !== false,
     bar_position: BAR_POSITIONS.includes(src.bar_position) ? src.bar_position : d.bar_position,
     bar_style: BAR_STYLES.includes(src.bar_style) ? src.bar_style : d.bar_style,
@@ -740,6 +743,9 @@ export function applyImmersive() {
   root.style.setProperty('--voice-bar-height', `${s.orb_height}px`);
   root.dataset.autohideBar = s.autohide_bar ? '1' : '0';
   root.dataset.autohideOrb = s.autohide_orb ? '1' : '0';
+  // The phone's window title bars, back by choice (css/mobile.css).
+  if (s.phone_titles) root.dataset.phoneTitles = '1';
+  else delete root.dataset.phoneTitles;
   window.dispatchEvent(new CustomEvent('desktop:immersive', { detail: s }));
 }
 

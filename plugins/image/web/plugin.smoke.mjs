@@ -80,8 +80,10 @@ function makeElement(tag) {
     clientHeight: 300,
     _listeners: {},
     _parent: null,
-    append(...kids) { for (const kid of kids) { kid._parent = el; el.children.push(kid); } },
-    appendChild(kid) { kid._parent = el; el.children.push(kid); return kid; },
+    // Real DOM semantics: appending a node moves it out of its old parent.
+    append(...kids) { for (const kid of kids) el.appendChild(kid); },
+    appendChild(kid) { if (kid.remove) kid.remove(); kid._parent = el; el.children.push(kid); return kid; },
+    get parentElement() { return el._parent; },
     remove() {
       const parent = el._parent;
       if (parent) { parent.children = parent.children.filter((c) => c !== el); el._parent = null; }
@@ -153,6 +155,7 @@ function makeElement(tag) {
 const body = makeElement('body');
 const documentStub = {
   body,
+  documentElement: makeElement('html'),
   activeElement: null,
   createElement: makeElement,
   createElementNS: (_ns, tag) => makeElement(tag),
@@ -199,6 +202,9 @@ const calls = {
   pickFiles: 0,
   contextMenu: [],
   revokes: 0,
+  sheetOpens: 0,
+  sheetDestroys: 0,
+  segmentedDestroys: 0,
 };
 
 class BlobStub {
@@ -324,6 +330,25 @@ const context = vm.createContext({
   },
   listReveal: () => Promise.resolve(),
   cardEnter: () => Promise.resolve(),
+  // The phone sheet: the dock body moves in and out of it (see below).
+  sheet: ({ body: nodes = [] } = {}) => {
+    const el = makeElement('div'); el.className = 'ui-sheet';
+    const card = makeElement('div'); card.className = 'ui-sheet-card';
+    card.append(...nodes); el.append(card);
+    let opened = false;
+    const api = { el, card, isOpen: () => opened, open() { opened = true; calls.sheetOpens += 1; }, close() { opened = false; }, destroy() { opened = false; calls.sheetDestroys += 1; } };
+    return api;
+  },
+  segmented: ({ options = [], value, onChange } = {}) => {
+    const node = makeElement('div'); node.className = 'ui-segmented';
+    let selected = value ?? options[0]?.value;
+    node.setValue = (next, { silent = false } = {}) => { if (next !== selected) { selected = next; if (!silent) onChange?.(next); } };
+    Object.defineProperty(node, 'value', { get: () => selected });
+    node.destroy = () => { calls.segmentedDestroys += 1; };
+    return node;
+  },
+  PHONE_QUERY: { matches: false, addEventListener() {}, removeEventListener() {} },
+  MutationObserver: class { observe() {} disconnect() {} },
   t: (key, params, fallback) => fallback ?? key,
   saveOrDownload, pickFiles, onOpenFromFiles, api,
   URL: {
@@ -512,9 +537,30 @@ calls.rawApply.length = 0;
 await mod.namespace.rotateCurrent('right');
 check('rotating sends the rotate op', calls.rawApply[0]?.body?.operations?.[0]?.op === 'rotate' && calls.rawApply[0]?.body?.operations?.[0]?.angle === 90, JSON.stringify(calls.rawApply[0]));
 
+/* Phone: the dock body moves into the bottom sheet, the window-bar icons
+   open it, the dials keep working there, and a desktop gets the dock back. */
+const dockEl = findByClass(tile, 'image-dock')[0];
+const dockBody = findByClass(tile, 'image-dock-body')[0];
+const sheetWrap = mod.namespace.S.els.sheetWrap;
+documentStub.documentElement.dataset.phone = '1';
+mod.namespace.syncPhoneLayout();
+check('on a phone the dock body lives in the sheet', dockBody.parentElement === sheetWrap && dockEl.hidden === true);
+check('the window bar shows the Looks / Adjust icons on a phone', mod.namespace.S.els.toolButtons.every((b) => b.hidden === false));
+mod.namespace.openToolSheet('looks');
+check('the Looks icon opens the sheet on its looks section', calls.sheetOpens === 1 && sheetWrap.dataset.tab === 'looks', `${calls.sheetOpens} / ${sheetWrap.dataset.tab}`);
+calls.rawApply.length = 0;
+dials[1].dispatch('keydown', { key: 'ArrowUp', shiftKey: false, preventDefault() {} });
+await tick(30);
+check('a dial still commits from inside the sheet', calls.rawApply.at(-1)?.body?.settings?.contrast === 1, JSON.stringify(calls.rawApply.at(-1)));
+documentStub.documentElement.dataset.phone = '0';
+mod.namespace.syncPhoneLayout();
+check('back on a desktop the dock body returns to the dock', dockBody.parentElement === dockEl && dockEl.hidden === false && !mod.namespace.S.sheet.isOpen());
+check('the window bar icons hide again on a desktop', mod.namespace.S.els.toolButtons.every((b) => b.hidden === true));
+
 /* Unmount is clean: listeners dropped, preview URL revoked. */
 const revokesBefore = calls.revokes;
 mod.namespace.unmountEditor();
+check('unmount destroys the sheet and its switch', calls.sheetDestroys === 1 && calls.segmentedDestroys === 1, `${calls.sheetDestroys} / ${calls.segmentedDestroys}`);
 check('unmount drops the key listener', (windowListeners['keydown'] || []).length === 0, String((windowListeners['keydown'] || []).length));
 check('unmount revokes the preview strip URL', calls.revokes > revokesBefore);
 

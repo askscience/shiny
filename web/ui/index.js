@@ -31,6 +31,10 @@ export { switchTheme, nextTheme } from './themeTransition.js';
 export { eyebrow, metaLine, largeTitle, hairlineList, hairlineRow } from './components/editorial.js';
 export { controlGrid, controlCard, controlGroup, toolbar } from './components/layout.js';
 export { segmented } from './components/choice.js';
+export { paneStack } from './components/panes.js';
+export { actionBar } from './components/actionbar.js';
+export { pushBack, removeBack, popBack, backDepth } from './backStack.js';
+export { pullRefresh } from './pullRefresh.js';
 
 export { button, iconButton, controlButton, toolButton, menuButton } from './components/button.js';
 export { element } from './components/element.js';

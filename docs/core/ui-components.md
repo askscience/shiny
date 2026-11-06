@@ -28,8 +28,12 @@ not always identical.
 | Form controls | `input`, `textarea`, `select`, `selectControl`, `slider`, `checkbox`, `toggle`, `toggleRow`, `searchBar` | `select()` returns a wrapper with `.select` and `.setOptions()`. `selectControl()` returns the actual select for compact toolbars and has `.setOptions()`. Both use the same in-page popup. |
 | Labels | `field({ label, control, hint, htmlFor })` | Associates the label with the control, including a wrapped select. Generates a control ID when needed. |
 | Numeric dials | `dial` | One control for Image adjustments and Studio parameters: pointer drag, wheel, arrow keys, Home/End, reset, ARIA values and cleanup. |
-| Layout | `toolbar`, `row`, `stack`, `controlGrid`, `controlCard`, `controlGroup` | Shared arrangement; callers supply content and translated labels. `toolbar(children, { className, label })` supports domain layout hooks. |
-| Selection | `chip`, `segmented` | Chip state has `aria-pressed`; segmented choices support roving keyboard focus and a selection indicator. |
+| Pane stack | `paneStack(root, { panes, compactWhen, onChange })` | A window's panes (a list, a detail, an editor) side by side while wide, one at a time while narrow or on a phone: the floor stays, the others slide in over it with an icon-only Back in their `[data-pane-bar]`. `show(id)`, `back()`, `reset()`, `isStacked()`, `top()`, `destroy()`. See [Panes](#panes). |
+| Action bar | `actionBar(children, { label })` | A window's bottom row of icon actions for the thumb; shown only on a phone. Append it as the tile's last child. |
+| Pull to refresh | `pullRefresh(scroller, onRefresh)` | A touch screen pulls a list down past its top to reload it: a spinner follows the finger and turns until the promise settles. Returns the remover. Plugins' stage uses it; lists that poll (Mail, Updates) should. |
+| Back registry | `pushBack(handler)`, `popBack()`, `backDepth()` | One "go back" for the phone: panes, modals, sheets and floating panels register while open; `phoneShell.js` pops the newest before going home. |
+| Layout | `toolbar`, `row`, `stack`, `controlGrid`, `controlCard`, `controlGroup` | Shared arrangement; callers supply content and translated labels. `toolbar(children, { className, label, compact, fold })` supports domain layout hooks; `compact: true` folds the row like a window bar. |
+| Selection | `chip`, `segmented` | Chip state has `aria-pressed`; segmented choices support roving keyboard focus and a selection indicator. An option given an `icon` shows it alone on a phone. |
 | Surfaces | `card`, `panel`, `section`, `divider`, `modal`, `sheet`, `tooltip`, `confirmDialog`, `promptDialog`, `menuSurface`, `menuItem` | Reuse shared surfaces and dialog focus/lifecycle handling. |
 | Tabs | `tabStrip`, `tab` | A window's tab strip (Terminal, Browser): `tabStrip({ label, className })` is the window's top bar (`data-window-bar`, `data-compact="off"`); `tab({ label, title, active, onSelect, onClose, closeLabel, leading, className })` is one tab — flat mono capitals, the active one a pill, its close shown on hover, on the active tab and on focus (always on touch). The owner re-renders the strip from its tab list; domain classes go in `className` as layout hooks. |
 | Media lists | `mediaCard` | Shared keyboard-activatable artwork card used by Radio and YouTube; accepts title, subtitle, source, position, duration and action. Optional `prefix` retains domain layout hooks. |
@@ -39,6 +43,10 @@ not always identical.
 
 `toolButton(icon, label, onClick, options)` is the compact icon action. Options
 include `danger`, `className`, `variant`, `disabled` and `iconSize`.
+A `button()` given both an `icon` and a `label` is marked `.ui-btn--labelled`
+and its label becomes its accessible name: on a phone the text steps back
+and the icon stands alone, round (see [Phone](#phone)). Give every action
+an icon; a text-only button is for the rare case there is no honest icon.
 `menuButton({ icon, label, text, onClick, className })` adds the shared menu
 chevron and menu ARIA attributes. Its `.caption` is available for an account
 name. `menuSurface({ className, onEscape })` and `menuItem({ label, onClick,
@@ -174,6 +182,63 @@ Phone switching and workspace suspension persist across portrait/landscape
 rotation on coarse-pointer phone screens. Stored desktop workspace layouts are
 retained. The virtual keyboard has compact geometry for short landscape screens.
 
+## Panes
+
+A window with more than one pane — a rail or list and a detail, a detail
+and its editor — hands them to `paneStack` once, at mount:
+
+```js
+const nav = paneStack(shell, {
+  panes: [
+    { id: 'list', el: listEl },                 // the floor
+    { id: 'reader', el: readerEl },             // slides in over it
+  ],
+  compactWhen: ({ width, phone }) => phone || width <= 700,   // the default
+  onChange: ({ id, stacked }) => {},
+});
+row.addEventListener('click', () => { select(item); nav.show('reader'); });
+```
+
+While the window is wide the owner's own grid lays the panes out and
+`show()` is a no-op. Narrow, or on a phone (`html[data-phone]`), the root
+(`.ui-panes.is-stacked`) becomes a column: the floor (`.ui-pane.is-floor`,
+the first pane given) fills it, a sibling that is not a pane — a strip of
+folders or sections — keeps its height above it, and every other pane is
+absolute, full-size, off to the right until `show(id)` slides it in
+(`.is-open`, the motion language's easing, none under reduced motion). A
+pane other than the floor gets an icon-only Back prepended to its
+`[data-pane-bar]` (mark its header row; `back: false` opts out). Escape, the
+phone's Back and a swipe in from the left edge pop the top pane through the
+back registry; focus moves into the pane and returns to the opener. The
+root dispatches `pane:change`. Call `destroy()` in unmount.
+
+Keep the owner's CSS to layout: the stack owns the sliding, the plate and
+the Back. The Plugins window (stage → manifest, stacked under 1080px), Chats
+(list → messages, always stacked), Mail, Files, Settings, Calendar and the
+other windows use it; see each window's docs.
+
+## Phone
+
+On a phone (`html[data-phone='1']`, see [desktop.md](desktop.md#phone-shell))
+every window reads like a phone app, through rules that live in the library
+rather than in each window:
+
+- **An action is an icon.** A `.ui-btn--labelled` button (icon + label)
+  shows the icon alone, 44px round; a `segmented` option with an icon does
+  the same; a menu trigger drops its caption; the Cancel / OK of
+  `confirmDialog` and `promptDialog` are two round icons. A text-only button
+  is the small size with a 44px hit area; mark one `data-text-ok` only when
+  it is genuinely text (a terminal key, a tab).
+- **One pane at a time** — [Panes](#panes).
+- **No title bar.** `css/mobile.css` hides a title-only `.tile-header` and
+  the window controls of a merged one; the window's toolbar keeps the row.
+  Close and Focus live on the switcher's cards, round, on a plate.
+- **A bottom row for the thumb** — `actionBar`, hidden anywhere else.
+- **Back** closes what is open on top before leaving the window.
+
+The responsive harness (below) sets `data-phone` on its phone viewports and
+fails a window that still shows a text button or a title bar there.
+
 ## Fonts and embedded content
 
 The default UI font is `system-ui`; theme body/display tokens use the operating
@@ -195,7 +260,9 @@ Run `scripts/test-web.sh` for syntax, unit and plugin smoke checks. The addition
 local fixture server with fake API responses, mounts actual window modules and
 core chrome, and checks phone portrait/landscape, desktop and narrow desktop tiles.
 It checks overflow, clipped controls, every settings section, touch/mouse select
-menus, email typography and external font requests. The map and virtual keyboard
+menus, email typography and external font requests; on the phone viewports it
+loads `css/mobile.css`, marks the document `data-phone`, and fails on a
+library button showing text (`textButtons`) or a title bar (`titleBar`). The map and virtual keyboard
 use their core frontends; Hello has no window.
 
 The browser suite is optional tooling, not an application build dependency. With
@@ -204,7 +271,7 @@ Playwright and its Chromium browser installed in a tooling directory:
 ```sh
 SHINY_PLAYWRIGHT_MODULE=/path/to/node_modules/playwright/package.json \
   node scripts/test-responsive-ui.mjs
-SHINY_UI_THEME=light SHINY_PLAYWRIGHT_MODULE=/path/to/node_modules/playwright/package.json \
+SHINY_UI_THEME=ink SHINY_PLAYWRIGHT_MODULE=/path/to/node_modules/playwright/package.json \
   node scripts/test-responsive-ui.mjs settings plugins mail
 ```
 

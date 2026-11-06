@@ -53,7 +53,9 @@ function findAll(root, predicate, out = []) {
   return out;
 }
 const textOf = (root) => findAll(root, () => true).map((n) => n.textContent).join(' ');
-const buttonNamed = (root, name) => findAll(root, (n) => n.tagName === 'BUTTON' && n.textContent === name)[0];
+// A button is named by its text, or by its label when it also carries an icon.
+const buttonNamed = (root, name) => findAll(root, (n) => n.tagName === 'BUTTON'
+  && (n.textContent === name || n.attrs['aria-label'] === name))[0];
 
 const storage = new Map();
 const localStorage = {
@@ -96,6 +98,7 @@ const context = vm.createContext({
   apiFetch: api,
   t: (key, params, fallback) => fallback ?? key,
   controlButton: () => makeElement('button'),
+  icon: () => makeElement('span'),
   fillScript: (origin, user, pass, opts) => `FILL ${origin} ${user} ${pass} ${opts?.onlyEmpty ? 'empty' : ''}`,
   suggestScript: (origin, pass) => `SUGGEST ${origin} ${pass}`,
   takeScript: () => 'TAKE sessionStorage.removeItem',

@@ -85,9 +85,10 @@ function renderNotEnabled(body, dialog) {
   body.append(
     hint(tr('notEnabled', 'Link sharing is off. Turn it on in Settings → Remote → File sharing, then try again.')),
     actions(
-      button({ label: t('common.cancel'), variant: 'ghost', onClick: () => dialog.close() }),
+      button({ label: t('common.cancel'), icon: 'ui/close', variant: 'ghost', onClick: () => dialog.close() }),
       button({
         label: tr('openSettings', 'Open Settings'),
+        icon: 'ui/settings',
         onClick: () => { dialog.close(); openSharingSettings(); },
       }),
     ),
@@ -110,8 +111,8 @@ function renderResult(body, share, dialog) {
     field({ label: tr('link', 'Link'), control: link }),
     meta.length ? hint(meta.join(' · ')) : null,
     actions(
-      button({ label: tr('done', 'Done'), variant: 'ghost', onClick: () => dialog.close() }),
-      button({ label: tr('copy', 'Copy link'), onClick: () => copyLink(share.url) }),
+      button({ label: tr('done', 'Done'), icon: 'ui/check', variant: 'ghost', onClick: () => dialog.close() }),
+      button({ label: tr('copy', 'Copy link'), icon: 'ui/copy', onClick: () => copyLink(share.url) }),
     ),
   );
   link.focus({ preventScroll: true });
@@ -141,8 +142,8 @@ function renderForm(body, entry, dialog) {
     checked: true,
   });
   const status = hint('');
-  const create = button({ label: tr('create', 'Create link') });
-  const cancel = button({ label: t('common.cancel'), variant: 'ghost', onClick: () => dialog.close() });
+  const create = button({ label: tr('create', 'Create link'), icon: 'ui/link' });
+  const cancel = button({ label: t('common.cancel'), icon: 'ui/close', variant: 'ghost', onClick: () => dialog.close() });
 
   create.addEventListener('click', async () => {
     setBusy(create, true);
@@ -217,7 +218,7 @@ function shareRow(s, refresh) {
   if (s.has_password) meta.push(tr('passwordSet', 'Password protected'));
   if (isE2e(s)) meta.push(tr('e2eSet', 'End-to-end encrypted'));
 
-  const revoke = button({ label: tr('revoke', 'Revoke'), variant: 'danger', size: 'sm' });
+  const revoke = button({ label: tr('revoke', 'Revoke'), icon: 'ui/trash', variant: 'danger', size: 'sm' });
   revoke.addEventListener('click', async () => {
     if (!(await confirmDialog(tr('revokeConfirm', 'Revoke the link to “{name}”? It stops working immediately.', { name: s.name })))) return;
     setBusy(revoke, true);
@@ -239,7 +240,7 @@ function shareRow(s, refresh) {
   text.style.flex = '1';
   const row = el('div', { className: 'ui-row' }, [
     text,
-    button({ label: tr('copy', 'Copy link'), variant: 'ghost', size: 'sm', onClick: () => copyLink(s.url) }),
+    button({ label: tr('copy', 'Copy link'), icon: 'ui/copy', variant: 'ghost', size: 'sm', onClick: () => copyLink(s.url) }),
     revoke,
   ]);
   row.style.gap = '8px';
@@ -274,6 +275,7 @@ export async function openSharesDialog() {
       }
       body.append(actions(button({
         label: tr('openSettings', 'Open Settings'),
+        icon: 'ui/settings',
         variant: 'ghost',
         onClick: () => { dialog.close(); openSharingSettings(); },
       })));

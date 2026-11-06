@@ -13,9 +13,9 @@ export function createDesktopSection({ on, cleanups, resources }) {
       label: t('settings.desktop.layout', null, 'Layout'),
       value: layout.mode,
       options: [
-        { value: 'master', label: t('settings.desktop.mode.tiling', null, 'Tiling') },
-        { value: 'columns', label: t('settings.desktop.mode.columns', null, 'Columns') },
-        { value: 'windows', label: t('settings.desktop.mode.windows', null, 'Windows') },
+        { value: 'master', label: t('settings.desktop.mode.tiling', null, 'Tiling'), icon: 'ui/grid' },
+        { value: 'columns', label: t('settings.desktop.mode.columns', null, 'Columns'), icon: 'ui/layers' },
+        { value: 'windows', label: t('settings.desktop.mode.windows', null, 'Windows'), icon: 'ui/monitor' },
       ],
       onChange: (value) => {
         setDesktopLayout({ ...getDesktopLayout(), mode: value });

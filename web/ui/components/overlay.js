@@ -5,6 +5,7 @@ import { icon } from '../icon.js';
 import { t } from '../../js/i18n.js';
 import { transition, disposeMotion } from '../motion.js';
 import { createResources } from '../../js/resources.js';
+import { pushBack } from '../backStack.js';
 
 const overlays = [];
 const inertBefore = new Map();
@@ -29,6 +30,8 @@ function lifecycle(el, card, o) {
   let opened = false;
   let trigger;
   let resources;
+  /** While open, the phone's Back closes this surface (ui/backStack.js). */
+  let releaseBack = null;
   const focusable = () => [...card.querySelectorAll('button,a[href],input,select,textarea,[tabindex]')]
     .filter(node => !node.disabled && node.tabIndex !== -1 && node.getClientRects().length && !node.closest('[hidden],.hidden'));
   const restoreBackground = () => {
@@ -50,6 +53,7 @@ function lifecycle(el, card, o) {
       el.classList.add('is-open');
       el.removeAttribute('aria-hidden');
       overlays.push(el); syncBackground();
+      if (o.closable !== false) releaseBack = pushBack(() => { api.close(); return true; });
       resources = createResources();
       resources.on(el, 'click', e => { if (e.target === el && o.closable !== false) api.close(); });
       resources.on(el, 'keydown', e => {
@@ -68,6 +72,7 @@ function lifecycle(el, card, o) {
     close() {
       if (!opened) return;
       opened = false;
+      releaseBack?.(); releaseBack = null;
       resources?.dispose(); resources = null;
       restoreBackground();
       el.classList.add('is-closing');
@@ -206,6 +211,7 @@ export function floating(o = {}) {
   let opened = false;
   let trigger = null;
   let cleanup = null;
+  let releaseBack = null;
 
   const clamp = (x, y) => {
     const width = el.offsetWidth || 380;
@@ -276,6 +282,7 @@ export function floating(o = {}) {
       };
       document.addEventListener('pointerdown', onDown, true);
       document.addEventListener('keydown', onKey, true);
+      releaseBack = pushBack(() => { api.close(); return true; });
       cleanup = () => {
         document.removeEventListener('pointerdown', onDown, true);
         document.removeEventListener('keydown', onKey, true);
@@ -287,6 +294,7 @@ export function floating(o = {}) {
       opened = false;
       el.classList.add('hidden');
       el.hidden = true;
+      releaseBack?.(); releaseBack = null;
       cleanup?.();
       cleanup = null;
       if (trigger?.isConnected) trigger.focus({ preventScroll: true });

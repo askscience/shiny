@@ -1,8 +1,9 @@
 import {
   menuSurface, menuItem, confirmDialog, promptDialog, menuButton, toolbar, input as uiInput, toolButton,
   button, toast, select, setIcon, modal, field, toggleRow, segmented, controlButton, placePopover,
-  setTileGlow, glowGradient, compactToolbar } from '../../ui/index.js';
+  setTileGlow, glowGradient, compactToolbar, paneStack, sheet as bottomSheet } from '../../ui/index.js';
 import { apiFetch } from '../../js/api.js';
+import { PHONE_QUERY } from '../../js/viewport.js';
 import { t, tp, getLocale } from '../../js/i18n.js';
 import { formatMenuDate, formatMenuTime, appendMenuFooter, showDocumentMenu } from '../../js/officeMenu.js';
 import { listFonts } from '../../js/fonts.js';
@@ -77,6 +78,12 @@ let statusInfoEl = null;
 let stateEl = null;
 let zoomLabel = null;
 let toolBtns = {};
+/** The desk and the outline, one at a time when narrow (ui/components/panes.js). */
+let panes = null;
+/** On a phone the formatting row lives in a bottom sheet, opened from the bar. */
+let formatSheet = null;
+let formatOnPhone = false;
+let phoneObserver = null;
 let resizeObs = null;
 
 let docs = [];
@@ -623,6 +630,8 @@ async function commitDesign(design) {
 
 function renderNav() {
   if (!navEl || navEl.hidden) return;
+  // Stacked and closed: nothing to look at until it slides in.
+  if (panes?.isStacked() && !panes.isOpen('outline')) return;
   const list = navEl.querySelector('.word-nav-list');
   list.textContent = '';
   const hs = headings();
@@ -637,18 +646,47 @@ function renderNav() {
     const item = controlButton();
     item.className = `word-nav-item word-nav-item--${h.tagName.toLowerCase()}`;
     item.textContent = h.textContent.trim();
-    item.addEventListener('click', () => scrollToBlock(h));
+    item.addEventListener('click', () => {
+      // Narrow: the outline is a pane over the desk — pop it, then jump.
+      if (panes?.isStacked()) panes.back();
+      scrollToBlock(h);
+    });
     list.appendChild(item);
   }
 }
 
 function toggleNav(force) {
+  if (panes?.isStacked()) {
+    // Narrow or on a phone: the outline slides in over the desk and pops on
+    // Back; the desktop preference is left alone.
+    const open = panes.isOpen('outline');
+    if (open && force !== true) panes.back();
+    else if (!open && force !== false) { panes.show('outline'); renderNav(); }
+    return;
+  }
   navOpen = typeof force === 'boolean' ? force : !navOpen;
   writePref('word.nav', navOpen ? '1' : '0');
   if (navEl) navEl.hidden = !navOpen;
   toolBtns.nav?.classList.toggle('is-active', navOpen);
   toolBtns.nav?.setAttribute('aria-pressed', String(navOpen));
   renderNav();
+}
+
+/** The stack switched layout or top pane: the outline's visibility follows. */
+function onPaneChange({ id, stacked }) {
+  if (!navEl) return;
+  // Stacked, the pane is positioned by the stack and must stay in the DOM
+  // flow (`hidden` would be display: none); wide, the desktop preference.
+  navEl.hidden = stacked ? false : !navOpen;
+  const open = stacked ? id === 'outline' : navOpen;
+  toolBtns.nav?.classList.toggle('is-active', open);
+  toolBtns.nav?.setAttribute('aria-pressed', String(open));
+  if (toolBtns.outline) {
+    toolBtns.outline.hidden = !stacked;
+    toolBtns.outline.classList.toggle('is-active', open);
+    toolBtns.outline.setAttribute('aria-pressed', String(open));
+  }
+  if (!stacked || open) renderNav();
 }
 
 function scrollToBlock(el) {
@@ -706,6 +744,8 @@ function setView(v) {
   if (deskEl) deskEl.hidden = view === 'preview';
   if (previewEl) previewEl.hidden = view !== 'preview';
   formatRow?.classList.toggle('is-disabled', view === 'preview');
+  if (toolBtns.format) toolBtns.format.disabled = view === 'preview';
+  if (view === 'preview') leaveFormatSheet();
   if (view === 'preview') void loadPreview();
   syncStatus();
 }
@@ -933,6 +973,7 @@ function openSwatches(anchor, kind) {
     b.title = c || t('plugin.word.color.auto', null, 'Automatic');
     b.addEventListener('click', () => {
       closePopup();
+      leaveFormatSheet();
       restoreSelection();
       if (kind === 'mark') exec('hiliteColor', c || 'transparent');
       else exec('foreColor', c || themeVars(currentDoc?.design)['--doc-ink']);
@@ -1005,7 +1046,7 @@ function syncToolbar() {
     bold: q('bold'), italic: q('italic'), underline: q('underline'), strike: q('strikeThrough'),
     ul: q('insertUnorderedList'), ol: q('insertOrderedList'),
     left: q('justifyLeft'), center: q('justifyCenter'), right: q('justifyRight'), justify: q('justifyFull'),
-    nav: navOpen,
+    nav: panes?.isStacked() ? panes.isOpen('outline') : navOpen,
   };
   for (const [key, btn] of Object.entries(toolBtns)) {
     if (key in state) {
@@ -1376,8 +1417,8 @@ async function openDesignDialog() {
   const actions = document.createElement('div');
   actions.className = 'ui-row word-design-actions';
   actions.append(
-    button({ label: t('plugin.word.design.preview', null, 'Save and preview'), variant: 'quiet', onClick: () => void save(true) }),
-    button({ label: t('plugin.word.design.save', null, 'Save'), onClick: () => void save(false) }),
+    button({ label: t('plugin.word.design.preview', null, 'Save and preview'), icon: 'ui/eye', variant: 'quiet', onClick: () => void save(true) }),
+    button({ label: t('plugin.word.design.save', null, 'Save'), icon: 'ui/check', onClick: () => void save(false) }),
   );
   dialog.card.appendChild(actions);
   dialog.open();
@@ -1482,6 +1523,18 @@ function buildBar() {
   titleInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); editorEl?.focus(); } });
   titleInput.addEventListener('blur', () => { if (dirty) void persist(); });
 
+  // Phone: the formatting row is a bottom sheet behind this button (placeFormatRow).
+  const formatBtn = tool('format', 'ui/type', t('plugin.word.toolbar.format', null, 'Formatting'), () => openFormatSheet());
+  formatBtn.classList.add('word-format-btn');
+  formatBtn.setAttribute('aria-haspopup', 'dialog');
+  formatBtn.dataset.keep = '';
+  formatBtn.hidden = true;
+  // Narrow: the outline is a pane over the desk, from here (onPaneChange).
+  const outlineBtn = tool('outline', 'ui/list', t('plugin.word.toolbar.outline', null, 'Outline'), () => toggleNav());
+  outlineBtn.classList.add('word-outline-btn');
+  outlineBtn.dataset.keep = '';
+  outlineBtn.hidden = true;
+
   undoBtn = tool('undo', 'ui/undo', t('plugin.word.toolbar.undo', null, 'Undo'), () => exec('undo'));
   redoBtn = tool('redo', 'ui/redo', t('plugin.word.toolbar.redo', null, 'Redo'), () => exec('redo'));
 
@@ -1498,7 +1551,7 @@ function buildBar() {
   // A narrow window folds the switch whole into the More menu (ui/compact.js).
   viewSwitch.dataset.foldable = '';
 
-  const aiBtn = button({ label: t('plugin.word.ai.button', null, 'AI'), icon: 'ui/magic-wand', iconSize: 14, variant: 'ghost', size: 'sm', onClick: () => openAiMenu(aiBtn) });
+  const aiBtn = button({ label: t('plugin.word.ai.button', null, 'AI'), icon: 'ui/brain', iconSize: 14, variant: 'ghost', size: 'sm', onClick: () => openAiMenu(aiBtn) });
   aiBtn.classList.add('word-ai');
   aiBtn.setAttribute('aria-haspopup', 'menu');
   aiBtn.addEventListener('mousedown', (e) => e.preventDefault());
@@ -1512,6 +1565,7 @@ function buildBar() {
 
   barEl.append(
     docMenuBtn, titleInput,
+    formatBtn, outlineBtn,
     cluster('word-cluster--history', undoBtn, redoBtn),
     viewSwitch,
     cluster('word-cluster--doc', aiBtn, designBtn, exportBtn),
@@ -1529,7 +1583,7 @@ function buildFormatRow() {
   blockSelect = select({
     options: BLOCKS.map((b) => ({ value: b.value, label: t(`plugin.word.block.${b.key}`, null, b.fallback) })),
     value: 'p',
-    onChange: (v) => { restoreSelection(); exec('formatBlock', `<${v}>`); },
+    onChange: (v) => { leaveFormatSheet(); restoreSelection(); exec('formatBlock', `<${v}>`); },
   });
   blockSelect.classList.add('word-select', 'word-select--block');
   blockSelect.select.setAttribute('aria-label', t('plugin.word.toolbar.style', null, 'Paragraph style'));
@@ -1538,7 +1592,7 @@ function buildFormatRow() {
   fontSelect = select({
     options: [{ value: '', label: t('plugin.word.toolbar.fontTheme', null, 'Theme font') }, ...DOCUMENT_FAMILIES.map((f) => ({ value: f, label: f }))],
     value: '',
-    onChange: (v) => styleSelection({ fontFamily: v ? `'${v}'` : '' }),
+    onChange: (v) => { leaveFormatSheet(); styleSelection({ fontFamily: v ? `'${v}'` : '' }); },
   });
   fontSelect.classList.add('word-select', 'word-select--font');
   // On a phone the font and size pickers fold whole into More, after the tools.
@@ -1558,7 +1612,7 @@ function buildFormatRow() {
   sizeSelect = select({
     options: [{ value: '', label: t('plugin.word.toolbar.sizeAuto', null, 'Size') }, ...[8, 9, 10, 10.5, 11, 12, 14, 16, 18, 20, 24, 28, 32, 40, 48].map((s) => ({ value: String(s), label: `${s}` }))],
     value: '',
-    onChange: (v) => styleSelection({ fontSize: v ? `${v}pt` : '' }),
+    onChange: (v) => { leaveFormatSheet(); styleSelection({ fontSize: v ? `${v}pt` : '' }); },
   });
   sizeSelect.classList.add('word-select', 'word-select--size');
   sizeSelect.dataset.foldable = '';
@@ -1612,7 +1666,63 @@ function buildFormatRow() {
   // Narrow windows: the trailing tools fold into the shared "More" menu
   // instead of the row scrolling sideways (ui/compact.js).
   compactToolbar(formatRow);
+  // In the phone's sheet a tool is one tap: the sheet goes, the selection
+  // comes back, then the tool runs (a swatch or a select picks later and
+  // leaves on its own).
+  formatRow.addEventListener('click', (e) => {
+    if (!formatSheet?.isOpen()) return;
+    const btn = e.target.closest('button.ui-btn');
+    if (!btn || btn.getAttribute('aria-haspopup') || btn === toolBtns.color || btn === toolBtns.mark) return;
+    leaveFormatSheet();
+    restoreSelection();
+  }, true);
   return formatRow;
+}
+
+/* ── Phone: the formatting row as a bottom sheet ────────────── */
+
+function isPhone() {
+  return document.documentElement.dataset.phone === '1';
+}
+
+function ensureFormatSheet() {
+  if (formatSheet) return formatSheet;
+  formatSheet = bottomSheet({
+    label: t('plugin.word.toolbar.format', null, 'Formatting'),
+    onClose: () => toolBtns.format?.setAttribute('aria-expanded', 'false'),
+  });
+  formatSheet.el.classList.add('word-format-sheet');
+  return formatSheet;
+}
+
+function openFormatSheet() {
+  if (!formatRow || view !== 'page') return;
+  // The sheet takes the focus; the editor's selection is what the tools act on.
+  rememberSelection();
+  const s = ensureFormatSheet();
+  if (formatRow.parentElement !== s.card) s.card.appendChild(formatRow);
+  s.open();
+  toolBtns.format?.setAttribute('aria-expanded', 'true');
+}
+
+function leaveFormatSheet() {
+  if (formatSheet?.isOpen()) formatSheet.close();
+}
+
+/** Phone: the row moves into the sheet behind the bar's Formatting button;
+ *  anywhere else it is the second row of the window. */
+function placeFormatRow() {
+  if (!tileEl || !formatRow) return;
+  const phone = isPhone();
+  if (phone === formatOnPhone) return;
+  formatOnPhone = phone;
+  if (phone) {
+    ensureFormatSheet().card.appendChild(formatRow);
+  } else {
+    leaveFormatSheet();
+    barEl.after(formatRow);
+  }
+  if (toolBtns.format) toolBtns.format.hidden = !phone;
 }
 
 function sheet(className) {
@@ -1755,9 +1865,14 @@ export function mountWordTile() {
   navEl = document.createElement('aside');
   navEl.className = 'word-nav';
   navEl.setAttribute('aria-label', t('plugin.word.toolbar.outline', null, 'Outline'));
-  const navHead = document.createElement('p');
+  const navHead = document.createElement('div');
   navHead.className = 'word-nav-head';
-  navHead.textContent = t('plugin.word.toolbar.outline', null, 'Outline');
+  // The stack prepends its Back here while the outline is a pane.
+  navHead.dataset.paneBar = '';
+  const navTitle = document.createElement('span');
+  navTitle.className = 'word-nav-title';
+  navTitle.textContent = t('plugin.word.toolbar.outline', null, 'Outline');
+  navHead.appendChild(navTitle);
   const navList = document.createElement('div');
   navList.className = 'word-nav-list';
   navEl.append(navHead, navList);
@@ -1777,6 +1892,17 @@ export function mountWordTile() {
   tileEl.appendChild(mainEl);
   tileEl.appendChild(buildStatus());
   toolBtns.nav?.classList.toggle('is-active', navOpen);
+  // Narrow or on a phone: the desk is the floor and the outline slides in
+  // over it (the preview keeps its place in the column as a plain sibling).
+  panes = paneStack(mainEl, {
+    panes: [{ id: 'desk', el: deskEl }, { id: 'outline', el: navEl }],
+    onChange: onPaneChange,
+  });
+  onPaneChange({ id: panes.top(), stacked: panes.isStacked() });
+  placeFormatRow();
+  PHONE_QUERY.addEventListener('change', placeFormatRow);
+  phoneObserver = new MutationObserver(placeFormatRow);
+  phoneObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-phone'] });
 
   wireDrops();
   resizeObs = new ResizeObserver((entries) => {
@@ -1805,6 +1931,14 @@ export function unmountWordTile() {
   resizeObs?.disconnect();
   resizeObs = null;
   document.removeEventListener('selectionchange', onSelectionChange);
+  PHONE_QUERY.removeEventListener('change', placeFormatRow);
+  phoneObserver?.disconnect();
+  phoneObserver = null;
+  panes?.destroy();
+  panes = null;
+  formatSheet?.destroy();
+  formatSheet = null;
+  formatOnPhone = false;
   tileEl?.remove();
   tileEl = null; barEl = null; titleInput = null; docMenuBtn = null; viewSwitch = null;
   undoBtn = null; redoBtn = null; formatRow = null; blockSelect = null; fontSelect = null; sizeSelect = null;

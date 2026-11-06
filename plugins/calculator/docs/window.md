@@ -4,7 +4,14 @@ The Calculator window, in the editorial language: a display with a small mono
 uppercase expression line over a large, tight display-font result (rolled up
 with `rollNumber` whenever a result is set), a keypad of flat grey pills with
 `=` as the single ink pill, a collapsible scientific pad, and a collapsible
-hairline history. Styles: the "Calculator plugin window" section of
+hairline history. The body is a pane stack (`paneStack`, see
+`docs/core/ui-components.md` § Panes): the pad (display, scientific row,
+keypad) is the floor and the history is a pane that slides in over it in a
+narrow window (≤ 700px) or on a phone, with a shared Back in its head; a wide
+window keeps the history inline under the keypad, or beside it as a 280px
+column from 760px. On a phone the keys grow with the window
+(`minmax(44px, 1fr)` rows) like a phone calculator; a short landscape screen
+scrolls the pad instead. Styles: the "Calculator plugin window" section of
 `web/css/tiles.css`.
 `=` posts to `/api/calculator/eval`, the same evaluator the AI tool uses.
 
@@ -26,15 +33,17 @@ hairline history. Styles: the "Calculator plugin window" section of
 
 1. If `tileEl` already exists, returns it (singleton).
 2. Creates `<section class="tile calculator-tile" data-plugin="calculator">`.
-3. Builds the **top bar** (`div.calculator-bar`, marked `dataset.windowBar = ''` so core merges it into the window controls; no plate at rest): a spacer, a History toggle (`ui/list`), a Scientific toggle (`ui/scientific`), and Clear history (`ui/trash`). An "on" toggle is a grey pill fill (`--ed-pill`) with `aria-pressed`, not an accent box.
-4. Builds the **display** (`div.calculator-display` with `.calculator-display-expr` and `.calculator-display-result`).
-5. Builds the **scientific pad** (`div.calculator-sci hidden`) via `buildSciPad()`. Hidden by default; `toggleSci()` flips `is-active`.
-6. Builds the **keypad** (`div.calculator-keys`) via `buildKeypad()` in five `.calculator-key-row`s.
-7. Builds the **history** (`div.calculator-history hidden`).
-8. Calls `renderDisplay()` and returns the tile.
+3. Builds the **top bar** (`div.calculator-bar`, marked `dataset.windowBar = ''` so core merges it into the window controls; no plate at rest): a spacer, a History toggle (`ui/history`, `.calculator-history-toggle`) and a Scientific toggle (`ui/scientific`). An "on" toggle is a grey pill fill (`--ed-pill`) with `aria-pressed`, not an accent box.
+4. Builds the **body** (`div.calculator-body`, the pane stack's root) and the **pad** (`div.calculator-pad`, the floor pane).
+5. Builds the **display** (`div.calculator-display` with `.calculator-display-expr` and `.calculator-display-result`) in the pad.
+6. Builds the **scientific pad** (`div.calculator-sci hidden`) via `buildSciPad()`. Hidden by default; `toggleSci()` flips `is-active`.
+7. Builds the **keypad** (`div.calculator-keys`) via `buildKeypad()` in five `.calculator-key-row`s.
+8. Builds the **history** (`div.calculator-history hidden`): a head marked `data-pane-bar` (eyebrow "HISTORY", the count, a spacer and Clear history as `ui/trash`) over a scrolling `.calculator-history-body`.
+9. Hands the pad and the history to `paneStack(body, …)` (`nav`), paints the history state, calls `renderDisplay()` and returns the tile.
 
-`unmountCalculatorTile()` removes `tileEl` and nulls all cached nodes
-(`exprEl`, `resultEl`, `keysEl`, `sciEl`, `historyEl`, toggle buttons).
+`unmountCalculatorTile()` destroys the stack, removes `tileEl` and nulls all
+cached nodes (`exprEl`, `resultEl`, `keysEl`, `sciEl`, `historyEl`,
+`historyBodyEl`, `historyCountEl`, toggle buttons).
 
 There is **no polling** in this window.
 
@@ -44,31 +53,40 @@ There is **no polling** in this window.
 section.tile.calculator-tile[data-plugin=calculator]
 ├── div.calculator-bar[data-window-bar]
 │   ├── div.calculator-bar-spacer
-│   ├── button.calculator-bar-btn (History)
-│   ├── button.calculator-bar-btn (Scientific)
-│   └── button.calculator-bar-btn (Clear history)
-├── div.calculator-display
-│   ├── div.calculator-display-expr
-│   └── div.calculator-display-result
-├── div.calculator-sci.hidden
-│   └── div.calculator-key-row > button.calculator-key (×20)
-├── div.calculator-keys
-│   └── div.calculator-key-row > button.calculator-key (×5)   (×5 rows)
-└── div.calculator-history.hidden
-    ├── div.calculator-history-head (eyebrow "HISTORY" + count)
-    └── div.ui-hairline-list.calculator-history-list
-        └── button.calculator-history-item
-            ├── span.calculator-history-expr   (mono, uppercase)
-            └── span.calculator-history-res    (display face)
+│   ├── button.calculator-bar-btn.calculator-history-toggle (History)
+│   └── button.calculator-bar-btn (Scientific)
+└── div.calculator-body.ui-panes                (paneStack root; .is-stacked while narrow)
+    ├── div.calculator-pad.ui-pane.is-floor     [data-pane=pad]
+    │   ├── div.calculator-display
+    │   │   ├── div.calculator-display-expr
+    │   │   └── div.calculator-display-result
+    │   ├── div.calculator-sci.hidden
+    │   │   └── div.calculator-key-row > button.calculator-key (×20)
+    │   └── div.calculator-keys
+    │       └── div.calculator-key-row > button.calculator-key (×5)   (×5 rows)
+    └── div.calculator-history.ui-pane          [data-pane=history] (.hidden while wide and closed)
+        ├── div.calculator-history-head[data-pane-bar]
+        │   ├── (button.ui-pane-back — the stack's, while stacked)
+        │   ├── eyebrow "HISTORY", eyebrow count
+        │   ├── div.calculator-bar-spacer
+        │   └── button.calculator-bar-btn.calculator-history-clear (Clear history)
+        └── div.calculator-history-body
+            └── div.ui-hairline-list.calculator-history-list
+                └── button.calculator-history-item
+                    ├── span.calculator-history-expr   (mono, uppercase)
+                    └── span.calculator-history-res    (display face)
 ```
 
 ### CSS class prefix
 
 All classes are prefixed **`calculator-`**: `calculator-tile`, `calculator-bar`,
-`calculator-bar-spacer`, `calculator-bar-btn`, `calculator-display`,
+`calculator-bar-spacer`, `calculator-bar-btn`, `calculator-history-toggle`,
+`calculator-body`, `calculator-pad`, `calculator-display`,
 `calculator-display-expr`, `calculator-display-result`, `calculator-sci`,
 `calculator-key`, `calculator-key-row`, `calculator-history`,
-`calculator-history-item`, `calculator-history-expr`, `calculator-history-res`.
+`calculator-history-head`, `calculator-history-clear`,
+`calculator-history-body`, `calculator-history-item`,
+`calculator-history-expr`, `calculator-history-res`.
 Modifiers: `is-fn`, `is-op`, `is-clear`, `is-equals`, `is-active`, `hidden`;
 on the result `is-empty` (muted 0 at rest), `is-long`, `is-error`. Plugins
 ship no CSS — core styles these class names thematically.
@@ -76,7 +94,7 @@ ship no CSS — core styles these class names thematically.
 ## Behaviour & state
 
 Module state: `expression` (string), `lastResult` (number-as-string or `null`),
-`sciMode`, `historyOpen`.
+`sciMode`, `historyOpen`, `nav` (the `paneStack` handle).
 
 - `append(text)` / `backspace()` / `clearAll()` mutate the expression and
   repaint.
@@ -94,6 +112,12 @@ Module state: `expression` (string), `lastResult` (number-as-string or `null`),
   play `listReveal` when the panel opens (not on each refresh after `=`).
   Clicking one sets `lastResult` to that result (rolled up) and closes the
   panel.
+- `openHistory()` / `closeHistory()` / `toggleHistory()` keep `historyOpen`,
+  the toggle's `is-active`/`aria-pressed` and the pane in step: wide, the
+  history is shown inline by dropping `hidden`; stacked, `hidden` stays off
+  and `nav.show('history')` / `nav.back()` slide the pane. Back, Escape and
+  the edge swipe pop the pane through the stack; `onPaneChange` then reads
+  `nav.isOpen('history')` back into `historyOpen`.
 - `clearHistory()` calls `DELETE /api/calculator/history`, refreshes, toasts.
 
 ### Keypad
@@ -138,4 +162,4 @@ Returns entries core wraps with separators/window management: **Equals**
 
 `../../ui/index.js`: `toolbar`, `toolButton`, `controlButton`, `emptyState`,
 `toast`, `setTileGlow`, `glowGradient`, `icon`, `eyebrow`, `hairlineList`,
-`listReveal`, `rollNumber`. `../../js/api.js`: `apiFetch`.
+`listReveal`, `rollNumber`, `paneStack`. `../../js/api.js`: `apiFetch`.

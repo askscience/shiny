@@ -60,6 +60,13 @@
   overflow: hidden;
 }
 
+.installer-chrome-status > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .installer-status-dot {
   width: 6px;
   height: 6px;
@@ -1264,14 +1271,30 @@
   z-index: 3;
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 8px;
   flex: 0 0 auto;
+  min-width: 0;
   padding: 10px var(--installer-gutter);
   border-top: 1px solid var(--installer-line);
   background: transparent;
 }
 
+.installer-footer-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* The summary opens from here only while it is a pane over the main. */
+.installer-shell:not(.is-stacked) .installer-manifest-open {
+  display: none;
+}
+
 .installer-footer-step {
+  flex: 1 1 auto;
+  min-width: 0;
   color: var(--muted);
   font-family: var(--font-mono);
   font-size: 10.5px;
@@ -1289,8 +1312,8 @@
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
+  flex: 0 0 auto;
   margin-inline-start: auto;
-  flex-wrap: wrap;
 }
 
 .installer-footer-actions .ui-btn {
@@ -1312,8 +1335,15 @@
 
 .installer-manifest-head {
   display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.installer-manifest-body {
+  display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 22px;
+  min-width: 0;
 }
 
 .installer-manifest-head-copy {
@@ -1692,51 +1722,46 @@
   }
 }
 
-@container (max-width: 1020px) {
-  .installer-shell {
-    grid-template-columns: 210px minmax(0, 1fr);
-  }
+/* Stacked (at 1020px or on a phone, ui/components/panes.js): the manifest
+   is a pane over the main and the rail a strip of steps above it. */
+.installer-shell.is-stacked > .installer-steps {
+  display: block;
+  flex: 0 0 auto;
+  padding: 9px 11px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-inline-end: 0;
+  border-bottom: 1px solid var(--installer-line);
+  scrollbar-width: none;
+}
 
-  .installer-manifest {
-    display: none;
-  }
+.installer-shell.is-stacked .installer-steps-head {
+  display: none;
+}
+
+.installer-shell.is-stacked .installer-step-list {
+  flex-direction: row;
+  gap: 4px;
+}
+
+.installer-shell.is-stacked .installer-step-item {
+  flex: 0 0 auto;
+  gap: 8px;
+  width: auto;
+  padding: 7px 12px;
+}
+
+.installer-shell.is-stacked .installer-step-label {
+  font-size: 12.5px;
+}
+
+.installer-shell.is-stacked > .installer-manifest {
+  border-inline-start: 0;
 }
 
 @container (max-width: 760px) {
   .installer-shell {
     --installer-gutter: 20px;
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr);
-  }
-
-  .installer-steps {
-    display: block;
-    padding: 9px 11px;
-    overflow-x: auto;
-    overflow-y: hidden;
-    border-inline-end: 0;
-    border-bottom: 1px solid var(--installer-line);
-    scrollbar-width: none;
-  }
-
-  .installer-steps-head {
-    display: none;
-  }
-
-  .installer-step-list {
-    flex-direction: row;
-    gap: 4px;
-  }
-
-  .installer-step-item {
-    flex: 0 0 auto;
-    gap: 8px;
-    width: auto;
-    padding: 7px 12px;
-  }
-
-  .installer-step-label {
-    font-size: 12.5px;
   }
 
   .installer-step-scroll {
@@ -1822,24 +1847,6 @@
 
   .installer-stage-list {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .installer-footer-step {
-    display: block;
-    width: 100%;
-  }
-
-  .installer-footer {
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-
-  .installer-footer-actions {
-    width: 100%;
-  }
-
-  .installer-footer-actions .ui-btn {
-    flex: 1 1 auto;
   }
 
   .installer-chrome-title {
@@ -2289,6 +2296,19 @@ button.installer-clip--free.is-selected .installer-gap-action {
   line-height: 1;
 }
 
+/* A sliver of a clip (a small swap on a big disk) cannot hold the remove
+   button: it hides rather than peek out clipped. The partition still goes
+   through its toggle below the bar. */
+.installer-clip {
+  container-type: inline-size;
+}
+
+@container (max-width: 44px) {
+  .installer-clip-remove-button {
+    display: none;
+  }
+}
+
 .installer-handle-layer {
   position: absolute;
   inset: 0;
@@ -2342,7 +2362,8 @@ button.installer-clip--free.is-selected .installer-gap-action {
   outline: none;
 }
 
-/* Live size while hovering, focusing or dragging an edge. */
+/* Live size while hovering, focusing or dragging an edge; a finger has no
+   hover, so it also shows while the handle is pressed and lingers after. */
 .installer-handle-bubble {
   position: absolute;
   bottom: calc(100% + 6px);
@@ -2375,7 +2396,8 @@ button.installer-clip--free.is-selected .installer-gap-action {
 
 .installer-handle:hover .installer-handle-bubble,
 .installer-handle:focus-visible .installer-handle-bubble,
-.installer-handle.is-dragging .installer-handle-bubble {
+.installer-handle.is-dragging .installer-handle-bubble,
+.installer-handle.is-touched .installer-handle-bubble {
   opacity: 1;
   transform: translate(-50%, 0);
 }
@@ -2383,9 +2405,11 @@ button.installer-clip--free.is-selected .installer-gap-action {
 .installer-handle.at-start:hover .installer-handle-bubble,
 .installer-handle.at-start:focus-visible .installer-handle-bubble,
 .installer-handle.at-start.is-dragging .installer-handle-bubble,
+.installer-handle.at-start.is-touched .installer-handle-bubble,
 .installer-handle.at-end:hover .installer-handle-bubble,
 .installer-handle.at-end:focus-visible .installer-handle-bubble,
-.installer-handle.at-end.is-dragging .installer-handle-bubble {
+.installer-handle.at-end.is-dragging .installer-handle-bubble,
+.installer-handle.at-end.is-touched .installer-handle-bubble {
   transform: none;
 }
 
@@ -2574,7 +2598,7 @@ button.installer-clip--free.is-selected .installer-gap-action {
   gap: 9px;
 }
 
-@media (max-width: 720px) {
+@container (max-width: 720px) {
   .installer-diskshelf {
     flex-direction: column;
     overflow-x: visible;

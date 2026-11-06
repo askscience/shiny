@@ -30,7 +30,11 @@ other code changes.
   a large title ("8 updates" / "Up to date", the count rolls up) under a mono
   eyebrow ("DEBIAN · APT"); the install action as the ink arrow pill; hairline
   package rows with the name on the left and mono "1.2 → 1.3 · MAIN" on the
-  right; the job log in mono. Packages and history cascade in when loaded.
+  right; the job log in mono. Details opens the log as a pane: a column
+  beside the content in a wide window, a slide-in over it with the shared
+  Back when the window is narrow or on a phone, where every action is its
+  icon and the install button wears the pending count as a badge. Packages
+  and history cascade in when loaded.
   While an install runs on apt, a progress bar shows the phase and percent
   ("INSTALLING · 42% · 12 OF 40 PACKAGES") and every package row shows its
   own state: a dot while queued, a spinner while unpacking/configuring, a

@@ -390,6 +390,8 @@
   "plugin.studio.ctx.duplicateClip": "Duplicate clip",
   "plugin.studio.ctx.deleteClip": "Delete clip",
   "plugin.studio.ctx.splitPlayhead": "Split clip at playhead",
+  "plugin.studio.ctx.renameTrack": "Rename track",
+  "plugin.studio.ctx.deleteNote": "Delete note",
   "plugin.studio.project.tracks.one": "{count} track",
   "plugin.studio.project.tracks.other": "{count} tracks",
   "plugin.studio.browser.tab.projects": "Projects"

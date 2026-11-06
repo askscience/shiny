@@ -75,6 +75,20 @@ these `web/editor.js` functions:
 3. No documents: `paintView()` renders the empty state with an **Open image**
    button; dropping a file on the stage uploads it.
 
+## Phone
+
+On a phone (`html[data-phone='1']`) the canvas keeps the whole screen: the
+dock body moves into a bottom sheet (the library's `sheet`) opened from two
+icons in the window bar — `.image-tools-looks` (ui/palette) and
+`.image-tools-adjust` (ui/brightness) — with a segmented switch
+(`.image-sheet-tabs`) between the Looks and Adjust sections
+(`.image-dock-section[data-section]`); the same DOM returns to the inline dock
+on a desktop (`syncPhoneLayout`), so the dials keep their listeners. The
+one-clicks carry icons (magic wand, contrast, invert, grayscale, sepia; Revert
+is `ui/undo`) and show the icon alone there. On the canvas a two-finger pinch
+zooms around the fingers (the chip's 5%–800% range) and a double-tap toggles
+fit ↔ 1:1.
+
 ## Dock behaviour
 
 - **Looks** preview on the open picture: `GET /api/images/:id/looks` returns one
@@ -108,7 +122,7 @@ these `web/editor.js` functions:
 | `files:open` (`onOpenFromFiles`) | `importFromFiles(path, name)` — extension allowlist mirrors `FILE_OPENERS`. |
 | `agent:actions` (any `image_*` action) | Focus the plugin, refresh the doc list; open the touched document or reload the pixels + look strip. |
 | Drop on the stage | Upload the file as a new document. |
-| Wheel / double-click / drag | Zoom around the cursor; toggle fit ↔ 100%; drag pans. `Ctrl +/-`, `Ctrl+0` also work. |
+| Wheel / double-click / drag / pinch / double-tap | Zoom around the cursor; toggle fit ↔ 100%; drag pans; two fingers pinch-zoom; a touch double-tap toggles fit ↔ 100%. `Ctrl +/-`, `Ctrl+0` also work. |
 
 ## CSS
 

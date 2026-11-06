@@ -53,7 +53,7 @@ export function createImageSection({ on, cleanups, resources }) {
 
     const modelHint = el('p', 'settings-hint');
     const hint = el('p', 'settings-hint');
-    const download = button({ label: t('common.download', null, 'Download'), variant: 'quiet', size: 'sm' });
+    const download = button({ label: t('common.download', null, 'Download'), icon: 'ui/download', variant: 'quiet', size: 'sm' });
     download.classList.add('hidden');
     const row = el('div', 'whisper-model-row');
     row.append(hint, download);

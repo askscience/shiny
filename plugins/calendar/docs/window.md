@@ -22,9 +22,17 @@ window" section of `web/css/tiles.css`):
   controls, no plate at rest): previous/next month as grey pills (`ghost`,
   `ui/chevron-left` / `ui/chevron-right`), the bar title
   (`.calendar-month-label`, "October 2026") that fades in with `--sc`,
-  **Today** (grey pill) and **New event** (ink pill with a trailing arrow,
-  `button({ variant: 'primary', arrow: true })`).
-- **Scrolling body** (`div.calendar-scroll`) opening on a `largeTitle()` —
+  **Today** (grey pill, `ui/calendar`) and **New event** (ink pill,
+  `ui/plus`). Compact (a window up to 700px, a phone) the two show their
+  icons alone.
+- **Body** (`div.calendar-scroll`): a `paneStack` with two panes — the
+  month (`div.calendar-month`, the floor: large title, weekday labels, day
+  grid) and the day detail (`div.calendar-detail`). Wide, both scroll
+  together as one column; narrow or on a phone, tapping a day slides the
+  detail in over the month and its head (`[data-pane-bar]`) gets the shared
+  Back — Escape, Android Back and the edge swipe pop it. On a phone a bottom
+  `actionBar` holds **New event** for the thumb.
+- The month pane opens on a `largeTitle()` —
   the month name ("October") with a mono meta line "2026 · 8 EVENTS"
   (`plugin.calendar.count.events`, plural). As the body scrolls, the large
   title fades out and the bar title + hairline fade in. A month change plays
@@ -38,11 +46,12 @@ window" section of `web/css/tiles.css`):
 - **Day detail** (`div.calendar-detail`): the date in the display face with a
   mono event count, then the day's events as `hairlineRow`s in a
   `hairlineList` — mono time column (lead), title + notes, mono location
-  (meta), and Edit / Delete. The rows play `listReveal` once per loaded day
+  (meta), and Edit (`ui/pencil`) / Delete (`ui/trash`) as icon buttons. The
+  rows play `listReveal` once per loaded day
   (a new date or a changed event list), not on every repaint.
 - Clicking a day lists its events; create/edit lives in a modal form whose
-  action row uses the shared buttons (Cancel grey pill, Save event ink pill
-  with arrow).
+  action row uses the shared buttons (Cancel grey pill with `ui/close`, Save
+  event ink pill with `ui/check`); the modal registers with the back stack.
 - The ambient glow uses theme tokens only (`--accent` / `--accent-2`), placed
   by the selected day and strengthened by that day's load.
 

@@ -57,8 +57,22 @@ export function button(o = {}) {
   };
   setContent();
 
+  // Icon and text together: on a phone the text steps back and the icon
+  // stands alone (ui/responsive.css), so the label is also the name.
+  const mark = () => {
+    const labelled = !!(o.icon && o.label);
+    el.classList.toggle('ui-btn--labelled', labelled);
+    if (labelled && !el.getAttribute('aria-label')) el.setAttribute('aria-label', o.label);
+  };
+  mark();
+
   el.setLoading = (v) => { o.loading = v; el.classList.toggle('is-loading', v); el.disabled = v || !!o.disabled; setContent(); };
-  el.setLabel = (label) => { o.label = label; setContent(); };
+  el.setLabel = (label) => {
+    const named = el.getAttribute('aria-label') === o.label;
+    o.label = label; setContent();
+    if (named) el.setAttribute('aria-label', label);
+    mark();
+  };
   if (o.onClick) el.addEventListener('click', o.onClick);
   if (o.className) el.classList.add(...o.className.split(/\s+/).filter(Boolean));
   if (o.arrow) el.classList.add('ui-btn--arrow');

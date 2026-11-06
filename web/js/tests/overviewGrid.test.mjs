@@ -4,7 +4,7 @@
  *   node web/js/tests/overviewGrid.test.mjs
  */
 
-import { gridLayout, motionFor, blurFor, MOTION, LABEL_H } from '../overviewGrid.js';
+import { gridLayout, motionFor, blurFor, MOTION, LABEL_H, LABEL_H_PHONE } from '../overviewGrid.js';
 
 let failures = 0;
 function check(name, condition, detail = '') {
@@ -51,7 +51,8 @@ const inside = (cards, W) => cards.every((c) => c.x >= -0.5 && c.x + c.w <= W + 
 {
   const g = gridLayout(12, 390, 760, { phone: true });
   check('many phone windows scroll', g.maxScroll > 0, `maxScroll=${g.maxScroll}`);
-  check('the scroll reaches the last row', g.cards[11].y + g.cards[11].h + LABEL_H <= 760 + g.maxScroll + 1);
+  check('the scroll reaches the last row', g.cards[11].y + g.cards[11].h + LABEL_H_PHONE <= 760 + g.maxScroll + 1);
+  check('a phone label has room for round buttons', LABEL_H_PHONE >= 44);
 }
 
 /* ── Desktop ──────────────────────────────────────────────────── */

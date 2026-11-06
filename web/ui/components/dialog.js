@@ -19,9 +19,11 @@ function ask(message, { text = false, value = '' } = {}) {
     if (control) form.appendChild(control);
     const actions = document.createElement('div');
     actions.className = 'ui-row ui-dialog-actions';
+    // Each action carries its icon, so a phone shows two small round icons
+    // (the shared phone button policy) and a desktop reads the words.
     actions.append(
-      button({ label: t('common.cancel'), variant: 'ghost', onClick: () => finish(text ? null : false) }),
-      button({ label: t('common.ok'), type: 'submit' }),
+      button({ label: t('common.cancel'), icon: 'ui/close', variant: 'ghost', onClick: () => finish(text ? null : false) }),
+      button({ label: t('common.ok'), icon: 'ui/check', type: 'submit' }),
     );
     form.appendChild(actions);
     form.addEventListener('submit', event => { event.preventDefault(); finish(text ? control.value : true); });

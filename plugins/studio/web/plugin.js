@@ -1,7 +1,7 @@
 import {
   confirmDialog, slider as uiSlider, toolbar, dial, element as h, input as uiInput,
   selectControl, controlButton, toast, icon, setIcon, button, searchBar, setTileGlow,
-  glowGradient, toolButton, segmented, listReveal, decodeText, eyebrow,
+  glowGradient, toolButton, segmented, listReveal, decodeText, eyebrow, paneStack,
 } from '../../ui/index.js';
 
 /**
@@ -726,6 +726,13 @@ let prevSig = '';                // pattern signature the editor preview was ren
 let prevGain = null;              // crossfade gain of the editor preview
 let auditionSource = null;       // looping SynthMe / WaveMe preview
 let ctxClip = null;               // { index, beat } under the last right-click
+let ctxTrack = null;              // { rename, remove } for the track head under the last right-click / long-press
+let ctxNote = null;               // piano-roll note index under the last right-click / long-press
+let shellEl = null;               // body + detail + browser + AI: the pane stack's root
+let paneNav = null;               // paneStack over shellEl
+let paneStacked = false;
+let aiBodyEl = null;              // the AI panel's scrolling body (its head is fixed)
+let detailBtn = null;             // window-bar button that opens the detail panel
 let pendingAiTrackId = null;     // AI-created track to drop in once mounted
 let lastConsumedAiTrackId = null; // de-dupe re-delivered agent:actions
 let metroOn = false;
@@ -1959,12 +1966,26 @@ function selectArrClip(clipIndex, { openEditor = false } = {}) {
   if (openEditor) { detailOpen = true; detailPage = 'editor'; }
   syncSelection();
   renderArranger();
+  if (openEditor) paneNav?.show('detail');
 }
 function selectLauncherClip(trackId, scene, { openEditor = false } = {}) {
   sel = { area: 'lch', trackId, scene };
   if (openEditor) { detailOpen = true; detailPage = 'editor'; }
   syncSelection();
   renderLauncher();
+  if (openEditor) paneNav?.show('detail');
+}
+/** A touch screen (or a phone) has no double-click: a single tap opens. */
+function coarsePointer() {
+  return document.documentElement.dataset.phone === '1' || !!window.matchMedia?.('(pointer: coarse)')?.matches;
+}
+/** Show the detail panel on `page` — under the body while wide, as a pane
+ *  over it while stacked. */
+function openDetail(page = detailPage) {
+  detailOpen = true;
+  detailPage = page;
+  renderDetail();
+  paneNav?.show('detail');
 }
 
 /* ── status / transport / footer ────────────────────────────── */
@@ -2660,6 +2681,11 @@ function renderArranger() {
     const name = h('span', 'studio-arr-name', tr.name);
     name.title = t('plugin.studio.track.renameHint', null, 'Double-click to rename');
     name.addEventListener('dblclick', (e) => { e.stopPropagation(); inlineRename(name, tr.name, (v) => { tr.name = v; markDirty(); renderArranger(); }); });
+    // Right-click or a long press (core turns it into `contextmenu`) puts
+    // the track's actions in the window menu — the touch path to rename.
+    head.addEventListener('contextmenu', () => {
+      ctxTrack = { rename: () => inlineRename(name, tr.name, (v) => { tr.name = v; markDirty(); renderArranger(); }), remove: () => removeArrTrack(ti) };
+    });
     head.appendChild(name);
 
     const btns = h('span', 'studio-arr-head-btns');
@@ -2786,7 +2812,7 @@ function renderArranger() {
     trim.title = t('plugin.studio.clip.trimStart', null, 'Drag to trim the clip start');
     trim.addEventListener('pointerdown', (e) => startClipTrim(e, i));
     el.appendChild(trim);
-    el.addEventListener('click', () => selectArrClip(i));
+    el.addEventListener('click', () => selectArrClip(i, { openEditor: coarsePointer() }));
     el.addEventListener('dblclick', () => selectArrClip(i, { openEditor: true }));
     el.addEventListener('pointerdown', (e) => startClipDrag(e, i));
     arrGridEl.appendChild(el);
@@ -3278,6 +3304,9 @@ function renderLauncher() {
     const name = h('span', 'studio-arr-name', tr.name);
     name.title = t('plugin.studio.track.renameHint', null, 'Double-click to rename');
     name.addEventListener('dblclick', (e) => { e.stopPropagation(); inlineRename(name, tr.name, (v) => { tr.name = v; renderLauncher(); }); });
+    head.addEventListener('contextmenu', () => {
+      ctxTrack = { rename: () => inlineRename(name, tr.name, (v) => { tr.name = v; renderLauncher(); }), remove: () => removeLauncherTrack(ti) };
+    });
     head.appendChild(name);
     const btns = h('span', 'studio-arr-head-btns');
     const mute = h('button', 'studio-ms', 'M');
@@ -3353,7 +3382,7 @@ function renderLauncher() {
           renderLauncher();
         });
         cell.appendChild(rm);
-        cell.addEventListener('click', () => selectLauncherClip(tr.id, c));
+        cell.addEventListener('click', () => selectLauncherClip(tr.id, c, { openEditor: coarsePointer() }));
         cell.addEventListener('dblclick', () => selectLauncherClip(tr.id, c, { openEditor: true }));
         cell.title = t('plugin.studio.launcher.clipHint', null, 'Click to select · ▶ to launch · double-click to edit');
       } else {
@@ -3487,13 +3516,13 @@ function renderAudioClipEditor(clip) {
   wrap.appendChild(facts);
   const actions = h('div', 'studio-audio-actions');
   if (Number.isFinite(info?.bpm) && Math.abs(info.bpm - arrangement.bpm) > 0.05) {
-    actions.appendChild(button({ variant: 'ghost', label: t('plugin.studio.clip.matchTempo', { bpm: info.bpm }, `Set project tempo to ${info.bpm} BPM`), onClick: () => {
+    actions.appendChild(button({ variant: 'ghost', icon: 'ui/metronome', label: t('plugin.studio.clip.matchTempo', { bpm: info.bpm }, `Set project tempo to ${info.bpm} BPM`), onClick: () => {
       arrangement.bpm = info.bpm; if (launcher) launcher.bpm = info.bpm;
       if (bpmInput) bpmInput.value = String(info.bpm);
       markDirty(); renderArranger(); renderEditor();
     } }));
   }
-  actions.appendChild(button({ variant: 'ghost', label: t('plugin.studio.clip.fullLength', null, 'Use the whole file'), onClick: () => { clip.length_beats = null; a.offset = 0; fitArrangementLength(); change(); renderEditor(); } }));
+  actions.appendChild(button({ variant: 'ghost', icon: 'ui/select-all', label: t('plugin.studio.clip.fullLength', null, 'Use the whole file'), onClick: () => { clip.length_beats = null; a.offset = 0; fitArrangementLength(); change(); renderEditor(); } }));
   wrap.appendChild(actions);
   gridEl.appendChild(wrap);
   if (!info) void loadAudioInfo(a.src).then(() => { if (selectedArrClip() === clip) renderEditor(); }).catch(() => {});
@@ -3544,7 +3573,7 @@ function renderEditorToolbar() {
 
   const arrClip = selectedArrClip();
   if (arrClip && !arrClip.audio) {
-    const loopBtn = button({ variant: 'ghost', label: t('plugin.studio.clip.loop', null, 'Loop'), onClick: () => {
+    const loopBtn = button({ variant: 'ghost', icon: 'ui/loop', label: t('plugin.studio.clip.loop', null, 'Loop'), onClick: () => {
       arrClip.loop = arrClip.loop === false; markDirty(); renderArranger(); renderEditorToolbar();
     } });
     loopBtn.classList.add('studio-toggle');
@@ -3568,10 +3597,7 @@ function renderEditorToolbar() {
     const hitsSel = nativeSelect(Array.from({ length: current.steps + 1 }, (_, i) => [String(i), String(i)]), '4', () => {}, t('plugin.studio.hint.euclideanHits', null, 'Euclidean hits'));
     hitsSel.classList.add('studio-select--narrow');
     const rotField = numberField(t('plugin.studio.editor.rotationPlaceholder', null, 'rot'), 0, () => {}, t('plugin.studio.hint.rotation', null, 'Rotation'));
-    const fill = h('button', 'studio-btn', t('plugin.studio.editor.fill', null, 'Fill'));
-    fill.type = 'button';
-    fill.title = t('plugin.studio.editor.fillHint', null, 'Fill the selected voice with a Euclidean rhythm');
-    fill.addEventListener('click', () => {
+    const fill = button({ variant: 'ghost', icon: 'ui/fill', label: t('plugin.studio.editor.fill', null, 'Fill'), onClick: () => {
       const hits = parseInt(hitsSel.value, 10) || 0;
       const rot = parseInt(rotField.value, 10) || 0;
       v.rhythm = `e${hits},${rot}`;
@@ -3582,29 +3608,26 @@ function renderEditorToolbar() {
       }
       markDirty();
       renderEditor();
-    });
-    const clear = h('button', 'studio-btn', t('plugin.studio.editor.clear', null, 'Clear'));
-    clear.type = 'button';
-    clear.title = t('plugin.studio.editor.clearHint', null, 'Clear the selected voice');
-    clear.addEventListener('click', () => {
+    } });
+    fill.classList.add('studio-btn');
+    fill.title = t('plugin.studio.editor.fillHint', null, 'Fill the selected voice with a Euclidean rhythm');
+    const clear = button({ variant: 'ghost', icon: 'ui/eraser', label: t('plugin.studio.editor.clear', null, 'Clear'), onClick: () => {
       v.rhythm = '.'.repeat(current.steps);
       v.notes = [];
       markDirty();
       renderEditor();
-    });
+    } });
+    clear.classList.add('studio-btn');
+    clear.title = t('plugin.studio.editor.clearHint', null, 'Clear the selected voice');
     edToolbarEl.append(hitsSel, rotField, fill, clear);
   }
-  const prev = h('button', 'studio-btn studio-btn--play', '');
-  prev.type = 'button';
-  prev.title = t('plugin.studio.editor.preview', null, 'Preview clip');
-  prev.appendChild(icon(prevPlaying ? 'ui/stop' : 'ui/play', { size: 12 }));
+  const prev = iconCtl(prevPlaying ? 'ui/stop' : 'ui/play', 'studio-btn studio-btn--play', t('plugin.studio.editor.preview', null, 'Preview clip'));
   prev.addEventListener('click', () => void previewClipInEditor());
   edToolbarEl.appendChild(prev);
 
-  const savePat = h('button', 'studio-btn', t('plugin.studio.editor.savePattern', null, 'Save pattern'));
-  savePat.type = 'button';
+  const savePat = button({ variant: 'ghost', icon: 'ui/save', label: t('plugin.studio.editor.savePattern', null, 'Save pattern'), onClick: () => void savePatternToLibrary().catch((e) => toast(e.message, { type: 'error' })) });
+  savePat.classList.add('studio-btn');
   savePat.title = t('plugin.studio.editor.savePatternHint', null, 'Save clip to the pattern library');
-  savePat.addEventListener('click', () => void savePatternToLibrary().catch((e) => toast(e.message, { type: 'error' })));
   edToolbarEl.appendChild(savePat);
 }
 
@@ -3924,6 +3947,7 @@ function renderPianoRoll() {
     bar.style.height = `${PR_ROW - 2}px`;
     bar.addEventListener('pointerdown', (e) => { auditionNote(v, nt.degree, nt.octave ?? v.octave); startNoteDrag(e, i, v); });
     bar.addEventListener('dblclick', (e) => { e.stopPropagation(); deleteNote(i); });
+    bar.addEventListener('contextmenu', () => { ctxNote = i; });
     notes.appendChild(bar);
   }
   grid.appendChild(notes);
@@ -4575,6 +4599,9 @@ function renderMixer() {
     const name = h('span', 'studio-mixer-name', tr.name);
     name.title = t('plugin.studio.track.renameHint', null, 'Double-click to rename');
     name.addEventListener('dblclick', () => inlineRename(name, tr.name, (v) => { tr.name = v; markDirty(); renderMixer(); renderArranger(); }));
+    strip.addEventListener('contextmenu', () => {
+      ctxTrack = { rename: () => inlineRename(name, tr.name, (v) => { tr.name = v; markDirty(); renderMixer(); renderArranger(); }) };
+    });
     strip.appendChild(h('span', 'studio-track-stripe'));
     strip.appendChild(name);
     strip.appendChild(h('span', 'studio-mixer-kind', tr.kind === 'audio' ? t('plugin.studio.mixer.audioTrack', null, 'Audio') : t('plugin.studio.mixer.instrumentTrack', null, 'Instrument')));
@@ -4700,24 +4727,73 @@ function effectiveSends(tr) {
 let browserQuery = '';
 const BROWSER_TABS = [['arrangements', 'plugin.studio.browser.tab.projects'], ['audio', 'plugin.studio.browser.tab.audio'], ['patterns', 'plugin.studio.browser.tab.patterns'], ['instruments', 'plugin.studio.browser.tab.instruments'], ['effects', 'plugin.studio.browser.tab.effects'], ['presets', 'plugin.studio.browser.tab.presets']];
 
+/* ── the overlays as panes ──────────────────────────────────────
+   Wide, the browser and the AI panel float over the body (`hidden` closes
+   them). Narrow or on a phone the shell is a pane stack: the body is the
+   floor and the detail panel, the browser and the AI panel slide in over
+   it one at a time, Back / Escape / the edge swipe popping them. */
+function overlayOpen(id, el) {
+  if (!el) return false;
+  return paneStacked ? paneNav.isOpen(id) : !el.classList.contains('hidden');
+}
+function showOverlay(id, el) {
+  if (!el) return;
+  el.classList.remove('hidden');
+  if (paneStacked) { void el.offsetWidth; paneNav.show(id); }
+}
+function hideOverlay(id, el) {
+  if (!el) return;
+  if (paneStacked) { if (paneNav.isOpen(id)) { paneNav.show(id); paneNav.back(); } } else el.classList.add('hidden');
+}
+/** The stack flipped (the window crossed the narrow threshold) or Back
+ *  popped a pane: keep the overlays' own state in step. */
+function onPaneChange({ id, stacked }) {
+  const flipped = stacked !== paneStacked;
+  paneStacked = stacked;
+  tileEl?.classList.toggle('studio-tile--stacked', stacked);
+  if (flipped) {
+    if (stacked) {
+      // What floated open becomes the open pane.
+      for (const [pid, el] of [['browser', browserEl], ['ai', aiPanelEl]]) {
+        const wasOpen = el && !el.classList.contains('hidden');
+        el?.classList.remove('hidden');
+        if (wasOpen) paneNav.show(pid);
+      }
+    } else {
+      browserEl?.classList.toggle('hidden', !paneNav.isOpen('browser'));
+      aiPanelEl?.classList.toggle('hidden', !paneNav.isOpen('ai'));
+      paneNav.reset();
+    }
+    renderDetail();
+    return;
+  }
+  if (!stacked) return;
+  if (id !== 'browser' && !paneNav.isOpen('browser') && browserBtn?.getAttribute('aria-expanded') === 'true') {
+    stopLibraryPreview();
+    browserBtn.setAttribute('aria-expanded', 'false');
+    browserMode = null;
+  }
+}
+
 function openBrowser(tab, mode = null) {
   browserTab = tab || browserTab;
   if (browserTab === 'audio') libraryFiles = null;   // re-list on open
   browserMode = mode ? { type: mode, area: panels.launcher && !panels.arranger ? 'lch' : 'arr' } : null;
-  browserEl?.classList.remove('hidden');
+  showOverlay('browser', browserEl);
   browserBtn?.setAttribute('aria-expanded', 'true');
   browserReveal = true;
   renderBrowser();
-  browserEl?.querySelector('input')?.focus();
+  // Never let focus scroll the shell: while stacked the pane is still sliding in.
+  browserEl?.querySelector('input')?.focus({ preventScroll: true });
 }
 function closeBrowser() {
   stopLibraryPreview();
-  browserEl?.classList.add('hidden');
+  hideOverlay('browser', browserEl);
   browserBtn?.setAttribute('aria-expanded', 'false');
   browserMode = null;
 }
 function toggleBrowser() {
-  if (browserEl?.classList.contains('hidden')) openBrowser(browserTab);
+  if (!overlayOpen('browser', browserEl)) openBrowser(browserTab);
   else closeBrowser();
 }
 
@@ -5385,12 +5461,12 @@ let aiNotice = null;             // { kind: 'download' | 'engine' | 'error', tex
 
 function openAiPanel() {
   if (!aiPanelEl) return;
-  aiPanelEl.classList.remove('hidden');
+  showOverlay('ai', aiPanelEl);
   renderAiPanel();
-  aiPanelEl.querySelector('textarea')?.focus();
+  aiPanelEl.querySelector('textarea')?.focus({ preventScroll: true });
 }
 function closeAiPanel() {
-  aiPanelEl?.classList.add('hidden');
+  hideOverlay('ai', aiPanelEl);
 }
 function aiField(label, control, hint) {
   const f = h('label', 'studio-ai-field');
@@ -5400,15 +5476,9 @@ function aiField(label, control, hint) {
   return f;
 }
 function renderAiPanel() {
-  if (!aiPanelEl || aiPanelEl.classList.contains('hidden')) return;
-  aiPanelEl.textContent = '';
-  const head = h('div', 'studio-browser-head');
-  head.appendChild(eyebrow(t('plugin.studio.ai.title', null, 'AI song')));
-  const close = iconCtl('ui/close', 'studio-head-btn', t('plugin.studio.common.close', null, 'Close'));
-  close.addEventListener('click', closeAiPanel);
-  head.appendChild(close);
-  aiPanelEl.appendChild(head);
-  aiPanelEl.appendChild(h('p', 'studio-ai-intro', t('plugin.studio.ai.intro', null, 'Describe a song and the local music model writes it — vocals included. It runs on this computer and takes several minutes; the result lands on a new audio track.')));
+  if (!aiBodyEl || !overlayOpen('ai', aiPanelEl)) return;
+  aiBodyEl.textContent = '';
+  aiBodyEl.appendChild(h('p', 'studio-ai-intro', t('plugin.studio.ai.intro', null, 'Describe a song and the local music model writes it — vocals included. It runs on this computer and takes several minutes; the result lands on a new audio track.')));
 
   const style = document.createElement('textarea');
   style.className = 'studio-ai-text';
@@ -5416,7 +5486,7 @@ function renderAiPanel() {
   style.placeholder = t('plugin.studio.ai.stylePlaceholder', null, 'e.g. dreamy synth-pop, female vocals, 100 BPM, warm analog pads');
   style.value = aiDraft.style;
   style.addEventListener('input', () => { aiDraft.style = style.value; });
-  aiPanelEl.appendChild(aiField(t('plugin.studio.ai.style', null, 'Style'), style));
+  aiBodyEl.appendChild(aiField(t('plugin.studio.ai.style', null, 'Style'), style));
 
   const lyrics = document.createElement('textarea');
   lyrics.className = 'studio-ai-text studio-ai-text--lyrics';
@@ -5424,7 +5494,7 @@ function renderAiPanel() {
   lyrics.placeholder = '[Verse]\n…\n[Chorus]\n…';
   lyrics.value = aiDraft.lyrics;
   lyrics.addEventListener('input', () => { aiDraft.lyrics = lyrics.value; });
-  aiPanelEl.appendChild(aiField(t('plugin.studio.ai.lyrics', null, 'Lyrics (optional)'), lyrics, t('plugin.studio.ai.lyricsHint', null, 'Mark sections with [Verse], [Chorus], [Bridge]… Leave empty for an instrumental feel.')));
+  aiBodyEl.appendChild(aiField(t('plugin.studio.ai.lyrics', null, 'Lyrics (optional)'), lyrics, t('plugin.studio.ai.lyricsHint', null, 'Mark sections with [Verse], [Chorus], [Bridge]… Leave empty for an instrumental feel.')));
 
   const row = h('div', 'studio-ai-row');
   const title = uiInput();
@@ -5441,7 +5511,7 @@ function renderAiPanel() {
   dur.value = String(aiDraft.duration);
   dur.addEventListener('change', () => { aiDraft.duration = clamp(parseInt(dur.value, 10) || 90, 30, 300); dur.value = String(aiDraft.duration); });
   row.appendChild(aiField(t('plugin.studio.ai.duration', null, 'Length (s)'), dur));
-  aiPanelEl.appendChild(row);
+  aiBodyEl.appendChild(row);
 
   const match = h('label', 'studio-ai-check');
   const cb = document.createElement('input');
@@ -5449,20 +5519,20 @@ function renderAiPanel() {
   cb.checked = aiDraft.match;
   cb.addEventListener('change', () => { aiDraft.match = cb.checked; });
   match.append(cb, h('span', null, t('plugin.studio.ai.matchTempo', null, 'Set the project tempo to the song’s tempo')));
-  aiPanelEl.appendChild(match);
+  aiBodyEl.appendChild(match);
 
   if (aiNotice) {
     const n = h('div', `studio-ai-notice studio-ai-notice--${aiNotice.kind}`);
     n.appendChild(h('span', null, aiNotice.text));
     if (aiNotice.kind === 'download') {
-      n.appendChild(button({ variant: 'primary', label: t('plugin.studio.ai.downloadModels', { size: aiNotice.size }, `Download (${aiNotice.size})`), onClick: () => void startModelDownload(aiNotice.quality) }));
+      n.appendChild(button({ variant: 'primary', icon: 'ui/download', label: t('plugin.studio.ai.downloadModels', { size: aiNotice.size }, `Download (${aiNotice.size})`), onClick: () => void startModelDownload(aiNotice.quality) }));
     }
-    aiPanelEl.appendChild(n);
+    aiBodyEl.appendChild(n);
   }
 
-  const go = button({ variant: 'primary', label: t('plugin.studio.ai.generate', null, 'Generate'), onClick: () => void startSongJob() });
+  const go = button({ variant: 'primary', icon: 'ui/magic-wand', label: t('plugin.studio.ai.generate', null, 'Generate'), onClick: () => void startSongJob() });
   go.classList.add('studio-ai-go');
-  aiPanelEl.appendChild(go);
+  aiBodyEl.appendChild(go);
 
   if (aiJobs.length) {
     const list = h('div', 'studio-ai-jobs');
@@ -5480,7 +5550,7 @@ function renderAiPanel() {
       }
       list.appendChild(r);
     }
-    aiPanelEl.appendChild(list);
+    aiBodyEl.appendChild(list);
   }
 }
 
@@ -6237,16 +6307,28 @@ export function mountStudioTile() {
   exportBtn.setAttribute('aria-label', t('plugin.studio.toolbar.exportLabel', null, 'Export WAV to Music'));
 
   aiBtnEl = button({ variant: 'ghost', icon: 'ui/magic-wand', label: '', onClick: () => {
-    if (aiPanelEl?.classList.contains('hidden')) openAiPanel(); else closeAiPanel();
+    if (!overlayOpen('ai', aiPanelEl)) openAiPanel(); else closeAiPanel();
   } });
   aiBtnEl.classList.add('studio-transport', 'studio-ai-btn');
   aiBtnEl.title = t('plugin.studio.toolbar.ai', null, 'AI song — generate a full song with the local music model');
   aiBtnEl.setAttribute('aria-label', t('plugin.studio.toolbar.aiLabel', null, 'AI song'));
 
-  const mixBtn = button({ variant: 'ghost', icon: 'ui/channels', label: '', onClick: () => { detailOpen = true; detailPage = 'mixer'; renderDetail(); } });
+  const mixBtn = button({ variant: 'ghost', icon: 'ui/channels', label: '', onClick: () => openDetail('mixer') });
   mixBtn.classList.add('studio-transport');
   mixBtn.title = t('plugin.studio.toolbar.mixer', null, 'Mixer');
   mixBtn.setAttribute('aria-label', t('plugin.studio.toolbar.mixer', null, 'Mixer'));
+
+  // The detail panel (Editor / Devices / Mixer): the way into its pane while
+  // the shell is stacked — the only time the bar shows it (tiles.css); wide,
+  // the panel sits under the body with its own rail.
+  detailBtn = button({ variant: 'ghost', icon: 'ui/properties', label: '', onClick: () => {
+    if (paneStacked) openDetail();
+    else { detailOpen = !detailOpen; renderDetail(); }
+  } });
+  detailBtn.classList.add('studio-transport', 'studio-detail-btn');
+  detailBtn.dataset.keep = '';
+  detailBtn.title = t('plugin.studio.panel.pages', null, 'Detail panel');
+  detailBtn.setAttribute('aria-label', t('plugin.studio.panel.pages', null, 'Detail panel'));
 
   const newBtn = button({ variant: 'ghost', icon: 'ui/file', label: '', onClick: () => void newProject() });
   newBtn.classList.add('studio-transport');
@@ -6292,8 +6374,13 @@ export function mountStudioTile() {
   // save dot. Every control keeps the shared 32px metrics.
   barEl.append(browserBtn, titleInput, viewSeg,
     h('span', 'studio-bar-sep'), stopBtn, playBtn, loopBtn, metroBtn,
-    beatDotEl, timeEl, bpmWrap, h('span', 'studio-bar-sep'), aiBtnEl, mixBtn, exportBtn, h('span', 'studio-bar-sep'), newBtn, projBtn, saveBtn, saveAsBtn, statusEl, saveDotEl);
+    beatDotEl, timeEl, bpmWrap, h('span', 'studio-bar-sep'), detailBtn, aiBtnEl, mixBtn, exportBtn, h('span', 'studio-bar-sep'), newBtn, projBtn, saveBtn, saveAsBtn, statusEl, saveDotEl);
   tileEl.appendChild(barEl);
+
+  /* ── shell: the body, the detail panel and the floating panels — the pane
+     stack's root (narrow or on a phone one of them shows at a time) ── */
+  shellEl = h('div', 'studio-shell');
+  tileEl.appendChild(shellEl);
 
   /* ── body: arranger + launcher side by side ── */
   bodyEl = h('div', 'studio-body');
@@ -6324,17 +6411,22 @@ export function mountStudioTile() {
   gridWrapEl = h('div', 'studio-panel studio-panel--synthme hidden');
   bodyEl.appendChild(gridWrapEl);
 
-  tileEl.appendChild(bodyEl);
+  shellEl.appendChild(bodyEl);
 
   /* ── detail panel ── */
   detailEl = h('div', 'studio-detail');
+  // The rail is the pane's head while stacked (Back lands at its start).
   const rail = h('div', 'studio-detail-rail');
-  // Editor / Devices / Mixer: one segmented control with mono labels. A click
-  // on the current page re-opens a collapsed panel.
+  rail.dataset.paneBar = '';
+  const detailTitle = eyebrow(t('plugin.studio.panel.pages', null, 'Detail panel'));
+  detailTitle.classList.add('studio-detail-title');
+  rail.appendChild(detailTitle);
+  // Editor / Devices / Mixer: one segmented control with mono labels (icons
+  // alone on a phone). A click on the current page re-opens a collapsed panel.
   pageSeg = segmented({
     label: t('plugin.studio.panel.pages', null, 'Detail panel'),
-    options: [['editor', 'plugin.studio.panel.editor'], ['devices', 'plugin.studio.panel.devices'], ['mixer', 'plugin.studio.panel.mixer']]
-      .map(([value, key]) => ({ value, label: t(key) })),
+    options: [['editor', 'plugin.studio.panel.editor', 'ui/pencil'], ['devices', 'plugin.studio.panel.devices', 'ui/layers'], ['mixer', 'plugin.studio.panel.mixer', 'ui/channels']]
+      .map(([value, key, iconName]) => ({ value, label: t(key), icon: iconName, iconSize: 14 })),
     value: detailPage,
     onChange: (page) => { detailPage = page; detailOpen = true; renderDetail(); },
   });
@@ -6349,7 +6441,7 @@ export function mountStudioTile() {
   detailBodyEl = h('div', 'studio-detail-body');
   const editorWrap = h('div', 'studio-editor-page');
   editorPageEl = editorWrap;
-  edToolbarEl = toolbar([], { className: 'studio-editor-toolbar' });
+  edToolbarEl = toolbar([], { className: 'studio-editor-toolbar', compact: true });
   gridEl = h('div', 'studio-grid');
   pianoEl = h('div', 'studio-pianoroll-inline hidden');
   editorWrap.append(edToolbarEl, gridEl, pianoEl);
@@ -6357,7 +6449,7 @@ export function mountStudioTile() {
   mixerEl = h('div', 'studio-mixer-page hidden');
   detailBodyEl.append(editorWrap, devicesEl, mixerEl);
   detailEl.appendChild(detailBodyEl);
-  tileEl.appendChild(detailEl);
+  shellEl.appendChild(detailEl);
 
   /* ── footer: a slim, static hint + parameter readout line ── */
   const footer = h('div', 'studio-footer');
@@ -6365,7 +6457,7 @@ export function mountStudioTile() {
   footerParamEl = h('span', 'studio-footer-param');
   footer.append(footerHintEl, footerParamEl);
   tileEl.appendChild(footer);
-  tileEl.addEventListener('contextmenu', () => { ctxClip = null; }, true);
+  tileEl.addEventListener('contextmenu', () => { ctxClip = null; ctxTrack = null; ctxNote = null; }, true);
   tileEl.addEventListener('mouseover', (e) => {
     const t = e.target.closest?.('[data-hint]');
     if (t) setReadout(t.dataset.hint);
@@ -6377,6 +6469,7 @@ export function mountStudioTile() {
   /* ── pop-up browser ── */
   browserEl = h('div', 'studio-browser hidden');
   const bHead = h('div', 'studio-browser-head');
+  bHead.dataset.paneBar = '';
   bHead.appendChild(eyebrow(t('plugin.studio.toolbar.browser', null, 'Browser')));
   const bClose = iconCtl('ui/close');
   bClose.type = 'button';
@@ -6401,17 +6494,36 @@ export function mountStudioTile() {
   browserEl.appendChild(tabsRow);
   browserListEl = h('div', 'studio-browser-list');
   browserEl.appendChild(browserListEl);
-  tileEl.appendChild(browserEl);
+  shellEl.appendChild(browserEl);
 
-  /* ── AI song panel ── */
+  /* ── AI song panel: a fixed head (the pane's bar) over a scrolling body ── */
   aiPanelEl = h('div', 'studio-browser studio-ai hidden');
   aiPanelEl.setAttribute('role', 'dialog');
   aiPanelEl.setAttribute('aria-label', t('plugin.studio.ai.title', null, 'AI song'));
-  tileEl.appendChild(aiPanelEl);
+  const aiHead = h('div', 'studio-browser-head');
+  aiHead.dataset.paneBar = '';
+  aiHead.appendChild(eyebrow(t('plugin.studio.ai.title', null, 'AI song')));
+  const aiClose = iconCtl('ui/close', 'studio-head-btn', t('plugin.studio.common.close', null, 'Close'));
+  aiClose.addEventListener('click', closeAiPanel);
+  aiHead.appendChild(aiClose);
+  aiBodyEl = h('div', 'studio-ai-body');
+  aiPanelEl.append(aiHead, aiBodyEl);
+  shellEl.appendChild(aiPanelEl);
+
+  // Narrow or on a phone: one pane at a time over the body (Back, Escape
+  // and the edge swipe pop it); wide, the detail sits under the body and
+  // the browser / AI panels float.
+  paneNav = paneStack(shellEl, {
+    panes: [{ id: 'body', el: bodyEl }, { id: 'detail', el: detailEl }, { id: 'browser', el: browserEl }, { id: 'ai', el: aiPanelEl }],
+    onChange: onPaneChange,
+  });
+  paneStacked = paneNav.isStacked();
+  tileEl.classList.toggle('studio-tile--stacked', paneStacked);
+  if (paneStacked) { browserEl.classList.remove('hidden'); aiPanelEl.classList.remove('hidden'); }
 
   tileEl.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeBrowser(); closeAiPanel(); } });
   tileEl.addEventListener('pointerdown', (e) => {
-    if (!browserEl.classList.contains('hidden') && !browserEl.contains(e.target) && e.target !== browserBtn && !browserBtn.contains(e.target)) closeBrowser();
+    if (overlayOpen('browser', browserEl) && !browserEl.contains(e.target) && e.target !== browserBtn && !browserBtn.contains(e.target)) closeBrowser();
   });
 
   /* ── initial state ── */
@@ -6456,6 +6568,11 @@ export function unmountStudioTile() {
   stopMeters();
   if (clockUiTimer) { clearInterval(clockUiTimer); clockUiTimer = 0; }
   if (beatFlashTimer) { clearTimeout(beatFlashTimer); beatFlashTimer = 0; }
+  paneNav?.destroy();
+  paneNav = null;
+  paneStacked = false;
+  shellEl = aiBodyEl = detailBtn = null;
+  ctxClip = ctxTrack = ctxNote = null;
   if (tileEl) { tileEl.remove(); tileEl = null; }
   barEl = timeEl = titleInput = bpmInput = statusEl = saveDotEl = playBtn = loopBtn = metroBtn = null;
   viewSeg?.destroy?.();
@@ -6562,7 +6679,7 @@ function onAgentActions(e) {
  *  Core supplies the surrounding separators + window management. */
 export function studioContextMenu() {
   const ready = !!arrangement;
-  const browserOpen = !!browserEl && !browserEl.classList.contains('hidden');
+  const browserOpen = overlayOpen('browser', browserEl);
   return [
     { type: 'item', label: t('plugin.studio.ctx.play', null, 'Play'), icon: 'ui/play', disabled: !ready, onClick: () => {
       if (panels.arranger) void renderArrangementAndPlay();
@@ -6579,6 +6696,23 @@ export function studioContextMenu() {
       ];
     })() : []),
     ...(sel?.area === 'arr' && !ctxClip ? [{ type: 'item', label: t('plugin.studio.ctx.splitPlayhead', null, 'Split clip at playhead'), icon: 'ui/pencil', onClick: () => splitSelectedAtPlayhead() }] : []),
+    // A track head or a note under the pointer (a long press on a touch
+    // screen): what double-click does with a mouse.
+    ...(ctxTrack ? (() => {
+      const ct = ctxTrack;
+      return [
+        { type: 'separator' },
+        { type: 'item', label: t('plugin.studio.ctx.renameTrack', null, 'Rename track'), icon: 'ui/pencil', onClick: () => ct.rename() },
+        ...(ct.remove ? [{ type: 'item', label: t('plugin.studio.track.remove', null, 'Remove track'), icon: 'ui/trash', onClick: () => ct.remove() }] : []),
+      ];
+    })() : []),
+    ...(ctxNote != null && current ? (() => {
+      const index = ctxNote;
+      return [
+        { type: 'separator' },
+        { type: 'item', label: t('plugin.studio.ctx.deleteNote', null, 'Delete note'), icon: 'ui/trash', onClick: () => deleteNote(index) },
+      ];
+    })() : []),
     { type: 'separator' },
     { type: 'item', label: t('plugin.studio.ctx.saveProject', null, 'Save project'), icon: 'ui/save', disabled: !ready, onClick: () => saveProjectNow() },
     { type: 'item', label: t(browserOpen ? 'plugin.studio.ctx.closeBrowser' : 'plugin.studio.ctx.openBrowser', null, browserOpen ? 'Close browser' : 'Open browser'), icon: 'ui/search', checked: browserOpen, onClick: toggleBrowser },

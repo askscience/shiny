@@ -18,13 +18,24 @@ export default {
 Editorial (the Dusk/Ink skin; styles in the `YouTube plugin window` block of
 `web/css/tiles.css`):
 
+- **Window bar** (`data-window-bar`, merged with the window controls) — the
+  shared search pill, then **Home** (`ui/home`, disabled while a video plays)
+  and **Refresh results** (`ui/refresh`) as icon tools; narrow, the tile
+  manager folds them.
 - **Hero** (only while a video plays) — the 16:9 embed (true black, small
   radius, no shadow; capped at ~60 % of the window height), a large display
-  title and a mono `CHANNEL · DURATION` meta line, and a grey **Back** pill led
-  by `ui/arrow-left` that returns to the previous grid. The hero arrives with
+  title and a mono `CHANNEL · DURATION` meta line, and an `ui/arrow-left`
+  icon that returns to the previous grid. Wide, the hero arrives with
   `cardEnter` each time a video starts.
-- **Search** — a flat grey pill (no shadow); the idle homepage adds the user's
-  top categories as shared `chip()`s.
+- **Panes** — the hero and the browse surface (chips + grid) are a
+  `paneStack`: wide, the hero sits above the grid; in a window up to 700px or
+  on a phone, playing a video slides the player in over the grid, its info
+  row is the pane bar (the shared Back leads it; the hero's own arrow hides)
+  and the "Up next" label and grid move in under the player. Back — the
+  pane's button, Escape, the phone's Back, the edge swipe — stops the video
+  and restores the previous grid, as the Back pill did.
+- **Chips** — the idle homepage adds the user's top categories as shared
+  `chip()`s under the bar.
 - **Grid label** — mono uppercase ("FOR YOU", "UP NEXT · BECAUSE YOU WATCHED
   …") with a muted two-digit count; a changed label decodes in.
 - **Cells** — a rounded 16:9 thumbnail box with the duration as a dark media

@@ -72,6 +72,15 @@ density; its styles live in `web/css/tiles.css` (the Studio sections).
 - **Keyboard shortcuts**: `Space` play/stop, `Cmd/Ctrl+S` save, `Cmd/Ctrl+E`
   export, `Del` delete the selection.
 - **Audition**: clicking a piano key previews the voice.
+- **Narrow windows and phones**: the body, the detail panel, the browser and
+  the AI panel are a `paneStack` (`.studio-shell`); the arranger is the floor
+  and the others slide in one at a time — the detail from the bar's panel
+  button (shown only then), the mixer button or a tap on a clip, the browser
+  and AI from their toggles — with the shared Back, Escape and the edge swipe popping them. The
+  editor toolbar is compacted; every text action is an icon on a phone; the
+  hint row is hidden there. A long press on a clip, a track head or a note
+  opens the same menu as a right-click (split / duplicate / delete, rename /
+  remove, delete note).
 - The window listens for `agent:actions` so AI renders/arrangements appear live,
   and can set the tile glow from artwork/track colour.
 

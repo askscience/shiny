@@ -338,6 +338,16 @@ address, close), plus New tab / New incognito tab.
   (`--browser-pop-top`, measured on resize and before a panel opens).
 - On touch (`pointer: coarse`) tabs are 36 px tall (the shared component's
   rule) and close buttons, rows and popover actions grow to finger size.
+- On a phone (`html[data-phone='1']`) the window has one header row: the
+  tab strip is hidden and `placeBar` moves the address row into the merged
+  title row — back, reload, the address, the open-tab count
+  (`.browser-tabcount--bar`) and the menu. The tab switcher, history,
+  bookmarks, downloads, the password manager and the import are full-height
+  panes over the page (`paneStack`, floor = `.browser-viewport`), each with
+  the shared Back in its `[data-pane-bar]` head; Escape and the phone's Back
+  pop them (`panelOpen` / `showPanel`). The menu and the login offer stay
+  popovers; wide windows keep every popover. Every panel action is an icon
+  with its label, the icon alone on a phone.
 
 ## Passwords
 

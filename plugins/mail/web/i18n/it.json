@@ -7,6 +7,7 @@
   "plugin.mail.toolbar.newMessage": "Nuovo messaggio",
   "plugin.mail.toolbar.sync": "Sincronizza la posta",
   "plugin.mail.toolbar.accounts": "Account di posta",
+  "plugin.mail.actions.label": "Azioni di Mail",
   "plugin.mail.menu.noAccounts": "Ancora nessun account",
   "plugin.mail.search.placeholder": "Cerca nella posta scaricata…",
   "plugin.mail.search.label": "Cerca nella posta",

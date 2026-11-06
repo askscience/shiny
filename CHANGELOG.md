@@ -4,6 +4,134 @@
 
 ### Added
 
+- On a phone every window now reads like a phone app. A window's panes — a
+  list and what it opens, a detail and its editor — come one at a time: the
+  detail slides in over the list and a round back arrow, Escape, Android's
+  Back or a swipe in from the left edge brings the list back. An action is
+  an icon: buttons that carried words show their icon alone, round and
+  finger-sized, and the few that have no icon are small; the OK and Cancel
+  of every dialog are two round icons. The window's title bar is gone on a
+  phone — the screen belongs to the app — and its Close and Focus buttons
+  moved to the window switcher's cards, round on a plate, next to the
+  app's icon. Back now closes what is open on top (a pane, a sheet, a
+  dialog, the switcher) before it leaves the window. Windows may add a
+  bottom row of icon actions for the thumb (compose, new, upload).
+  All of it comes from the shared UI library (`paneStack`, `actionBar`,
+  the back registry and the phone button policy), so every window and
+  plugin gets the same behaviour; Plugins and Chats were the first to move
+  onto it.
+
+- Around the phone's apps: the home screen's icons wear a badge for what
+  waits inside (unread mail, updates to install); a list pulled down past
+  its top reloads (Plugins first); the window, the bottom bar and the chat's
+  composer lift above the soft keyboard where the browser does not resize
+  the page for it; and Settings → Appearance → "Window titles on a phone"
+  puts the title bars back for whoever wants them.
+
+- Calendar on a phone: the month fills the window and a day opens as its own
+  pane over it, with Back returning to the month; wide windows keep the month
+  and the day's events in one column. Today, New event, Edit, Cancel and Save
+  are icons, and a bottom action bar puts New event under the thumb. The old
+  rule that squeezed the day's events to a third of the window is gone.
+
+- Files reads like a phone app: the toolbar is the window bar, the places
+  become a strip above the folder when the window is narrow, and the bottom
+  row carries New folder and Upload. One tap opens a file on a touchscreen, a
+  long press opens its menu, and Select lets you tick several files before
+  acting on them. The share dialogs' buttons are icons on a phone, and the
+  quick look's arrows no longer need a mouse.
+
+- Updates on a phone: every action is its icon, with the number of pending
+  updates as a badge on the install button, and the package versions sit
+  under each name instead of being squeezed beside it. Details opens the
+  update log as its own page with a Back button; in a wide window the log is
+  a column beside the list, and the same button hides it again.
+
+- Settings reads like a phone app: the list of sections is the first
+  screen, a section slides in over it with a Back arrow and its name in a
+  slim bar, and the "At a glance" summary opens from an info button there.
+  Every action in Settings is an icon on a phone; the profile name and photo
+  now save as soon as they change, so the Save button is gone. The layout
+  switch (Tiling, Columns, Windows) shows icons.
+
+- Mail on a phone works one pane at a time: the folders sit in a strip
+  across the top, the message list is the floor and an open message slides
+  in over it, closing with Back, Escape or a swipe from the edge. Every
+  button in the window, the composer and the account manager is an icon on
+  a phone, and a Compose button sits along the bottom within thumb's reach.
+
+- YouTube reads like a phone app: the search pill, Home and Refresh share
+  one row with the window controls, and on a phone or in a narrow window
+  playing a video slides the player in over the grid, with Back, Escape or
+  a swipe from the edge returning to the results. The "Up next" row follows
+  the player there, and the old text Back pill is now an icon.
+
+- Word reads like a phone app. On a phone the formatting tools live in a
+  bottom sheet behind one button in the bar, so the window keeps a single
+  toolbar row; a tap on a tool applies it to what you had selected and tucks
+  the sheet away. The outline slides in over the page from a list button in
+  narrow windows and on phones, with Back to return, and picking a heading
+  jumps to it. Every action in the bar and the Design dialog is an icon on a
+  phone.
+
+- Installer: on a phone or in a narrow window the installation summary is a
+  pane that slides over the current step from an info button in the footer
+  and closes with Back or Escape; the step rail becomes a strip above the
+  step. The footer's Back, Next, Re-check, Install and Cancel are icons on a
+  phone. Dragging a partition edge with a finger shows its size while pressed
+  and for a moment after letting go; the remove button no longer pokes out
+  of a sliver-thin partition.
+
+- Calculator: the history is now a pane that slides in over the keypad in a
+  narrow window or on a phone, with a Back arrow and the clear action in its
+  head; a wide window keeps it under the keypad, or beside it when there is
+  room. Tapping an entry brings its result back and returns to the keypad.
+  On a phone the keys grow to fill the window like a phone calculator.
+
+- On a phone or in a narrow window the PDF window reads like a phone app:
+  the page fills the window with the thumbnails in a strip above it, and the
+  comments slide in over the page from the Comments button in the bar, with
+  Back, Escape or an edge swipe closing them. Every action in the bar, the
+  mode strip, the selection bar, the comment cards and the dialogs is an
+  icon on a phone. On a touch screen each thumbnail keeps its page-actions
+  button, and the page menu offers Move earlier / Move later so pages can be
+  reordered without dragging.
+
+- Impress reads like a phone app: the slide strip becomes a row of
+  thumbnails above the stage, and the slide settings (layout, transition,
+  bullets, notes, slide actions) slide in as a pane from a properties
+  button in the window bar, closing with Back or Escape. New, Present and
+  Add slide are icons, and a phone gets an Add slide button at the thumb.
+  Wide windows keep the inspector under the stage.
+
+- Browser on a phone: one header row — the address bar is the window bar,
+  with back, reload, the open-tab count and the menu — and the tab switcher,
+  history, bookmarks, downloads, passwords and import open as full screens
+  over the page with a Back button, closed by Escape or the phone's Back.
+  Every panel action is an icon with its label, the icon alone on a phone;
+  the start page's Refresh draws the theme's glyph. Desktop windows keep
+  their tab strip and popovers.
+
+- Calc reads like a phone app: the New action and the empty state's New
+  spreadsheet / Import CSV / Import .ods are icons (the empty state names
+  them in captions underneath), and the grid can be zoomed — pinch with two
+  fingers, Ctrl+scroll, or the bar's zoom tools. On a touchscreen a second
+  tap on the selected cell edits it in place and a long press opens the
+  cell's menu with Edit cell and Clear cell. The in-cell editor, which never
+  appeared, shows again.
+
+- On a phone the Image editor gives the picture the whole screen: looks and
+  adjustments open as a bottom sheet from two icons in the window bar, with
+  a switch between them. Every one-click action has an icon, and the canvas
+  now understands a two-finger pinch and a double-tap to zoom.
+
+- Studio reads like a phone app: in a narrow window or on a phone the
+  arranger is the floor and the detail panel, the browser and the AI panel
+  slide in over it one at a time, with Back, Escape and the edge swipe
+  closing them. The editor's actions are icons on a phone, the hint row is
+  gone there, and a long press on a clip, a track or a note opens the same
+  menu as a right-click — tapping a clip opens its editor.
+
 - The machine's login screen wears the look each account picked in Settings
   — theme, accent, gradient and motion style — instead of the default light
   theme and orange accent. Each session publishes its account's look when it

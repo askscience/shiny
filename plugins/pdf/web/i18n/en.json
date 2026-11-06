@@ -190,6 +190,8 @@
   "plugin.pdf.page.insertBlank": "Insert blank page after",
   "plugin.pdf.page.extract": "Extract to new PDF",
   "plugin.pdf.page.delete": "Delete page",
+  "plugin.pdf.page.moveEarlier": "Move earlier",
+  "plugin.pdf.page.moveLater": "Move later",
   "plugin.pdf.history.editText": "edit text",
   "plugin.pdf.history.rotate": "rotate",
   "plugin.pdf.history.reorder": "reorder pages",

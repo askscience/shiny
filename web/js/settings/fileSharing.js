@@ -45,15 +45,15 @@ export function createFileSharingBlock({ on, resources }) {
   const urlField = field(tr('url', 'Public URL'), urlInput, {
     hint: tr('urlHint', 'Your reverse proxy must forward this URL to the local share gate (its address appears here once sharing is on).'),
   });
-  const applyBtn = button({ label: tr('apply', 'Apply'), variant: 'ghost', onClick: () => void applySetup() });
+  const applyBtn = button({ label: tr('apply', 'Apply'), icon: 'ui/check', variant: 'ghost', onClick: () => void applySetup() });
 
   const urlEl = el('code', 'remote-ticket');
-  const copyBtn = button({ label: tr('copyUrl', 'Copy URL'), variant: 'ghost', onClick: copyUrl });
+  const copyBtn = button({ label: tr('copyUrl', 'Copy URL'), icon: 'ui/copy', variant: 'ghost', onClick: copyUrl });
   const urlRow = el('div', 'settings-inline-actions');
   urlRow.append(urlEl, copyBtn);
 
   const downloadHint = el('p', 'settings-hint', tr('notBundled', 'Gokapi is not bundled with this build of Shiny.'));
-  const downloadBtn = button({ label: tr('download', 'Download Gokapi'), variant: 'ghost', onClick: () => void download() });
+  const downloadBtn = button({ label: tr('download', 'Download Gokapi'), icon: 'ui/download', variant: 'ghost', onClick: () => void download() });
   const downloadRow = el('div', 'settings-inline-actions');
   downloadRow.append(downloadBtn);
 

@@ -1,6 +1,6 @@
 import {
   confirmDialog, dial, toolbar, element as el, toolButton, button, toast,
-  emptyState, eyebrow, metaLine, listReveal, cardEnter,
+  emptyState, eyebrow, metaLine, listReveal, cardEnter, sheet, segmented,
 } from '../../../ui/index.js';
 
 /**
@@ -14,6 +14,11 @@ import {
  * Every pixel change goes through the plugin's Rust engine; this module only
  * builds DOM, tracks state and paints returned RGBA.
  *
+ * On a phone (`html[data-phone]`) the canvas keeps the whole screen: the dock
+ * body moves into a bottom sheet opened from two icons in the window bar
+ * (Looks, Adjust — one sheet, a segmented switch between the two sections)
+ * and comes back to the inline dock when the screen is a desktop again.
+ *
  * All window styling lives in the core stylesheet (`web/css/tiles.css`, the
  * `image-*` block) — this file ships no CSS, per the plugin UI contract.
  *
@@ -24,6 +29,7 @@ import {
 import { openContextMenu } from '../../../js/contextMenu.js';
 import { saveOrDownload, pickFiles, onOpenFromFiles } from '../../../js/files.js';
 import { t } from '../../../js/i18n.js';
+import { PHONE_QUERY } from '../../../js/viewport.js';
 import * as api from './api.js';
 
 export const PLUGIN_NAME = 'image';
@@ -47,12 +53,16 @@ const ADJUST_DIALS = [
 ];
 
 const ONE_CLICKS = [
-  ['auto_tone', 'plugin.image.oneClick.autoTone', 'Auto tone'],
-  ['auto_contrast', 'plugin.image.oneClick.autoContrast', 'Auto contrast'],
-  ['invert', 'plugin.image.oneClick.invert', 'Invert'],
-  ['grayscale', 'plugin.image.oneClick.grayscale', 'B&W'],
-  ['sepia', 'plugin.image.oneClick.sepia', 'Sepia'],
+  ['auto_tone', 'plugin.image.oneClick.autoTone', 'Auto tone', 'ui/magic-wand'],
+  ['auto_contrast', 'plugin.image.oneClick.autoContrast', 'Auto contrast', 'ui/contrast'],
+  ['invert', 'plugin.image.oneClick.invert', 'Invert', 'ui/invert'],
+  ['grayscale', 'plugin.image.oneClick.grayscale', 'B&W', 'ui/grayscale'],
+  ['sepia', 'plugin.image.oneClick.sepia', 'Sepia', 'ui/sepia'],
 ];
+
+/** The zoom range of the chip, the wheel, the keys and a pinch. */
+const ZOOM_MIN = 0.05;
+const ZOOM_MAX = 8;
 
 /* ── State ──────────────────────────────────────────────────────── */
 
@@ -67,6 +77,12 @@ export const S = {
   pending: null,
   applying: false,
   drag: null,
+  pointers: null, // active pointers on the canvas (a pinch needs two)
+  pinch: null,    // { dist, zoom } at the start of a two-finger gesture
+  lastTap: null,  // { at, x, y } of the last touch tap (double-tap = fit ↔ 1:1)
+  touchToggledAt: 0,
+  phone: false,   // the dock body lives in the sheet
+  sheet: null,
   looksUrl: '',
   looksRevealed: false, // the filmstrip cascades in once per document
   enterPending: false,  // the next paint is a new image's first
@@ -102,7 +118,13 @@ export function buildWorkspace() {
   zoomChip.title = t('plugin.image.toolbar.fitToggle', null, 'Toggle fit / actual size');
   zoomChip.addEventListener('click', () => (S.fit ? setZoom(1) : zoomToFit()));
   S.els.zoomChip = zoomChip;
-  appRight.appendChild(zoomChip);
+  // Phone only: the dock is a sheet, opened on its Looks or Adjust section.
+  const looksBtn = toolButton('ui/palette', t('plugin.image.dock.looks', null, 'Looks'), () => openToolSheet('looks'), { className: 'image-tools-btn image-tools-looks' });
+  const adjustBtn = toolButton('ui/brightness', t('plugin.image.dock.adjust', null, 'Adjust'), () => openToolSheet('adjust'), { className: 'image-tools-btn image-tools-adjust' });
+  looksBtn.hidden = true;
+  adjustBtn.hidden = true;
+  S.els.toolButtons = [looksBtn, adjustBtn];
+  appRight.append(zoomChip, looksBtn, adjustBtn);
   appbar.append(menuBtn, appHead, appRight);
   tile.appendChild(appbar);
 
@@ -119,20 +141,112 @@ export function buildWorkspace() {
   const dock = el('div', 'image-dock');
   const body = el('div', 'image-dock-body');
 
-  body.appendChild(eyebrow(t('plugin.image.dock.looks', null, 'Looks'), 'image-dock-eyebrow'));
+  const looksSection = el('div', 'image-dock-section');
+  looksSection.dataset.section = 'looks';
+  looksSection.appendChild(eyebrow(t('plugin.image.dock.looks', null, 'Looks'), 'image-dock-eyebrow'));
   const lookRow = el('div', 'image-look-row');
   S.els.lookRow = lookRow;
-  body.appendChild(lookRow);
+  looksSection.appendChild(lookRow);
+  body.appendChild(looksSection);
 
   body.appendChild(el('div', 'image-dock-divider'));
-  body.appendChild(eyebrow(t('plugin.image.dock.adjust', null, 'Adjust'), 'image-dock-eyebrow'));
-  body.appendChild(buildAdjustBody());
+  const adjustSection = el('div', 'image-dock-section');
+  adjustSection.dataset.section = 'adjust';
+  adjustSection.appendChild(eyebrow(t('plugin.image.dock.adjust', null, 'Adjust'), 'image-dock-eyebrow'));
+  adjustSection.appendChild(buildAdjustBody());
+  body.appendChild(adjustSection);
 
   dock.appendChild(body);
   S.els.dock = dock;
+  S.els.dockBody = body;
   tile.appendChild(dock);
 
+  buildToolSheet();
+  syncPhoneLayout();
+
   return tile;
+}
+
+/* ── Phone: the dock as a bottom sheet ──────────────────────────── */
+
+function isPhone() {
+  return document.documentElement?.dataset?.phone === '1';
+}
+
+/**
+ * The sheet that holds the dock body on a phone: a segmented switch (Looks /
+ * Adjust) over the same DOM the inline dock shows on a desktop — the dials
+ * keep their listeners, so they work wherever the body sits.
+ */
+function buildToolSheet() {
+  const wrap = el('div', 'image-sheet');
+  wrap.dataset.tab = 'adjust';
+  const tabs = segmented({
+    label: t('plugin.image.sheet.label', null, 'Looks and adjustments'),
+    options: [
+      { value: 'looks', label: t('plugin.image.dock.looks', null, 'Looks'), icon: 'ui/palette' },
+      { value: 'adjust', label: t('plugin.image.dock.adjust', null, 'Adjust'), icon: 'ui/brightness' },
+    ],
+    value: 'adjust',
+    onChange: (value) => { wrap.dataset.tab = value; },
+  });
+  tabs.classList.add('image-sheet-tabs');
+  wrap.appendChild(tabs);
+  S.els.sheetWrap = wrap;
+  S.els.sheetTabs = tabs;
+  S.sheet = sheet({ label: t('plugin.image.sheet.label', null, 'Looks and adjustments'), body: [wrap] });
+}
+
+/** Open the tools sheet on one of its sections (phone only). */
+export function openToolSheet(tab = 'adjust') {
+  if (!S.sheet || !S.phone) return;
+  S.els.sheetTabs?.setValue?.(tab, { silent: true });
+  if (S.els.sheetWrap) S.els.sheetWrap.dataset.tab = tab;
+  S.sheet.open();
+}
+
+/** Move the dock body between the inline dock and the sheet. */
+export function syncPhoneLayout() {
+  const phone = isPhone();
+  const { dock, dockBody, sheetWrap, toolButtons } = S.els;
+  if (!dock || !dockBody) return;
+  if (phone === S.phone && dockBody.parentElement === (phone ? sheetWrap : dock)) return;
+  S.phone = phone;
+  if (phone) {
+    sheetWrap?.appendChild(dockBody);
+    // The sheet joins the document now (closed), so the looks and dials stay
+    // in the page — and reachable — while it is not open.
+    if (S.sheet?.el && !S.sheet.el.parentElement) document.body.appendChild(S.sheet.el);
+    dock.hidden = true;
+  } else {
+    S.sheet?.close();
+    dock.appendChild(dockBody);
+    dock.hidden = false;
+  }
+  for (const b of toolButtons || []) b.hidden = !phone;
+  if (S.fit) paintView();
+}
+
+let phoneObs = null;
+let phoneListening = false;
+
+function watchPhone() {
+  if (phoneListening) return;
+  phoneListening = true;
+  PHONE_QUERY?.addEventListener?.('change', syncPhoneLayout);
+  // The shell marks the document; follow the mark itself too.
+  if (typeof MutationObserver !== 'undefined' && document.documentElement) {
+    phoneObs = new MutationObserver(syncPhoneLayout);
+    phoneObs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-phone'] });
+  }
+}
+
+function unwatchPhone() {
+  if (!phoneListening) return;
+  phoneListening = false;
+  PHONE_QUERY?.removeEventListener?.('change', syncPhoneLayout);
+  phoneObs?.disconnect();
+  phoneObs = null;
 }
 
 /* ── Looks (preview thumbnails of every effect) ─────────────────── */
@@ -273,12 +387,12 @@ function buildAdjustBody() {
   wrap.appendChild(grid);
 
   const actions = el('div', 'image-oneclicks');
-  for (const [op, key, label] of ONE_CLICKS) {
-    const b = button({ label: t(key, null, label), variant: 'ghost', size: 'sm', onClick: () => void applyOp({ op }) });
+  for (const [op, key, label, iconName] of ONE_CLICKS) {
+    const b = button({ label: t(key, null, label), icon: iconName, variant: 'ghost', size: 'sm', onClick: () => void applyOp({ op }) });
     b.classList.add('image-oneclick');
     actions.appendChild(b);
   }
-  const revert = button({ label: t('plugin.image.oneClick.revert', null, 'Revert'), variant: 'quiet', size: 'sm', onClick: () => void resetCurrent() });
+  const revert = button({ label: t('plugin.image.oneClick.revert', null, 'Revert'), icon: 'ui/undo', variant: 'quiet', size: 'sm', onClick: () => void resetCurrent() });
   revert.classList.add('image-oneclick', 'image-oneclick--revert');
   revert.title = t('plugin.image.oneClick.revertTitle', null, 'Restore the original image');
   actions.appendChild(revert);
@@ -358,7 +472,7 @@ function renderEmptyState() {
     title: t('plugin.image.empty.title', null, 'No image open'),
     body: t('plugin.image.empty.body', null, 'Open or drop a picture to start.'),
   }));
-  const open = button({ label: t('plugin.image.empty.open', null, 'Open image'), arrow: true, onClick: () => void pickFile() });
+  const open = button({ label: t('plugin.image.empty.open', null, 'Open image'), icon: 'ui/folder-open', arrow: true, onClick: () => void pickFile() });
   open.classList.add('image-empty-open');
   empty.appendChild(open);
 }
@@ -381,12 +495,13 @@ export function updateChrome() {
     S.els.zoomChip.textContent = !S.doc ? ''
       : S.fit ? t('plugin.image.toolbar.actualSize', null, '1:1') : t('plugin.image.toolbar.fit', null, 'Fit');
   }
+  for (const b of S.els.toolButtons || []) b.disabled = !S.doc;
 }
 
 /* ── Zoom & pan ─────────────────────────────────────────────────── */
 
 export function setZoom(z, { focus = null } = {}) {
-  const clamped = Math.max(0.05, Math.min(8, z));
+  const clamped = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, z));
   const area = S.els.area;
   let cx = null;
   let cy = null;
@@ -433,26 +548,85 @@ function onKeyDown(e) {
 
 export function wireCanvas(view, area) {
   view.style.touchAction = 'none';
+  S.pointers = new Map();
+  const toggleFit = () => (S.fit ? setZoom(1) : zoomToFit());
+  const endDrag = (pointerId) => {
+    S.drag = null;
+    view.classList.remove('is-panning');
+    try { view.releasePointerCapture(pointerId); } catch (_) { /* released */ }
+  };
+  const pinchDistance = () => {
+    const [a, b] = [...S.pointers.values()];
+    return Math.hypot(b.x - a.x, b.y - a.y);
+  };
+  const pinchCentre = () => {
+    const [a, b] = [...S.pointers.values()];
+    return { clientX: (a.x + b.x) / 2, clientY: (a.y + b.y) / 2 };
+  };
   view.addEventListener('pointerdown', (e) => {
     if (!S.doc || e.button === 2) return;
     view.setPointerCapture(e.pointerId);
+    S.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, type: e.pointerType, moved: false });
+    if (S.pointers.size === 2) {
+      // A second finger: the pan becomes a pinch around the fingers' midpoint.
+      S.drag = null;
+      view.classList.remove('is-panning');
+      S.pinch = { dist: Math.max(1, pinchDistance()), zoom: S.zoom };
+      return;
+    }
+    if (S.pointers.size > 2) return;
     S.drag = { sx: e.clientX, sy: e.clientY, sl: area.scrollLeft, st: area.scrollTop };
     view.classList.add('is-panning');
   });
   view.addEventListener('pointermove', (e) => {
-    if (!S.drag || !S.doc) return;
+    const p = S.pointers.get(e.pointerId);
+    if (p) {
+      if (Math.abs(e.clientX - p.x) > 8 || Math.abs(e.clientY - p.y) > 8) p.moved = true;
+      p.x = e.clientX;
+      p.y = e.clientY;
+    }
+    if (!S.doc) return;
+    if (S.pinch && S.pointers.size === 2) {
+      // Two fingers: zoom by the distance ratio, clamped like the chip.
+      const z = S.pinch.zoom * (pinchDistance() / S.pinch.dist);
+      if (Math.abs(z - S.zoom) > 0.002) setZoom(z, { focus: pinchCentre() });
+      return;
+    }
+    if (!S.drag) return;
     area.scrollLeft = S.drag.sl - (e.clientX - S.drag.sx);
     area.scrollTop = S.drag.st - (e.clientY - S.drag.sy);
   });
   const end = (e) => {
-    if (!S.drag) return;
-    S.drag = null;
-    view.classList.remove('is-panning');
-    try { view.releasePointerCapture(e.pointerId); } catch (_) { /* released */ }
+    const p = S.pointers.get(e.pointerId);
+    S.pointers.delete(e.pointerId);
+    if (S.pinch) {
+      // Lifting either finger ends the pinch; the other finger starts fresh.
+      S.pinch = null;
+      S.pointers.clear();
+      endDrag(e.pointerId);
+      return;
+    }
+    if (S.drag) endDrag(e.pointerId);
+    // A touch double-tap toggles fit ↔ 1:1 (touch fires no dblclick).
+    if (e.type === 'pointerup' && p && p.type === 'touch' && !p.moved) {
+      const now = Date.now();
+      const last = S.lastTap;
+      if (last && now - last.at < 350 && Math.hypot(e.clientX - last.x, e.clientY - last.y) < 30) {
+        S.lastTap = null;
+        S.touchToggledAt = now;
+        toggleFit();
+      } else {
+        S.lastTap = { at: now, x: e.clientX, y: e.clientY };
+      }
+    }
   };
   view.addEventListener('pointerup', end);
   view.addEventListener('pointercancel', end);
-  view.addEventListener('dblclick', () => (S.fit ? setZoom(1) : zoomToFit()));
+  view.addEventListener('dblclick', (e) => {
+    // A touch double-tap is handled on pointerup; some browsers fire both.
+    if (e.sourceCapabilities?.firesTouchEvents || Date.now() - (S.touchToggledAt || 0) < 500) return;
+    toggleFit();
+  });
   view.addEventListener('wheel', (e) => {
     if (!S.doc) return;
     e.preventDefault();
@@ -652,6 +826,7 @@ export function mountEditor() {
     });
     S.resizeObs.observe(S.els.area);
   }
+  watchPhone();
   void openNewest();
   return tile;
 }
@@ -662,6 +837,11 @@ export function getEditorElement() {
 
 export function unmountEditor() {
   for (const control of S.els.dials || []) control.destroy();
+  S.els.sheetTabs?.destroy?.();
+  S.sheet?.destroy();
+  S.sheet = null;
+  S.phone = false;
+  unwatchPhone();
   window.removeEventListener('keydown', onKeyDown);
   keysWired = false;
   window.clearTimeout(looksTimer);
@@ -674,6 +854,9 @@ export function unmountEditor() {
   S.doc = null;
   S.render = null;
   S.drag = null;
+  S.pinch = null;
+  S.pointers = null;
+  S.lastTap = null;
   if (S.looksUrl) URL.revokeObjectURL(S.looksUrl);
   S.looksUrl = '';
 }

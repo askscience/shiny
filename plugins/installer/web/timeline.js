@@ -490,8 +490,11 @@ export function renderTimelinePanel(options) {
       rect,
       handle: event.currentTarget,
       moved: false,
+      // A finger has no hover: the size lingers a moment once it lifts.
+      touch: event.pointerType !== 'mouse',
     };
     event.currentTarget.setPointerCapture?.(event.pointerId);
+    // The bubble shows from the press (`is-dragging`), not only on hover.
     event.currentTarget.classList.add('is-dragging');
     window.addEventListener('pointermove', onDragMove);
     window.addEventListener('pointerup', endDrag);
@@ -543,10 +546,21 @@ export function renderTimelinePanel(options) {
     }
   }
 
+  /** Keeps the bubble up for a moment after a touch lets go of the handle. */
+  function lingerBubble(handle) {
+    if (handle.__linger) window.clearTimeout(handle.__linger);
+    handle.classList.add('is-touched');
+    handle.__linger = window.setTimeout(() => {
+      handle.classList.remove('is-touched');
+      delete handle.__linger;
+    }, 1200);
+  }
+
   function cleanupDrag() {
     if (drag?.handle) {
       drag.handle.releasePointerCapture?.(drag.pointerId);
       drag.handle.classList.remove('is-dragging');
+      if (drag.touch) lingerBubble(drag.handle);
     }
     window.removeEventListener('pointermove', onDragMove);
     window.removeEventListener('pointerup', endDrag);

@@ -16,16 +16,28 @@ export default {
 
 ## Layout
 
-- A sidebar of classic places (Home, Trash, the XDG folders) with a flat
-  menu button (new folder, upload, hidden files, view, empty trash).
-- One toolbar row, in the editorial style of the theme lab (`web/theme-lab/v4`):
+- A sidebar of classic places (Home, Trash, the XDG folders). In a window
+  up to 560px wide, and on a phone, the places become a strip that scrolls
+  sideways above the content.
+- The window bar (`data-window-bar`, merged with the title row by the tile
+  manager), in the editorial style of the theme lab (`web/theme-lab/v4`):
   round-cornered grey square back/forward buttons, a plain breadcrumb
   ("Home / Documents": ancestors muted and clickable, the current folder in
   500 weight, a small chevron for the path actions — new folder, upload, copy
   path, hidden files), a grey search field with its glyph on the right
   (typing searches the whole home after two characters; Escape clears;
-  Ctrl+F / Ctrl+L focus it), and the grid/list switcher with its options
-  chevron as one grey group.
+  Ctrl+F / Ctrl+L focus it), the grid/list switcher with its options chevron
+  as one grey group, and the flat app menu (new folder, upload, shared links,
+  select, hidden files, view, empty trash). While the bar is compact the
+  view switcher steps into the menu and the search shrinks to its glyph
+  until it is tapped.
+- On a phone a thumb row along the bottom (`actionBar`) carries New folder
+  and Upload.
+- **Touch:** on a coarse pointer one tap opens an entry (a mouse keeps the
+  double-click), a long press opens the item menu (core `contextMenu.js`),
+  and **Select** — in the app menu and the item menu — enters a selection
+  mode where taps toggle entries, each wearing a check, until Done (the bar's
+  check, or Escape). The quick look's arrows stay visible on touch.
 - **Grid view:** each entry is a rounded (12px) thumbnail box ~92px tall on the
   theme's tile grey with the monochrome glyph centred — folders use the icon
   catalog's `ui/folder*` names, which the Dusk/Ink themes override with their

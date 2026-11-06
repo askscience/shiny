@@ -1,6 +1,7 @@
 import {
-  avatar, badge, button, controlButton, emptyState, field, icon, input,
+  avatar, badge, button, controlButton, emptyState, field, icon, iconButton, input,
   keyValue, select, spinner, toast, listReveal, rollNumber, decodeText,
+  paneStack, compactToolbar,
 } from '../../ui/index.js';
 import { apiFetch } from '../../js/api.js';
 import { t } from '../../js/i18n.js';
@@ -51,6 +52,10 @@ const T = (key, fallback, params) => t(`plugin.installer.${key}`, params, fallba
 
 let tileEl = null;
 let refs = {};
+/** The pane stack over the shell: main (the floor) and the manifest. */
+let panes = null;
+/** The footer as a compact toolbar (ui/compact.js). */
+let footerBar = null;
 let pollTimer = null;
 let state = null;
 let fieldUid = 0;
@@ -875,7 +880,17 @@ function renderSteps() {
   nav.appendChild(list);
   requestAnimationFrame(() => {
     const active = list.querySelector('.installer-step-item.is-active');
-    active?.scrollIntoView({ block: 'nearest', inline: 'center' });
+    if (!active) return;
+    // As a strip (stacked) the rail itself scrolls to centre the step: a
+    // scrollIntoView would also drag the shell sideways, towards the
+    // manifest pane waiting off to the right.
+    if (nav.scrollWidth > nav.clientWidth && typeof active.getBoundingClientRect === 'function') {
+      const a = active.getBoundingClientRect();
+      const b = nav.getBoundingClientRect();
+      nav.scrollLeft += (a.left + a.width / 2) - (b.left + b.width / 2);
+      return;
+    }
+    active.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
   });
 }
 
@@ -1335,6 +1350,7 @@ function renderExistingConfirm(disk) {
     button({
       label: T('common.cancel', 'Cancel'),
       variant: 'ghost',
+      icon: 'ui/close',
       onClick: cancelExisting,
     }),
     button({
@@ -2112,7 +2128,9 @@ function installReady() {
 }
 
 function renderFooter() {
-  const footer = refs.footer;
+  // The footer is a compact toolbar (its More menu is its own child); the
+  // row inside it is what gets redrawn.
+  const footer = refs.footerRow;
   clear(footer);
   const step = el('div', 'installer-footer-step');
   const notReady = state.phase === 'wizard' && state.step === STEPS.length - 1 && !installReady();
@@ -2134,6 +2152,16 @@ function renderFooter() {
   footer.appendChild(step);
   if (refs.live) refs.live.textContent = step.textContent;
 
+  // While the manifest is a pane over the main (a narrow window, a phone)
+  // the summary opens from here; wide, the aside is already beside the step.
+  footer.appendChild(iconButton({
+    icon: 'ui/info',
+    size: 'sm',
+    label: T('manifest.title', 'Installation summary'),
+    className: 'installer-manifest-open',
+    onClick: () => panes?.show('manifest'),
+  }));
+
   const actions = el('div', 'installer-footer-actions');
   if (state.phase === 'progress') {
     if (state.jobStatus?.done) {
@@ -2147,6 +2175,7 @@ function renderFooter() {
       actions.appendChild(button({
         label: T('progress.cancel', 'Cancel install'),
         variant: 'danger',
+        icon: 'ui/close',
         onClick: () => void cancelJob(),
       }));
     }
@@ -2154,6 +2183,7 @@ function renderFooter() {
     actions.appendChild(button({
       label: T('common.back', 'Back'),
       variant: 'quiet',
+      icon: 'ui/chevron-left',
       disabled: state.step === 0,
       onClick: () => goStep(state.step - 1),
     }));
@@ -2161,7 +2191,7 @@ function renderFooter() {
       actions.appendChild(button({
         label: T('common.next', 'Next'),
         variant: 'ghost',
-        arrow: true,
+        icon: 'ui/chevron-right',
         onClick: goNext,
       }));
     } else {
@@ -2176,7 +2206,7 @@ function renderFooter() {
       const install = button({
         label: T('common.install', "Install LiteAura"),
         variant: 'primary',
-        arrow: true,
+        icon: 'ui/download',
         disabled: !installReady(),
         onClick: () => void startInstall(),
       });
@@ -2493,16 +2523,10 @@ function backToReview() {
 }
 
 function renderManifest() {
-  const manifest = refs.manifest;
+  // The head is the pane bar (built once at mount, the stack's Back lands
+  // in it); only the body is redrawn.
+  const manifest = refs.manifestBody;
   clear(manifest);
-  const head = el('div', 'installer-manifest-head');
-  const headCopy = el('div', 'installer-manifest-head-copy');
-  headCopy.append(
-    el('span', 'installer-eyebrow', T('manifest.eyebrow', 'Your plan')),
-    el('h2', 'installer-manifest-title', T('manifest.title', 'Installation summary')),
-  );
-  head.appendChild(headCopy);
-  manifest.appendChild(head);
 
   const disk = selectedDisk();
   const target = el('section', 'installer-manifest-section');
@@ -2576,16 +2600,38 @@ export function mountInstallerTile() {
     scroll: el('div', 'installer-step-scroll'),
     inner: el('div', 'installer-step-inner'),
     footer: el('footer', 'installer-footer'),
+    footerRow: el('div', 'installer-footer-row'),
     manifest: el('aside', 'installer-manifest'),
+    manifestHead: el('div', 'installer-manifest-head'),
+    manifestBody: el('div', 'installer-manifest-body'),
     live: el('div', 'installer-sr-only'),
   };
   refs.chrome.dataset.windowBar = '';
+  refs.manifestHead.dataset.paneBar = '';
+  const headCopy = el('div', 'installer-manifest-head-copy');
+  headCopy.append(
+    el('span', 'installer-eyebrow', T('manifest.eyebrow', 'Your plan')),
+    el('h2', 'installer-manifest-title', T('manifest.title', 'Installation summary')),
+  );
+  refs.manifestHead.appendChild(headCopy);
+  refs.manifest.append(refs.manifestHead, refs.manifestBody);
   refs.steps.setAttribute('aria-label', T('steps.nav', 'Installation steps'));
   refs.live.setAttribute('aria-live', 'polite');
   refs.scroll.appendChild(refs.inner);
+  refs.footerRow.dataset.fold = '';
+  refs.footer.appendChild(refs.footerRow);
   refs.main.append(refs.scroll, refs.footer);
   refs.shell.append(refs.steps, refs.main, refs.manifest);
   tileEl.append(refs.chrome, refs.shell, refs.live);
+
+  // Rail · main · manifest side by side while wide; at 1020px or on a phone
+  // the manifest is a pane that slides over the main from the footer's
+  // info button and closes with Back / Escape, the rail a strip above.
+  panes = paneStack(refs.shell, {
+    panes: [{ id: 'main', el: refs.main }, { id: 'manifest', el: refs.manifest }],
+    compactWhen: ({ width, phone }) => phone || width <= 1020,
+  });
+  footerBar = compactToolbar(refs.footer);
 
   render();
   void refreshData();
@@ -2595,6 +2641,10 @@ export function mountInstallerTile() {
 export function unmountInstallerTile() {
   if (pollTimer) window.clearInterval(pollTimer);
   pollTimer = null;
+  panes?.destroy();
+  panes = null;
+  footerBar?.destroy();
+  footerBar = null;
   refs = {};
   tileEl?.remove();
   tileEl = null;

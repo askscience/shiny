@@ -101,7 +101,7 @@ Core UI and the Files plugin: windows, folders, file types, navigation. Folder a
 | ![](ui/folder.svg) | `ui/folder` | `places/scalable/folder.svg` *(coloured)* |
 | ![](ui/folder-open.svg) | `ui/folder-open` | `status/symbolic/folder-open-symbolic.svg` |
 | ![](ui/folder-plus.svg) | `ui/folder-plus` | `actions/symbolic/folder-new-symbolic.svg` |
-| ![](ui/forward.svg) | `ui/forward` | `emblems/scalable/emblem-symbolic-link.svg` |
+| ![](ui/forward.svg) | `ui/forward` | `— in-house` |
 | ![](ui/fx.svg) | `ui/fx` | `— in-house` |
 | ![](ui/gradient.svg) | `ui/gradient` | `— in-house` |
 | ![](ui/grayscale.svg) | `ui/grayscale` | `— in-house` |

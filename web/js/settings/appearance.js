@@ -108,7 +108,7 @@ export function createAppearancePanelSection({ on, cleanups, resources }) {
     };
     // Uploading is the "Upload" card in the wallpaper grid itself; the row
     // below only carries Remove once a photo of the user's own is set.
-    const removeBtn = button({ label: t('settings.appearance.background.remove', null, 'Remove photo'), variant: 'danger', size: 'sm' });
+    const removeBtn = button({ label: t('settings.appearance.background.remove', null, 'Remove photo'), icon: 'ui/trash', variant: 'danger', size: 'sm' });
     removeBtn.classList.add('hidden');
     const imageRow = el('div', 'background-image-row');
     imageRow.append(removeBtn);
@@ -259,6 +259,12 @@ export function createAppearancePanelSection({ on, cleanups, resources }) {
 
   function buildTopBarControls() {
     const immersive = getImmersive();
+    // A phone hides every window's title bar; this is the way to keep it.
+    const phoneTitles = toggleRow({
+      label: t('settings.appearance.phoneTitles', null, 'Window titles on a phone'),
+      checked: immersive.phone_titles,
+      onChange: (checked) => setImmersive({ phone_titles: checked }),
+    });
     const autohideBar = toggleRow({
       label: t('settings.appearance.autohideBar', null, 'Autohide the top bar'),
       hint: t('settings.appearance.autohideBarHint', null, 'Slide the top bar away until the pointer reaches the edge it docks to.'),
@@ -438,6 +444,7 @@ export function createAppearancePanelSection({ on, cleanups, resources }) {
     return [
       pageHeading(t('settings.appearance.topBarHeading', null, 'Top bar & voice bar'), 'bar'),
       barPreview(),
+      phoneTitles,
       desktopOnly(autohideBar),
       desktopOnly(field(t('settings.appearance.topBarStyle', null, 'Top bar style'), barStyle, {
         hint: t('settings.appearance.topBarStyleHint', null,

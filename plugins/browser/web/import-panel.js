@@ -48,6 +48,8 @@ export function createImportPanel({
   panel.setAttribute('aria-label', title);
 
   const head = el('div', 'browser-popover-head');
+  // The stack prepends its Back here while the panel is a pane (a phone).
+  head.setAttribute('data-pane-bar', '');
   head.append(el('span', null, title));
   const body = el('div', 'browser-popover-list browser-import-body');
   const status = el('div', 'browser-pw-status browser-import-status');

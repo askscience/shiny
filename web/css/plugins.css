@@ -287,7 +287,6 @@ html[data-motion='depth'] .pw-row:hover .pw-icon { transform: perspective(300px)
   min-height: 44px;
   padding: 10px 20px 0;
 }
-.pw-manifest-back { display: none; }
 .pw-manifest-name { display: none; min-width: 0; overflow: hidden; font-size: 13px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
 .pw-manifest-body { display: flex; flex-direction: column; gap: 18px; padding: 8px 20px 28px; min-width: 0; }
 .pw-manifest-note { margin: 24px 0; color: var(--muted); font-size: 13px; }
@@ -479,35 +478,10 @@ html[data-motion='depth'] .pw-object-body { transition-timing-function: var(--sp
 /* Other windows (Mail) borrow the remove button's danger hover. */
 .plugin-card-remove:hover:not(:disabled) { color: var(--error); background: var(--error-soft); }
 
-/* ── Narrower windows: the manifest becomes a panel over the stage ── */
+/* ── Narrower windows: the manifest is a pane over the stage ──
+   The pane stack (ui/components/panes.js, `.pw-layout.is-stacked`) does the
+   sliding and the Back; the rail becomes a numbered strip above the stage. */
 @container plugin-window (max-width: 1080px) {
-  .pw-layout { grid-template-columns: var(--pw-rail) minmax(0, 1fr); }
-  .pw-manifest {
-    position: absolute;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 3;
-    width: min(380px, 100%);
-    background: var(--bg-elevated, var(--surface));
-    -webkit-backdrop-filter: blur(var(--glass-blur-panel, 24px));
-    backdrop-filter: blur(var(--glass-blur-panel, 24px));
-    transform: translateX(100%);
-    visibility: hidden;
-    transition: transform var(--motion-connect, 0.28s) var(--pw-ease), visibility 0s linear var(--motion-connect, 0.28s);
-  }
-  html[data-motion='fluid'] .pw-manifest { transition-timing-function: var(--spring-snappy, ease-out), linear; }
-  html[data-motion='depth'] .pw-manifest { transition-timing-function: var(--spring-soft, ease-out), linear; }
-  .pw-layout[data-manifest-open] .pw-manifest { transform: none; visibility: visible; transition-delay: 0s; }
-  .pw-manifest-back { display: inline-flex; }
-  .pw-manifest-eyebrow { display: none; }
-  .pw-manifest-name { display: block; }
-  .pw-row.is-selected:not(:focus-visible) { background: transparent; border-radius: 0; border-bottom-color: var(--pw-line); }
-}
-
-/* Narrow: the rail becomes a numbered strip over the stage. */
-@container plugin-window (max-width: 760px) {
-  .pw-layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
   .pw-rail {
     flex-direction: row;
     padding: 8px 10px;
@@ -521,7 +495,14 @@ html[data-motion='depth'] .pw-object-body { transition-timing-function: var(--sp
   .pw-rail-head { display: none; }
   .pw-rail-list { flex-direction: row; gap: 2px; }
   .pw-rail-item { width: auto; flex: none; white-space: nowrap; }
-  .pw-manifest { width: 100%; }
+  .pw-row.is-selected:not(:focus-visible) { background: transparent; border-radius: 0; border-bottom-color: var(--pw-line); }
+}
+.pw-layout.is-stacked .pw-manifest-eyebrow { display: none; }
+.pw-layout.is-stacked .pw-manifest-name { display: block; }
+.pw-layout.is-stacked .pw-manifest-top { padding-inline-start: 12px; }
+
+/* Narrow: the status steps back. */
+@container plugin-window (max-width: 760px) {
   .pw-chrome-status { display: none; }
 }
 
@@ -553,7 +534,6 @@ html[data-motion='depth'] .pw-object-body { transition-timing-function: var(--sp
   .pw-object-float,
   .pw-object-shadow { animation: none !important; }
   .pw-object-body,
-  .pw-manifest,
   .pw-row-name,
   .pw-row .pw-icon { transition: none !important; }
 }
