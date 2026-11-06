@@ -57,6 +57,7 @@ import { initSpokenReply } from './spokenReply.js';
 import { initLockScreen } from './lockScreen.js';
 import { initShellMotion } from './shellMotion.js';
 import { hideBootScreen } from './bootScreen.js';
+import { initGreeterLook } from './greeterLook.js';
 
 let appInitialized = false;
 // null = not yet evaluated — the first check must always apply show/hide,
@@ -147,6 +148,8 @@ async function boot() {
  *  remember" really means an empty desktop with every plugin closed. */
 async function beginSession() {
   await loadUserPreferences();
+  // The machine's login screen wears this account's look (greeterLook.js).
+  initGreeterLook();
   // An update reload continues this session: its plugins stay active.
   if (!getRemember() && !isUpdateReload()) await resetSessionPlugins();
   await initApp();
@@ -157,6 +160,7 @@ async function initApp() {
   if (appInitialized) {
     await reloadUserSession();
     refreshAppearance();
+    initGreeterLook();
     return;
   }
   appInitialized = true;

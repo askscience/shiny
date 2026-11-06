@@ -4,6 +4,11 @@
 # anything yet.
 d /run/shiny 0750 root shiny -
 d /var/log/shiny 2775 root shiny -
+# Each account's look (theme, accent, motion) for the login screen: every
+# account in `shiny` adds its own file and, the directory being sticky, only
+# its own; the greeter reads a file only when its owner is the account named.
+d /var/lib/shiny 0755 root root -
+d /var/lib/shiny/looks 3775 root shiny -
 d /var/lib/shiny-greeter 0755 shiny-greeter shiny-greeter -
 d /var/lib/shiny-greeter/.local 0755 shiny-greeter shiny-greeter -
 d /var/lib/shiny-greeter/.local/share 0755 shiny-greeter shiny-greeter -

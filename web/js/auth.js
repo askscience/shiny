@@ -10,7 +10,7 @@ import { resetUserSession } from './session.js';
 import { hideBootScreen } from './bootScreen.js';
 import { t } from './i18n.js';
 import {
-  gateChrome, gateEnter, gateExit, gateReveal, gateShake, gateLookFor, applyGateLook,
+  gateChrome, gateEnter, gateExit, gateReveal, gateShake, gateLookFor, applyGateLook, latestLook,
 } from './gate.js';
 
 const overlay = document.getElementById('login-overlay');
@@ -72,6 +72,7 @@ function pickerUsers() {
       username: u.name,
       name: u.display_name || u.name,
       avatar: null,
+      look: u.look || null,
     }));
   }
   return getKnownUsers();
@@ -140,6 +141,9 @@ export function showLogin() {
   // Resolve the host's Linux accounts first, then render. On a stock install
   // the request returns `enabled:false` and the picker uses saved profiles.
   loadUnixUsers().finally(() => {
+    // The machine's login screen opens in the look of whoever used it last.
+    const last = greeterMode ? latestLook(linuxUsers) : null;
+    if (last) applyGateLook(last);
     renderProfilePicker();
     if (pickerUsers().length) {
       showStep('pick');

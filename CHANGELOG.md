@@ -4,6 +4,16 @@
 
 ### Added
 
+- The machine's login screen wears the look each account picked in Settings
+  — theme, accent, gradient and motion style — instead of the default light
+  theme and orange accent. Each session publishes its account's look when it
+  starts and whenever it changes, to `/var/lib/shiny/looks` (the greeter is
+  another account and cannot read Settings); the login screen opens in the
+  look of the account used last and changes with the account pointed at.
+  Only colours, a theme name and a motion style are published, and the
+  greeter takes a file only from the account it names. The login screen's
+  launcher starts the renamed `liteaura` shell too.
+
 - Import from another browser, in the Browser's main menu. History and
   bookmarks come in one click from the browsers installed on the computer —
   Firefox, LibreWolf, Chrome, Chromium, Brave, Edge, Vivaldi, Opera, also as

@@ -241,10 +241,18 @@ pub async fn unix_users(
         crate::services::unix_user::list_human_users()
             .into_iter()
             .map(|u| {
+                // The login screen dresses itself in the look each account
+                // published from its own session (services::greeter_look).
+                let look = if state.config.greeter_mode {
+                    crate::services::greeter_look::read(&crate::services::greeter_look::dir(), &u.name, u.uid)
+                } else {
+                    None
+                };
                 serde_json::json!({
                     "name": u.name,
                     "display_name": u.display_name(),
                     "uid": u.uid,
+                    "look": look,
                 })
             })
             .collect()
@@ -865,4 +873,45 @@ mod tests {
             PasswordCheck::NoMatch
         ));
     }
+}
+
+/// `PUT /api/greeter-look` — publish the look this account picked (theme,
+/// accent, gradient, motion) for the machine's login screen.
+///
+/// Only a session server bound to its Linux account publishes, and only for
+/// the account it runs as: the traveler must be that account. Anywhere else
+/// (the greeter itself, a dev server, a remote app account) it answers
+/// `published: false` and writes nothing.
+pub async fn publish_greeter_look(
+    State(state): State<AppState>,
+    Extension(traveler): Extension<crate::models::Traveler>,
+    Json(look): Json<crate::services::greeter_look::Look>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let published = if state.config.linux_users && !state.config.greeter_mode {
+        let uid = session_uid();
+        match crate::services::unix_user::lookup_uid(uid) {
+            Some(user)
+                if traveler.unix_user.as_deref() == Some(user.name.as_str())
+                    || traveler.unix_uid == Some(i64::from(uid)) =>
+            {
+                tokio::task::spawn_blocking(move || {
+                    crate::services::greeter_look::publish(
+                        &crate::services::greeter_look::dir(),
+                        &user.name,
+                        &look,
+                    )
+                })
+                .await
+                .map_err(|e| AppError::Internal(e.to_string()))?
+                .unwrap_or_else(|e| {
+                    tracing::debug!("greeter look not published: {e}");
+                    false
+                })
+            }
+            _ => false,
+        }
+    } else {
+        false
+    };
+    Ok(Json(serde_json::json!({ "success": true, "published": published })))
 }

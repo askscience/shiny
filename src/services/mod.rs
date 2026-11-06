@@ -33,6 +33,7 @@ pub mod touchbar;
 pub mod keyboard_backlight;
 pub mod screen_brightness;
 pub mod unix_user;
+pub mod greeter_look;
 pub mod auth_helper;
 pub mod iroh_remote;
 pub mod tailscale;

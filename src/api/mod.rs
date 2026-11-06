@@ -653,6 +653,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/auth/logout", post(auth::logout))
         .route("/api/auth/verify-password", post(auth::verify_password_route))
         .route("/api/preferences", get(preferences::get_preferences).put(preferences::put_preferences))
+        .route("/api/greeter-look", put(auth::publish_greeter_look))
         // Installed font families — the appearance "Global font" picker and the
         // Writer's font menu read the live fontconfig list (see fonts.rs).
         .route("/api/fonts", get(fonts::list))

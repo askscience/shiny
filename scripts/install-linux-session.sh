@@ -158,6 +158,10 @@ EOF
 # account (and the greeter) can write its own. Created here so a reinstall does
 # not leave a launcher pointing at a directory that is not there.
 install -d -o root -g shiny -m 2775 /var/log/shiny
+# The look each account picked, for the login screen (src/services/greeter_look.rs):
+# group-writable, setgid and sticky, so every account writes its own file only.
+install -d -m 0755 /var/lib/shiny
+install -d -o root -g shiny -m 3775 /var/lib/shiny/looks
 
 if [ ! -x "$SERVER_MODE_BIN" ]; then
     echo "Building shiny-server-mode…"

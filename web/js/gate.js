@@ -22,6 +22,7 @@
  */
 import {
   motionStyle, SPRINGS, EASE, reducedMotion, setIcon, applyAppearance, getAccent, getGradient,
+  getActiveTheme, setTheme,
 } from '../ui/index.js';
 import { getLocale, t } from './i18n.js';
 import { getKnownUsers } from './userProfiles.js';
@@ -74,6 +75,9 @@ function readJson(key) {
  * `{ username }` (Linux accounts carry no id); `null` → the last one signed in.
  */
 export function gateLookFor(user) {
+  // The machine's login screen: each account's look comes with the account
+  // list, published by its own session (greeterLook.js) — theme included.
+  if (user?.look) return { ...user.look };
   const known = getKnownUsers();
   const match = user
     ? known.find((u) => (user.id && u.id === user.id) || (user.username && u.username === user.username))
@@ -92,8 +96,26 @@ export function gateLookFor(user) {
 export function applyGateLook(look) {
   const root = document.documentElement;
   if (look?.motion) root.dataset.motion = look.motion;
-  const gradient = look?.gradient?.stops?.length >= 2 ? look.gradient : getGradient();
-  applyAppearance({ accent: look?.accent || getAccent(), gradient });
+  const paint = () => {
+    const gradient = look?.gradient?.stops?.length >= 2 ? look.gradient : getGradient();
+    applyAppearance({ accent: look?.accent || getAccent(), gradient });
+  };
+  // Only a published look names a theme (the in-app sign-in keeps the
+  // device's). The accent is painted again once the theme is in: whether it
+  // reads on the canvas depends on the theme's mode.
+  if (look?.theme && look.theme !== getActiveTheme()) {
+    void setTheme(look.theme).then(paint, () => {});
+  }
+  paint();
+}
+
+/** Of the accounts the login screen lists, the look published last, or null. */
+export function latestLook(users) {
+  let best = null;
+  for (const user of users || []) {
+    if (user?.look && (!best || (user.look.updated || 0) > (best.updated || 0))) best = user.look;
+  }
+  return best;
 }
 
 /* ── Chrome: brand, clock, date, weather ─────────────────────── */

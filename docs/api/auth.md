@@ -102,13 +102,31 @@ when a PAM account's helper is unreachable.
 **Loopback only.** Lists the real Linux accounts the login picker can offer.
 
 ```json
-{ "enabled": true, "greeter": false, "users": [ { "name": "alice", "display_name": "Alice", "uid": 1000 } ] }
+{ "enabled": true, "greeter": false, "users": [ { "name": "alice", "display_name": "Alice", "uid": 1000, "look": null } ] }
 ```
+
+On the greeter each account carries the `look` its session published
+(`{ "theme", "accent", "gradient": { "id", "angle", "stops" }, "motion",
+"updated" }`, see `PUT /api/greeter-look`), or `null`.
 
 `enabled` mirrors `SHINY_LINUX_USERS`; the list is empty when off. `greeter`
 marks the Shiny login screen (see greeter mode above). In a user session with
 `SHINY_LOGIN_SELF_ONLY` the list is narrowed to the session's own account — the
 picker must not offer logins the endpoint would refuse.
+
+---
+
+## `PUT /api/greeter-look`
+
+**Signed in.** Publishes the look this account picked — `{ "theme": "ink",
+"accent": "#4f7cff", "gradient": { "id": "aurora", "angle": 135, "stops":
+["#112233", "#445566"] }, "motion": "fluid" }` — for the machine's login
+screen, as `/var/lib/shiny/looks/<account>.json`. Only a session server bound
+to its Linux account (`SHINY_LINUX_USERS`, not the greeter) writes, and only
+for the account it runs as; anything that is not a theme name, a colour, a
+gradient of 2–8 colours or a known motion style is dropped. Answers
+`{ "success": true, "published": bool }` — `false` when there is nowhere to
+publish (no directory, another server).
 
 ---
 

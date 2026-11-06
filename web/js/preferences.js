@@ -495,6 +495,7 @@ export function setDesktopSurface(patch) {
   localStorage.setItem(scopedKey(DESKTOP_SURFACE_KEY), raw);
   persist(DESKTOP_SURFACE_KEY, raw);
   applyDesktopSurface();
+  window.dispatchEvent(new CustomEvent('desktop:surface', { detail: merged }));
 }
 
 /** Write the surface settings onto :root as CSS custom properties. */

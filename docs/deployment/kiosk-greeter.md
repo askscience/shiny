@@ -146,8 +146,34 @@ out for unusual setups.
 | `/run/shiny/handover` | `shiny-auth` on a successful `login-session` | Tells the greeter's stop script this stop is a handover. Cleared when the kiosk session ends. |
 | `/var/lib/shiny-greeter/.local/share/shiny/shiny.db` | greeter server | The greeter's own (account-free) database. |
 | `$HOME/.local/share/shiny/liteaura/` | `liteaura` in the session or greeter | QtWebEngine profile (cookies, localStorage, cache); the greeter gets its own under the system account's home. |
+| `/var/lib/shiny/looks/<account>.json` | session server (`PUT /api/greeter-look`) | The account's look — theme, accent, gradient, motion — for the login screen (see below). |
 | `$XDG_RUNTIME_DIR/shiny-session-token` | session server | Loopback boot token, single-use, re-read before every launch. |
 | `$XDG_RUNTIME_DIR/shiny-remote.state` | session server | `on`/`off`: server-mode window instead of the kiosk. |
+
+## The login screen wears each account's look
+
+The greeter is its own account with its own web profile, so it cannot read a
+user's Settings. Each session publishes the look its account picked —
+theme, accent, gradient and motion style — whenever it starts and whenever one
+of those changes (`web/js/greeterLook.js` → `PUT /api/greeter-look` →
+`src/services/greeter_look.rs`). The server writes
+`/var/lib/shiny/looks/<account>.json`, world-readable, atomically.
+
+The greeter's `GET /api/auth/unix-users` returns each account with its `look`,
+and the login screen opens in the look published last (the account that used
+the machine most recently) and takes the look of whichever account is pointed
+at or picked. A theme the greeter switches to is remembered in its own
+profile, so the next boot paints it before the list arrives.
+
+- `/var/lib/shiny/looks` is `root:shiny`, mode `3775`: every account in the
+  `shiny` group can add a file, and the sticky bit keeps it to its own. The
+  greeter takes a file only when it is a small regular file **owned by the
+  account it is named after**, and only a theme name, colours, a gradient and
+  a known motion style survive validation on both sides.
+- Created by `scripts/install-linux-session.sh` and, for the package, by
+  `liteaura.tmpfiles`. Without the directory nothing is published and the
+  login screen keeps its default look.
+- `SHINY_LOOKS_DIR` moves it (tests, unusual layouts); both servers must agree.
 
 ## Environment
 
@@ -157,6 +183,7 @@ out for unusual setups.
 | `SHINY_GREETER_PORT` | `8079` | greeter launcher | Port the greeter's server listens on (loopback). |
 | `LITEAURA_DATA_DIR` | `$HOME/.local/share/shiny/liteaura` | greeter launcher | QtWebEngine profile for the login screen. It must live in the greeter's own home: the repo's `data/liteaura` belongs to the desktop user and QtWebEngine cannot write it. |
 | `LITEAURA_UI_SCALE` | `1.5` (greeter) | greeter launcher | Login-card scale. The internal panel is 3072×1920 but Xorg reports 96 DPI, so the automatic scale is unreadable. |
+| `SHINY_LOOKS_DIR` | `/var/lib/shiny/looks` | session and greeter servers | Where each account's look for the login screen is published. |
 | `SHINY_LOGIN_SELF_ONLY` | = `SHINY_LINUX_USERS` | server | Refuse PAM logins for accounts other than the server's own uid. |
 | `SHINY_AUTH_KIOSK_UNIT` | `shiny-kiosk@%s.service` | helper | Unit the `login-session` op starts (`%s` = verified account). |
 | `SHINY_AUTH_SYSTEMCTL` | `/usr/bin/systemctl` | helper | systemctl path (tests/overrides). |
