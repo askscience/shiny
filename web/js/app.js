@@ -58,6 +58,7 @@ import { initLockScreen } from './lockScreen.js';
 import { initShellMotion } from './shellMotion.js';
 import { hideBootScreen } from './bootScreen.js';
 import { initGreeterLook } from './greeterLook.js';
+import { closeOrphanNativeViews } from './nativeViews.js';
 
 let appInitialized = false;
 // null = not yet evaluated — the first check must always apply show/hide,
@@ -77,6 +78,9 @@ function cancelVoiceInput() {
 }
 
 async function boot() {
+  // Browser pages a previous load of this app left in the shell (a reload, an
+  // update): close them before any window opens new ones.
+  closeOrphanNativeViews();
   // The bar's separators come from the one hudDivider factory; mount them
   // before anything awaits so the bar never paints without them.
   initHudDividers();

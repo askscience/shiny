@@ -36,6 +36,12 @@
 
 ### Fixed
 
+- Browser pages no longer stay on screen after the app reloads (an update
+  without restart, a crash recovery): a page left behind did not follow its
+  window and did not close with it, because the new document knew nothing of
+  the native views the old one opened. The shell now closes them when the app
+  starts loading, and the app closes any it finds recorded from its previous
+  load.
 - A machine set up under the former name keeps its site logins: the session
   script moves the shell profile from `~/.local/share/shiny/peakd` to
   `~/.local/share/shiny/liteaura` before the shell starts (the shell's own

@@ -135,6 +135,11 @@ pub enum Command {
     /// Evaluate a script in the page and report the result back to the app as
     /// a `page-js` view event. The token ties the answer to the request (the
     /// page reads the rendered document for the AI's read/click tools).
+    /// Close every page view. Never sent by a page: the shell queues it when
+    /// the app view starts loading a new document (a reload, an update), so
+    /// the views the previous document opened do not outlive it — nothing
+    /// would be left to move, hide or close them.
+    CloseAll,
     RunJs {
         id: String,
         token: String,
@@ -240,6 +245,11 @@ impl ViewBus {
             }
         }
         true
+    }
+
+    /// Queue [`Command::CloseAll`] behind the commands already waiting.
+    pub fn close_all(&self) {
+        self.commands.lock().push(Command::CloseAll);
     }
 
     /// Queue one event for `window.__liteauraViewEvent` on the main view.
@@ -395,6 +405,13 @@ impl<H: ViewHost> Views<H> {
                     self.host.close(&id);
                 }
             }
+            Command::CloseAll => {
+                let mut ids: Vec<String> = self.live.drain().collect();
+                ids.sort();
+                for id in ids {
+                    self.host.close(&id);
+                }
+            }
             Command::Focus { id } => {
                 if self.live.contains(&id) {
                     self.host.focus(&id);
@@ -529,6 +546,29 @@ mod tests {
         fn close(&mut self, id: &str) {
             self.calls.push(format!("close {id}"));
         }
+    }
+
+    #[test]
+    fn a_reloaded_app_closes_the_views_it_left_behind() {
+        let bus = ViewBus::new();
+        bus.handle_ipc(r#"liteaura:view:{"op":"open","id":"t1","url":"https://a/","visible":true}"#);
+        bus.handle_ipc(r#"liteaura:view:{"op":"open","id":"t2","url":"https://b/","visible":false}"#);
+        // The app view starts loading again; the new document opens its own.
+        bus.close_all();
+        bus.handle_ipc(r#"liteaura:view:{"op":"open","id":"t1","url":"https://c/","visible":true}"#);
+        let mut views = Views::new(bus, RecordingHost::default());
+        views.pump(|_| {});
+        assert_eq!(
+            views.host.calls,
+            vec![
+                "create t1 https://a/ true false",
+                "create t2 https://b/ false false",
+                "close t1",
+                "close t2",
+                // A fresh view, not the old one navigated.
+                "create t1 https://c/ true false",
+            ]
+        );
     }
 
     #[test]

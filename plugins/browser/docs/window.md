@@ -416,6 +416,15 @@ it raced with.
 
 ## Gotchas
 
+- **A page view outlives a reload of the app.** It belongs to the shell, not
+  to the document that opened it, and a new document (an update reload, a
+  crash recovery) restarts its tab ids at `t1`. Two guards close the old
+  ones: the shell closes every page view when the app view starts loading
+  (`Command::CloseAll`, `crates/liteaura/src/browse.rs`), and `nativeSend`
+  keeps the open ids in `sessionStorage` (`web/js/nativeViews.js`) so the new
+  document closes what is left at boot (`closeOrphanNativeViews`) — for a
+  shell without the first guard. Without them a page stayed on screen,
+  neither following its window nor closing with it.
 - **The page is not an iframe.** `frameEl` is parked on `about:blank` and hidden
   whenever a tab is native; all real rendering is the page item in the shell's
   scene. A test must

@@ -31,6 +31,7 @@ import { openWithPlugin, pluginForFile, revealInFiles } from '../../js/files.js'
 import { t, tp } from '../../js/i18n.js';
 import { onOpenUrl } from '../../js/linkRouter.js';
 import { nativeOccluderHoles, watchNativeOccluders } from '../../js/nativeOccluders.js';
+import { forgetNativeView, rememberNativeView } from '../../js/nativeViews.js';
 import { createPasswordsPanel, fillScript, readScript } from './passwords.js';
 import { createLoginAssist } from './login-assist.js';
 import { createImportPanel } from './import-panel.js';
@@ -72,6 +73,10 @@ function nativeSend(payload) {
   if (!nativeAvailable) return false;
   try {
     window.ipc.postMessage(NATIVE_PREFIX + JSON.stringify(payload));
+    // A reload of the app must be able to close what this document opened
+    // (see web/js/nativeViews.js).
+    if (payload.op === 'open') rememberNativeView(payload.id);
+    else if (payload.op === 'close') forgetNativeView(payload.id);
     return true;
   } catch (_) {
     return false;

@@ -384,6 +384,8 @@ const context = vm.createContext({
   createPasswordsPanel,
   createLoginAssist,
   createImportPanel,
+  rememberNativeView: () => {},
+  forgetNativeView: () => {},
   fillScript,
   readScript,
   // The i18n runtime: resolve to the inline English fallback, as the catalog does.
