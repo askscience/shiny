@@ -77,6 +77,15 @@ export LITEAURA_ADFILTER_DIR="${LITEAURA_ADFILTER_DIR:-${XDG_DATA_HOME:-$HOME/.l
 # accounts on this machine must never share a browser profile. The old shared
 # location was the repo's data/liteaura, which only ever worked with one user.
 export LITEAURA_DATA_DIR="${LITEAURA_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/shiny/liteaura}"
+# Under the former name the profile was .../shiny/peakd. The shell's own
+# migration only knows its XDG folders, so move this one here, before the
+# shell starts and while nothing has it open: without it the renamed shell
+# opens an empty profile and the user is signed out of every site. Once only;
+# never over an existing profile.
+legacy_data_dir="$(dirname "$LITEAURA_DATA_DIR")/peakd"
+if [ ! -e "$LITEAURA_DATA_DIR" ] && [ -d "$legacy_data_dir" ] && [ ! -L "$legacy_data_dir" ]; then
+    mv "$legacy_data_dir" "$LITEAURA_DATA_DIR" 2>/dev/null || true
+fi
 
 # A packaged install has no repo: /usr/share/shiny holds web/ and voice/, and
 # the voice helpers create their virtualenvs next to their scripts. Give this

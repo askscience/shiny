@@ -26,6 +26,15 @@
 
 ### Fixed
 
+- A machine set up under the former name keeps its site logins: the session
+  script moves the shell profile from `~/.local/share/shiny/peakd` to
+  `~/.local/share/shiny/liteaura` before the shell starts (the shell's own
+  migration only covered its XDG folders), once and never over an existing
+  profile. A development machine still launching the `peakd` shell from an
+  old `/usr/local/bin/shiny-session` showed blank pages in the Browser once
+  its web code spoke the renamed protocol; re-run
+  `scripts/install-linux-session.sh` (or install the rendered script) after
+  the rename.
 - A plugin directory with a leftover library next to the rebuilt one loaded
   the leftover: the loader only recognised `lib<name>.so`, never the
   `libshiny_<name>_plugin.so` every build produces, and fell back to the
