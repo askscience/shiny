@@ -2,9 +2,11 @@
 # Build the LiteAura live installer ISO without root.
 #
 # The base is the official Debian 13 XFCE live image. We remaster its squashfs,
-# add LiteAura, Qt6, the installer helper and the T2 kernel/userspace setup, then
-# rebuild the bootable image with GRUB. Nothing on the host is installed and no
-# running service is touched.
+# install LiteAura from its signed APT repository (with apt, inside the image,
+# so the dependencies resolve and later updates come from the same suite), add
+# Qt6, the installer helper and the T2 kernel/userspace setup, then rebuild the
+# bootable image with GRUB. Nothing on the host is installed and no running
+# service is touched.
 set -euo pipefail
 
 REPO=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
@@ -14,10 +16,17 @@ OUTDIR=${LITEAURA_ISO_OUT:-$BUILD/out}
 ISO_NAME=liteaura-live-t2-amd64.iso
 LIVE_URL=${LITEAURA_LIVE_URL:-https://cdimage.debian.org/debian-cd/current-live/amd64/iso-hybrid/debian-live-13.7.0-amd64-xfce.iso}
 T2_KVER=${T2_KVER:-$(uname -r)}
-PKG_VERSION=${LITEAURA_VERSION:-0.1.2}
-DEB_BUILD=${LITEAURA_DEB_BUILD:-$BUILD/deb}
+# The version installed from the repository; read back after the install.
+PKG_VERSION=
 APT_KEYRING=${LITEAURA_KEYRING:-$REPO/packaging/liteaura-archive.gpg}
-APT_URL=https://askscience.github.io/shiny/apt
+APT_URL=${LITEAURA_APT_URL:-https://askscience.github.io/shiny/apt}
+DEBIAN_MIRROR=${LITEAURA_DEBIAN_MIRROR:-http://deb.debian.org/debian}
+# Not dependencies of liteaura, but wanted in the image: the voice pack builds
+# its own venvs (faster-whisper, Supertonic) on the first online start, and the
+# kiosk uses the serial-port and quick WebEngine/WebChannel modules.
+EXTRA_PACKAGES="libqt6serialport6 libqt6webenginequick6 libqt6webchannelquick6
+    libqt6positioning6-plugins fonts-roboto-unhinted
+    python3-pip-whl python3-setuptools-whl python3.13-venv python3-venv"
 
 TOOLS="$BUILD/tools"
 DEBS="$BUILD/debs"
@@ -160,16 +169,20 @@ stage_app() {
 
 seed_live_account() {
     log "seeding the live LiteAura account database"
+    # The server that seeds is the one just installed from the repository, so
+    # the database carries exactly the migrations of the shipped version.
     local seed="$BUILD/seed" db="$BUILD/seed/db/shiny.db" pid i
+    [ -x "$ROOTFS/usr/bin/shiny" ] || die "liteaura is not installed in the image"
     rm -rf "$seed"
     mkdir -p "$seed/home" "$seed/run" "$seed/plugins" "$seed/db"
     HOME="$seed/home" XDG_RUNTIME_DIR="$seed/run" \
         DATABASE_URL="sqlite://$db" SERVER_HOST=127.0.0.1 SERVER_PORT=18183 \
-        LOG_FILE="$seed/shiny.log" WEB_DIR="$REPO/web" \
-        PLUGINS_DIR="$seed/plugins" SYSTEM_PLUGINS_DIR="$REPO/data/plugins" \
+        LOG_FILE="$seed/shiny.log" WEB_DIR="$ROOTFS/usr/share/shiny/web" \
+        PLUGINS_DIR="$seed/plugins" SYSTEM_PLUGINS_DIR="$ROOTFS/usr/lib/shiny/plugins" \
         SHINY_AUTH_ENABLED=false SHINY_LINUX_USERS=false SHINY_HOME_MODE=virtual \
         SUPERTONIC_AUTO_INSTALL=0 WHISPER_AUTO_INSTALL=0 \
-        "$REPO/target/release/shiny" >"$seed/server.out" 2>&1 &
+        AUTO_START_SUPERTONIC=false AUTO_START_WHISPER=false AUTO_START_QWEN_TTS=false \
+        "$ROOTFS/usr/bin/shiny" >"$seed/server.out" 2>&1 &
     pid=$!
     for i in $(seq 1 80); do
         curl -sf http://127.0.0.1:18183/api/health/live >/dev/null 2>&1 && break
@@ -187,31 +200,37 @@ seed_live_account() {
     rm -rf "$seed"
 }
 
-build_packages() {
-    log "building the liteaura deb"
-    (cd "$REPO" && LITEAURA_DEB_BUILD="$DEB_BUILD" LITEAURA_KEYRING="$APT_KEYRING" \
-        LITEAURA_VERSION="$PKG_VERSION" ./scripts/build-deb.sh)
+in_root() {
+    unshare -Ur /usr/sbin/chroot "$ROOTFS" /usr/bin/env \
+        PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+        DEBIAN_FRONTEND=noninteractive "$@"
+}
+
+# apt inside the image, rootless: a user namespace maps only root, so apt may
+# not drop to its _apt sandbox user. The build reads Debian and the LiteAura
+# suite from a list of its own (the image's list also names the live medium,
+# which does not exist while building).
+apt_in_root() {
+    in_root apt-get -o APT::Sandbox::User=root \
+        -o Dir::Etc::SourceList=/tmp/liteaura-build.list \
+        -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold "$@"
 }
 
 stage_package() {
-    log "installing the liteaura package payload into the live rootfs"
-    build_packages
-    local deb="$DEB_BUILD/out/liteaura_${PKG_VERSION}_amd64.deb"
-    local keydeb="$DEB_BUILD/out/liteaura-archive-keyring_${PKG_VERSION}_all.deb"
-    [ -f "$deb" ] || die "missing $deb"
-    [ -f "$keydeb" ] || die "missing $keydeb"
+    log "installing liteaura from $APT_URL into the live rootfs"
+    local alog="$BUILD/apt-install.log" resolv="$ROOTFS/etc/resolv.conf" saved_resolv=0
 
+    # Leftovers of an image that carried the payload as plain files.
     rm -rf "$ROOTFS/usr/bin/shiny" "$ROOTFS/usr/bin/liteaura" \
         "$ROOTFS/usr/bin/shiny-auth" "$ROOTFS/usr/bin/shiny-server-mode" \
         "$ROOTFS/usr/libexec/shiny" "$ROOTFS/usr/lib/shiny/plugins" \
         "$ROOTFS/usr/share/shiny/web" "$ROOTFS/usr/share/shiny/iconsets" \
-        "$ROOTFS/usr/share/shiny/backgrounds"
-    dpkg-deb -x "$deb" "$ROOTFS"
-    dpkg-deb -x "$keydeb" "$ROOTFS"
+        "$ROOTFS/usr/share/shiny/backgrounds" \
+        "$ROOTFS/opt/liteaura/repo" "$ROOTFS/etc/apt/preferences.d/90-liteaura.pref"
 
-    install -d "$ROOTFS/etc/apt/sources.list.d" "$ROOTFS/var/lib/shiny" "$ROOTFS/var/log/shiny" \
-        "$ROOTFS/usr/share/fonts/truetype"
-    rm -rf "$ROOTFS/opt/liteaura/repo" "$ROOTFS/etc/apt/preferences.d/90-liteaura.pref"
+    # The repository, exactly as an installed system keeps it.
+    install -d "$ROOTFS/etc/apt/sources.list.d" "$ROOTFS/usr/share/keyrings" \
+        "$ROOTFS/var/lib/shiny" "$ROOTFS/var/log/shiny" "$ROOTFS/usr/share/fonts/truetype"
     install -m 0644 "$APT_KEYRING" "$ROOTFS/usr/share/keyrings/liteaura-archive.gpg"
     cat > "$ROOTFS/etc/apt/sources.list.d/liteaura.sources" <<EOF
 Types: deb
@@ -220,61 +239,48 @@ Suites: liteaura
 Components: main
 Signed-By: /usr/share/keyrings/liteaura-archive.gpg
 EOF
+    cat > "$ROOTFS/tmp/liteaura-build.list" <<EOF
+deb $DEBIAN_MIRROR trixie main non-free-firmware
+deb $DEBIAN_MIRROR trixie-updates main non-free-firmware
+deb http://security.debian.org/debian-security trixie-security main non-free-firmware
+EOF
+
+    # Name resolution for apt while it runs in the image.
+    if [ -e "$resolv" ] || [ -L "$resolv" ]; then
+        mv "$resolv" "$resolv.liteaura-build"
+        saved_resolv=1
+    fi
+    cp -L /etc/resolv.conf "$resolv"
+
+    : >"$alog"
+    local ok=1
+    # shellcheck disable=SC2086 # EXTRA_PACKAGES is a word list
+    apt_in_root update >>"$alog" 2>&1 \
+        && apt_in_root install -y --no-install-recommends liteaura liteaura-archive-keyring $EXTRA_PACKAGES >>"$alog" 2>&1 \
+        || ok=0
+    apt_in_root clean >>"$alog" 2>&1 || true
+    find "$ROOTFS/var/lib/apt/lists" -maxdepth 1 -type f -delete 2>/dev/null || true
+    rm -f "$ROOTFS/tmp/liteaura-build.list" "$resolv"
+    [ "$saved_resolv" = 1 ] && mv "$resolv.liteaura-build" "$resolv"
+    if [ "$ok" != 1 ]; then
+        tail -40 "$alog" >&2
+        die "could not install liteaura from the repository"
+    fi
+
+    PKG_VERSION=$(in_root dpkg-query -W -f='${Version}' liteaura 2>/dev/null || true)
+    [ -n "$PKG_VERSION" ] || die "liteaura is not installed in the image"
+    log "liteaura $PKG_VERSION installed from the repository"
+
     if [ -d /usr/share/fonts/truetype/roboto ]; then
         cp -a /usr/share/fonts/truetype/roboto "$ROOTFS/usr/share/fonts/truetype/"
     fi
 }
 
-dpkg_in_root() {
-    unshare -Ur /usr/sbin/chroot "$ROOTFS" /usr/bin/env \
-        PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
-        /bin/sh -c "$1"
-}
-
-register_payload() {
-    log "registering liteaura in the image dpkg database"
-    local reg="$ROOTFS/tmp/liteaura-register"
-    local dlog="$BUILD/dpkg-register.log"
-    local pkg
-    rm -rf "$reg"
-    mkdir -p "$reg/first" "$reg/deps" "$reg/main"
-    # python3-venv + the bundled pip/setuptools wheels: the voice pack builds
-    # its own venvs (faster-whisper, Supertonic) on the first online start.
-    for pkg in libqt6serialport6 libqt6webenginequick6 libqt6webchannelquick6 \
-        libqt6positioning6-plugins fonts-roboto-unhinted \
-        python3-pip-whl python3-setuptools-whl python3.13-venv python3-venv; do
-        local target="$reg/deps"
-        [ "$pkg" = libqt6serialport6 ] && target="$reg/first"
-        if ! compgen -G "$DEBS/${pkg}_*.deb" >/dev/null; then
-            (cd "$DEBS" && apt-get download "$pkg" >/dev/null 2>&1) \
-                || die "could not download $pkg"
-        fi
-        cp "$DEBS/${pkg}_"*.deb "$target/"
-    done
-    cp "$DEB_BUILD/out/liteaura_${PKG_VERSION}_amd64.deb" \
-        "$DEB_BUILD/out/liteaura-archive-keyring_${PKG_VERSION}_all.deb" "$reg/main/"
-
-    : >"$dlog"
-    dpkg_in_root 'dpkg -i /tmp/liteaura-register/first/*.deb' >>"$dlog" 2>&1 || {
-        tail -30 "$dlog" >&2
-        die "could not register the liteaura dependencies"
-    }
-    dpkg_in_root 'dpkg -i /tmp/liteaura-register/deps/*.deb' >>"$dlog" 2>&1 || {
-        tail -30 "$dlog" >&2
-        die "could not register the liteaura dependencies"
-    }
-    dpkg_in_root 'dpkg -i /tmp/liteaura-register/main/*.deb' >>"$dlog" 2>&1 || {
-        tail -30 "$dlog" >&2
-        die "could not register liteaura"
-    }
-    rm -rf "$reg"
-
+verify_package() {
     local status
-    status=$(unshare -Ur /usr/sbin/chroot "$ROOTFS" /usr/bin/env \
-        PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
-        dpkg-query -W -f='${Status}' liteaura 2>/dev/null || true)
+    status=$(in_root dpkg-query -W -f='${Status}' liteaura 2>/dev/null || true)
     [ "$status" = "install ok installed" ] \
-        || die "liteaura is not registered in the image (status: ${status:-missing})"
+        || die "liteaura is not installed in the image (status: ${status:-missing})"
 }
 
 stage_qt() {
@@ -620,7 +626,7 @@ build_iso() {
   "package": "liteaura $PKG_VERSION amd64",
   "apt_repo": "$APT_URL",
   "built_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-  "note": "rootless UEFI remaster; package payload; real install engine enabled"
+  "note": "rootless UEFI remaster; liteaura installed with apt from the repository; real install engine enabled"
 }
 EOF
     log "done"
@@ -641,7 +647,7 @@ stage_t2
 stage_overlay
 verify_audio_runtime
 remove_xfce
-register_payload
+verify_package
 build_t2_initrd
 assemble_boot
 build_iso

@@ -104,8 +104,13 @@ nothing that runs.
 
 ## Live image
 
-The live ISO ships the package payload as plain files and points apt at this
-repository; there is no bundled `pool` snapshot:
+`scripts/build-live-iso.sh` installs `liteaura` and `liteaura-archive-keyring`
+**from this repository** while it builds the image: apt runs inside the
+remastered rootfs (rootless, in a user namespace) with Debian trixie and the
+`liteaura` suite as sources, so the dependencies resolve and the image carries
+exactly the published version — nothing is built from the working tree. The
+live account's database is seeded by that installed server. The image keeps
+the source:
 
 ```text
 /etc/apt/sources.list.d/liteaura.sources
@@ -115,9 +120,17 @@ repository; there is no bundled `pool` snapshot:
 ```
 
 Boot does not need the network, and the installer copies the live rootfs to the
-target, so the same source is present after installation. The payload is
-registered in the image's dpkg database during the build, so `apt upgrade`
-tracks `liteaura` from the first boot.
+target, so the same source is present after installation and `apt upgrade`
+tracks `liteaura` from the first boot. The live session signs in automatically;
+the installed system uses LiteAura's own login screen (`liteaura-seat`).
+
+```sh
+./scripts/build-live-iso.sh   # → ~/liteaura-iso/out/liteaura-live-t2-amd64.iso (+ .sha256)
+```
+
+`LITEAURA_ISO_BUILD`, `LITEAURA_BASE_ISO`, `LITEAURA_APT_URL` and
+`LITEAURA_DEBIAN_MIRROR` override the build folder, the Debian live base, the
+repository and the Debian mirror. The build needs about 22 GB free.
 
 ## Signing key
 
