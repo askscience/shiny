@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-11-07
+
 ### Added
 
 - The README's tour video covers all three faces of LiteAura: the desktop
