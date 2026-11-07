@@ -2,15 +2,6 @@
 
 ## [Unreleased]
 
-### Changed
-
-- The live ISO installs LiteAura from its signed APT repository while it is
-  built, with apt inside the image, instead of packing files from the working
-  tree: the image carries exactly the published version with its dependencies
-  resolved, and the live account is seeded by that same server. The live
-  session still signs in on its own; the installed system uses LiteAura's
-  login screen.
-
 ### Added
 
 - The README's tour video covers all three faces of LiteAura: the desktop
@@ -270,6 +261,13 @@
   Browser library this way. The built name now wins.
 
 ### Changed
+
+- The live ISO installs LiteAura from its signed APT repository while it is
+  built, with apt inside the image, instead of packing files from the working
+  tree: the image carries exactly the published version with its dependencies
+  resolved, and the live account is seeded by that same server. The live
+  session still signs in on its own; the installed system uses LiteAura's
+  login screen.
 
 - The dots replace the voice bar's other animations: the glow that swelled
   with the audio and the "Tool status" setting (the state word, the step
