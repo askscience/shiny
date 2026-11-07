@@ -48,6 +48,10 @@ other code changes.
   The busy spinner lives only on the action button.
 - **Agent tools**: `updates_status`, `updates_distro`, `updates_refresh`,
   `updates_apply`, `update_ollama`.
+  `updates_status` (and `GET /api/updates/status`) serve the package list
+  from a 5-minute in-memory cache: `cached` is true for a cached answer and
+  `stale` only once that answer is older than 5 minutes, at which point a
+  background refresh starts. `force: true` always re-queries.
 - **REST routes** under `/api/updates/*`.
 
 ## Supported distributions

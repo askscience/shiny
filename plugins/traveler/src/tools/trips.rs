@@ -1,7 +1,7 @@
 //! Trip lifecycle tools: create, list, get, active, start, end, stats.
 
 use async_trait::async_trait;
-use chrono::Utc;
+use chrono::{NaiveDateTime, Utc};
 use serde_json::json;
 use sqlx::SqlitePool;
 
@@ -202,7 +202,7 @@ impl Tool for TripStats {
 
     async fn invoke(&self, ctx: &PluginCtx, req: ToolRequest<'_>) -> Result<ActionOutcome, AppError> {
         let id = req.params.require_str("trip_id")?;
-        let _ = fetch_trip(ctx.pool().await, req.traveler_id, &id).await?;
+        let trip = fetch_trip(ctx.pool().await, req.traveler_id, &id).await?;
         let locations = sqlx::query_as::<_, Location>(
             "SELECT * FROM locations WHERE trip_id = ?1 ORDER BY timestamp ASC",
         )
@@ -210,43 +210,125 @@ impl Tool for TripStats {
         .fetch_all(ctx.pool().await)
         .await?;
 
-        let mut total_distance = 0.0;
-        let mut total_speed = 0.0;
-        let mut speed_count = 0;
-        for window in locations.windows(2) {
-            total_distance += haversine_km(
-                window[0].latitude,
-                window[0].longitude,
-                window[1].latitude,
-                window[1].longitude,
-            );
-        }
-        // Average over ALL recorded speeds — the old windows(2) sum silently
-        // dropped the final point's speed from the average.
-        for loc in &locations {
-            if let Some(s) = loc.speed {
-                total_speed += s;
-                speed_count += 1;
-            }
-        }
-        let avg_speed = if speed_count > 0 {
-            Some(total_speed / speed_count as f64 * 3.6)
-        } else {
-            None
-        };
-
         Ok(ActionOutcome::ok(
             "trip_stats",
-            json!({
-                "stats": {
-                    "total_distance_km": total_distance,
-                    "total_duration_hours": 0.0,
-                    "point_count": locations.len() as i64,
-                    "avg_speed_kmh": avg_speed,
-                    "start_location": null,
-                    "end_location": null,
-                }
-            }),
+            json!({ "stats": compute_trip_stats(&trip, &locations, Utc::now().naive_utc()) }),
         ))
+    }
+}
+
+/// Parse a stored timestamp: SQLite's `YYYY-MM-DD HH:MM:SS` (what the plugin
+/// writes) or RFC 3339.
+fn parse_ts(s: &str) -> Option<NaiveDateTime> {
+    NaiveDateTime::parse_from_str(s.trim(), "%Y-%m-%d %H:%M:%S")
+        .ok()
+        .or_else(|| chrono::DateTime::parse_from_rfc3339(s.trim()).ok().map(|d| d.naive_utc()))
+}
+
+fn point_json(loc: &Location) -> serde_json::Value {
+    json!({ "lat": loc.latitude, "lon": loc.longitude, "timestamp": loc.timestamp })
+}
+
+/// Stats for one trip. Duration runs from the trip's `start_time` (else its
+/// first GPS point) to its `end_time` (else `now` while it is active, else its
+/// last GPS point); `null` when either end is unknown.
+pub(crate) fn compute_trip_stats(
+    trip: &Trip,
+    locations: &[Location],
+    now: NaiveDateTime,
+) -> serde_json::Value {
+    let total_distance: f64 = locations
+        .windows(2)
+        .map(|w| haversine_km(w[0].latitude, w[0].longitude, w[1].latitude, w[1].longitude))
+        .sum();
+    // Average over ALL recorded speeds (m/s → km/h).
+    let speeds: Vec<f64> = locations.iter().filter_map(|l| l.speed).collect();
+    let avg_speed = (!speeds.is_empty())
+        .then(|| speeds.iter().sum::<f64>() / speeds.len() as f64 * 3.6);
+
+    let first = locations.first();
+    let last = locations.last();
+    let start = trip
+        .start_time
+        .as_deref()
+        .and_then(parse_ts)
+        .or_else(|| first.and_then(|l| l.timestamp.as_deref()).and_then(parse_ts));
+    let end = trip.end_time.as_deref().and_then(parse_ts).or_else(|| {
+        if trip.status == "active" {
+            Some(now)
+        } else {
+            last.and_then(|l| l.timestamp.as_deref()).and_then(parse_ts)
+        }
+    });
+    let duration_hours = match (start, end) {
+        (Some(s), Some(e)) if e >= s => Some((e - s).num_seconds() as f64 / 3600.0),
+        _ => None,
+    };
+
+    json!({
+        "total_distance_km": total_distance,
+        "total_duration_hours": duration_hours,
+        "point_count": locations.len() as i64,
+        "avg_speed_kmh": avg_speed,
+        "start_location": first.map(point_json),
+        "end_location": last.map(point_json),
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn trip(status: &str, start: Option<&str>, end: Option<&str>) -> Trip {
+        let mut t = Trip::new("me".into(), "t".into(), None);
+        t.status = status.into();
+        t.start_time = start.map(String::from);
+        t.end_time = end.map(String::from);
+        t
+    }
+
+    fn loc(lat: f64, lon: f64, ts: &str, speed: Option<f64>) -> Location {
+        let mut l = Location::new("me".into(), None, lat, lon, None, speed, None, "gps".into());
+        l.timestamp = Some(ts.into());
+        l
+    }
+
+    fn now() -> NaiveDateTime {
+        NaiveDateTime::parse_from_str("2026-01-01 12:00:00", "%Y-%m-%d %H:%M:%S").unwrap()
+    }
+
+    #[test]
+    fn stats_use_trip_times_and_first_last_points() {
+        let t = trip("completed", Some("2026-01-01 08:00:00"), Some("2026-01-01 10:30:00"));
+        let locs = vec![
+            loc(45.0, 9.0, "2026-01-01 08:05:00", Some(10.0)),
+            loc(45.1, 9.0, "2026-01-01 10:00:00", Some(20.0)),
+        ];
+        let s = compute_trip_stats(&t, &locs, now());
+        assert_eq!(s["total_duration_hours"], 2.5);
+        assert_eq!(s["start_location"]["lat"], 45.0);
+        assert_eq!(s["end_location"]["lat"], 45.1);
+        assert_eq!(s["point_count"], 2);
+        assert!((s["avg_speed_kmh"].as_f64().unwrap() - 54.0).abs() < 1e-9);
+        assert!(s["total_distance_km"].as_f64().unwrap() > 11.0);
+    }
+
+    #[test]
+    fn stats_fall_back_to_points_and_now() {
+        let locs = vec![
+            loc(45.0, 9.0, "2026-01-01 09:00:00", None),
+            loc(45.0, 9.1, "2026-01-01 10:00:00", None),
+        ];
+        // Ended trip without stored times: first → last point.
+        let s = compute_trip_stats(&trip("completed", None, None), &locs, now());
+        assert_eq!(s["total_duration_hours"], 1.0);
+        // Active trip: start → now.
+        let s = compute_trip_stats(&trip("active", Some("2026-01-01 11:00:00"), None), &locs, now());
+        assert_eq!(s["total_duration_hours"], 1.0);
+        // Nothing known: nulls, never fake zeros.
+        let s = compute_trip_stats(&trip("planned", None, None), &[], now());
+        assert!(s["total_duration_hours"].is_null());
+        assert!(s["start_location"].is_null());
+        assert!(s["avg_speed_kmh"].is_null());
     }
 }

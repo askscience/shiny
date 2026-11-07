@@ -304,15 +304,14 @@ pub async fn execute_action(
                 owner: None,
             }
         }
-        // Refused on a vertical, phone-like screen (see AgentContext).
-        "workspace_create" if !ctx.workspaces_enabled => ActionOutcome {
-            action: action_key.clone(),
-            result: "unavailable".into(),
-            data: json!({ "reason": "workspaces are off on this screen" }),
-            artifact: None,
-            extra_artifacts: vec![],
-            owner: None,
-        },
+        // Refused on a vertical, phone-like screen (see AgentContext): the
+        // frontend has no workspaces there and drops these events, so an "ok"
+        // would make the model report a change that never happened.
+        "workspace_create" | "workspace_remove" | "workspace_switch" | "workspace_move"
+            if !ctx.workspaces_enabled =>
+        {
+            workspaces_unavailable(&action_key)
+        }
         "workspace_create" => ActionOutcome {
             action: action_key.clone(),
             result: "ok".into(),
@@ -330,10 +329,10 @@ pub async fn execute_action(
             owner: None,
         },
         "workspace_switch" => {
-            let to = params
-                .get("to")
-                .map(|v| workspace_target(v, "next"))
-                .unwrap_or_else(|| "next".to_string());
+            let to = match params.get("to") {
+                Some(v) => workspace_switch_target(v)?,
+                None => "next".to_string(),
+            };
             ActionOutcome {
                 action: action_key.clone(),
                 result: "ok".into(),
@@ -355,7 +354,7 @@ pub async fn execute_action(
             // "new" so "move X to a new workspace" works in a single call.
             let to = params
                 .get("to")
-                .map(|v| workspace_target(v, "new"))
+                .map(workspace_move_target)
                 .unwrap_or_else(|| "new".to_string());
             ActionOutcome {
                 action: action_key.clone(),
@@ -793,22 +792,54 @@ pub(crate) async fn music_quality_pref(state: &AppState, user_id: &str) -> Optio
     crate::services::song_gen::resolve_tier(&value).map(|t| t.key.to_string())
 }
 
-/// Normalize a workspace target: 1-based number or numeric string → 0-based
-/// index string; "new" passes through; anything else falls back to `default`.
-fn workspace_target(v: &Value, default: &str) -> String {
-    if let Some(n) = v.as_u64() {
-        return n.saturating_sub(1).to_string();
+/// The refusal every workspace action gets on a vertical, phone-like screen.
+fn workspaces_unavailable(action_key: &str) -> ActionOutcome {
+    ActionOutcome {
+        action: action_key.to_string(),
+        result: "unavailable".into(),
+        data: json!({ "reason": "workspaces are off on this screen" }),
+        artifact: None,
+        extra_artifacts: vec![],
+        owner: None,
+    }
+}
+
+/// A 1-based workspace number (JSON number or numeric string, ≥ 1).
+fn workspace_number(v: &Value) -> Option<u64> {
+    let n = match v {
+        Value::Number(n) => n
+            .as_u64()
+            .or_else(|| n.as_f64().filter(|f| f.fract() == 0.0 && *f >= 0.0).map(|f| f as u64))?,
+        Value::String(s) => s.trim().parse::<u64>().ok()?,
+        _ => return None,
+    };
+    (n >= 1).then_some(n)
+}
+
+/// `workspace_switch` target: a 1-based number becomes the 0-based index
+/// string; "next" / "prev" pass through. Anything else is refused, naming the
+/// valid values, so the frontend never receives a target it would read as NaN.
+fn workspace_switch_target(v: &Value) -> Result<String, AppError> {
+    if let Some(n) = workspace_number(v) {
+        return Ok((n - 1).to_string());
     }
     if let Some(s) = v.as_str() {
-        if s == "new" {
-            return "new".to_string();
+        let s = s.trim().to_ascii_lowercase();
+        if s == "next" || s == "prev" {
+            return Ok(s);
         }
-        if let Ok(n) = s.parse::<u64>() {
-            return n.saturating_sub(1).to_string();
-        }
-        return s.to_string();
     }
-    default.to_string()
+    Err(AppError::BadRequest(format!(
+        "invalid workspace target {v}: use a workspace number (1, 2, ...), \"next\" or \"prev\""
+    )))
+}
+
+/// `workspace_move` target: a 1-based number becomes the 0-based index
+/// string; "new" and anything unrecognised become "new" (a fresh workspace).
+fn workspace_move_target(v: &Value) -> String {
+    workspace_number(v)
+        .map(|n| (n - 1).to_string())
+        .unwrap_or_else(|| "new".to_string())
 }
 
 /// Core actions focus mode refuses: they act on the desktop — other windows,
@@ -1218,8 +1249,37 @@ fn strip_balanced_braces(s: &str) -> String {
 mod tests {
     use super::{
         focus_blocks_core, focus_blocks_plugin, focus_core_refusal, focus_plugin_refusal,
-        AgentContext,
+        workspace_move_target, workspace_switch_target, workspaces_unavailable, AgentContext,
     };
+    use serde_json::json;
+
+    #[test]
+    fn workspace_switch_accepts_only_numbers_next_and_prev() {
+        assert_eq!(workspace_switch_target(&json!(2)).unwrap(), "1");
+        assert_eq!(workspace_switch_target(&json!("3")).unwrap(), "2");
+        assert_eq!(workspace_switch_target(&json!("next")).unwrap(), "next");
+        assert_eq!(workspace_switch_target(&json!("Prev")).unwrap(), "prev");
+        for bad in [json!("music"), json!("new"), json!(0), json!("0"), json!(-1), json!(null)] {
+            let err = workspace_switch_target(&bad).unwrap_err().to_string();
+            assert!(err.contains("next") && err.contains("prev"), "{bad}: {err}");
+        }
+    }
+
+    #[test]
+    fn workspace_move_unknown_targets_become_new() {
+        assert_eq!(workspace_move_target(&json!(1)), "0");
+        assert_eq!(workspace_move_target(&json!("4")), "3");
+        assert_eq!(workspace_move_target(&json!("new")), "new");
+        assert_eq!(workspace_move_target(&json!("media")), "new");
+        assert_eq!(workspace_move_target(&json!(0)), "new");
+    }
+
+    #[test]
+    fn workspaces_refusal_is_unavailable() {
+        let out = workspaces_unavailable("workspace_switch");
+        assert_eq!(out.action, "workspace_switch");
+        assert_eq!(out.result, "unavailable");
+    }
 
     fn ctx(focused: &[&str]) -> AgentContext {
         AgentContext {

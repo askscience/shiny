@@ -24,7 +24,7 @@ routes return bytes/streams directly). Registered in
 | `POST` | `/api/files/mkdir` | `{ path }` | Create a folder. |
 | `POST` | `/api/files/rename` | `{ from, to }` | Move/rename. |
 | `POST` | `/api/files/delete` | `{ path }` | Move to `.Trash` (permanent if already in Trash). |
-| `POST` | `/api/files/restore` | `{ name }` | Restore from `.Trash`. |
+| `POST` | `/api/files/restore` | `{ name }` | Restore from `.Trash` (`name` or `.Trash/name`). |
 | `POST` | `/api/files/empty-trash` | — | Permanently delete `.Trash` contents. |
 
 ### Link sharing (Gokapi)

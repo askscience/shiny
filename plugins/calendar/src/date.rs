@@ -135,9 +135,25 @@ pub fn month_bounds(month: &str) -> Result<(String, String), String> {
     ))
 }
 
+/// The times to store for an event: an all-day event keeps no start or end
+/// time, whatever was passed.
+pub fn event_times(all_day: bool, start: String, end: String) -> (String, String) {
+    if all_day {
+        (String::new(), String::new())
+    } else {
+        (start, end)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn all_day_events_drop_their_times() {
+        assert_eq!(event_times(true, "09:00".into(), "10:00".into()), (String::new(), String::new()));
+        assert_eq!(event_times(false, "09:00".into(), "10:00".into()), ("09:00".into(), "10:00".into()));
+    }
 
     #[test]
     fn dates() {

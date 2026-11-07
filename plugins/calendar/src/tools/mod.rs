@@ -13,7 +13,7 @@ use shiny_plugin_sdk::outcome::ActionOutcome;
 use shiny_plugin_sdk::services::PluginCtx;
 use shiny_plugin_sdk::tools::{ParamHelpers, Tool, ToolRequest};
 
-use crate::date::{current_month, month_bounds, normalize_date, normalize_time};
+use crate::date::{current_month, event_times, month_bounds, normalize_date, normalize_time};
 
 const EVENT_COLS: &str = "id, title, date, start_time, end_time, description, location, all_day";
 type EventRow = (String, String, String, String, String, String, String, i64);
@@ -128,6 +128,7 @@ impl Tool for CalendarCreate {
             .unwrap_or_default();
         let end_time = normalize_time(&end_raw).map_err(AppError::BadRequest)?;
         let all_day = req.params.param_bool("all_day").unwrap_or(false);
+        let (start_time, end_time) = event_times(all_day, start_time, end_time);
         let description = req.params.param_str("description").unwrap_or_default();
         let location = req.params.param_str("location").unwrap_or_default();
 
@@ -309,6 +310,7 @@ impl Tool for CalendarUpdate {
         let description = req.params.param_str("description").unwrap_or_else(|| row.5.clone());
         let location = req.params.param_str("location").unwrap_or_else(|| row.6.clone());
         let all_day = req.params.param_bool("all_day").unwrap_or(row.7 != 0);
+        let (start_time, end_time) = event_times(all_day, start_time, end_time);
 
         sqlx::query(
             "UPDATE calendar_events SET title = ?1, date = ?2, start_time = ?3, end_time = ?4, \

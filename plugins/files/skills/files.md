@@ -37,10 +37,11 @@ The classic home folders (`Desktop`, `Documents`, `Downloads`, `Music`,
 - `file_copy` — `{ from: string, to: string }` → `{ from, to }`; copies folders
   recursively. `to` is the full destination path.
 - `file_delete` — `{ path: string }` → `{ trashed }` (the new `.Trash/<name>`
-  path), or `{ deleted }` when `path` was already inside `.Trash` (permanent).
+  path), or `{ deleted }` when `path` was already inside `.Trash` (permanent;
+  `./.Trash/x` counts too).
 - `file_restore` — `{ name: string }` → `{ restored }`. `name` is the entry name
-  inside `.Trash` (e.g. `"notes.txt"`, not `".Trash/notes.txt"`); it goes back
-  to the home root.
+  inside `.Trash` (`"notes.txt"`) or the `trashed` path `file_delete` returned
+  (`".Trash/notes.txt"`); it goes back to the home root.
 - `file_search` — `{ query: string, path?: string }` → `{ query, results, count }`.
   Case-insensitive name match (at least 2 characters), up to 100 results in the
   same shape as `file_list` entries; skips `.Trash`.

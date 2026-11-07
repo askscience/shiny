@@ -468,6 +468,76 @@ pub fn needs_backfill(
         && !cache::synced_recently(db, user_id, account_id, folder, EMPTY_RECHECK_SECS)?)
 }
 
+/// Most never-cached folders one folder-less search backfills (each is capped
+/// by `cache::MAX_SYNC` messages). Later searches pick up the rest.
+const SEARCH_BACKFILL_FOLDERS: usize = 8;
+
+/// Minimum gap between the folder scans a folder-less search runs, so a
+/// burst of searches does not open an IMAP connection each time.
+pub const SEARCH_FOLDER_SCAN_SECS: i64 = 600;
+
+/// Sync-state key that records the last folder scan. It starts with a control
+/// character, which real mailbox names do not use, so it never collides with
+/// a folder.
+const FOLDER_SCAN_MARK: &str = "\u{1}shiny-search-folder-scan";
+
+/// Fill the local cache before a search. With `folder`, backfill that folder
+/// (as list does). Without one, backfill INBOX, then — at most every
+/// `SEARCH_FOLDER_SCAN_SECS` — list the account's folders and backfill up to
+/// `SEARCH_BACKFILL_FOLDERS` that have mail on the server but nothing cached.
+/// Failures on those extra folders (e.g. non-selectable ones) are logged and
+/// skipped so the search still runs over what is cached.
+pub async fn backfill_for_search(
+    db: &Db,
+    user_id: &str,
+    a: &Account,
+    folder: Option<&str>,
+) -> Result<(), AppError> {
+    let first = folder.unwrap_or("INBOX").to_string();
+    if needs_backfill(db, user_id, &a.id, &first)? {
+        sync_folder(db, user_id, a.clone(), first).await?;
+    }
+    if folder.is_some()
+        || cache::synced_recently(db, user_id, &a.id, FOLDER_SCAN_MARK, SEARCH_FOLDER_SCAN_SECS)?
+    {
+        return Ok(());
+    }
+    let folders = match list_folders(a.clone()).await {
+        Ok(f) => f,
+        Err(e) => {
+            tracing::warn!("mail search: could not list folders: {e}");
+            return Ok(());
+        }
+    };
+    let mut synced = 0usize;
+    for name in search_backfill_candidates(&folders) {
+        if synced >= SEARCH_BACKFILL_FOLDERS {
+            break;
+        }
+        if !needs_backfill(db, user_id, &a.id, &name)? {
+            continue;
+        }
+        synced += 1;
+        if let Err(e) = sync_folder(db, user_id, a.clone(), name.clone()).await {
+            tracing::warn!("mail search: skipping folder {name}: {e}");
+        }
+    }
+    cache::set_sync_state(db, user_id, &a.id, FOLDER_SCAN_MARK, 0)?;
+    Ok(())
+}
+
+/// Folders (from `list_folders`) worth backfilling for a search: every named
+/// folder except INBOX (already handled) and folders the server reports empty.
+fn search_backfill_candidates(folders: &[Json]) -> Vec<String> {
+    folders
+        .iter()
+        .filter(|f| f.get("total").and_then(Json::as_u64) != Some(0))
+        .filter_map(|f| f.get("name").and_then(Json::as_str))
+        .filter(|n| !n.trim().is_empty() && cache::canon_folder(n) != "INBOX")
+        .map(String::from)
+        .collect()
+}
+
 /// Fetch every envelope in a folder (paged), capped by `cache::MAX_SYNC`.
 fn fetch_all_envelopes(a: &Account, folder: &str) -> Result<Vec<Envelope>, AppError> {
     let mut client = connect_imap(a)?;
@@ -793,4 +863,24 @@ pub async fn delete_message(a: Account, folder: String, id: String) -> Result<()
         Ok(())
     })
     .await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn search_backfills_named_non_inbox_folders_with_mail() {
+        let folders = vec![
+            json!({ "name": "INBOX", "total": 10 }),
+            json!({ "name": "inbox", "total": 3 }),
+            json!({ "name": "Archive", "total": 40 }),
+            json!({ "name": "Empty", "total": 0 }),
+            json!({ "name": "[Gmail]", "total": null }),
+            json!({ "name": "", "total": 5 }),
+            json!({ "total": 5 }),
+        ];
+        assert_eq!(search_backfill_candidates(&folders), vec!["Archive".to_string(), "[Gmail]".to_string()]);
+        assert!(FOLDER_SCAN_MARK.starts_with('\u{1}'));
+    }
 }

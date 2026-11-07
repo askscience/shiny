@@ -388,10 +388,34 @@ pub async fn move_to_trash(home: &Path, path: &Path) -> Result<String, AppError>
     Ok(rel_display(home, &dest))
 }
 
-/// Restore a trashed entry back to the home root (or into `dest` under home).
+/// Whether a user-supplied home-relative path names `.Trash` or something
+/// inside it. The path is normalised first, so `./.Trash/x` and `.Trash//x`
+/// count too.
+pub fn is_in_trash(rel: &str) -> bool {
+    clean_rel(rel)
+        .ok()
+        .and_then(|p| p.components().next().map(|c| c.as_os_str() == TRASH_DIR))
+        .unwrap_or(false)
+}
+
+/// The path of a trashed entry relative to `.Trash`. Accepts the bare entry
+/// name (`x`) and the home-relative path `file_delete` returns (`.Trash/x`,
+/// `./.Trash/x`). Refuses an empty result (that would be the Trash itself).
+pub fn trash_entry_rel(name: &str) -> Result<String, AppError> {
+    let clean = clean_rel(name)?;
+    let inner = clean.strip_prefix(TRASH_DIR).unwrap_or(&clean);
+    let out = inner.to_string_lossy().into_owned();
+    if out.is_empty() {
+        return Err(AppError::BadRequest("name of a trashed entry required".into()));
+    }
+    Ok(out)
+}
+
+/// Restore a trashed entry back to the home root. `name` is the entry name
+/// inside `.Trash` or its `.Trash/`-prefixed home-relative path.
 pub async fn restore_from_trash(home: &Path, name: &str) -> Result<String, AppError> {
     let trash = home.join(TRASH_DIR);
-    let src = resolve(&trash, name).await?;
+    let src = resolve(&trash, &trash_entry_rel(name)?).await?;
     if !exists(&src).await {
         return Err(AppError::NotFound("not in trash".into()));
     }
@@ -557,6 +581,38 @@ pub async fn recent(home: &Path, limit: usize) -> Result<Vec<Value>, AppError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn trash_paths_are_normalised() {
+        assert!(is_in_trash(".Trash"));
+        assert!(is_in_trash(".Trash/x"));
+        assert!(is_in_trash("./.Trash/x"));
+        assert!(is_in_trash(".Trash//x"));
+        assert!(!is_in_trash("Documents/.Trash/x"));
+        assert!(!is_in_trash(".Trashy"));
+        assert_eq!(trash_entry_rel("x").unwrap(), "x");
+        assert_eq!(trash_entry_rel(".Trash/x").unwrap(), "x");
+        assert_eq!(trash_entry_rel("./.Trash/x").unwrap(), "x");
+        assert!(trash_entry_rel(".Trash").is_err());
+        assert!(trash_entry_rel(".Trash/../y").is_err());
+    }
+
+    #[tokio::test]
+    async fn restore_accepts_the_path_move_to_trash_returns() {
+        let home = std::env::temp_dir().join(format!("shiny-files-trash-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        std::fs::create_dir_all(&home).unwrap();
+        for name in ["a.txt", "b.txt"] {
+            std::fs::write(home.join(name), b"x").unwrap();
+        }
+        let ta = move_to_trash(&home, &home.join("a.txt")).await.unwrap();
+        assert_eq!(ta, ".Trash/a.txt");
+        assert_eq!(restore_from_trash(&home, &ta).await.unwrap(), "a.txt");
+        move_to_trash(&home, &home.join("b.txt")).await.unwrap();
+        assert_eq!(restore_from_trash(&home, "b.txt").await.unwrap(), "b.txt");
+        assert!(home.join("a.txt").exists() && home.join("b.txt").exists());
+        let _ = std::fs::remove_dir_all(&home);
+    }
 
     #[tokio::test]
     async fn recent_lists_newest_first_and_skips_hidden_and_outside_files() {

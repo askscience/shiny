@@ -195,6 +195,20 @@
   suggestions work from a video id alone. Two PDF shortcuts no longer
   collide with Word's and with each other (`replace_text`, `add_note`).
 
+- Fixes found while checking the assistant's instructions against the tools:
+  a PDF watermark goes only on the pages asked for; a spreadsheet created
+  with a wrong cell name says so instead of coming out empty, and a sheet
+  can be deleted by its title; rewriting a presentation with no slides is
+  refused instead of emptying it; Word's document design takes margins
+  again; MIDI effects after "humanize" in Studio play; a file the assistant
+  put in the Trash can be restored with the name it was given; all-day
+  events keep no stray times; an email with neither subject nor text is not
+  sent, and a search without a folder also looks in folders never opened;
+  on a vertical screen the assistant no longer claims to have switched or
+  moved desktops; routes only take car, bike or foot; trip statistics show
+  the real duration and the first and last position; and an update check
+  served from the cache is no longer flagged as out of date.
+
 - A right-click inside a Browser page opens the menu again (Back, Copy,
   Paste, "Fill password…" on a field): the shell was dropping the request
   before it reached the window. A site with several saved logins — common

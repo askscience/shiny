@@ -21,7 +21,7 @@ impl Tool for ListDiary {
     fn step_label(&self) -> &str { "Reading diary…" }
 
     async fn invoke(&self, ctx: &PluginCtx, req: ToolRequest<'_>) -> Result<ActionOutcome, AppError> {
-        let limit = req.params.get("limit").and_then(|v| v.as_i64()).unwrap_or(20);
+        let limit = super::list_limit(req.params, 20);
         let entries = sqlx::query_as::<_, DiaryEntry>(
             "SELECT * FROM diary_entries WHERE traveler_id = ?1 ORDER BY date DESC LIMIT ?2",
         )
@@ -67,7 +67,7 @@ impl Tool for SearchDiary {
 
     async fn invoke(&self, ctx: &PluginCtx, req: ToolRequest<'_>) -> Result<ActionOutcome, AppError> {
         let q = req.params.require_str("q")?;
-        let limit = req.params.get("limit").and_then(|v| v.as_i64()).unwrap_or(20);
+        let limit = super::list_limit(req.params, 20);
         let pattern = format!("%{}%", q);
         let entries = sqlx::query_as::<_, DiaryEntry>(
             "SELECT * FROM diary_entries WHERE traveler_id = ?1 AND \

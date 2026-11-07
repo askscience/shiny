@@ -2,10 +2,10 @@
 
 | Tool | Params | Returns / behaviour |
 |---|---|---|
-| `calendar_create` | `{ title, date, start_time?, end_time?, location?, description?, all_day? }` | Creates an event; returns `event_id`. `date` accepts `today`/`tomorrow`/`yesterday`; `time` is an alias for `start_time`. |
+| `calendar_create` | `{ title, date, start_time?, end_time?, location?, description?, all_day? }` | Creates an event; returns `event_id`. `date` accepts `today`/`tomorrow`/`yesterday`; `time` is an alias for `start_time`. With `all_day:true` the times are stored empty. |
 | `calendar_list` | `{ month?, from?, to?, limit? }` | Events in a range (`from`+`to` together, else `month`; defaults to the current month; `limit` 200, max 500) with `event_id`, title, date, times, description, location, `all_day`. |
 | `calendar_get` | `{ date }` | One day's events. |
-| `calendar_update` | `{ event_id, title?, date?, start_time?, end_time?, all_day?, description?, location? }` | Changes only the fields passed. |
+| `calendar_update` | `{ event_id, title?, date?, start_time?, end_time?, all_day?, description?, location? }` | Changes only the fields passed; an event that is (or becomes) all-day has its times cleared. |
 | `calendar_delete` | `{ event_id, confirm: true }` | Permanently removes an event. |
 
 `event_id` accepts the UUID **or** the exact title (case-insensitive; the latest-dated match wins when several share it).

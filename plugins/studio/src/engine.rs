@@ -542,6 +542,9 @@ fn apply_midi(
     let mut gate = 1.0;
     let mut ratchet = 0u32;
     let mut probability = 1.0;
+    // Timing offset in beats from `humanize`; applied after the whole chain so
+    // every MIDI effect (before and after it) still takes part.
+    let mut shift = 0.0;
     for fx in midi {
         match fx.kind.as_str() {
             "transpose" => deg += fx.params.get("steps").copied().unwrap_or(0.0) as i32,
@@ -551,20 +554,10 @@ fn apply_midi(
             "probability" | "chance" => probability = fx.params.get("amount").copied().unwrap_or(1.0).clamp(0.0, 1.0),
             "humanize" => {
                 // Deterministic pseudo-humanize: a fixed fraction of a step,
-                // alternating direction by note index, so renders stay
-                // reproducible.
+                // alternating direction by note, so renders stay reproducible.
                 let amt = fx.params.get("amount").copied().unwrap_or(0.0).clamp(0.0, 1.0);
-                let jitter = if (start_step + deg as u32) % 2 == 0 { amt } else { -amt };
-                let start_beat = start_step as f64 / 4.0 + jitter * 0.02;
-                let dur = (len_steps as f64 / 4.0 * gate).max(0.02);
-                return vec![PlannedNote {
-                    start: start_beat,
-                    end: start_beat + dur,
-                    degree: deg,
-                    octave: oct,
-                    velocity: vel.clamp(0.05, 1.2),
-                    pad,
-                }];
+                let even = (start_step as i64 + deg as i64).rem_euclid(2) == 0;
+                shift = if even { amt } else { -amt } * 0.02;
             }
             _ => {}
         }
@@ -578,7 +571,7 @@ fn apply_midi(
             return Vec::new();
         }
     }
-    let start_beat = start_step as f64 / 4.0;
+    let start_beat = (start_step as f64 / 4.0 + shift).max(0.0);
     let dur = (len_steps as f64 / 4.0 * gate).clamp(0.02, steps as f64 / 4.0);
     let end_beat = (start_beat + dur).min(steps as f64 / 4.0);
     let mut out = Vec::new();
@@ -1445,7 +1438,8 @@ pub struct ReturnsConfig {
     /// Reverb parameters (`size`, `damping`, `predelay`, `width`, `mod`).
     pub reverb: HashMap<String, f64>,
     /// Delay parameters (`time` ms or `sync` beats, `feedback`, `damp`,
-    /// `ping_pong`, `mod`).
+    /// `ping_pong`). The return delay has no modulation; `mod` is only read by
+    /// the delay insert effect.
     pub delay: HashMap<String, f64>,
     /// Return fader gains (linear, default 1).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1622,4 +1616,38 @@ fn band_energy(channels: &[Vec<f32>], sr: f64) -> [f64; 5] {
         }
     }
     energy
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn fx(kind: &str, key: &str, v: f64) -> MidiFxConfig {
+        MidiFxConfig { kind: kind.into(), params: HashMap::from([(key.to_string(), v)]) }
+    }
+
+    #[test]
+    fn humanize_does_not_stop_the_midi_chain() {
+        // Effects before and after `humanize` must all apply.
+        let chain = vec![
+            fx("gate", "amount", 0.5),
+            fx("ratchet", "count", 2.0),
+            fx("humanize", "amount", 0.5),
+            fx("transpose", "steps", 3.0),
+            fx("velocity", "amount", 0.5),
+        ];
+        let notes = apply_midi(&chain, 4, 4, 0, 0, 0.8, 16, 0);
+        assert_eq!(notes.len(), 2, "ratchet set before humanize must still split the note");
+        for n in &notes {
+            assert_eq!(n.degree, 3, "transpose after humanize must apply");
+            assert!((n.velocity - 0.4).abs() < 1e-9, "velocity after humanize must apply");
+        }
+        // gate 0.5 on a 1-beat note → 0.5 beat total, starting near beat 1.
+        assert!((notes[0].start - 1.0).abs() <= 0.02 + 1e-9);
+        assert!(notes[1].end <= notes[0].start + 0.5 + 1e-9);
+
+        // Probability 0 before humanize still drops the note.
+        let drop = vec![fx("probability", "amount", 0.0), fx("humanize", "amount", 1.0)];
+        assert!(apply_midi(&drop, 4, 1, 0, 0, 0.8, 16, 0).is_empty());
+    }
 }

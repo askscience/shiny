@@ -37,7 +37,9 @@ again.
 ## Caching
 
 `src/cache.rs` stores messages locally; the first `list`/`search` of a folder
-downloads it automatically. `mail_sync` pulls new mail. This is why the tools
+downloads it automatically. A search without a folder also backfills up to 8
+never-cached folders that have mail (`mail::backfill_for_search`; the folder
+list is fetched at most every 10 minutes per account). `mail_sync` pulls new mail. This is why the tools
 read "instantly, no network" and why `mail_sync` exists.
 
 ## Source layout

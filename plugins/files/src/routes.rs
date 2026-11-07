@@ -839,9 +839,7 @@ fn delete(ctx: Arc<PluginCtx>) -> RouteHandler {
                 return Err(AppError::NotFound("file not found".into()));
             }
             // Deleting from inside Trash is permanent; elsewhere it moves to Trash.
-            if rel == fs_util::TRASH_DIR
-                || rel.starts_with(&format!("{}/", fs_util::TRASH_DIR))
-            {
+            if fs_util::is_in_trash(&rel) {
                 fs_util::delete_permanent(&path).await?;
                 return Ok(ok(json!({ "deleted": fs_util::rel_display(&home, &path) })));
             }
@@ -860,7 +858,8 @@ fn restore(ctx: Arc<PluginCtx>) -> RouteHandler {
             let axum::Json(body) = axum::Json::<PathBody>::from_request(req, &())
                 .await
                 .map_err(|e| AppError::BadRequest(format!("invalid JSON body: {e}")))?;
-            let name = clean_name(&body.name.or(body.path).unwrap_or_default())?;
+            let raw = body.name.or(body.path).unwrap_or_default();
+            let name = clean_name(&fs_util::trash_entry_rel(&raw)?)?;
             let restored = fs_util::restore_from_trash(&home, &name).await?;
             Ok(ok(json!({ "restored": restored })))
         }

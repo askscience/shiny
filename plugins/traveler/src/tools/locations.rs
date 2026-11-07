@@ -71,7 +71,7 @@ impl Tool for ListLocations {
     fn step_label(&self) -> &str { "Listing locations…" }
 
     async fn invoke(&self, ctx: &PluginCtx, req: ToolRequest<'_>) -> Result<ActionOutcome, AppError> {
-        let limit = req.params.get("limit").and_then(|v| v.as_i64()).unwrap_or(50);
+        let limit = super::list_limit(req.params, 50);
         let rows = if let Some(trip_id) = req.params.param_str("trip_id") {
             sqlx::query_as::<_, Location>(
                 "SELECT * FROM locations WHERE traveler_id = ?1 AND trip_id = ?2 ORDER BY timestamp DESC LIMIT ?3",

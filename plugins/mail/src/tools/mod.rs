@@ -39,6 +39,17 @@ fn str_array(v: &Value) -> Vec<String> {
         .unwrap_or_default()
 }
 
+/// Refuse an email with neither a subject nor a body (attachments alone do
+/// not count: an attachment-only mail still needs a subject).
+fn check_has_content(subject: &str, body: &str) -> Result<(), AppError> {
+    if subject.trim().is_empty() && body.trim().is_empty() {
+        return Err(AppError::BadRequest(
+            "mail_send needs a subject or a body; refusing to send an empty email".into(),
+        ));
+    }
+    Ok(())
+}
+
 #[async_trait]
 impl Tool for MailStatus {
     fn name(&self) -> &str { "mail_status" }
@@ -145,7 +156,7 @@ impl Tool for MailSearch {
     fn name(&self) -> &str { "mail_search" }
     fn step_label(&self) -> &str { "Searching mail…" }
     fn doc_fragment(&self) -> Option<&str> {
-        Some("- `mail_search` — Search cached messages by subject, sender or body text (local, no IMAP). params: `{ account?: string, folder?: string, query: string }`. Omit `folder` to search all folders. Returns up to 60 matching envelopes.")
+        Some("- `mail_search` — Search cached messages by subject, sender or body text. params: `{ account?: string, folder?: string, query: string }`. Omit `folder` to search all folders (never-cached folders with mail, up to 8, are downloaded first). Returns up to 60 matching envelopes.")
     }
     fn humanize(&self, _r: &str, data: &Value) -> String {
         let n = data.get("messages").and_then(|v| v.as_array()).map(|a| a.len()).unwrap_or(0);
@@ -157,11 +168,9 @@ impl Tool for MailSearch {
         let query = req.params.require_str("query")?;
         let a = mail::resolve_account(ctx.db(), req.user_id, account.as_deref())?;
 
-        // Backfill the default/requested folder on first use; then search local.
-        let eff_folder = folder.clone().unwrap_or_else(|| "INBOX".into());
-        if mail::needs_backfill(ctx.db(), req.user_id, &a.id, &eff_folder)? {
-            mail::sync_folder(ctx.db(), req.user_id, a.clone(), eff_folder).await?;
-        }
+        // Backfill the requested folder (or, with no folder, INBOX and the
+        // account's never-cached folders) on first use; then search local.
+        mail::backfill_for_search(ctx.db(), req.user_id, &a, folder.as_deref()).await?;
 
         let messages = cache::search(ctx.db(), req.user_id, Some(&a.id), folder.as_deref(), &query, 60)?;
         Ok(ActionOutcome::ok("mail_search", json!({ "query": query, "messages": messages })))
@@ -195,7 +204,7 @@ impl Tool for MailSend {
     fn name(&self) -> &str { "mail_send" }
     fn step_label(&self) -> &str { "Sending email…" }
     fn doc_fragment(&self) -> Option<&str> {
-        Some("- `mail_send` — Compose and send an email. params: `{ account?: string, to: string[], cc?: string[], bcc?: string[], subject: string, body: string, attachments?: string[] }`. The sender is the account's email. `attachments` are files in the user's home, as home-relative paths (e.g. `Documents/report.pdf`, the paths the Files tools return); 18 MB total at most.")
+        Some("- `mail_send` — Compose and send an email. params: `{ account?: string, to: string[], cc?: string[], bcc?: string[], subject: string, body: string, attachments?: string[] }`. The sender is the account's email. `attachments` are files in the user's home, as home-relative paths (e.g. `Documents/report.pdf`, the paths the Files tools return); 18 MB total at most. Refused when `subject` and `body` are both empty.")
     }
     fn humanize(&self, _r: &str, data: &Value) -> String {
         let to = data.get("to").and_then(|v| v.as_array()).map(|a| a.iter().filter_map(|x| x.as_str()).collect::<Vec<_>>().join(", ")).unwrap_or_default();
@@ -218,6 +227,7 @@ impl Tool for MailSend {
         let bcc = str_array(req.params.get("bcc").unwrap_or(&Value::Null));
         let subject = req.params.param_str("subject").unwrap_or_default();
         let body = req.params.param_str("body").unwrap_or_default();
+        check_has_content(&subject, &body)?;
         // A single path is accepted as well as a list; objects may carry a
         // display `filename` next to the `path`.
         let refs: Vec<attach::AttachmentRef> = match req.params.get("attachments") {
@@ -264,5 +274,18 @@ impl Tool for MailSaveAttachment {
             "mail_save_attachment",
             json!({ "path": path, "name": att.filename, "size": att.bytes.len() }),
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn empty_email_is_refused() {
+        assert!(check_has_content("", "").is_err());
+        assert!(check_has_content("  ", "\n").is_err());
+        assert!(check_has_content("Report", "").is_ok());
+        assert!(check_has_content("", "hello").is_ok());
     }
 }

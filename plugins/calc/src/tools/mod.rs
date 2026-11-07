@@ -162,16 +162,26 @@ fn rows_to_cells(rows: &[Value]) -> Map<String, Value> {
     map
 }
 
-fn incoming_cells(req: &ToolRequest<'_>) -> Result<Map<String, Value>, AppError> {
-    normalize_cells(incoming_cells_raw(req)?)
+fn incoming_cells(params: &Value) -> Result<Map<String, Value>, AppError> {
+    normalize_cells(incoming_cells_raw(params)?)
+}
+
+/// `calc_create`'s optional seed cells: none given is an empty sheet, but
+/// cells that are given are checked exactly like `calc_write` checks them, so
+/// a bad reference is an error instead of a silently empty sheet.
+fn initial_cells(params: &Value) -> Result<Map<String, Value>, AppError> {
+    match incoming_cells_raw(params) {
+        Ok(raw) => normalize_cells(raw),
+        Err(_) => Ok(Map::new()),
+    }
 }
 
 /// See `incoming_cells` for the accepted param shapes.
-fn incoming_cells_raw(req: &ToolRequest<'_>) -> Result<Map<String, Value>, AppError> {
-    if let Some(obj) = req.params.get("cells").and_then(|v| v.as_object()) {
+fn incoming_cells_raw(params: &Value) -> Result<Map<String, Value>, AppError> {
+    if let Some(obj) = params.get("cells").and_then(|v| v.as_object()) {
         return Ok(obj.clone());
     }
-    if let Some(arr) = req.params.get("cells").and_then(|v| v.as_array()) {
+    if let Some(arr) = params.get("cells").and_then(|v| v.as_array()) {
         let mut map = Map::new();
         for item in arr {
             if let Some(pair) = item.as_array() {
@@ -188,24 +198,24 @@ fn incoming_cells_raw(req: &ToolRequest<'_>) -> Result<Map<String, Value>, AppEr
         }
         return Ok(map);
     }
-    if let Some(cell) = req.params.get("cell").and_then(|v| v.as_object()) {
+    if let Some(cell) = params.get("cell").and_then(|v| v.as_object()) {
         return Ok(cell.clone());
     }
     // A table of rows — `data: [["Item","Cost"],["Flights",184]]` — is how
     // models write a sheet when they do not think in cell names. Row 1 is A1.
     for key in ["data", "rows", "values", "table"] {
-        if let Some(rows) = req.params.get(key).and_then(|v| v.as_array()) {
+        if let Some(rows) = params.get(key).and_then(|v| v.as_array()) {
             if rows.iter().all(|r| r.is_array()) && !rows.is_empty() {
                 return Ok(rows_to_cells(rows));
             }
         }
     }
-    if let (Some(r), Some(v)) = (req.params.param_str("ref"), req.params.get("value")) {
+    if let (Some(r), Some(v)) = (params.param_str("ref"), params.get("value")) {
         let mut map = Map::new();
         map.insert(r, v.clone());
         return Ok(map);
     }
-    if let Some(obj) = req.params.as_object() {
+    if let Some(obj) = params.as_object() {
         const KNOWN: &[&str] = &["sheet_id", "title", "cells", "cell", "ref", "value", "rows", "cols", "name"];
         let mut map = Map::new();
         for (k, v) in obj {
@@ -296,7 +306,7 @@ impl Tool for CalcCreate {
 
         // Optional initial cells: one call creates AND fills the sheet, so the
         // model can't leave an empty document behind.
-        let cells_map = incoming_cells(&req).unwrap_or_default();
+        let cells_map = initial_cells(req.params)?;
         let count = cells_map.len();
         let cells_json = serde_json::to_string(&cells_map)?;
 
@@ -372,7 +382,7 @@ impl Tool for CalcWrite {
     }
 
     async fn invoke(&self, ctx: &PluginCtx, req: ToolRequest<'_>) -> Result<ActionOutcome, AppError> {
-        let incoming = incoming_cells(&req)?;
+        let incoming = incoming_cells(req.params)?;
 
         let sheet_id = resolve_sheet_id(ctx.pool().await, req.traveler_id, req.params.param_str("sheet_id"))
             .await?
@@ -588,14 +598,19 @@ impl Tool for CalcDelete {
     fn aliases(&self) -> &[&str] { &["delete_sheet", "delete_spreadsheet", "remove_sheet"] }
     fn step_label(&self) -> &str { "Deleting spreadsheet…" }
     fn doc_fragment(&self) -> Option<&str> {
-        Some("- `calc_delete` — Delete a spreadsheet. params: `{ sheet_id: string }`")
+        Some("- `calc_delete` — Delete a spreadsheet. params: `{ sheet_id: string, confirm: true }` — `sheet_id` (UUID or exact title) is required.")
     }
     fn humanize(&self, _r: &str, _d: &Value) -> String {
         "Spreadsheet deleted".into()
     }
 
     async fn invoke(&self, ctx: &PluginCtx, req: ToolRequest<'_>) -> Result<ActionOutcome, AppError> {
-        let sheet_id = req.params.require_str("sheet_id")?;
+        // Required: a delete never falls back to the most recent sheet. The
+        // id or the title is accepted, like every other calc tool.
+        let given = req.params.require_str("sheet_id")?;
+        if given.trim().is_empty() {
+            return Err(AppError::BadRequest("sheet_id required".into()));
+        }
 
         // Deleting a spreadsheet is permanent and irreversible. The model must
         // pass confirm:true — accidental "delete the content" requests should
@@ -610,6 +625,9 @@ impl Tool for CalcDelete {
             ));
         }
 
+        let Some(sheet_id) = resolve_sheet_id(ctx.pool().await, req.traveler_id, Some(given)).await? else {
+            return Ok(ActionOutcome::error("calc_delete", "Spreadsheet not found"));
+        };
         let result = sqlx::query("DELETE FROM spreadsheets WHERE id = ?1 AND user_id = ?2")
             .bind(&sheet_id)
             .bind(req.traveler_id)
@@ -638,5 +656,37 @@ mod table_tests {
         assert_eq!(cells["B2"], 184);
         assert_eq!(cells["B3"], "=SUM(B2:B2)");
         assert_eq!(cells.len(), 6);
+    }
+}
+
+#[cfg(test)]
+mod cell_tests {
+    use super::{incoming_cells, initial_cells, resolve_sheet_id};
+    use serde_json::json;
+
+    #[test]
+    fn create_seed_cells_are_checked_like_write() {
+        assert!(initial_cells(&json!({ "title": "Budget" })).unwrap().is_empty());
+        let ok = initial_cells(&json!({ "title": "Budget", "cells": { "a1": 5 } })).unwrap();
+        assert_eq!(ok["A1"], "5");
+        let bad = json!({ "title": "Budget", "cells": { "Total": "5" } });
+        let create_err = initial_cells(&bad).unwrap_err().to_string();
+        let write_err = incoming_cells(&bad).unwrap_err().to_string();
+        assert_eq!(create_err, write_err);
+        assert!(create_err.contains("invalid cell ref"), "{create_err}");
+    }
+
+    #[tokio::test]
+    async fn sheet_id_resolves_by_title_and_never_guesses_when_given() {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::query("CREATE TABLE spreadsheets (id TEXT, user_id TEXT, title TEXT, updated_at TEXT)")
+            .execute(&pool).await.unwrap();
+        sqlx::query("INSERT INTO spreadsheets VALUES ('id-1','u','Budget','2026-01-01'), ('id-2','u','Other','2026-02-01')")
+            .execute(&pool).await.unwrap();
+        let r = |s: &str| resolve_sheet_id(&pool, "u", Some(s.to_string()));
+        assert_eq!(r("budget").await.unwrap().as_deref(), Some("id-1"));
+        assert_eq!(r("id-1").await.unwrap().as_deref(), Some("id-1"));
+        // An unknown name is not found, not the latest sheet.
+        assert_eq!(r("Missing").await.unwrap(), None);
     }
 }

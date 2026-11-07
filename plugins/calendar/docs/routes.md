@@ -6,7 +6,7 @@ All routes are `auth`, registered in [`src/plugin.rs`](../src/plugin.rs).
 |---|---|---|---|
 | `GET` | `/api/calendar/events` | `?month=` / `?from=&to=` / `?date=` | List events in a range or day. |
 | `POST` | `/api/calendar/events` | `{ title, date, start_time?, end_time?, location?, description?, all_day? }` | Create. |
-| `PUT` | `/api/calendar/events/:id` | partial event fields | Update. |
+| `PUT` | `/api/calendar/events/:id` | partial event fields | Update. All-day events (create or update) store no times. |
 | `DELETE` | `/api/calendar/events/:id` | — | Delete. |
 
 Responses use `{ "success": true, "data": … }`. Path params arrive via the

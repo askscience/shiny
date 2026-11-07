@@ -219,14 +219,30 @@ fn all_pages(doc: &Document) -> Result<Vec<usize>, AppError> {
     Ok((0..pdfcraft_organize::page_count(doc).map_err(bad)?).collect())
 }
 
-/// A translucent diagonal watermark on every page (replacing an earlier one).
-pub fn watermark(bytes: &[u8], text: &str, opacity: f64) -> Result<Vec<u8>, AppError> {
+/// A translucent diagonal watermark on `pages` (0-based; `None` or empty =
+/// every page). An earlier watermark is removed from every page first, so the
+/// document keeps a single watermark.
+pub fn watermark(bytes: &[u8], pages: Option<&[usize]>, text: &str, opacity: f64) -> Result<Vec<u8>, AppError> {
     let text = text.trim();
     if text.is_empty() {
         return Err(AppError::BadRequest("watermark text must not be empty".into()));
     }
     edit_doc(bytes, |doc| {
-        let pages = all_pages(doc)?;
+        let every = all_pages(doc)?;
+        let targets = match pages {
+            Some(p) if !p.is_empty() => {
+                let mut p = p.to_vec();
+                p.sort_unstable();
+                p.dedup();
+                if let Some(&bad_page) = p.iter().find(|&&i| i >= every.len()) {
+                    return Err(AppError::BadRequest(format!(
+                        "page {bad_page} is out of range (the PDF has {} pages, numbered from 0)", every.len()
+                    )));
+                }
+                p
+            }
+            _ => every.clone(),
+        };
         let wm = pdfcraft_edit::Watermark {
             text: text.to_string(),
             opacity: opacity.clamp(0.05, 1.0),
@@ -235,7 +251,8 @@ pub fn watermark(bytes: &[u8], text: &str, opacity: f64) -> Result<Vec<u8>, AppE
         if let Some(c) = wm.first_undrawable() {
             return Err(AppError::BadRequest(format!("The character '{c}' cannot be used in a watermark")));
         }
-        pdfcraft_edit::add_watermark(doc, &pages, &wm, true).map_err(bad)
+        pdfcraft_edit::remove_marks(doc, &every, pdfcraft_edit::MarkKind::Watermark).map_err(bad)?;
+        pdfcraft_edit::add_watermark(doc, &targets, &wm, false).map_err(bad)
     })
 }
 

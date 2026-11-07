@@ -103,6 +103,20 @@ fn coerce_slide(v: &Value) -> Slide {
 
 /// Parse the `slides` parameter. Accepts an array of slide objects, or a
 /// single slide object (treated as a one-slide deck).
+/// `slide_write`'s slide list: it replaces the whole deck, so a call without
+/// slides (missing, `null` or `[]`) is refused instead of emptying the deck.
+fn required_slides(params: &Value) -> Result<Vec<Slide>, AppError> {
+    let slides = coerce_slides(params.get("slides"))?;
+    if slides.is_empty() {
+        return Err(AppError::BadRequest(
+            "slides required — slide_write replaces the whole deck, so pass the complete slide list \
+             (use slide_edit to change or add one slide)"
+                .into(),
+        ));
+    }
+    Ok(slides)
+}
+
 fn coerce_slides(value: Option<&Value>) -> Result<Vec<Slide>, AppError> {
     let Some(v) = value else {
         return Ok(Vec::new());
@@ -200,7 +214,7 @@ impl Tool for SlideWrite {
     fn aliases(&self) -> &[&str] { &["write_presentation", "set_slides", "rewrite_deck"] }
     fn step_label(&self) -> &str { "Writing slides…" }
     fn doc_fragment(&self) -> Option<&str> {
-        Some("- `slide_write` — Replace the ENTIRE slide list of a presentation (and optionally its title/theme). params: `{ deck_id?: string, title?: string, theme?: string, slides: [slide, …] }` — without `deck_id` targets the most recently used presentation. Only use for full rewrites; always pass the complete slide list. Slides carry `transition` (none|fade|slide|push|zoom) and `reveal` (all|bullets) too — copy them from `slide_read` when rewriting, since the list you pass replaces everything.")
+        Some("- `slide_write` — Replace the ENTIRE slide list of a presentation (and optionally its title/theme). params: `{ deck_id?: string, title?: string, theme?: string, slides: [slide, …] }` — without `deck_id` targets the most recently used presentation. Only use for full rewrites; always pass the complete slide list (missing or empty `slides` is refused). Slides carry `transition` (none|fade|slide|push|zoom) and `reveal` (all|bullets) too — copy them from `slide_read` when rewriting, since the list you pass replaces everything.")
     }
     fn humanize(&self, _r: &str, data: &Value) -> String {
         let title = data.get("title").and_then(|v| v.as_str()).unwrap_or("presentation");
@@ -209,7 +223,7 @@ impl Tool for SlideWrite {
     }
 
     async fn invoke(&self, ctx: &PluginCtx, req: ToolRequest<'_>) -> Result<ActionOutcome, AppError> {
-        let slides = coerce_slides(req.params.get("slides"))?;
+        let slides = required_slides(req.params)?;
         let count = slides.len();
         let deck_id = match req.params.param_str("deck_id") {
             Some(id) if !id.trim().is_empty() => id,
@@ -507,5 +521,13 @@ mod tests {
         let junk = coerce_slide(&json!({ "transition": "spin", "reveal": "later" }));
         assert_eq!(junk.transition, "none");
         assert_eq!(junk.reveal, "all");
+    }
+
+    #[test]
+    fn slide_write_refuses_without_slides() {
+        for params in [json!({}), json!({ "slides": null }), json!({ "slides": [] })] {
+            assert!(matches!(required_slides(&params), Err(AppError::BadRequest(_))), "{params}");
+        }
+        assert_eq!(required_slides(&json!({ "slides": [{ "title": "T" }] })).unwrap().len(), 1);
     }
 }

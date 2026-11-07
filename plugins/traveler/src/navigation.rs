@@ -16,7 +16,7 @@ pub async fn build_navigation_session(
     from_lon: f64,
     params: &Value,
 ) -> Result<NavigationSession, AppError> {
-    let profile = params.param_str("profile").unwrap_or_else(|| "car".into());
+    let profile = osm::route_profile(params.param_str("profile").as_deref()).to_string();
 
     let (to_lat, to_lon, dest_name) = if let Some(dest) = params.param_str("destination") {
         let place = osm_client.geocode_near(&dest, from_lat, from_lon, Some(8)).await?;

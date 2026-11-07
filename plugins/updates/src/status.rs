@@ -39,11 +39,16 @@ pub fn has_cache() -> bool {
 fn cached_fresh() -> Option<UpdateStatus> {
     let guard = cache().lock().ok()?;
     let entry = guard.as_ref()?;
-    if entry.at.elapsed() < CACHE_TTL {
-        Some(entry.status.clone())
-    } else {
-        None
-    }
+    let age = entry.at.elapsed();
+    (age < CACHE_TTL).then(|| from_cache(entry.status.clone(), age))
+}
+
+/// Mark a snapshot served from the cache: `cached` is always true, `stale`
+/// only once the snapshot is older than the freshness window.
+fn from_cache(mut status: UpdateStatus, age: Duration) -> UpdateStatus {
+    status.cached = true;
+    status.stale = age >= CACHE_TTL;
+    status
 }
 
 fn put(status: UpdateStatus) {
@@ -109,9 +114,9 @@ pub fn snapshot() -> UpdateStatus {
         .lock()
         .ok()
         .and_then(|g| g.as_ref().map(|c| (c.status.clone(), c.at.elapsed())));
-    if let Some((mut s, age)) = cached {
-        if age >= CACHE_TTL {
-            s.stale = true;
+    if let Some((s, age)) = cached {
+        let s = from_cache(s, age);
+        if s.stale {
             spawn_refresh();
         }
         return s;
@@ -132,8 +137,7 @@ fn spawn_refresh() {
 /// Build a status snapshot. `force` bypasses the cache.
 pub fn collect(force: bool) -> UpdateStatus {
     if !force {
-        if let Some(mut cached) = cached_fresh() {
-            cached.stale = true;
+        if let Some(cached) = cached_fresh() {
             return cached;
         }
     }
@@ -168,6 +172,7 @@ pub fn collect(force: bool) -> UpdateStatus {
         packages,
         checked_at: now_secs(),
         stale: false,
+        cached: false,
         error,
         ollama: ollama::status(),
     };
@@ -176,4 +181,52 @@ pub fn collect(force: bool) -> UpdateStatus {
         put(status.clone());
     }
     status
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::OllamaStatus;
+
+    fn sample() -> UpdateStatus {
+        UpdateStatus {
+            distro: DistroInfo {
+                id: "debian".into(),
+                name: "Debian".into(),
+                version: Some("13".into()),
+                id_like: vec![],
+                manager: "apt".into(),
+                manager_label: "APT".into(),
+                supported: true,
+            },
+            packages: vec![],
+            count: 0,
+            checked_at: 0,
+            stale: false,
+            cached: false,
+            error: None,
+            ollama: OllamaStatus {
+                installed: false,
+                path: None,
+                version: None,
+                service: None,
+                update_command: String::new(),
+                can_update: false,
+            },
+        }
+    }
+
+    #[test]
+    fn fresh_cache_is_cached_but_not_stale() {
+        let s = from_cache(sample(), Duration::from_secs(10));
+        assert!(s.cached);
+        assert!(!s.stale, "a fresh cached answer is not out of date");
+    }
+
+    #[test]
+    fn old_cache_is_stale() {
+        let s = from_cache(sample(), CACHE_TTL + Duration::from_secs(1));
+        assert!(s.cached);
+        assert!(s.stale);
+    }
 }

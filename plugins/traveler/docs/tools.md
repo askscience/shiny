@@ -14,15 +14,15 @@ cards. All are wrapped with `bridged(...)` in
 | `get_trip` | `{ trip_id }` | One trip. |
 | `get_active_trip` | `{}` | The active trip, or none. |
 | `start_trip` | `{ trip_id }` | Starts it (status `active`). |
-| `end_trip` | `{ trip_id }` | Ends it (status `ended`). |
-| `trip_stats` | `{ trip_id }` | Distance/duration stats. |
+| `end_trip` | `{ trip_id }` | Ends it (status `completed`). |
+| `trip_stats` | `{ trip_id }` | `total_distance_km`, `total_duration_hours`, `point_count`, `avg_speed_kmh`, `start_location`, `end_location` (first/last GPS point). Duration: trip start (else first point) → trip end (else now while active, else last point); fields with no data are `null`. |
 
 ## Locations
 
 | Tool | Params | Returns |
 |---|---|---|
 | `submit_location` | `{ latitude, longitude, altitude?, speed?, heading?, accuracy?, trip_id? }` | Records a GPS point (attaches to the active trip by default). |
-| `list_locations` | `{ trip_id?, limit? }` | Points. |
+| `list_locations` | `{ trip_id?, limit? }` | Points (`limit` default 50, clamped to `1..=200`). |
 | `trip_route` | `{ trip_id }` | Ordered points for the route. |
 
 ## Maps
@@ -31,7 +31,7 @@ cards. All are wrapped with `bridged(...)` in
 |---|---|---|
 | `map_search` | `{ q, limit? }` | Geocoding results (Nominatim). |
 | `map_reverse` | `{ lat, lon }` | Address for coordinates. |
-| `map_route` | `{ to_lat, to_lon, profile? }` | Route geometry + steps (OSRM). |
+| `map_route` | `{ to_lat, to_lon, from_lat?, from_lon?, profile? }` | Route geometry + steps (OSRM). |
 | `map_poi` | `{ amenity, radius?, lat?, lon? }` | Nearby POIs (Overpass). |
 | `navigate_to` | `{ destination, profile? }` | Starts turn-by-turn navigation; emits a `NavigationSession`. |
 
@@ -39,9 +39,9 @@ cards. All are wrapped with `bridged(...)` in
 
 | Tool | Params | Returns |
 |---|---|---|
-| `list_diary` | `{}` | Diary entries. |
+| `list_diary` | `{ limit? }` | Diary entries (`limit` default 20, clamped to `1..=200`). |
 | `get_diary` | `{ date }` | One entry. |
-| `search_diary` | `{ query }` | Matching entries. |
+| `search_diary` | `{ q, limit? }` | Matching entries (`limit` default 20, clamped to `1..=200`). |
 | `generate_diary` | `{ date? }` | Generates an entry (Ollama). |
 
 ## Planning
@@ -73,3 +73,8 @@ and saved to the user's artifact store, tagged with the owning plugin.
   unreachable the tool errors rather than inventing data.
 - Geocoding `limit` values are clamped to `1..=20` before the request leaves
   the process, so a caller cannot ask Nominatim for an unbounded result set.
+- `profile` (`map_route`, `navigate_to`, `plan_trip`) is normalised by
+  `shiny_osm::route_profile` to `car`, `bike` or `foot` — synonyms such as
+  `driving`, `cycling`/`bicycle` and `walking` map onto them, and anything
+  missing or unknown becomes `car`. Only that canonical name reaches the OSRM
+  URL; raw input is never interpolated.

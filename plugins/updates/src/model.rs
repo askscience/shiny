@@ -41,8 +41,13 @@ pub struct UpdateStatus {
     pub count: usize,
     /// Unix seconds when the list was collected.
     pub checked_at: i64,
-    /// True when the answer came from cache rather than a fresh query.
+    /// True when the cached answer is older than the freshness window
+    /// (5 minutes); a background refresh is then already under way.
     pub stale: bool,
+    /// True when the answer came from the in-memory cache rather than a
+    /// query run for this call.
+    #[serde(default)]
+    pub cached: bool,
     /// Set when the query failed (unsupported distro, timeout, …).
     pub error: Option<String>,
     pub ollama: OllamaStatus,

@@ -13,7 +13,7 @@ Reads are capped at 256 KB.
 | `file_move` | `move_file`, `rename_file` | `{ from, to }` | `{ from, to }` |
 | `file_copy` | `copy_file`, `duplicate_file` | `{ from, to }` | `{ from, to }` |
 | `file_delete` | `delete_file`, `remove_file`, `trash_file` | `{ path: string }` | `{ trashed }` (or `{ deleted }` when already in `.Trash`); moves to Trash |
-| `file_restore` | `restore_file`, `undelete_file` | `{ name: string }` (or `path`) | `{ restored }` — entry name inside `.Trash` |
+| `file_restore` | `restore_file`, `undelete_file` | `{ name: string }` (or `path`) | `{ restored }` — `name` is the entry name inside `.Trash` or the `.Trash/<name>` path `file_delete` returned; restores to the home root |
 | `file_search` | `search_files`, `find_file` | `{ query: string, path?: string }` | `{ query, results, count }` — case-insensitive name contains, min 2 chars, max 100; results are entries as in `file_list`; skips `.Trash` and `.cache` |
 | `file_info` | `stat_file`, `file_details` | `{ path: string }` | `{ path, kind, size, modified, mime, is_image, is_text, is_pdf, is_office }` |
 
@@ -24,7 +24,8 @@ Reads are capped at 256 KB.
 - Prefer `file_list` to discover names rather than guessing.
 - Read before writing when intent depends on current content.
 - `file_delete` is recoverable (`file_restore`); permanent delete only happens
-  if the path is already inside `.Trash`.
+  if the path is already inside `.Trash` (checked after normalising, so
+  `./.Trash/x` is deleted for good, not trashed again).
 - Never invent absolute paths or `..`.
 
 ## Step labels & humanize

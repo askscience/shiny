@@ -166,6 +166,9 @@ impl OsmClient {
         to_lon: f64,
         profile: &str,
     ) -> Result<RouteResult, AppError> {
+        // Never interpolate caller input: only a canonical profile name
+        // (`car` / `bike` / `foot`) ever reaches the URL path.
+        let profile = route_profile(Some(profile));
         let url = format!(
             "https://router.project-osrm.org/route/v1/{}/{},{};{},{}?steps=true&geometries=geojson&overview=full",
             profile, from_lon, from_lat, to_lon, to_lat
@@ -350,6 +353,19 @@ fn normalize_destination_query(raw: &str) -> String {
     q.trim_end_matches(|c: char| c.is_ascii_punctuation()).trim().to_string()
 }
 
+/// Canonical OSRM routing profile for a user/model-supplied one: `car`
+/// (also `driving`, `drive`, `auto`, `motorcar`), `bike` (`cycling`,
+/// `bicycle`, `cycle`) or `foot` (`walking`, `walk`, `pedestrian`, `hiking`).
+/// Missing or unknown values fall back to `car`.
+pub fn route_profile(input: Option<&str>) -> &'static str {
+    let p = input.unwrap_or("").trim().to_ascii_lowercase();
+    match p.as_str() {
+        "bike" | "cycling" | "bicycle" | "cycle" | "biking" => "bike",
+        "foot" | "walking" | "walk" | "pedestrian" | "hiking" | "on foot" => "foot",
+        _ => "car",
+    }
+}
+
 pub fn place_label(place: &GeoPlace) -> String {
     place
         .name
@@ -398,4 +414,21 @@ fn score_place(place: &GeoPlace, query: &str, near_lat: f64, near_lon: f64) -> f
     }
 
     score
+}
+
+#[cfg(test)]
+mod tests {
+    use super::route_profile;
+
+    #[test]
+    fn route_profile_is_canonical_and_never_raw() {
+        assert_eq!(route_profile(None), "car");
+        assert_eq!(route_profile(Some("driving")), "car");
+        assert_eq!(route_profile(Some(" Cycling ")), "bike");
+        assert_eq!(route_profile(Some("bicycle")), "bike");
+        assert_eq!(route_profile(Some("walking")), "foot");
+        assert_eq!(route_profile(Some("foot")), "foot");
+        assert_eq!(route_profile(Some("car/../../x?y=1")), "car");
+        assert_eq!(route_profile(Some("helicopter")), "car");
+    }
 }

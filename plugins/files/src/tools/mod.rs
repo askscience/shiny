@@ -289,7 +289,7 @@ impl Tool for FileDelete {
         if tokio::fs::symlink_metadata(&path).await.is_err() {
             return Err(AppError::NotFound("file not found".into()));
         }
-        if rel == fs_util::TRASH_DIR || rel.starts_with(&format!("{}/", fs_util::TRASH_DIR)) {
+        if fs_util::is_in_trash(&rel) {
             fs_util::delete_permanent(&path).await?;
             return Ok(ActionOutcome::ok(
                 "file_delete",
@@ -311,7 +311,7 @@ impl Tool for FileRestore {
     fn aliases(&self) -> &[&str] { &["restore_file", "undelete_file"] }
     fn step_label(&self) -> &str { "Restoring…" }
     fn doc_fragment(&self) -> Option<&str> {
-        Some("- `file_restore` — Restore something from Trash back to the home folder. params: `{ name: string }` — the entry name inside `.Trash`.")
+        Some("- `file_restore` — Restore something from Trash back to the home folder. params: `{ name: string }` — the entry name inside `.Trash`, or the `.Trash/…` path `file_delete` returned.")
     }
     fn humanize(&self, _r: &str, data: &Value) -> String {
         let p = data.get("restored").and_then(|v| v.as_str()).unwrap_or("item");

@@ -89,7 +89,6 @@ impl Tool for PdfCreate {
             .filter(|t| !t.trim().is_empty())
             .unwrap_or_else(|| "Untitled".into());
         let content = req.params.param_str("content").unwrap_or_default();
-        let css = req.params.param_str("css").unwrap_or_default();
         let format = req.params.param_str("format").unwrap_or_else(|| {
             if req.params.param_bool("plain").unwrap_or(false) {
                 "plain".to_string()
@@ -97,7 +96,6 @@ impl Tool for PdfCreate {
                 "auto".to_string()
             }
         });
-        let _ = css;
         let opts = ops::CreateOptions {
             title: Some(title.clone()),
             page_numbers: req.params.param_bool("page_numbers").unwrap_or(false),
@@ -496,7 +494,7 @@ impl Tool for PdfWatermark {
     fn aliases(&self) -> &[&str] { &["watermark_pdf", "add_watermark"] }
     fn step_label(&self) -> &str { "Adding watermark…" }
     fn doc_fragment(&self) -> Option<&str> {
-        Some("- `pdf_watermark` — Add a diagonal text watermark. params: `{ pdf_id?: string, text: string, pages?: number[], all?: boolean }` — omitting `pages` (or `all:true`) watermarks every page.")
+        Some("- `pdf_watermark` — Add a diagonal text watermark. params: `{ pdf_id?: string, text: string, pages?: number[], all?: boolean }` — `pages` are 0-based page indexes; omitting `pages` (or `all:true`) watermarks every page. Replaces an earlier watermark.")
     }
     fn humanize(&self, _r: &str, data: &Value) -> String {
         let title = data.get("title").and_then(|v| v.as_str()).unwrap_or("PDF");

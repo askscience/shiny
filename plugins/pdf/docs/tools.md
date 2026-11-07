@@ -10,7 +10,7 @@ document. Every modifying tool is undoable (`pdf_undo`).
 | `pdf_list` · `pdf_read` | `{}` · `{ pdf_id?, page? }` | List · text in reading order. |
 | `pdf_annotate` | `{ pdf_id?, page?, kind, rect, text?, color? }` | Real comment: `highlight`, `underline`, `strikeout`, `squiggly`, `note`, `free_text`, `box`, `oval`, `link`. |
 | `pdf_add_note` | `{ pdf_id?, page?, text, x?, y? }` | Comment at a point. |
-| `pdf_watermark` | `{ pdf_id?, text }` | Removable watermark on every page (`pages`/`all` are parsed but ignored). |
+| `pdf_watermark` | `{ pdf_id?, text, pages?, all? }` | Removable watermark on the listed 0-based `pages`; every page when `pages` is omitted/empty or `all:true`. Replaces an earlier watermark. |
 | `pdf_rotate` · `pdf_delete_pages` · `pdf_reorder` · `pdf_merge` | `{ pdf_id?, degrees?, pages?, all? }` · `{ pdf_id?, pages }` · `{ pdf_id?, order }` · `{ pdf_id?, other_id }` | Pages. |
 | `pdf_replace_text` | `{ pdf_id?, page?, old, new }` | Find & replace in a PDF's own text (keeps the font). |
 | `pdf_undo` | `{ pdf_id?, redo? }` | History. |

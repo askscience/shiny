@@ -260,3 +260,34 @@ fn table_cells_are_separate_runs() {
     let runs = ops::page_text_runs(&b, 0).unwrap();
     assert!(runs.iter().any(|r| r.text == "Service"), "{:?}", runs.iter().map(|r| &r.text).collect::<Vec<_>>());
 }
+
+#[test]
+fn watermark_honours_selected_pages() {
+    let b = md("uno\n\n\\pagebreak\n\ndue\n\n\\pagebreak\n\ntre");
+    let only = ops::add_watermark(&b, Some(&[1]), "BOZZA").unwrap();
+    assert!(!page_text(&only, 0).contains("BOZZA"), "{}", page_text(&only, 0));
+    assert!(page_text(&only, 1).contains("BOZZA"), "{}", page_text(&only, 1));
+    assert!(!page_text(&only, 2).contains("BOZZA"), "{}", page_text(&only, 2));
+    // A new watermark replaces the old one everywhere, not just on its pages.
+    let moved = ops::add_watermark(&only, Some(&[0]), "FINALE").unwrap();
+    assert!(page_text(&moved, 0).contains("FINALE"));
+    assert!(!all_text(&moved).contains("BOZZA"), "{}", all_text(&moved));
+    // No pages (or an empty list) = every page.
+    for pages in [None, Some(&[][..])] {
+        let every = ops::add_watermark(&b, pages, "BOZZA").unwrap();
+        assert!((0..3).all(|p| page_text(&every, p).contains("BOZZA")));
+    }
+    assert!(ops::add_watermark(&b, Some(&[3]), "BOZZA").is_err());
+}
+
+#[test]
+fn link_kind_is_case_insensitive() {
+    let b = md("x");
+    let out = ops::annotate(&b, 0, "Link", &[[64.0, 770.0, 50.0, 12.0]], "example.com", None, 12.0, "me").unwrap();
+    let doc = craft::open(&out).unwrap();
+    let links = pdfcraft_annot::links::list(&doc);
+    assert_eq!(links.len(), 1);
+    assert!(matches!(&links[0].action, pdfcraft_annot::links::LinkAction::Uri(u) if u == "https://example.com"));
+    // A link is not a comment, so it never shows its address as comment text.
+    assert!(craft::comments(&out).unwrap().is_empty());
+}

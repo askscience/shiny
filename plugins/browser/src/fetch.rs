@@ -1,9 +1,11 @@
-//! Fetching a filtered document as text, for the AI tools.
+//! Fetching a document as text, for the AI tools (`browser_read`,
+//! `navigate?format=text`).
 //!
-//! The request goes through the same proxy the window renders through, which
-//! matters for two reasons: the page the model reads is the page the user
-//! would see (ads and trackers already removed), and the shell-out happens
-//! through the one code path that is already tested.
+//! There is no proxy in the way: the URL is checked by the shared SSRF guard
+//! (`preview::ensure_public_target`), then fetched directly with the shared
+//! Chrome-impersonating client, DNS pinned to the checked addresses and
+//! redirects off. The body is size-capped and reduced to plain text by
+//! [`html_to_text`]; no ad or tracker filtering is applied to it.
 
 use std::time::Duration;
 
@@ -13,10 +15,9 @@ use shiny_plugin_sdk::errors::AppError;
 
 /// What a browser sends when it is asking for a document.
 ///
-/// The proxy classifies a request by `Sec-Fetch-Dest`, then `Accept`, then the
-/// URL's extension. A tool fetch has none of those, so without this header a
-/// page read is `other`: it is not counted as a document and a mislabelled
-/// response is not recognised as HTML.
+/// Server-side fetches (tool reads, previews, site and news lookups) send it so
+/// sites that negotiate on `Accept` answer with the HTML page a browser would
+/// get, rather than JSON, a bot page or a bare `*/*` fallback.
 pub const ACCEPT_HTML: &str =
     "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
 
@@ -24,7 +25,7 @@ pub const ACCEPT_HTML: &str =
 /// merely huge page must not be able to balloon the server's memory.
 const MAX_TEXT_BYTES: usize = 2 * 1024 * 1024;
 
-/// Fetch `url` through the plugin's own filter proxy and return its text.
+/// Fetch `url` directly (after the SSRF check) and return its text.
 ///
 /// The client is the shared impersonating one, so the request carries the same
 /// Chrome TLS/HTTP2 fingerprint and `User-Agent` as every other browser fetch
@@ -47,10 +48,8 @@ pub async fn text(url: &str) -> Result<String, AppError> {
 
     let mut response = client
         .get(url)
-        // A real browser asks for a document. Without this the proxy has no
-        // `Sec-Fetch-Dest` and no `Accept` to classify by, so a page read is
-        // counted as `other` (no document metrics) and its HTML is not sniffed
-        // when the origin mislabels the response.
+        // Ask for a document the way a real browser does, so the origin
+        // serves its HTML page.
         .header("accept", ACCEPT_HTML)
         .send()
         .await

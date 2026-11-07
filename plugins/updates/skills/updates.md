@@ -20,8 +20,11 @@ The plugin detects the distribution and uses its native package manager:
   updates. params: `{ force?: boolean }` (`force: true` re-queries instead of
   using the cache). Read-only, no password. Returns
   `{ distro, packages: [{name, current, candidate, repo}], count, checked_at,
-  stale, error, ollama: {installed, path, version, service, update_command,
-  can_update}, summary }`.
+  stale, cached, error, ollama: {installed, path, version, service,
+  update_command, can_update}, summary }`. `cached: true` means the list came
+  from the in-memory cache; `stale: true` means that cached list is older than
+  5 minutes (a background refresh is already running) — pass `force: true` if
+  the user needs the current state.
 - **`updates_distro`** — Report the detected distribution and package manager.
   params: `{}`. Read-only. Returns `{ distro: {id, name, version, id_like,
   manager, manager_label, supported} }`.

@@ -12,7 +12,7 @@ PDFs are stored server-side as real **.pdf** bytes and open in the PDF window. P
 - `pdf_delete_pages` — `{"action":"pdf_delete_pages","params":{"pdf_id":"…","pages":[1]}}`
 - `pdf_reorder` — `{"action":"pdf_reorder","params":{"pdf_id":"…","order":[2,0,1]}}` — the document becomes exactly these pages (repeats are copies).
 - `pdf_merge` — Append another PDF's pages to the end of `pdf_id`. `{"action":"pdf_merge","params":{"pdf_id":"…","other_id":"…"}}` — `other_id` required.
-- `pdf_watermark` — Diagonal translucent text (removable later as one mark). `{"action":"pdf_watermark","params":{"pdf_id":"…","text":"DRAFT"}}` — always marks every page.
+- `pdf_watermark` — Diagonal translucent text (removable later as one mark). `{"action":"pdf_watermark","params":{"pdf_id":"…","text":"DRAFT"}}` — marks every page; `pages` = 0-based page indexes (e.g. `[0,2]`) limits it to those pages (`all:true` forces every page). A new watermark replaces the earlier one.
 - `pdf_undo` — Undo the last edit (`"redo":true` re-applies). `{"action":"pdf_undo","params":{"pdf_id":"…"}}` → `{pdf_id, page_count, label, redo}`.
 - `pdf_delete` — Delete a PDF (not undoable). `{"action":"pdf_delete","params":{"pdf_id":"…"}}` — `pdf_id` required.
 

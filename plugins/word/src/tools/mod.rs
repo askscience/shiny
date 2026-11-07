@@ -470,6 +470,52 @@ async fn target_doc(ctx: &PluginCtx, req: &ToolRequest<'_>) -> Result<String, Ap
 
 /* ── doc_design ─────────────────────────────────────────────── */
 
+/// Merge `doc_design` params into a stored design: only the keys passed
+/// change. Margins are millimetres (0 = the 25 mm default) and go through the
+/// same `Design::validate` as the window's design route.
+fn apply_design_params(mut design: Design, p: &Value) -> Result<Design, AppError> {
+    if let Some(t) = p.param_str("template") {
+        let t = t.trim().to_ascii_lowercase();
+        design = design.with_template_defaults(if t == "plain" { "" } else { &t });
+    }
+    let flag = |k: &str| p.get(k).and_then(|v| v.as_bool().or_else(|| v.as_str().map(|s| s == "true")));
+    if let Some(v) = flag("cover") { design.cover = v; }
+    if let Some(v) = flag("toc") { design.toc = v; }
+    if let Some(v) = flag("header") { design.header = v; }
+    if let Some(v) = flag("page_numbers") { design.page_numbers = v; }
+    for (key, slot) in [
+        ("paper", &mut design.paper),
+        ("subtitle", &mut design.subtitle),
+        ("author", &mut design.author),
+        ("date", &mut design.date),
+        ("lang", &mut design.lang),
+        ("accent", &mut design.accent),
+    ] {
+        if let Some(v) = p.param_str(key) {
+            *slot = v.trim().to_string();
+        }
+    }
+    for (key, slot) in [
+        ("margin_top", &mut design.margin_top),
+        ("margin_right", &mut design.margin_right),
+        ("margin_bottom", &mut design.margin_bottom),
+        ("margin_left", &mut design.margin_left),
+    ] {
+        match p.get(key) {
+            None | Some(Value::Null) => {}
+            Some(v) => {
+                let mm = v
+                    .as_f64()
+                    .or_else(|| v.as_str().and_then(|s| s.trim().trim_end_matches("mm").trim().parse().ok()))
+                    .ok_or_else(|| AppError::BadRequest(format!("{key} must be a number of millimetres")))?;
+                *slot = mm as f32;
+            }
+        }
+    }
+    design.validate()?;
+    Ok(design)
+}
+
 pub struct DocDesign;
 
 #[async_trait]
@@ -478,7 +524,7 @@ impl Tool for DocDesign {
     fn aliases(&self) -> &[&str] { &["doc_layout", "format_document", "style_document"] }
     fn step_label(&self) -> &str { "Designing document…" }
     fn doc_fragment(&self) -> Option<&str> {
-        Some("- `doc_design` — Set how a document looks when exported (Word/PDF): params: `{ doc_id?, template?: \"plain\"|\"classic\"|\"modern\"|\"minimal\", cover?: bool, toc?: bool, header?: bool, page_numbers?: bool, paper?: \"a4\"|\"letter\", subtitle?, author?, date?, lang?, accent?: \"#RRGGBB\" }` — only the keys you pass change. Choosing a template turns on the header and page numbers unless you pass them.")
+        Some("- `doc_design` — Set how a document looks when exported (Word/PDF): params: `{ doc_id?, template?: \"plain\"|\"classic\"|\"modern\"|\"minimal\", cover?: bool, toc?: bool, header?: bool, page_numbers?: bool, paper?: \"a4\"|\"letter\", subtitle?, author?, date?, lang?, accent?: \"#RRGGBB\", margin_top?, margin_right?, margin_bottom?, margin_left? }` — margins in millimetres, 5–80 (0 = the 25 mm default); only the keys you pass change. Choosing a template turns on the header and page numbers unless you pass them.")
     }
     fn humanize(&self, _r: &str, data: &Value) -> String {
         let title = data.get("title").and_then(|v| v.as_str()).unwrap_or("document");
@@ -497,29 +543,11 @@ impl Tool for DocDesign {
         .ok_or_else(|| AppError::NotFound("Document not found".into()))?;
         let (title, stored) = row;
 
-        let p = req.params;
-        let mut design = Design::from_json(&stored);
-        if let Some(t) = p.param_str("template") {
-            let t = t.trim().to_ascii_lowercase();
-            design = design.with_template_defaults(if t == "plain" { "" } else { &t });
-        }
-        let flag = |k: &str| p.get(k).and_then(|v| v.as_bool().or_else(|| v.as_str().map(|s| s == "true")));
-        if let Some(v) = flag("cover") { design.cover = v; }
-        if let Some(v) = flag("toc") { design.toc = v; }
-        if let Some(v) = flag("header") { design.header = v; }
-        if let Some(v) = flag("page_numbers") { design.page_numbers = v; }
-        for (key, slot) in [
-            ("paper", &mut design.paper),
-            ("subtitle", &mut design.subtitle),
-            ("author", &mut design.author),
-            ("date", &mut design.date),
-            ("lang", &mut design.lang),
-            ("accent", &mut design.accent),
-        ] {
-            if let Some(v) = p.param_str(key) {
-                *slot = v.trim().to_string();
-            }
-        }
+        let design = match apply_design_params(Design::from_json(&stored), req.params) {
+            Ok(d) => d,
+            Err(AppError::BadRequest(msg)) => return Ok(ActionOutcome::error("doc_design", msg)),
+            Err(e) => return Err(e),
+        };
         if let Err(AppError::BadRequest(msg)) = design.validate() {
             return Ok(ActionOutcome::error("doc_design", msg));
         }
@@ -711,5 +739,23 @@ mod title_tests {
         assert_eq!(title_from_content("Intro line\n\n## Later heading").as_deref(), Some("Later heading"));
         assert_eq!(title_from_content("**Packing list**\n- socks").as_deref(), Some("Packing list"));
         assert_eq!(title_from_content("   \n").as_deref(), None);
+    }
+}
+
+#[cfg(test)]
+mod design_tests {
+    use super::apply_design_params;
+    use crate::engine::Design;
+    use serde_json::json;
+
+    #[test]
+    fn doc_design_reads_margins_in_millimetres() {
+        let start = Design { margin_left: 30.0, ..Default::default() };
+        let d = apply_design_params(start, &json!({ "margin_top": 20, "margin_bottom": "15", "margin_right": 0 })).unwrap();
+        assert_eq!((d.margin_top, d.margin_right, d.margin_bottom, d.margin_left), (20.0, 0.0, 15.0, 30.0));
+        // Same bounds as the window's design route.
+        assert!(apply_design_params(Design::default(), &json!({ "margin_left": 2 })).is_err());
+        assert!(apply_design_params(Design::default(), &json!({ "margin_left": 90 })).is_err());
+        assert!(apply_design_params(Design::default(), &json!({ "margin_left": "wide" })).is_err());
     }
 }

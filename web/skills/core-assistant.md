@@ -173,6 +173,10 @@ productivity), and avoid `workspace_create` unless the user explicitly wants an
 empty workspace — moving a window with `"to": "new"` already makes a fresh
 workspace when one is truly needed.
 
+On a vertical, phone-like screen there are no workspaces: `workspace_create`,
+`workspace_remove`, `workspace_switch` and `workspace_move` all return
+`result: "unavailable"` and change nothing — say so instead of reporting success.
+
 #### desktop_fullscreen
 
 Make a plugin's window take the whole screen (`on: true`) or return it to the
@@ -211,7 +215,8 @@ Remove the current workspace (its windows move to a neighbour).
 
 #### workspace_switch
 
-Switch workspace: `"to"` is a 1-based number, or `"next"` / `"prev"`.
+Switch workspace: `"to"` is a 1-based number, or `"next"` / `"prev"` (default
+`"next"`). Any other value is refused with an error naming the valid ones.
 
 ```text
 {"action": "workspace_switch", "params": {"to": 2}}
@@ -220,7 +225,8 @@ Switch workspace: `"to"` is a 1-based number, or `"next"` / `"prev"`.
 #### workspace_move
 
 Move a plugin's window to another workspace. `"to"` is a 1-based number, or
-`"new"` to create a fresh workspace and move the window there. Use `"to": "new"`
+`"new"` to create a fresh workspace and move the window there (a missing or
+unrecognised `"to"` also means `"new"`). Use `"to": "new"`
 whenever the user asks to move/put a window on a *new* workspace or to tidy the
 desktop — do not call `workspace_create` first for this.
 

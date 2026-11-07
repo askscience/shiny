@@ -498,8 +498,15 @@ call of its own) does not force the stop to wait for the whole batch.
 
 The workspace guard fires before dispatch and emits an explicit step. On a
 phone-like screen the core refuses `workspace_*` rather than claiming a
-workspace was created. (The tool implementations also guard, returning
-`result: "unavailable"`; the pre-check avoids even that.)
+workspace was created. (The tool implementations also guard: all four of
+`workspace_create`, `workspace_remove`, `workspace_switch` and `workspace_move`
+return `result: "unavailable"`; the pre-check avoids even that.)
+
+Targets are normalised in `agent_tools.rs` before they reach the frontend:
+`workspace_switch` takes a 1-based number, `"next"` or `"prev"` (missing →
+`"next"`) and refuses anything else with a `BadRequest` naming the valid values;
+`workspace_move` takes a 1-based number or `"new"`, and a missing or
+unrecognised target becomes `"new"`.
 
 ### 4.5 Handling a successful outcome
 

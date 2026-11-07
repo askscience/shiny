@@ -292,7 +292,7 @@ pub fn annotate(
         other => return Err(AppError::BadRequest(format!("unknown annotation kind: {other}"))),
     };
     let color = color.map(|c| [c[0] as f64, c[1] as f64, c[2] as f64]);
-    let note = if kind == "link" { "" } else { text };
+    let note = if matches!(mark, Mark::Link { .. }) { "" } else { text };
     Ok(crate::craft::add_mark(bytes, page, mark, note, color, author)?.0)
 }
 
@@ -302,7 +302,8 @@ pub fn ink(bytes: &[u8], page: usize, strokes: Vec<Vec<[f64; 2]>>, color: Option
     Ok(crate::craft::add_mark(bytes, page, crate::craft::Mark::Ink { strokes }, "", color, author)?.0)
 }
 
-/// A translucent diagonal watermark on every page (replaces an earlier one).
-pub fn add_watermark(bytes: &[u8], _pages: Option<&[usize]>, text: &str) -> Result<Vec<u8>, AppError> {
-    crate::craft::watermark(bytes, text, 0.25)
+/// A translucent diagonal watermark on `pages` (0-based; `None` or empty =
+/// every page). Replaces an earlier watermark.
+pub fn add_watermark(bytes: &[u8], pages: Option<&[usize]>, text: &str) -> Result<Vec<u8>, AppError> {
+    crate::craft::watermark(bytes, pages, text, 0.25)
 }

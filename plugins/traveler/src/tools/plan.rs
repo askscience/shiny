@@ -36,7 +36,7 @@ impl Tool for PlanTrip {
             .and_then(|v| v.as_u64())
             .unwrap_or(3)
             .max(1) as u32;
-        let profile = req.params.param_str("profile").unwrap_or_else(|| "car".into());
+        let profile = crate::osm::route_profile(req.params.param_str("profile").as_deref());
         let model = req.ctx.ollama_model.as_deref();
         let lang = req.ctx.lang.as_str();
 
@@ -49,7 +49,7 @@ impl Tool for PlanTrip {
         let from_lat = req.ctx.lat.unwrap_or(place.lat);
         let from_lon = req.ctx.lon.unwrap_or(place.lon);
         let route_opt = osm
-            .route(from_lat, from_lon, place.lat, place.lon, &profile)
+            .route(from_lat, from_lon, place.lat, place.lon, profile)
             .await
             .ok();
 

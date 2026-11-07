@@ -232,7 +232,6 @@ fn pdf_create(ctx: Arc<PluginCtx>) -> RouteHandler {
         /// The documented field. `text` is accepted for older callers.
         content: Option<String>,
         text: Option<String>,
-        css: Option<String>,
         format: Option<String>,
         plain: Option<bool>,
         page_numbers: Option<bool>,
@@ -247,7 +246,6 @@ fn pdf_create(ctx: Arc<PluginCtx>) -> RouteHandler {
                 .map_err(|e| AppError::BadRequest(format!("invalid JSON body: {e}")))?;
             let title = clean_title(body.title.as_deref().unwrap_or("Untitled"));
             let text = body.content.or(body.text).unwrap_or_default();
-            let _css = body.css;
             let format = body.format.unwrap_or_else(|| {
                 if body.plain.unwrap_or(false) { "plain".to_string() } else { "auto".to_string() }
             });

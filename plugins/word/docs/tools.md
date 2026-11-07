@@ -199,14 +199,15 @@ Errors:
 | Aliases | `doc_layout`, `format_document`, `style_document` |
 | `step_label` | `Designing document…` |
 | Code | `DocDesign::invoke`, `src/tools/mod.rs` |
-| Params | `doc_id?`, `template?: plain\|classic\|modern\|minimal`, `cover?`, `toc?`, `header?`, `page_numbers?` (bools), `paper?: a4\|letter`, `subtitle?`, `author?`, `date?`, `lang?`, `accent?: #RRGGBB` |
+| Params | `doc_id?`, `template?: plain\|classic\|modern\|minimal`, `cover?`, `toc?`, `header?`, `page_numbers?` (bools), `paper?: a4\|letter`, `subtitle?`, `author?`, `date?`, `lang?`, `accent?: #RRGGBB`, `margin_top?`, `margin_right?`, `margin_bottom?`, `margin_left?` (mm) |
 | Returns | `{ doc_id, title, design }` |
 | Humanised | `Designed "«title»"` |
 
 Behaviour: reads the stored `design` JSON and changes only the keys passed.
 Choosing a non-plain `template` also turns on `header` and `page_numbers`
 (`Design::with_template_defaults`) unless the call passes them. Invalid values
-(unknown template, bad colour, text over 200 characters) return an outcome
+(unknown template, bad colour, a margin outside 5–80 mm other than 0 = the
+25 mm default, text over 200 characters) return an outcome
 error naming the allowed values. The content is not touched. See
 [architecture.md](architecture.md#composition) for what each option draws.
 

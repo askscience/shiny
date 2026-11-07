@@ -23,8 +23,11 @@ downloaded into the cache automatically. To pull in brand-new mail, call
   `{ id, subject, from, from_addresses, date, size, seen, has_attachment }`. Use
   `page` to page through older mail.
 - `mail_search` — Find messages by text, searching the cached subject, sender
-  and body (local, no network). params: `{ account?: string, folder?: string,
-  query: string }`. Omit `folder` to search all folders. Use it to find a
+  and body. params: `{ account?: string, folder?: string, query: string }`.
+  With `folder`, a never-cached folder is downloaded first (like `mail_list`).
+  Omit `folder` to search all folders: INBOX and up to 8 folders that have mail
+  but were never cached are downloaded first (the folder list is re-checked at
+  most every 10 minutes); after that it is local. Use it to find a
   specific email ("the email about the invoice") before calling `mail_read`.
   Returns `{ query, messages }` (up to 60, same shape as `mail_list`).
 - `mail_read` — Fetch one full message from the cache. params:
@@ -43,7 +46,8 @@ downloaded into the cache automatically. To pull in brand-new mail, call
   To forward an attachment you received, save it first with
   `mail_save_attachment`, then attach the returned path. Returns
   `{ to, sent, attachments }`; `sent: false` means an identical email was just
-  sent and this duplicate was skipped.
+  sent and this duplicate was skipped. Refused when both `subject` and `body`
+  are empty (an attachment-only email still needs a subject).
 
   Example: `{"action":"mail_send","params":{"to":["ann@example.com"],"subject":"Report","body":"Here it is.","attachments":["Documents/report.pdf"]}}`
 - `mail_save_attachment` — Save one attachment of a received message into the

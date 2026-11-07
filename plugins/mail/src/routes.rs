@@ -391,10 +391,7 @@ fn mail_search(ctx: Arc<PluginCtx>) -> RouteHandler {
                 .ok_or_else(|| AppError::BadRequest("search query required".into()))?;
             let a = mail::resolve_account(ctx.db(), &uid, q.account.as_deref())?;
 
-            let eff_folder = q.folder.clone().unwrap_or_else(|| "INBOX".into());
-            if mail::needs_backfill(ctx.db(), &uid, &a.id, &eff_folder)? {
-                mail::sync_folder(ctx.db(), &uid, a.clone(), eff_folder).await?;
-            }
+            mail::backfill_for_search(ctx.db(), &uid, &a, q.folder.as_deref()).await?;
 
             let messages = cache::search(ctx.db(), &uid, Some(&a.id), q.folder.as_deref(), &query, 60)?;
             Ok(ok(json!({ "messages": messages, "query": query })))

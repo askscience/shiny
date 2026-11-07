@@ -82,10 +82,10 @@ impl Tool for MapRoute {
             .params
             .param_f64("to_lon")
             .ok_or_else(|| AppError::BadRequest("to_lon required".into()))?;
-        let profile = req.params.param_str("profile").unwrap_or_else(|| "car".into());
+        let profile = crate::osm::route_profile(req.params.param_str("profile").as_deref());
 
         let route = OsmClient::new()
-            .route(from_lat, from_lon, to_lat, to_lon, &profile)
+            .route(from_lat, from_lon, to_lat, to_lon, profile)
             .await?;
 
         let artifact = Artifact {

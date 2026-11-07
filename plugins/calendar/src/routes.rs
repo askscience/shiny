@@ -15,7 +15,7 @@ use shiny_plugin_sdk::util::{as_text};
 use shiny_plugin_sdk::routes::{bridged_route, path_params_from_request, RouteHandler, ok, user_id};
 use shiny_plugin_sdk::services::PluginCtx;
 
-use crate::date::{current_month, month_bounds, normalize_date, normalize_time};
+use crate::date::{current_month, event_times, month_bounds, normalize_date, normalize_time};
 
 const EVENT_COLS_SQL: &str = "id, title, date, start_time, end_time, description, location, all_day";
 
@@ -151,6 +151,7 @@ fn event_create(ctx: Arc<PluginCtx>) -> RouteHandler {
             let end_time = normalize_time(&body.end_time.unwrap_or_default())
                 .map_err(AppError::BadRequest)?;
             let all_day = body.all_day.unwrap_or(false);
+            let (start_time, end_time) = event_times(all_day, start_time, end_time);
             let description = clean_text(body.description, 2000);
             let location = clean_text(body.location, 500);
 
@@ -236,6 +237,7 @@ fn event_update(ctx: Arc<PluginCtx>) -> RouteHandler {
                 None => as_text(&cur[6]),
             };
             let all_day = body.all_day.unwrap_or(as_int(&cur[7]) != 0);
+            let (start_time, end_time) = event_times(all_day, start_time, end_time);
 
             let changed = ctx.db().execute(
                 "UPDATE calendar_events SET title = ?1, date = ?2, start_time = ?3, end_time = ?4, \
