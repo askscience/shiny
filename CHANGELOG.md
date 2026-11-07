@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Debug builds are much smaller: the workspace keeps only file and line
+  tables (backtraces still show `file:line`) and dependencies carry no debug
+  info. `target/debug` had grown past 200 GB with full debug info on every
+  copy. For a debugger session, build with `CARGO_PROFILE_DEV_DEBUG=true`.
+  The getting-started guide also shows how to prune old build artifacts with
+  `cargo-sweep`.
+
 ## [0.2.1] - 2026-11-07
 
 ### Added

@@ -28,6 +28,16 @@ krilla = { git = "https://github.com/storytold/craft-libs", rev = "92d392cff132e
 
 # Thin LTO plus a single codegen unit: the per-sample DSP hot loops (Studio)
 # benefit from cross-crate inlining.
+# Debug builds keep file:line backtraces but no full debug info (variables
+# for gdb/lldb), and dependencies none at all: full debug info made every
+# copy of the workspace in target/debug several times bigger. For a debugger
+# session, build with CARGO_PROFILE_DEV_DEBUG=true.
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
+
 [profile.release]
 lto = "thin"
 codegen-units = 1

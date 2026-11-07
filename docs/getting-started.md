@@ -73,6 +73,24 @@ cargo build --features iroh    # include peer-to-peer remote access
 The [kiosk shell](deployment/kiosk-shell.md) is a separate binary
 (`cargo build -p liteaura` on Linux, `-p liteaura-mac` on macOS).
 
+### Keeping `target/` small
+
+Cargo never deletes old build artifacts: every change of dependencies,
+features or toolchain leaves another copy of the workspace in `target/`, plus
+its incremental cache. Debug builds already skip full debug info
+(`[profile.dev]` in `Cargo.toml`: file and line tables only, none for
+dependencies; build with `CARGO_PROFILE_DEV_DEBUG=true` when you need a
+debugger). To drop what has not been used for a week:
+
+```bash
+cargo install cargo-sweep
+cargo sweep --time 7          # in the repository (or -r over several)
+cargo sweep --installed       # artifacts of toolchains no longer installed
+```
+
+`cargo clean --profile dev` empties `target/debug` without touching the
+release binaries a running session uses.
+
 ---
 
 ## 3. First run
