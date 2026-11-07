@@ -4,6 +4,11 @@
 
 ### Added
 
+- The README's tour video covers all three faces of LiteAura: the desktop
+  (the assistant writing a document and a budget, the three window layouts,
+  the overview, the themes), the phone and the wearable face. The recording
+  scripts are in `scripts/readme-tour/`.
+
 - A wearable face, for a watch but available on any screen (Settings →
   Desktop → Wearable): your wallpaper under the assistant's dots, now spread
   over the whole screen — semi-transparent, fading out in a circle, moving
@@ -182,6 +187,17 @@
   fill but never save. The editor has the same strong-password suggestion.
 
 ### Fixed
+
+- In the Columns layout a long document no longer stretches its window
+  taller than the screen, and in the Windows layout new windows open in a
+  cascade instead of exactly on top of each other.
+- Plugins open the same database as the server when its address carries
+  options (`sqlite://…/shiny.db?mode=rwc`): they used to create an empty file
+  named after the whole address, so Word, Calc and the rest found no tables.
+- The wearable face's settings are a panel made for a round screen: round
+  wallpaper swatches and rows that step to the next AI model, theme or
+  animation on a tap, all inside the circle; a 12-hour clock keeps its AM/PM
+  small so the time fits.
 
 - The assistant no longer loses a plugin's tools halfway through a request.
   After its first step (a web search before writing the document) it worked

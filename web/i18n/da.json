@@ -1382,5 +1382,6 @@
   "wearable.wallpaper": "Baggrund",
   "wearable.animation": "Animation",
   "settings.desktop.wearable": "Wearable",
-  "settings.desktop.wearableHint": "Et ur over assistentens animation, ingen vinduer, lytter altid efter sit navn."
+  "settings.desktop.wearableHint": "Et ur over assistentens animation, ingen vinduer, lytter altid efter sit navn.",
+  "wearable.leave": "Forlad wearable-visningen"
 }

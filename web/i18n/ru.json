@@ -1418,5 +1418,6 @@
   "wearable.wallpaper": "Обои",
   "wearable.animation": "Анимация",
   "settings.desktop.wearable": "Носимое устройство",
-  "settings.desktop.wearableHint": "Часы поверх анимации ассистента, без окон, всегда слушает своё имя."
+  "settings.desktop.wearableHint": "Часы поверх анимации ассистента, без окон, всегда слушает своё имя.",
+  "wearable.leave": "Выйти из режима носимого устройства"
 }

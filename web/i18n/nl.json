@@ -1382,5 +1382,6 @@
   "wearable.wallpaper": "Achtergrond",
   "wearable.animation": "Animatie",
   "settings.desktop.wearable": "Wearable",
-  "settings.desktop.wearableHint": "Een klok boven de animatie van de assistent, geen vensters, luistert altijd naar zijn naam."
+  "settings.desktop.wearableHint": "Een klok boven de animatie van de assistent, geen vensters, luistert altijd naar zijn naam.",
+  "wearable.leave": "Wearable-weergave verlaten"
 }

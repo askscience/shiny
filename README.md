@@ -4,14 +4,14 @@
 Say "Hey, Laura" (or press the voice bar) and a conversational agent running on
 your own machine (Ollama) answers out loud, opens windows, writes documents and
 drives its apps. Around it is a complete desktop shell — windows across
-workspaces, a top bar with the system's controls, a phone layout, a lock screen,
-its own login screen — and every app beyond the assistant is a **self-contained
-plugin** you can add or remove while it runs.
+workspaces, a top bar with the system's controls, a phone layout, a wearable
+watch face, a lock screen, its own login screen — and every app beyond the
+assistant is a **self-contained plugin** you can add or remove while it runs.
 
 <p align="center">
-  <a href="docs/screenshots/liteaura-tour.mp4"><img src="docs/screenshots/liteaura-tour.webp" alt="The assistant at work: asked in the chat, it writes a three-day Lisbon itinerary in Word, adds the train to the calendar and builds the trip budget in a spreadsheet, opening each window; then the free-window layout, the overview and the Ink theme" width="100%"></a>
+  <a href="docs/screenshots/liteaura-tour.mp4"><img src="docs/screenshots/liteaura-tour.webp" alt="A tour in three parts. Desktop: asked in the chat, the assistant writes a guide to Lisbon's trams in Word and a trip budget in Calc, opening each window; then the Tiling, Columns and free Windows layouts, the overview and the Dusk, Ink and Editorial themes. Phone: the home screen, the same document and budget as phone apps, the app switcher and the Ink theme. Wearable: a round watch face with the clock over the assistant's dots, which move with four animations, and its settings panel" width="100%"></a>
 </p>
-<p align="center"><sub>Asked in the chat, the assistant writes the itinerary in Word, puts the train in the calendar and builds the budget in Calc, opening each window — then free windows, the overview and the Ink theme. Recorded with <code>gemma4:31b-cloud</code> through Ollama; the model's thinking time is sped up. <a href="docs/screenshots/liteaura-tour.mp4">MP4</a></sub></p>
+<p align="center"><sub><b>Desktop · Phone · Wearable.</b> Asked in the chat, the assistant writes a guide in Word and a budget in Calc, opening each window — then the three window layouts, the overview and the themes; the same apps on a phone; and the wearable face, where the assistant's dots fill the screen. Recorded with <code>gemma4:31b-cloud</code> through Ollama; the model's thinking time is sped up, and the wearable's spoken requests are played as a demo. <a href="docs/screenshots/liteaura-tour.mp4">Full video (MP4, 1080p)</a></sub></p>
 
 | Tiling · Dusk | Free windows · Ink |
 |---|---|

@@ -1418,5 +1418,6 @@
   "wearable.wallpaper": "Ozadje",
   "wearable.animation": "Animacija",
   "settings.desktop.wearable": "Nosljiva naprava",
-  "settings.desktop.wearableHint": "Ura nad animacijo pomočnika, brez oken, vedno posluša svoje ime."
+  "settings.desktop.wearableHint": "Ura nad animacijo pomočnika, brez oken, vedno posluša svoje ime.",
+  "wearable.leave": "Zapusti način nosljive naprave"
 }

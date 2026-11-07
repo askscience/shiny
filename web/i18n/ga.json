@@ -1436,5 +1436,6 @@
   "wearable.wallpaper": "Cúlbhrat",
   "wearable.animation": "Beochan",
   "settings.desktop.wearable": "Inchaite",
-  "settings.desktop.wearableHint": "Clog os cionn bheochan an chúntóra, gan fuinneoga, ag éisteacht i gcónaí lena ainm."
+  "settings.desktop.wearableHint": "Clog os cionn bheochan an chúntóra, gan fuinneoga, ag éisteacht i gcónaí lena ainm.",
+  "wearable.leave": "Fág an modh inchaite"
 }

@@ -11,10 +11,10 @@ export function createLayoutController(state, { getDesktopLayout, setWindowsGeom
   }
 
   function defaultWindowGeom(index) {
-    const step = 34;
+    const step = 48;
     return {
-      x: 40 + (index % 6) * step,
-      y: 40 + (index % 6) * step,
+      x: 40 + (index % 8) * step * 2,
+      y: 40 + (index % 8) * step,
       w: 560,
       h: 400,
       z: 0,
@@ -26,7 +26,10 @@ export function createLayoutController(state, { getDesktopLayout, setWindowsGeom
     if (!g || typeof g !== 'object'
       || !Number.isFinite(Number(g.x)) || !Number.isFinite(Number(g.y))
       || !Number.isFinite(Number(g.w)) || !Number.isFinite(Number(g.h))) {
-      g = defaultWindowGeom(index);
+      // A window raised before its first layout pass (an open focuses it) asks
+      // with index 0: cascade from the windows already placed instead, or every
+      // new window lands on the same spot and hides the others.
+      g = defaultWindowGeom(index || Object.keys(state.windowGeom).length);
       state.windowGeom[name] = g;
     }
     g.x = Number(g.x);

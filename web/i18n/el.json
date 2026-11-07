@@ -1382,5 +1382,6 @@
   "wearable.wallpaper": "Ταπετσαρία",
   "wearable.animation": "Κίνηση",
   "settings.desktop.wearable": "Φορητή συσκευή",
-  "settings.desktop.wearableHint": "Ένα ρολόι πάνω από την κίνηση του βοηθού, χωρίς παράθυρα, πάντα σε αναμονή για το όνομά του."
+  "settings.desktop.wearableHint": "Ένα ρολόι πάνω από την κίνηση του βοηθού, χωρίς παράθυρα, πάντα σε αναμονή για το όνομά του.",
+  "wearable.leave": "Έξοδος από τη λειτουργία φορητής συσκευής"
 }

@@ -1418,5 +1418,6 @@
   "wearable.wallpaper": "Tapeta",
   "wearable.animation": "Animacja",
   "settings.desktop.wearable": "Urządzenie noszone",
-  "settings.desktop.wearableHint": "Zegar nad animacją asystenta, bez okien, zawsze nasłuchuje swojego imienia."
+  "settings.desktop.wearableHint": "Zegar nad animacją asystenta, bez okien, zawsze nasłuchuje swojego imienia.",
+  "wearable.leave": "Opuść tryb urządzenia noszonego"
 }

@@ -1418,5 +1418,6 @@
   "wearable.wallpaper": "Tapeta",
   "wearable.animation": "Animace",
   "settings.desktop.wearable": "Nositelné zařízení",
-  "settings.desktop.wearableHint": "Hodiny nad animací asistenta, žádná okna, vždy naslouchá svému jménu."
+  "settings.desktop.wearableHint": "Hodiny nad animací asistenta, žádná okna, vždy naslouchá svému jménu.",
+  "wearable.leave": "Opustit režim nositelného zařízení"
 }

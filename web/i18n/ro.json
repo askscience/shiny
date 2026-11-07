@@ -1400,5 +1400,6 @@
   "wearable.wallpaper": "Fundal",
   "wearable.animation": "Animație",
   "settings.desktop.wearable": "Purtabil",
-  "settings.desktop.wearableHint": "Un ceas peste animația asistentului, fără ferestre, mereu atent la numele său."
+  "settings.desktop.wearableHint": "Un ceas peste animația asistentului, fără ferestre, mereu atent la numele său.",
+  "wearable.leave": "Ieși din modul purtabil"
 }

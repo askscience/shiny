@@ -66,10 +66,13 @@ with a face meant for a watch, on any screen — desktop, phone or watch.
   runs, a reply plays, the keyboard is open or the screen is locked; a
   microphone that will not open is retried with a back-off up to a minute. A
   tap on the face listens once.
-- **Settings.** One icon button opens a dialog with the wallpaper grid
-  (`renderBackgroundPresets`, `uploadBackground` from `background.js`), the AI
-  model (`loadAiModelChoices` from `settings/assistant.js`), the theme, the
-  animation (`orbEffectOptions` from `voiceDots.js`) and the switch back — the
+- **Settings.** One icon button opens a panel made for a round face: it
+  covers the face and keeps its content inside the inscribed circle (70% of
+  the short side). The wallpapers are a row of round swatches
+  (`BACKGROUND_PRESETS`, `uploadBackground` from `background.js`); the AI
+  model (`loadAiModelChoices` from `settings/assistant.js`), the theme and the
+  animation (`orbEffectOptions` from `voiceDots.js`) are rows that step to the
+  next choice on a tap — no menus; two icons close it or leave the face. The
   same helpers Settings → Appearance and Assistant use.
 
 ## Phone shell

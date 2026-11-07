@@ -66,6 +66,13 @@ html[data-wearable] #control-center {
   font-variant-numeric: tabular-nums;
 }
 
+.wearable-time-suffix {
+  font-size: 0.3em;
+  font-weight: 400;
+  letter-spacing: 0;
+  margin-left: 0.15em;
+}
+
 .wearable-date {
   font-size: clamp(13px, 3.4vmin, 24px);
   opacity: 0.8;
@@ -112,22 +119,123 @@ html[data-wearable] #control-center {
   opacity: 1;
 }
 
-.wearable-settings-dialog .ui-modal-card {
-  width: min(420px, 92vw);
-  max-height: 86vh;
-  overflow: auto;
-}
-
-.wearable-field {
+/* Settings: a panel over the face, its content inside the inscribed circle
+   (a column no wider than 70% of the short side fits a round watch). */
+.wearable-panel {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
   display: grid;
-  gap: 6px;
+  place-items: center;
+  background: color-mix(in srgb, var(--bg, #000) 62%, transparent);
+  backdrop-filter: blur(18px) saturate(1.2);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2);
+  animation: wearable-panel-in 220ms ease-out;
 }
 
-.wearable-field-label {
-  font-size: 12px;
+.wearable.is-settings .wearable-clock,
+.wearable.is-settings > .wearable-settings {
+  visibility: hidden;
+}
+
+@keyframes wearable-panel-in {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
+
+.wearable-panel-body {
+  width: min(360px, 70vmin);
+  max-height: 72vmin;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(6px, 1.6vmin, 10px);
+  scrollbar-width: none;
+}
+
+.wearable-panel-body::-webkit-scrollbar {
+  display: none;
+}
+
+.wearable-swatches {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 4px 2px 8px;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+}
+
+.wearable-swatches::-webkit-scrollbar {
+  display: none;
+}
+
+.wearable-swatch {
+  flex: 0 0 auto;
+  width: clamp(34px, 9vmin, 46px);
+  height: clamp(34px, 9vmin, 46px);
+  border-radius: 50%;
+  border: 2px solid transparent;
+  background: color-mix(in srgb, var(--text, #fff) 12%, transparent) center / cover no-repeat;
+  color: var(--text, #fff);
+  display: grid;
+  place-items: center;
+  padding: 0;
+  cursor: pointer;
+  scroll-snap-align: start;
+}
+
+.wearable-swatch.is-active {
+  border-color: var(--accent, #f60);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--bg, #000) 70%, transparent);
+}
+
+.wearable-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: clamp(38px, 10vmin, 48px);
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text, #fff) 9%, transparent);
+  color: var(--text, #fff);
+  font: inherit;
+  font-size: clamp(12px, 3.3vmin, 15px);
+  text-align: left;
+  cursor: pointer;
+}
+
+.wearable-row:active {
+  background: color-mix(in srgb, var(--accent, #f60) 22%, transparent);
+}
+
+.wearable-row-label {
   opacity: 0.75;
+  white-space: nowrap;
 }
 
-.wearable-wallpapers {
-  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+.wearable-row-value {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 34vmin;
+}
+
+.wearable-panel-actions {
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+  margin-top: 2px;
+}
+
+.wearable-panel-actions .ui-btn {
+  color: var(--text, #fff);
+  background: color-mix(in srgb, var(--text, #fff) 9%, transparent);
+  border-radius: 50%;
+  width: 42px;
+  height: 42px;
 }

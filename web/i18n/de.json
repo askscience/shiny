@@ -1382,5 +1382,6 @@
   "wearable.wallpaper": "Hintergrund",
   "wearable.animation": "Animation",
   "settings.desktop.wearable": "Wearable",
-  "settings.desktop.wearableHint": "Eine Uhr über der Animation des Assistenten, keine Fenster, hört immer auf seinen Namen."
+  "settings.desktop.wearableHint": "Eine Uhr über der Animation des Assistenten, keine Fenster, hört immer auf seinen Namen.",
+  "wearable.leave": "Wearable-Ansicht verlassen"
 }

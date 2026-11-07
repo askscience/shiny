@@ -1382,5 +1382,6 @@
   "wearable.wallpaper": "Тапет",
   "wearable.animation": "Анимация",
   "settings.desktop.wearable": "Носимо устройство",
-  "settings.desktop.wearableHint": "Часовник върху анимацията на асистента, без прозорци, винаги слуша за името му."
+  "settings.desktop.wearableHint": "Часовник върху анимацията на асистента, без прозорци, винаги слуша за името му.",
+  "wearable.leave": "Изход от носимия режим"
 }

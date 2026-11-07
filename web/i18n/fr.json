@@ -1400,5 +1400,6 @@
   "wearable.wallpaper": "Fond d'écran",
   "wearable.animation": "Animation",
   "settings.desktop.wearable": "Montre",
-  "settings.desktop.wearableHint": "Une horloge sur l'animation de l'assistant, aucune fenêtre, toujours à l'écoute de son nom."
+  "settings.desktop.wearableHint": "Une horloge sur l'animation de l'assistant, aucune fenêtre, toujours à l'écoute de son nom.",
+  "wearable.leave": "Quitter le mode montre"
 }

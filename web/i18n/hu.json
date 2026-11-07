@@ -1382,5 +1382,6 @@
   "wearable.wallpaper": "Háttérkép",
   "wearable.animation": "Animáció",
   "settings.desktop.wearable": "Hordható",
-  "settings.desktop.wearableHint": "Óra az asszisztens animációja fölött, ablakok nélkül, mindig figyel a nevére."
+  "settings.desktop.wearableHint": "Óra az asszisztens animációja fölött, ablakok nélkül, mindig figyel a nevére.",
+  "wearable.leave": "Kilépés a hordható nézetből"
 }

@@ -1418,5 +1418,6 @@
   "wearable.wallpaper": "Fonas",
   "wearable.animation": "Animacija",
   "settings.desktop.wearable": "Dėvimas įrenginys",
-  "settings.desktop.wearableHint": "Laikrodis virš asistento animacijos, jokių langų, visada klausosi savo vardo."
+  "settings.desktop.wearableHint": "Laikrodis virš asistento animacijos, jokių langų, visada klausosi savo vardo.",
+  "wearable.leave": "Išeiti iš dėvimo įrenginio režimo"
 }

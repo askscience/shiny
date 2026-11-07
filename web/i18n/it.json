@@ -1404,5 +1404,6 @@
   "wearable.wallpaper": "Sfondo",
   "wearable.animation": "Animazione",
   "settings.desktop.wearable": "Wearable",
-  "settings.desktop.wearableHint": "Un orologio sopra l'animazione dell'assistente, nessuna finestra, sempre in ascolto del suo nome."
+  "settings.desktop.wearableHint": "Un orologio sopra l'animazione dell'assistente, nessuna finestra, sempre in ascolto del suo nome.",
+  "wearable.leave": "Esci dalla modalità wearable"
 }

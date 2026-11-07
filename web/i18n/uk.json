@@ -1418,5 +1418,6 @@
   "wearable.wallpaper": "Шпалери",
   "wearable.animation": "Анімація",
   "settings.desktop.wearable": "Носимий пристрій",
-  "settings.desktop.wearableHint": "Годинник над анімацією асистента, без вікон, завжди слухає своє ім'я."
+  "settings.desktop.wearableHint": "Годинник над анімацією асистента, без вікон, завжди слухає своє ім'я.",
+  "wearable.leave": "Вийти з режиму носимого пристрою"
 }

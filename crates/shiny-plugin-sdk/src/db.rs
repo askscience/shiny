@@ -50,14 +50,18 @@ pub struct Db {
 unsafe impl Send for Db {}
 unsafe impl Sync for Db {}
 
+/// The file behind the host's `DATABASE_URL`. Its query (`?mode=rwc`, which
+/// sqlx reads) is not part of the path: kept, it made every plugin open an
+/// empty `shiny.db?mode=rwc` beside the real database.
 fn sqlite_path(url: &str) -> String {
-    if let Some(p) = url.strip_prefix("sqlite://") {
-        p.to_string()
+    let path = if let Some(p) = url.strip_prefix("sqlite://") {
+        p
     } else if let Some(p) = url.strip_prefix("sqlite:") {
-        p.to_string()
+        p
     } else {
-        url.to_string()
-    }
+        url
+    };
+    path.split_once('?').map_or(path, |(file, _)| file).to_string()
 }
 
 fn errmsg(db: *mut sqlite3) -> String {
@@ -260,6 +264,13 @@ fn column(stmt: *mut sqlite3_stmt, i: c_int) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_url_query_is_not_part_of_the_path() {
+        assert_eq!(sqlite_path("sqlite:///tmp/a/shiny.db?mode=rwc"), "/tmp/a/shiny.db");
+        assert_eq!(sqlite_path("sqlite://data/traveler.db"), "data/traveler.db");
+        assert_eq!(sqlite_path("sqlite::memory:"), ":memory:");
+    }
 
     #[test]
     fn open_and_query_file() {

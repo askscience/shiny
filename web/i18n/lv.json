@@ -1400,5 +1400,6 @@
   "wearable.wallpaper": "Fona attēls",
   "wearable.animation": "Animācija",
   "settings.desktop.wearable": "Valkājama ierīce",
-  "settings.desktop.wearableHint": "Pulkstenis virs asistenta animācijas, bez logiem, vienmēr klausās savu vārdu."
+  "settings.desktop.wearableHint": "Pulkstenis virs asistenta animācijas, bez logiem, vienmēr klausās savu vārdu.",
+  "wearable.leave": "Iziet no valkājamās ierīces režīma"
 }

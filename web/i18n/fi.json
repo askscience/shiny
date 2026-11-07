@@ -1382,5 +1382,6 @@
   "wearable.wallpaper": "Taustakuva",
   "wearable.animation": "Animaatio",
   "settings.desktop.wearable": "Puettava",
-  "settings.desktop.wearableHint": "Kello avustajan animaation päällä, ei ikkunoita, kuuntelee aina nimeään."
+  "settings.desktop.wearableHint": "Kello avustajan animaation päällä, ei ikkunoita, kuuntelee aina nimeään.",
+  "wearable.leave": "Poistu puettavasta näkymästä"
 }

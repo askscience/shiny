@@ -87,6 +87,9 @@ body.is-tiling-resize {
 #tile-grid.tile-grid--columns .tile {
   flex: 1 1 320px;
   min-width: 0;
+  /* The layout sizes the window, never its content: without this a long
+     document made its row (and so the window) taller than the screen. */
+  contain: size;
 }
 
 /* Floating Windows layout (settings → Layout: Windows). The desktop manager

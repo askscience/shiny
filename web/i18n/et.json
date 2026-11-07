@@ -1382,5 +1382,6 @@
   "wearable.wallpaper": "Taustapilt",
   "wearable.animation": "Animatsioon",
   "settings.desktop.wearable": "Kantav seade",
-  "settings.desktop.wearableHint": "Kell assistendi animatsiooni kohal, aknaid pole, kuulab alati oma nime."
+  "settings.desktop.wearableHint": "Kell assistendi animatsiooni kohal, aknaid pole, kuulab alati oma nime.",
+  "wearable.leave": "Lahku kantava seadme vaatest"
 }
