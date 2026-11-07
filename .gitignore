@@ -67,3 +67,6 @@ backpack/
 # Theme Lab: standalone local previews used to design the themes. Scratch
 # material, not shipped — the chosen directions live in web/themes/.
 /web/theme-lab/
+
+# Project website (kept out of the repository)
+/website/
