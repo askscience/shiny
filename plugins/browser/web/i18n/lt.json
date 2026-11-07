@@ -136,6 +136,7 @@
   "plugin.browser.passwords.offerSuggest": "Naudoti saugų slaptažodį šiai paskyrai? Jis įrašomas registruojantis.",
   "plugin.browser.passwords.useStrong": "Naudoti",
   "plugin.browser.passwords.offerUnlock": "Atrakinkite įrašytus slaptažodžius, kad prisijungtumėte prie {site}.",
+  "plugin.browser.passwords.offerChoose": "Svetainei {site} įrašyti keli prisijungimai. Pasirinkite vieną, kad prisijungtumėte.",
   "plugin.browser.import.menu": "Importuoti iš kitos naršyklės…",
   "plugin.browser.import.title": "Importuoti iš kitos naršyklės",
   "plugin.browser.import.working": "Importuojama…",

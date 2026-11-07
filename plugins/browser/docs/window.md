@@ -382,7 +382,7 @@ being asked, from the tab's view events:
 
 | Event | What happens |
 |---|---|
-| `load` `finished` | `takeScript` hands over a login the previous page of the same origin kept in `sessionStorage` (a form that posted to itself); `watchScript` installs the form watcher and answers the form's kind. A **login** form gets the site's saved login filled in when there is exactly one for that very host (not a parent domain's, which the panel still offers on a click) and its fields are empty (`fillScript(…, { onlyEmpty: true })`, once more after 1.5 s for a form drawn late); with the vault locked it offers "Unlock" once per site. A **sign-up** form (`autocomplete="new-password"`, or two password fields) gets "Use a strong password?": `generatePassword()` (20 characters, every class, no look-alikes, `crypto.getRandomValues`) goes into the password and its confirmation (`suggestScript`). |
+| `load` `finished` | `takeScript` hands over a login the previous page of the same origin kept in `sessionStorage` (a form that posted to itself); `watchScript` installs the form watcher and answers the form's kind. A **login** form gets the site's saved login filled in when there is exactly one for that very host (not a parent domain's, which the panel still offers on a click) and its fields are empty; with several for that host (often after an import) it says so once per site and session and its "Fill password…" opens the panel to pick one (`fillScript(…, { onlyEmpty: true })`, once more after 1.5 s for a form drawn late); with the vault locked it offers "Unlock" once per site. A **sign-up** form (`autocomplete="new-password"`, or two password fields) gets "Use a strong password?": `generatePassword()` (20 characters, every class, no look-alikes, `crypto.getRandomValues`) goes into the password and its confirmation (`suggestScript`). |
 | `load` `started` | The page is being left: `takeScript` reads what the watcher kept (a submit, a click on a form button, Enter in a field, `pagehide`). |
 | `url` without a load | A single-page app moved on: the same, then the form is watched again. |
 
@@ -411,6 +411,8 @@ reloaded after every import. Routes: [`routes.md`](routes.md#import-from-another
 
 A right-click in a page opens the app's own menu over the page — never a
 platform menu. The shell forwards the request as a `context-menu` view event
+(it must be in `ViewBus::FORWARDED`, `crates/liteaura/src/browse.rs`, like every
+view event the plugin hears)
 (`{x, y, linkUrl, editable, selection}`; the position is local to the page item,
 so the plugin adds the frame origin and divides by `dpr`), and the plugin opens
 core's `openContextMenu()` at the cursor. The `.ctx-menu` mask hole keeps it

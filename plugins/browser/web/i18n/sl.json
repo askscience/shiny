@@ -136,6 +136,7 @@
   "plugin.browser.passwords.offerSuggest": "Uporabim močno geslo za ta račun? Shrani se ob registraciji.",
   "plugin.browser.passwords.useStrong": "Uporabi",
   "plugin.browser.passwords.offerUnlock": "Odklenite shranjena gesla za prijavo v {site}.",
+  "plugin.browser.passwords.offerChoose": "Za {site} je shranjenih več prijav. Izberite eno za prijavo.",
   "plugin.browser.import.menu": "Uvozi iz drugega brskalnika…",
   "plugin.browser.import.title": "Uvozi iz drugega brskalnika",
   "plugin.browser.import.working": "Uvažanje…",

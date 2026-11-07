@@ -136,6 +136,7 @@
   "plugin.browser.passwords.offerSuggest": "Użyć silnego hasła dla tego konta? Zostanie zapisane przy rejestracji.",
   "plugin.browser.passwords.useStrong": "Użyj",
   "plugin.browser.passwords.offerUnlock": "Odblokuj zapisane hasła, aby zalogować się do {site}.",
+  "plugin.browser.passwords.offerChoose": "Dla {site} zapisano kilka loginów. Wybierz jeden, aby się zalogować.",
   "plugin.browser.import.menu": "Importuj z innej przeglądarki…",
   "plugin.browser.import.title": "Importuj z innej przeglądarki",
   "plugin.browser.import.working": "Importowanie…",

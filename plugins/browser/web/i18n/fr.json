@@ -132,6 +132,7 @@
   "plugin.browser.passwords.offerSuggest": "Utiliser un mot de passe fort pour ce compte ? Il est enregistré à l'inscription.",
   "plugin.browser.passwords.useStrong": "L'utiliser",
   "plugin.browser.passwords.offerUnlock": "Déverrouillez vos mots de passe enregistrés pour vous connecter à {site}.",
+  "plugin.browser.passwords.offerChoose": "Plusieurs identifiants sont enregistrés pour {site}. Choisissez-en un pour vous connecter.",
   "plugin.browser.import.menu": "Importer depuis un autre navigateur…",
   "plugin.browser.import.title": "Importer depuis un autre navigateur",
   "plugin.browser.import.working": "Importation…",

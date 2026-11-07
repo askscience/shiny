@@ -128,6 +128,7 @@
   "plugin.browser.passwords.offerSuggest": "Да се използва ли силна парола за този профил? Запазва се при регистрацията.",
   "plugin.browser.passwords.useStrong": "Използвай",
   "plugin.browser.passwords.offerUnlock": "Отключете запазените пароли, за да влезете в {site}.",
+  "plugin.browser.passwords.offerChoose": "За {site} са запазени няколко данни за вход. Изберете един, за да влезете.",
   "plugin.browser.import.menu": "Импортиране от друг браузър…",
   "plugin.browser.import.title": "Импортиране от друг браузър",
   "plugin.browser.import.working": "Импортиране…",

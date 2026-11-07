@@ -132,6 +132,7 @@
   "plugin.browser.passwords.offerSuggest": "¿Usar una contraseña segura para esta cuenta? Se guarda al registrarte.",
   "plugin.browser.passwords.useStrong": "Usarla",
   "plugin.browser.passwords.offerUnlock": "Desbloquea tus contraseñas guardadas para iniciar sesión en {site}.",
+  "plugin.browser.passwords.offerChoose": "Hay varios inicios de sesión guardados para {site}. Elige uno para entrar.",
   "plugin.browser.import.menu": "Importar de otro navegador…",
   "plugin.browser.import.title": "Importar de otro navegador",
   "plugin.browser.import.working": "Importando…",

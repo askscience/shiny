@@ -9,7 +9,8 @@
  * - **load finished** — hand over a login the previous page of the same origin
  *   kept (`takeScript`), watch the new page's form (`watchScript`), then fill
  *   the saved login when there is exactly one for the site and its fields are
- *   empty, or offer a strong password on a sign-up form.
+ *   empty, point to the list when it has several (once per site and session),
+ *   or offer a strong password on a sign-up form.
  * - **load started / address change** — the page is being left (a form posted,
  *   a single-page app moved on): take what the watched form kept.
  *
@@ -119,6 +120,8 @@ export function createLoginAssist({
   let shownFor = null;
   /** Sites whose locked vault was already pointed out this session. */
   const unlockHinted = new Set();
+  /** Sites whose several saved logins were already pointed out this session. */
+  const chooseHinted = new Set();
 
   async function vaultState() {
     try {
@@ -207,6 +210,15 @@ export function createLoginAssist({
           hide();
           openPanel(null);
         }, 'ui/lock');
+    } else if (offer.type === 'choose') {
+      nodes.push(el('p', 'browser-pw-intro', t('plugin.browser.passwords.offerChoose', { site: host },
+        `Several logins are saved for ${host}. Choose one to sign in.`)));
+      primary = button('ui-btn ui-btn--primary browser-pw-primary',
+        t('plugin.browser.passwords.fillMenu', null, 'Fill password…'), () => {
+          tab.loginOffer = null;
+          hide();
+          openPanel(null);
+        }, 'ui/user');
     } else {
       return;
     }
@@ -289,6 +301,15 @@ export function createLoginAssist({
     // domain's logins (the panel offers those on a click).
     const host = sameHost(origin);
     const entries = (await entriesFor(origin) || []).filter((e) => sameHost(e.origin) === host);
+    if (entries.length > 1) {
+      // Which account is the user's to say: point to the list (the panel
+      // shows the site's logins first and fills the one picked).
+      if (!chooseHinted.has(origin) && !tab.loginOffer) {
+        chooseHinted.add(origin);
+        present(tab, { type: 'choose', origin });
+      }
+      return;
+    }
     if (entries.length !== 1) return;
     const secret = await reveal(entries[0].id);
     if (!secret?.password) return;

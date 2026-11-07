@@ -128,6 +128,7 @@
   "plugin.browser.passwords.offerSuggest": "Erős jelszót használ ehhez a fiókhoz? Regisztráláskor mentésre kerül.",
   "plugin.browser.passwords.useStrong": "Használom",
   "plugin.browser.passwords.offerUnlock": "Oldja fel a mentett jelszavakat a bejelentkezéshez: {site}.",
+  "plugin.browser.passwords.offerChoose": "Több mentett bejelentkezés van ehhez: {site}. Válasszon egyet a belépéshez.",
   "plugin.browser.import.menu": "Importálás másik böngészőből…",
   "plugin.browser.import.title": "Importálás másik böngészőből",
   "plugin.browser.import.working": "Importálás…",

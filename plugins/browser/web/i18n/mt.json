@@ -140,6 +140,7 @@
   "plugin.browser.passwords.offerSuggest": "Tuża password b'saħħitha għal dan il-kont? Tiġi ssejvjata meta tirreġistra.",
   "plugin.browser.passwords.useStrong": "Użaha",
   "plugin.browser.passwords.offerUnlock": "Iftaħ il-passwords issejvjati biex tidħol f'{site}.",
+  "plugin.browser.passwords.offerChoose": "Hemm diversi logins issejvjati għal {site}. Agħżel wieħed biex tidħol.",
   "plugin.browser.import.menu": "Importa minn browser ieħor…",
   "plugin.browser.import.title": "Importa minn browser ieħor",
   "plugin.browser.import.working": "Qed jimporta…",

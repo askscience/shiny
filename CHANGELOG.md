@@ -175,6 +175,12 @@
 
 ### Fixed
 
+- A right-click inside a Browser page opens the menu again (Back, Copy,
+  Paste, "Fill password…" on a field): the shell was dropping the request
+  before it reached the window. A site with several saved logins — common
+  after importing passwords from another browser — no longer stays silent:
+  the Browser says so once and "Fill password…" lets you pick the account.
+
 - Browser pages no longer stay on screen after the app reloads (an update
   without restart, a crash recovery): a page left behind did not follow its
   window and did not close with it, because the new document knew nothing of

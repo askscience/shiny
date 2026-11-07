@@ -128,6 +128,7 @@
   "plugin.browser.passwords.offerSuggest": "Kas kasutada sellel kontol tugevat parooli? See salvestatakse registreerumisel.",
   "plugin.browser.passwords.useStrong": "Kasuta",
   "plugin.browser.passwords.offerUnlock": "Saidile {site} sisselogimiseks ava salvestatud paroolid.",
+  "plugin.browser.passwords.offerChoose": "Saidile {site} on salvestatud mitu sisselogimist. Vali üks, et sisse logida.",
   "plugin.browser.import.menu": "Impordi teisest brauserist…",
   "plugin.browser.import.title": "Impordi teisest brauserist",
   "plugin.browser.import.working": "Importimine…",

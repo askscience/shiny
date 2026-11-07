@@ -136,6 +136,7 @@
   "plugin.browser.passwords.offerSuggest": "Використати надійний пароль для цього облікового запису? Він збережеться під час реєстрації.",
   "plugin.browser.passwords.useStrong": "Використати",
   "plugin.browser.passwords.offerUnlock": "Розблокуйте збережені паролі, щоб увійти на {site}.",
+  "plugin.browser.passwords.offerChoose": "Для {site} збережено кілька входів. Виберіть один, щоб увійти.",
   "plugin.browser.import.menu": "Імпорт з іншого браузера…",
   "plugin.browser.import.title": "Імпорт з іншого браузера",
   "plugin.browser.import.working": "Імпорт…",

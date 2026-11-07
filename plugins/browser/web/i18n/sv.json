@@ -128,6 +128,7 @@
   "plugin.browser.passwords.offerSuggest": "Använda ett starkt lösenord för kontot? Det sparas när du registrerar dig.",
   "plugin.browser.passwords.useStrong": "Använd",
   "plugin.browser.passwords.offerUnlock": "Lås upp dina sparade lösenord för att logga in på {site}.",
+  "plugin.browser.passwords.offerChoose": "Flera inloggningar är sparade för {site}. Välj en för att logga in.",
   "plugin.browser.import.menu": "Importera från en annan webbläsare…",
   "plugin.browser.import.title": "Importera från en annan webbläsare",
   "plugin.browser.import.working": "Importerar…",

@@ -128,6 +128,7 @@
   "plugin.browser.passwords.offerSuggest": "Ein sicheres Passwort für dieses Konto verwenden? Es wird bei der Registrierung gespeichert.",
   "plugin.browser.passwords.useStrong": "Verwenden",
   "plugin.browser.passwords.offerUnlock": "Entsperre deine gespeicherten Passwörter, um dich bei {site} anzumelden.",
+  "plugin.browser.passwords.offerChoose": "Für {site} sind mehrere Anmeldungen gespeichert. Wähle eine aus, um dich anzumelden.",
   "plugin.browser.import.menu": "Aus einem anderen Browser importieren…",
   "plugin.browser.import.title": "Aus einem anderen Browser importieren",
   "plugin.browser.import.working": "Wird importiert…",

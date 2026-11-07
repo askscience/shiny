@@ -128,6 +128,7 @@
   "plugin.browser.passwords.offerSuggest": "Use a strong password for this account? It is saved when you sign up.",
   "plugin.browser.passwords.useStrong": "Use it",
   "plugin.browser.passwords.offerUnlock": "Unlock your saved passwords to sign in to {site}.",
+  "plugin.browser.passwords.offerChoose": "Several logins are saved for {site}. Choose one to sign in.",
   "plugin.browser.import.menu": "Import from another browser…",
   "plugin.browser.import.title": "Import from another browser",
   "plugin.browser.import.working": "Importing…",

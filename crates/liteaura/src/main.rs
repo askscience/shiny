@@ -353,7 +353,7 @@ extern "C" fn on_view(_userdata: *mut c_void, id: *const c_char, kind: *const c_
 
     let Some(bus) = BUS.get() else { return };
     match kind.as_str() {
-        "load" | "title" | "url" | "new-window" | "page-js" => {
+        k if ViewBus::forwards(k) => {
             // The app view is loading a new document (a reload, an update):
             // the page views the old one opened would stay on screen with
             // no one left to move or close them.

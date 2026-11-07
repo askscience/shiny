@@ -257,6 +257,23 @@ impl ViewBus {
         self.events.lock().push(event);
     }
 
+    /// The view events the shim reports that the plugin hears about. Every
+    /// kind [`Self::view_event`] shapes must be here, or the shell drops it
+    /// before it reaches `window.__liteauraViewEvent`.
+    pub const FORWARDED: [&'static str; 6] = [
+        "load",
+        "title",
+        "url",
+        "new-window",
+        "page-js",
+        "context-menu",
+    ];
+
+    #[must_use]
+    pub fn forwards(kind: &str) -> bool {
+        Self::FORWARDED.contains(&kind)
+    }
+
     #[must_use]
     pub fn view_event(id: &str, kind: &str, payload: &str) -> Value {
         match kind {
@@ -664,6 +681,17 @@ mod tests {
         assert_eq!(event["type"], "context-menu");
         assert_eq!(event["menu"]["editable"], true);
         assert_eq!(event["menu"]["x"], 1.0);
+    }
+
+    #[test]
+    fn page_menus_and_script_answers_reach_the_plugin() {
+        // A right-click on a page and a page script's answer (the password
+        // fill) are both view events: dropping either leaves the Browser
+        // without its page menu or its autofill.
+        for kind in ["context-menu", "page-js", "load", "url", "title", "new-window"] {
+            assert!(ViewBus::forwards(kind), "{kind} is dropped");
+        }
+        assert!(!ViewBus::forwards("crashed"));
     }
 
     #[test]

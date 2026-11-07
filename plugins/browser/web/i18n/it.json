@@ -132,6 +132,7 @@
   "plugin.browser.passwords.offerSuggest": "Usare una password sicura per questo account? Viene salvata quando ti registri.",
   "plugin.browser.passwords.useStrong": "Usala",
   "plugin.browser.passwords.offerUnlock": "Sblocca le password salvate per accedere a {site}.",
+  "plugin.browser.passwords.offerChoose": "Ci sono più accessi salvati per {site}. Scegline uno per entrare.",
   "plugin.browser.import.menu": "Importa da un altro browser…",
   "plugin.browser.import.title": "Importa da un altro browser",
   "plugin.browser.import.working": "Importazione…",

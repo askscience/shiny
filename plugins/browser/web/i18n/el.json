@@ -128,6 +128,7 @@
   "plugin.browser.passwords.offerSuggest": "Χρήση ισχυρού κωδικού για αυτόν τον λογαριασμό; Αποθηκεύεται κατά την εγγραφή.",
   "plugin.browser.passwords.useStrong": "Χρήση",
   "plugin.browser.passwords.offerUnlock": "Ξεκλειδώστε τους αποθηκευμένους κωδικούς για να συνδεθείτε στο {site}.",
+  "plugin.browser.passwords.offerChoose": "Υπάρχουν πολλές αποθηκευμένες συνδέσεις για το {site}. Επιλέξτε μία για να συνδεθείτε.",
   "plugin.browser.import.menu": "Εισαγωγή από άλλο πρόγραμμα περιήγησης…",
   "plugin.browser.import.title": "Εισαγωγή από άλλο πρόγραμμα περιήγησης",
   "plugin.browser.import.working": "Εισαγωγή…",

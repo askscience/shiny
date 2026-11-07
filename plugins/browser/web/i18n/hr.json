@@ -132,6 +132,7 @@
   "plugin.browser.passwords.offerSuggest": "Koristiti jaku lozinku za ovaj račun? Sprema se pri registraciji.",
   "plugin.browser.passwords.useStrong": "Koristi",
   "plugin.browser.passwords.offerUnlock": "Otključajte spremljene lozinke za prijavu na {site}.",
+  "plugin.browser.passwords.offerChoose": "Za {site} spremljeno je više prijava. Odaberite jednu za prijavu.",
   "plugin.browser.import.menu": "Uvezi iz drugog preglednika…",
   "plugin.browser.import.title": "Uvezi iz drugog preglednika",
   "plugin.browser.import.working": "Uvoz…",

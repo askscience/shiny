@@ -132,6 +132,7 @@
   "plugin.browser.passwords.offerSuggest": "Folosești o parolă puternică pentru acest cont? Se salvează la înregistrare.",
   "plugin.browser.passwords.useStrong": "Folosește-o",
   "plugin.browser.passwords.offerUnlock": "Deblochează parolele salvate pentru a te conecta la {site}.",
+  "plugin.browser.passwords.offerChoose": "Sunt salvate mai multe conturi pentru {site}. Alege unul pentru a te conecta.",
   "plugin.browser.import.menu": "Importă din alt browser…",
   "plugin.browser.import.title": "Importă din alt browser",
   "plugin.browser.import.working": "Se importă…",

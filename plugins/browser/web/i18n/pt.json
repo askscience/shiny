@@ -132,6 +132,7 @@
   "plugin.browser.passwords.offerSuggest": "Usar uma palavra-passe forte nesta conta? É guardada quando se registar.",
   "plugin.browser.passwords.useStrong": "Usar",
   "plugin.browser.passwords.offerUnlock": "Desbloqueie as palavras-passe guardadas para entrar em {site}.",
+  "plugin.browser.passwords.offerChoose": "Há vários inícios de sessão guardados para {site}. Escolha um para entrar.",
   "plugin.browser.import.menu": "Importar de outro navegador…",
   "plugin.browser.import.title": "Importar de outro navegador",
   "plugin.browser.import.working": "A importar…",

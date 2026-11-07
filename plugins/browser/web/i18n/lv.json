@@ -132,6 +132,7 @@
   "plugin.browser.passwords.offerSuggest": "Izmantot šim kontam drošu paroli? Tā tiek saglabāta reģistrējoties.",
   "plugin.browser.passwords.useStrong": "Izmantot",
   "plugin.browser.passwords.offerUnlock": "Atbloķējiet saglabātās paroles, lai pieteiktos vietnē {site}.",
+  "plugin.browser.passwords.offerChoose": "Vietnei {site} ir saglabāti vairāki pieteikšanās dati. Izvēlieties vienus, lai pieteiktos.",
   "plugin.browser.import.menu": "Importēt no citas pārlūkprogrammas…",
   "plugin.browser.import.title": "Importēt no citas pārlūkprogrammas",
   "plugin.browser.import.working": "Importē…",

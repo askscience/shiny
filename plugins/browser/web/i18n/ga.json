@@ -140,6 +140,7 @@
   "plugin.browser.passwords.offerSuggest": "Pasfhocal láidir a úsáid don chuntas seo? Sábháiltear é nuair a chláraíonn tú.",
   "plugin.browser.passwords.useStrong": "Úsáid é",
   "plugin.browser.passwords.offerUnlock": "Díghlasáil do phasfhocail shábháilte chun síniú isteach ar {site}.",
+  "plugin.browser.passwords.offerChoose": "Tá roinnt sonraí logála isteach sábháilte do {site}. Roghnaigh ceann acu chun síniú isteach.",
   "plugin.browser.import.menu": "Iompórtáil ó bhrabhsálaí eile…",
   "plugin.browser.import.title": "Iompórtáil ó bhrabhsálaí eile",
   "plugin.browser.import.working": "Á iompórtáil…",

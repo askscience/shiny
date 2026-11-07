@@ -136,6 +136,7 @@
   "plugin.browser.passwords.offerSuggest": "Použít pro tento účet silné heslo? Uloží se při registraci.",
   "plugin.browser.passwords.useStrong": "Použít",
   "plugin.browser.passwords.offerUnlock": "Odemkněte uložená hesla a přihlaste se k {site}.",
+  "plugin.browser.passwords.offerChoose": "Pro {site} je uloženo více přihlášení. Vyberte jedno pro přihlášení.",
   "plugin.browser.import.menu": "Importovat z jiného prohlížeče…",
   "plugin.browser.import.title": "Importovat z jiného prohlížeče",
   "plugin.browser.import.working": "Importuje se…",

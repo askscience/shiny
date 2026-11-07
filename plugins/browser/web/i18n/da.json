@@ -128,6 +128,7 @@
   "plugin.browser.passwords.offerSuggest": "Brug en stærk adgangskode til denne konto? Den gemmes, når du tilmelder dig.",
   "plugin.browser.passwords.useStrong": "Brug den",
   "plugin.browser.passwords.offerUnlock": "Lås dine gemte adgangskoder op for at logge ind på {site}.",
+  "plugin.browser.passwords.offerChoose": "Der er gemt flere logins til {site}. Vælg ét for at logge ind.",
   "plugin.browser.import.menu": "Importér fra en anden browser…",
   "plugin.browser.import.title": "Importér fra en anden browser",
   "plugin.browser.import.working": "Importerer…",

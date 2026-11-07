@@ -211,6 +211,13 @@ reset({ entries: [{ id: 'e1', origin: 'https://shop.example', username: 'a' }, {
 pageState.kind = 'login';
 await assist.pageLoaded(tab());
 check('with two saved logins nothing is guessed', !pageState.scripts.some((s) => s.startsWith('FILL')));
+check('with two saved logins the user is pointed to the list', shown() && textOf(offer).includes('Several logins'));
+buttonNamed(offer, 'Fill password…').click();
+check('"Fill password…" opens the panel', opened.length === 1 && opened[0] === null);
+reset({ entries: [{ id: 'e1', origin: 'https://shop.example', username: 'a' }, { id: 'e2', origin: 'https://shop.example', username: 'b' }] });
+pageState.kind = 'login';
+await assist.pageLoaded(tab());
+check('the list is pointed to once per site', !shown());
 
 reset({ unlocked: false });
 pageState.kind = 'login';
