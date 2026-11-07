@@ -296,6 +296,32 @@ check('another app id gets its own stream',
 forgetWebAppSurface('photocraft');
 check('its stream closes with it', sources[2].closed === true);
 
+// A Craft app's API is defined by its WebAssembly, seconds after `load`
+// (VectorCraft: ~3.7 s). The surface keeps looking and attaches when it lands.
+const late = webAppSurface('lightcraft');
+const lateFrame = late.mount().children.find((el) => el.tagName === 'IFRAME');
+const lateWindow = {};
+lateFrame.contentWindow = lateWindow;
+lateFrame.fire('load');
+check('an API not there yet at load attaches nothing at first', sources.length === 3, `${sources.length}`);
+lateWindow.lightcraft = { request: async () => ({}) };
+await new Promise((resolve) => setTimeout(resolve, 600));
+check('an API that appears after load is attached',
+  sources.length === 4 && sources[3].url.includes('app=lightcraft'), `${sources.length}`);
+forgetWebAppSurface('lightcraft');
+check('its stream closes with it too', sources[3].closed === true);
+
+// Closing the window while the app is still starting ends the wait.
+const gone = webAppSurface('deckcraft');
+const goneFrame = gone.mount().children.find((el) => el.tagName === 'IFRAME');
+const goneWindow = {};
+goneFrame.contentWindow = goneWindow;
+goneFrame.fire('load');
+forgetWebAppSurface('deckcraft');
+goneWindow.deckcraft = { request: async () => ({}) };
+await new Promise((resolve) => setTimeout(resolve, 600));
+check('a forgotten surface stops looking', sources.length === 4, `${sources.length}`);
+
 /* ── In-app Open…: file inputs are served by the shell picker ── */
 
 const wsurface = webAppSurface('wordcraft');

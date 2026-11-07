@@ -188,6 +188,15 @@
 
 ### Fixed
 
+- Craft apps get live AI control. The assistant's tools for an open Craft
+  app now act on the window you see — the document appears and changes in
+  front of you — instead of always working on a hidden copy. The page looked
+  for the app's control API once, when the frame loaded, but a Craft app
+  defines it only after its WebAssembly has started (VectorCraft: about 3.7 s
+  later), so live control never attached. The window now keeps looking for up
+  to two minutes, and the next turn switches the app's server to the live
+  channel (`web/js/webAppSurface.js`).
+
 - In the Columns layout a long document no longer stretches its window
   taller than the screen, and in the Windows layout new windows open in a
   cascade instead of exactly on top of each other.

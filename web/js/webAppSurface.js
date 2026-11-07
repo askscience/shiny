@@ -90,11 +90,15 @@ for (const type of ['theme:change', 'locale:change']) {
  * installed later — that ships the documented API gets live control with no
  * change here. A build without it keeps the headless behavior: nothing is
  * attached and the core's fallback servers stay in charge.
+ *
+ * Returns whether the page API was there to attach to. A Craft app's API is
+ * defined by its WebAssembly, which boots seconds after the frame's `load` —
+ * see `watchControl`, which keeps looking.
  */
 function attachControl(name, frame, surface) {
   const api = frame.contentWindow?.[name];
-  if (!api || typeof api.request !== 'function') return;
-  if (surface.controlFor === frame.contentWindow) return; // already attached
+  if (!api || typeof api.request !== 'function') return false;
+  if (surface.controlFor === frame.contentWindow) return true; // already attached
   surface.control?.close();
   surface.controlFor = frame.contentWindow;
 
@@ -130,6 +134,36 @@ function attachControl(name, frame, surface) {
   });
   // EventSource reconnects by itself; a dead stream is the server's business.
   surface.control = source;
+  return true;
+}
+
+/** How often, and for how long, a loaded page is checked for its control API. */
+const CONTROL_POLL_MS = 250;
+const CONTROL_WAIT_MS = 120_000;
+
+/**
+ * Attach live control as soon as the page's API exists. At the frame's `load`
+ * a Craft app is still fetching and starting its WebAssembly (VectorCraft
+ * defines `window.vectorcraft` ~3.7 s later), so a single check at `load`
+ * always missed it and every app stayed headless. Look now, then every
+ * CONTROL_POLL_MS for up to CONTROL_WAIT_MS; a newer `load` (a reload) or
+ * closing the window ends the wait. The core picks the live channel up at the
+ * agent's next turn (`CraftMcp::sync` restarts the app's CLI with `--connect`).
+ */
+function watchControl(name, frame, surface) {
+  clearTimeout(surface.controlWait);
+  surface.controlWait = null;
+  if (attachControl(name, frame, surface)) return;
+  const doc = frame.contentWindow;
+  const started = Date.now();
+  const look = () => {
+    surface.controlWait = null;
+    if (frame.contentWindow !== doc) return; // replaced: its own `load` watches
+    if (attachControl(name, frame, surface)) return;
+    if (Date.now() - started >= CONTROL_WAIT_MS) return; // a build without the API
+    surface.controlWait = setTimeout(look, CONTROL_POLL_MS);
+  };
+  surface.controlWait = setTimeout(look, CONTROL_POLL_MS);
 }
 
 /**
@@ -207,7 +241,7 @@ function ensureSurface(name) {
   // The app's document (and its page API) is ready at `load`; a reload replaces
   // the window the bridge was talking to, so re-attach on every load.
   frame.addEventListener('load', () => {
-    attachControl(name, frame, surface);
+    watchControl(name, frame, surface);
     installFrameFileInputShim(frame);
     applyHostContext(frame, { post: true });
     const pending = window.__pendingFileOpen;
@@ -227,7 +261,9 @@ export function webAppSurface(name) {
 
 /** Drop a cached surface (tests; the shell keeps surfaces for their window). */
 export function forgetWebAppSurface(name) {
-  surfaces.get(name)?.control?.close();
+  const surface = surfaces.get(name);
+  clearTimeout(surface?.controlWait);
+  surface?.control?.close();
   surfaces.delete(name);
 }
 
