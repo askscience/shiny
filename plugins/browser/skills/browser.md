@@ -8,13 +8,17 @@ are removed before the page reaches the window.
 
 - `browser_open` — Open a page in the Browser window. params: `{ url: string }`.
   Accepts a full URL (`https://example.com`) or a search phrase
-  (`"best espresso machine"`), which searches instead.
+  (`"best espresso machine"`), which searches instead. Returns `{ url }` (the
+  resolved URL).
 - `browser_search` — Search the web in the Browser window. params:
   `{ query: string }`. Uses the configured SearXNG instance when the server has
-  `SEARXNG_URL` set, otherwise Brave Search.
-- `browser_read` — Fetch a page through the ad-blocking engine and return its
-  readable text **without** opening the window. params:
-  `{ url: string, max_chars?: number }`.
+  `SEARXNG_URL` set, otherwise DuckDuckGo. Returns `{ query, url }`.
+- `browser_read` — Fetch a page and return its readable text **without**
+  opening the window. params: `{ url: string, max_chars?: number }` — `url` may
+  also be a search phrase (reads the results page); `max_chars` defaults to
+  20000, max 100000. Returns `{ url, text, chars, truncated }`.
+
+Example: `{"action":"browser_read","params":{"url":"https://example.com","max_chars":5000}}`
 
 ### When to use which
 
@@ -35,8 +39,9 @@ are removed before the page reaches the window.
 - The window also has a **Downloads** manager (every download from every site,
   with progress and controls; files land in Files → Downloads) and **incognito**
   tabs. You do not need to describe these unless the user asks.
-- `browser_read` fetches the page text directly; the ad blocker runs in the
-  window for rendered pages, so `browser_read` filtering is best-effort.
+- `browser_read` fetches the page text directly (scripts and styles are
+  dropped); the ad blocker runs in the window for rendered pages, so
+  `browser_read` filtering is best-effort.
 - The window's home surface (the Home button, shown when it opens) lists
   **related news** chosen from what the user has recently searched for. Those
   cards are a UI feature, not a tool: do not offer to "open the news shelf" —

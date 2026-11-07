@@ -2,7 +2,7 @@
 
 ### youtube_search
 
-Search YouTube for videos. Returns a list of videos with title, channel, duration, thumbnail and `video_id` — each result also becomes a tappable card the user can play.
+Search YouTube for videos. `query` is required, `limit` defaults to 8. Returns `{ results, count }`, each result `{ video_id, title, channel, duration, thumbnail }` — each result also becomes a tappable card the user can play.
 
 ```text
 {"action": "youtube_search", "params": {"query": "what to search", "limit": 8}}
@@ -13,14 +13,19 @@ Search YouTube for videos. Returns a list of videos with title, channel, duratio
 Start playing a video in the YouTube window.
 
 ```text
-{"action": "youtube_play", "params": {"video_id": "<id>"}}
+{"action": "youtube_play", "params": {"video_id": "<id>", "title": "…", "channel": "…", "thumbnail": "…"}}
 ```
+
+`title`, `channel` and `thumbnail` are optional but should be passed from the
+search result: they label the player and feed the watch history.
 
 or with a query — plays the first search hit:
 
 ```text
 {"action": "youtube_play", "params": {"query": "never gonna give you up"}}
 ```
+
+Returns `{ video_id, title, channel, thumbnail }` (plus `query` when searched).
 
 ### youtube_suggest
 
@@ -32,15 +37,19 @@ before (a simple built-in ranker — no external recommendation service).
 {"action": "youtube_suggest", "params": {"video_id": "<id>", "title": "…", "channel": "…", "limit": 8}}
 ```
 
-Seed it with a topic instead when the user hasn't played anything yet:
+Always pass `title` (and `channel`) with `video_id`: the ranker searches by
+them, so a bare `video_id` finds nothing. Seed it with a topic instead when the
+user hasn't played anything yet (`query` is used only when `title` is absent):
 
 ```text
 {"action": "youtube_suggest", "params": {"query": "jazz piano", "limit": 8}}
 ```
 
-With no seed it falls back to the user's most recently watched video (and to
-trending videos for a brand-new user), so "suggest something to watch" works on
-its own. The YouTube window also fills its grid with these suggestions
+With no seed it falls back to the user's most recently watched video, then
+their most-searched topic, and to trending videos for a brand-new user, so
+"suggest something to watch" works on its own. `limit` defaults to 8 (max 24).
+Returns `{ results, count, based_on: { video_id, title, channel } }`, results
+shaped like `youtube_search`'s. The YouTube window also fills its grid with these suggestions
 automatically whenever a video starts playing.
 
 Rules:

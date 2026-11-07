@@ -34,11 +34,13 @@ Shared conventions:
 | Aliases | `create_document`, `new_document` |
 | `step_label` | `Creating document…` |
 | Code | `DocCreate::invoke`, `src/tools/mod.rs` |
-| Params | `title?: string`, `content?: string` |
+| Params | `title?: string` (alias `name`), `content?: string` |
 | Returns | `{ doc_id, title }` |
 | Humanised | `Created document "«title»"` |
 
-Behaviour: `title` defaults to `Untitled` when missing/blank. `content` is
+Behaviour: when `title` is missing/blank the document is named after the
+content's first Markdown heading (else its first non-empty line, cleaned and
+cut to 80 characters), and only then `Untitled` (`title_from_content`). `content` is
 passed through `content_to_html` and encoded with `odt::html_to_odt`. A UUID id
 is generated and the row inserted. Creating with no content is allowed and
 produces an empty paragraph; the embedded skill still strongly instructs the

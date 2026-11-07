@@ -175,6 +175,26 @@
 
 ### Fixed
 
+- The assistant no longer loses a plugin's tools halfway through a request.
+  After its first step (a web search before writing the document) it worked
+  without the tools' docs, so "write it in Word" became a string of made-up
+  tool names until it went looking for Word's skill in the terminal. Every
+  step now names each plugin's tools, and a plugin's full skill comes back as
+  soon as the assistant activates it, opens its window or guesses one of its
+  tool names wrong. A new test checks that every plugin's skill names all of
+  its tools and only real ones.
+
+- Every plugin's instructions for the assistant were checked against what
+  its tools really do, and corrected where they differed: missing tools
+  (Studio's presets, Files' whole tool list), parameters that do not exist
+  (Word's margins, Files' "empty trash"), missing ones (Radio's genre, country
+  and language, Calc's sheet size, Image's colourise and gamma) and the
+  answers each tool gives back. A few tools now also do what their
+  instructions promised: Image reads and edits the latest picture when none
+  is named, Mail takes a single address as a plain string, and YouTube
+  suggestions work from a video id alone. Two PDF shortcuts no longer
+  collide with Word's and with each other (`replace_text`, `add_note`).
+
 - A right-click inside a Browser page opens the menu again (Back, Copy,
   Paste, "Fill password…" on a field): the shell was dropping the request
   before it reached the window. A site with several saved logins — common

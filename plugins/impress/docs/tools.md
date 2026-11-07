@@ -2,14 +2,15 @@
 
 | Tool | Params | Returns / behaviour |
 |---|---|---|
-| `slide_create` | `{ title, theme?, slides: [slide] }` | Creates **and fills** a deck. Returns `deck_id`. |
-| `slide_read` | `{ deck_id }` | `{ deck_id, title, theme, slides }` — the array you write back. |
-| `slide_write` | `{ deck_id, slides, title?, theme? }` | Replaces the **entire** slide list. |
-| `slide_edit` | `{ deck_id, index?, slide }` | Changes one slide (0-based `index`; omit to append). |
-| `slide_list` | `{}` | The user's decks. |
+| `slide_create` | `{ title?, theme?, slides?: [slide] }` | Creates **and fills** a deck. Returns `{ deck_id, title, theme, count }`. |
+| `slide_read` | `{ deck_id? }` | `{ deck_id, title, theme, slides, count, hint }` — `slides` is the array you write back. |
+| `slide_write` | `{ deck_id?, slides, title?, theme? }` | Replaces the **entire** slide list. Returns `{ deck_id, title, count }`. |
+| `slide_edit` | `{ deck_id?, index?, slide }` | Changes one slide (0-based `index`; omitted or out of range appends). Returns `{ deck_id, title, count }`. |
+| `slide_list` | `{}` | `{ presentations: [{ deck_id, title, slide_count, updated_at }], count }`. |
 | `slide_delete` | `{ deck_id, confirm: true }` | Deletes a deck. |
 
-A **slide** object: `{ layout, title, subtitle, bullets, columns, body,
+Without `deck_id`, every tool but `slide_delete` targets the most recently
+updated deck. A **slide** object: `{ layout, title, subtitle, bullets, columns, body,
 attribution, notes, transition, reveal }`.
 
 ## Rules (from [`skills/impress.md`](../skills/impress.md))

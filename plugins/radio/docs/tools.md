@@ -6,7 +6,7 @@ contract in [`skills/radio.md`](../skills/radio.md).
 
 | Tool | Params | Returns / behaviour |
 |---|---|---|
-| `radio_search` | `{ query, limit? }` | Stations ranked by votes; each has a `stationuuid`. Searches name, tag, country and language. |
+| `radio_search` | `{ query?, tag?, country?, language?, limit? }` | Stations ranked by votes; each has a `stationuuid`. `query` matches the name; `tag`, `country`, `language` filter; `limit` 10 (max 100). |
 | `radio_play` | `{ stationuuid?, query?, tag? }` | Tunes a station and starts playback. With only `query`/`tag`, the most-voted match wins. Emits a `radio_station` artifact the window picks up and may attach a "Now playing" notification. |
 | `radio_stop` | `{}` | Stops playback. |
 

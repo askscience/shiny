@@ -7,6 +7,7 @@ title** (case-insensitive).
 
 Shared helpers:
 
+- `resolve_or_latest(pool, user_id, id_or_title)` — `resolve_image_id`, or the most recently updated image when no id is given (get/edit only, never delete).
 - `resolve_image_id(pool, user_id, id_or_title)` — tries `id` then
   `lower(title) = lower(…) ORDER BY updated_at DESC LIMIT 1`.
 - `operations_param(req)` — accepts `operations: [...]` or a single
@@ -36,7 +37,7 @@ is the `data` payload.
 
 ## `image_get`
 
-- **Params:** `{ "image_id"?: string }` — omit to read the most recently updated.
+- **Params:** `{ "image_id"?: string }` — id or exact title; without it, the most recently updated image (`resolve_or_latest`).
 - **Returns:** `{ "image_id", "title", "width", "height", "updated_at" }`.
 - **Errors:** `NotFound("Image not found")`.
 - **Humanize:** `Read "<title>"`.
@@ -46,7 +47,7 @@ is the `data` payload.
 - **Params:**
   ```json
   {
-    "image_id"?: "…",              // id or exact title; default most recent
+    "image_id": "…",               // id or exact title; default: most recently updated
     "operations": [ { "op": "look", "name": "portra" }, { "op": "vibrance", "amount": 10 } ]
   }
   ```
@@ -87,7 +88,7 @@ Operations are applied **in order**. Dispatch is
 
 | Op | Params |
 |---|---|
-| `blur` \| `gaussian_blur` \| `gaussian` | `radius` (0..100) |
+| `blur` \| `gaussian_blur` \| `gaussian` | `radius` (1..100, default 2) |
 | `sharpen` \| `unsharp_mask` | `radius`, `amount` (default 1.0), `threshold` |
 | `vignette` | `amount` (default 50), `size` (default 30), `roundness` |
 
@@ -107,7 +108,7 @@ destructive op bakes them into the base alongside the look before applying.
 The rendered picture is always `look(settings(bytes))`.
 
 **Geometry:** `rotate {angle}`, `flip_h` \| `fliph`, `flip_v` \| `flipv`,
-`reset` — restore the original upload.
+`reset` — restore the original upload (any `reset` in the list swaps in the original first; the other ops then run in order over it).
 
 ## `image_delete`
 

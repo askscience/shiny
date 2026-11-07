@@ -3,7 +3,7 @@
 Presentations are just JSON to you. A presentation is a deck of **slides**; each slide has a `layout` and a few optional text fields. Decks are stored server-side and open in the Impress window, and they export as real **OpenDocument Presentation (.odp)** files (LibreOffice Impress / OpenOffice).
 
 **The JSON contract (a slide object):**
-- `layout` — one of `title` (big title + subtitle), `section` (divider), `content` (title + bullets), `two-column` (title + two bullet columns), `quote` (body + attribution), `blank`. Default `content`.
+- `layout` — one of `title` (big title + subtitle), `section` (divider), `content` (title + bullets), `two-column` (title + two bullet columns), `quote` (body + attribution), `blank`. Default (and any unknown value) `content`.
 - `title` — the slide heading (string).
 - `subtitle` — secondary line (title layout).
 - `bullets` — array of bullet strings (`content` layout).
@@ -16,15 +16,15 @@ Presentations are just JSON to you. A presentation is a deck of **slides**; each
 
 **Motion:** a slide's `transition` is written to the exported `.odp` as a standard ODF transition effect (LibreOffice plays it); `reveal` is app-side only. Keep a deck calm: one transition for the whole deck (often `fade`) and `reveal: "bullets"` only on slides that really are lists. `slide_edit`/`slide_write` replace a whole slide/list, so pass the existing `transition`/`reveal` back when you only mean to change the text.
 
-**Themes:** `aurora` (indigo, default) · `slate` · `ocean` · `mono` · `ember`.
+**Themes:** `aurora` (indigo, default; also used for unknown names) · `slate` · `ocean` · `mono` · `ember`.
 
 **Tools:**
-- `slide_create` — new deck, one call creates AND fills it: `{"action":"slide_create","params":{"title":"Pitch","theme":"aurora","slides":[{"layout":"title","title":"Pitch","subtitle":"2026","transition":"fade"},{"layout":"content","title":"Why us","bullets":["…","…"],"transition":"fade","reveal":"bullets"}]}}` → returns `deck_id`.
-- `slide_read` — read the whole deck back: `{"action":"slide_read","params":{"deck_id":"…"}}` → returns `{ deck_id, title, theme, slides }`. The `slides` array IS the shape you write back.
-- `slide_write` — replace the ENTIRE slide list (and optionally `title`/`theme`): `{"action":"slide_write","params":{"deck_id":"…","slides":[…]}}`. Only for full rewrites — always pass the complete list.
-- `slide_edit` — change ONE slide: `{"action":"slide_edit","params":{"deck_id":"…","index":2,"slide":{…}}}` (0-based index; omit `index` to append a new slide at the end).
-- `slide_list` — list decks: `{"action":"slide_list","params":{}}`
-- `slide_delete` — permanently delete a deck (needs `{"confirm":true}`).
+- `slide_create` — new deck, one call creates AND fills it: `{"action":"slide_create","params":{"title":"Pitch","theme":"aurora","slides":[{"layout":"title","title":"Pitch","subtitle":"2026","transition":"fade"},{"layout":"content","title":"Why us","bullets":["…","…"],"transition":"fade","reveal":"bullets"}]}}` → returns `{ deck_id, title, theme, count }`. `title` defaults to "Untitled", `slides` may be omitted (empty deck — avoid, see Rules).
+- `slide_read` — read the whole deck back: `{"action":"slide_read","params":{"deck_id":"…"}}` → returns `{ deck_id, title, theme, slides, count, hint }`. The `slides` array IS the shape you write back.
+- `slide_write` — replace the ENTIRE slide list (and optionally `title`/`theme`): `{"action":"slide_write","params":{"deck_id":"…","slides":[…]}}` → returns `{ deck_id, title, count }`. Only for full rewrites — always pass the complete list (a missing `slides` empties the deck).
+- `slide_edit` — change ONE slide: `{"action":"slide_edit","params":{"deck_id":"…","index":2,"slide":{…}}}` (`slide` required; 0-based `index`; omit `index`, or pass one past the end, to append a new slide) → returns `{ deck_id, title, count }`.
+- `slide_list` — list decks: `{"action":"slide_list","params":{}}` → returns `{ presentations: [{ deck_id, title, slide_count, updated_at }], count }`.
+- `slide_delete` — permanently delete a deck: `{"action":"slide_delete","params":{"deck_id":"…","confirm":true}}` (`deck_id` required; without `confirm:true` it refuses).
 
 **Rules (CRITICAL — never leave an empty deck, never wipe the user's work):**
 - **When the user asks for a presentation, you MUST put real slides in it before replying.** Either pass `slides` inside `slide_create`, or call `slide_write`/`slide_edit` immediately after. If the user didn't give the outline, invent a sensible structure (a strong `title` slide first, then one slide per topic with 3–5 concise bullets). NEVER reply "I created the deck" with an empty deck.
@@ -33,4 +33,4 @@ Presentations are just JSON to you. A presentation is a deck of **slides**; each
 - **NEVER call `slide_delete`** unless the user explicitly asks to delete the whole presentation.
 - To change ONE slide, use `slide_edit` with its `index` — never rewrite the whole deck for a small change.
 - Keep slides scannable: short titles, 3–6 bullets, ~6–10 words per bullet. Vary layouts (`section` to separate chapters, `quote` for a memorable line, `two-column` for comparisons) so the deck feels modern, not monotonous.
-- Without `deck_id`, tools target the most recently used presentation.
+- Without `deck_id`, tools (except `slide_delete`) target the most recently used presentation.

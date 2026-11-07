@@ -8,6 +8,8 @@ sandbox — commands run as the same user the Shiny server runs as.
 
 - `terminal_exec` — Run a shell command and return its output.
   params: `{ command: string }`
+  returns: `{ command, output, timed_out }` — `output` is the cleaned text
+  (ANSI codes stripped, long output cut in the middle).
 
 The command runs in a persistent shell of its own (never the Terminal window's
 shells), so successive calls share `cd`/environment state and nothing is ever

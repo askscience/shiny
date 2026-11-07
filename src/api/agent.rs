@@ -696,13 +696,26 @@ async fn prepare_agent(
 
     // Compact hint for continuation turns: every installed plugin with its
     // status so the model can still activate/deactivate mid-conversation.
+    //
+    // A usable plugin also names its tools: the continuation prompt has no
+    // tool docs, and a model past its first tool (a web search before the
+    // document) otherwise guesses `word_create_document` for `doc_create`.
+    let registry = state.plugins.tools();
     let plugins_hint = catalog
         .iter()
         .map(|(n, d, a)| {
-            if *a {
+            if !*a {
+                return format!("{n}: {d} (inactive)");
+            }
+            let tools = if focus_mode && !focused.contains(n) {
+                Vec::new()
+            } else {
+                registry.names_owned_by(n)
+            };
+            if tools.is_empty() {
                 format!("{n}: {d}")
             } else {
-                format!("{n}: {d} (inactive)")
+                format!("{n}: {d} [tools: {}]", tools.join(", "))
             }
         })
         .collect::<Vec<_>>()

@@ -596,6 +596,7 @@ where
                                 .tools()
                                 .skills_markdown_for(&std::collections::BTreeSet::from([name
                                     .to_string()]));
+                            injected_skills.insert(name.to_string());
                             if !docs.trim().is_empty() {
                                 note.push_str(&format!(
                                     "\n\nApp '{name}' tools (available from now on):\n{docs}"
@@ -632,52 +633,55 @@ where
                     }
                 }
 
-                // Keep a plugin's tool docs in the conversation after its tools
-                // are used: the continuation prompt is slim, so without this the
-                // model "forgets" calc_write after calc_create and replies
-                // without filling the sheet. Injected once per plugin per run.
-                if let Some(owner) = &outcome.owner {
-                    if owner != "core" && injected_skills.insert(owner.clone()) {
-                        // A plugin carries its own skills docs; a store-installed
-                        // Craft app has none, so its MCP tools' docs stand in.
-                        let skills = state.plugins.skills_for(owner);
-                        let skills = if skills.trim().is_empty() {
-                            state
-                                .plugins
-                                .tools()
-                                .skills_markdown_for(&std::collections::BTreeSet::from([owner
-                                    .clone()]))
-                        } else {
-                            skills
-                        };
-                        if !skills.trim().is_empty() {
-                            // A Craft app's tools act on its engine, not on the
-                            // window the user sees: the model has to save.
-                            let reminder = if crate::plugins::store::CraftApp::by_id(owner).is_some() {
-                                "\nThese tools edit the app's engine, not the window the user sees: save/export the document before answering and give the path."
-                            } else {
-                                ""
-                            };
-                            note.push_str(&format!("\n\nPlugin '{owner}' tools:{reminder}\n{skills}"));
-                        }
+                // Hand the model a plugin's tool docs, once per plugin per run,
+                // whenever this step shows it needs them. The continuation
+                // prompt carries no docs, so without this a model past its
+                // first tool guesses names (`word_create_document` for
+                // `doc_create`) and ends up reading the skill files from the
+                // terminal.
+                //
+                // - its tools were just used: keep them in view, or the model
+                //   "forgets" calc_write after calc_create;
+                // - it was just activated, or was already active when the model
+                //   asked (`already`: the model asked because it lacks them);
+                // - its window was just opened;
+                // - the model called a tool that does not exist under that
+                //   plugin's name (`word_…`, or `{"plugin":"word"}`).
+                let mut wanted: Vec<String> = Vec::new();
+                if let Some(owner) = outcome.owner.as_deref().filter(|o| *o != "core") {
+                    wanted.push(owner.to_string());
+                }
+                if outcome.result == "ok"
+                    && (outcome.action == "plugin_activate" || outcome.action == "show_plugin")
+                {
+                    if let Some(name) = outcome.data.get("plugin").and_then(|v| v.as_str()) {
+                        wanted.push(name.to_string());
                     }
                 }
-
-                // A freshly activated plugin is usable right away — hand the
-                // model its skills docs so it can call the plugin's tools in
-                // this same conversation.
-                if outcome.action == "plugin_activate" && outcome.result == "ok" {
-                    let already = outcome.data.get("already").and_then(|v| v.as_bool()).unwrap_or(false);
-                    if !already {
-                        if let Some(name) = outcome.data.get("plugin").and_then(|v| v.as_str()) {
-                            let skills = state.plugins.skills_for(name);
-                            if !skills.trim().is_empty() {
-                                note.push_str(&format!(
-                                    "\n\nPlugin '{name}' tools (available from now on):\n{skills}"
-                                ));
-                            }
-                        }
+                let unknown = outcome.result == "error" && is_unknown_action(&outcome.data);
+                if unknown {
+                    let names: Vec<String> =
+                        state.plugins.list().into_iter().map(|m| m.name).collect();
+                    if let Some(name) = guessed_plugin(&action, &params, &names) {
+                        wanted.push(name);
                     }
+                }
+                let mut gave_docs = false;
+                for name in wanted {
+                    if !injected_skills.insert(name.clone()) {
+                        continue;
+                    }
+                    if let Some(docs) = plugin_docs_note(state, &name) {
+                        note.push_str(&docs);
+                        gave_docs = true;
+                    }
+                }
+                if unknown && !gave_docs {
+                    note.push_str(
+                        "\nThere is no tool by that name. Use a tool name exactly as listed: each \
+                         plugin's tools are named in the system prompt; do not invent names \
+                         and do not search the disk for them.",
+                    );
                 }
 
                 continuation_messages
@@ -763,8 +767,79 @@ where
     })
 }
 
+/// Whether a failed step failed because the tool name does not exist.
+fn is_unknown_action(data: &Value) -> bool {
+    data.get("error")
+        .and_then(|v| v.as_str())
+        .is_some_and(|e| e.contains("Unknown action"))
+}
+
+/// The plugin a made-up tool name points at: `word_create_document` and
+/// `word` with `{"action":"create_document"}` are Word's, as is any call
+/// naming `{"plugin":"word"}`. `None` when no installed plugin fits.
+fn guessed_plugin(action: &str, params: &Value, plugins: &[String]) -> Option<String> {
+    let named = ["plugin", "name"]
+        .iter()
+        .filter_map(|k| params.get(*k).and_then(|v| v.as_str()))
+        .map(str::to_ascii_lowercase);
+    let action = action.to_ascii_lowercase();
+    let prefix = action
+        .split(['_', '.', ':', '-'])
+        .next()
+        .unwrap_or_default()
+        .to_string();
+    std::iter::once(prefix)
+        .chain(named)
+        .find(|candidate| plugins.iter().any(|p| p == candidate))
+}
+
+/// One plugin's tool docs as a step note, or `None` when it has none. A
+/// plugin carries its own skills docs; a store-installed Craft app has none,
+/// so its MCP tools' docs stand in.
+fn plugin_docs_note(state: &AppState, name: &str) -> Option<String> {
+    let skills = state.plugins.skills_for(name);
+    let skills = if skills.trim().is_empty() {
+        state
+            .plugins
+            .tools()
+            .skills_markdown_for(&std::collections::BTreeSet::from([name.to_string()]))
+    } else {
+        skills
+    };
+    if skills.trim().is_empty() {
+        return None;
+    }
+    // A Craft app's tools act on its engine, not on the window the user sees:
+    // the model has to save.
+    let reminder = if crate::plugins::store::CraftApp::by_id(name).is_some() {
+        "\nThese tools edit the app's engine, not the window the user sees: save/export the document before answering and give the path."
+    } else {
+        ""
+    };
+    Some(format!("\n\nPlugin '{name}' tools:{reminder}\n{skills}"))
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_made_up_tool_name_points_at_its_plugin() {
+        let plugins = vec!["word".to_string(), "terminal".to_string()];
+        let none = json!({});
+        assert_eq!(super::guessed_plugin("word_create_document", &none, &plugins).as_deref(), Some("word"));
+        assert_eq!(
+            super::guessed_plugin("word", &json!({"action": "create_document"}), &plugins).as_deref(),
+            Some("word")
+        );
+        assert_eq!(super::guessed_plugin("help", &json!({"plugin": "Word"}), &plugins).as_deref(), Some("word"));
+        assert_eq!(super::guessed_plugin("list_tools", &none, &plugins), None);
+    }
+
+    #[test]
+    fn an_unknown_action_is_recognised() {
+        assert!(super::is_unknown_action(&json!({"error": "Bad request: Unknown action: word_help"})));
+        assert!(!super::is_unknown_action(&json!({"error": "not found"})));
+    }
+
     use super::repeat_key;
     use serde_json::json;
 
@@ -788,3 +863,4 @@ mod tests {
         }
     }
 }
+

@@ -4,25 +4,24 @@ The word plugin manages documents for the user. Documents are stored server-side
 
 **"This document" / "the document":** the one open in the Word window. Every tool without `doc_id` targets it (the window marks the document it opens), so for requests like "fix the second paragraph" or "add a table here" just omit `doc_id`. Requests sent from Word's AI menu start with *In the Word document "<title>":* and may quote the selected text — act on that document and, for a selection, replace exactly that text with `doc_edit`.
 
-**Discovery flow:** when the user asks about a specific document and you don't have its id, call `doc_list` first (it returns `doc_id` + `title` for every document), then `doc_open`/`doc_read` with the `doc_id` you found.
+**Discovery flow:** when the user asks about a specific document and you don't have its id, call `doc_list` first (it returns `doc_id` + `title` for every document), then `doc_read` with the `doc_id` you found.
 
-- `doc_create` — Create a new document. `{"action":"doc_create","params":{"title":"My Notes","content":"…"}}` → returns `{doc_id, title}`. Without `title` it defaults to "Untitled".
-- `doc_open` — Open an existing document (reads it AND surfaces it in the Word window). `{"action":"doc_open","params":{"doc_id":"…"}}` → returns `{doc_id, title, content}`. `doc_read` is an alias.
-- `doc_read` — Read a document back. `{"action":"doc_read","params":{"doc_id":"…"}}` → returns `{doc_id, title, content}` (content is Markdown).
-- `doc_edit` — Make a targeted change inside a document (keeps everything else intact). `{"action":"doc_edit","params":{"doc_id":"…","old":"the text to change","new":"the replacement"}}`
-- `doc_append` — Append content to a document, keeping what's already in it. `{"action":"doc_append","params":{"doc_id":"…","content":"…"}}`
-- `doc_write` — Replace the ENTIRE content of a document. Only use for full rewrites — always pass the complete text. `{"action":"doc_write","params":{"doc_id":"…","content":"…"}}`
+- `doc_create` — Create a new document. `{"action":"doc_create","params":{"title":"My Notes","content":"…"}}` → returns `{doc_id, title}`. Without `title` the document is named after the content's first heading (or first line), else "Untitled".
+- `doc_read` — Read a document back (it also opens it in the Word window, like every `doc_*` call). `{"action":"doc_read","params":{"doc_id":"…"}}` → returns `{doc_id, title, content, format:"markdown", hint}` (content is Markdown). `doc_open` is an alias.
+- `doc_edit` — Make a targeted change inside a document (keeps everything else intact). `{"action":"doc_edit","params":{"doc_id":"…","old":"the text to change","new":"the replacement"}}` → returns `{doc_id, title}`. Replaces the first occurrence of `old` (exact, else case-insensitive); when `old` is not found it returns an error carrying the current content.
+- `doc_append` — Append content to a document, keeping what's already in it. `{"action":"doc_append","params":{"doc_id":"…","content":"…"}}` → returns `{doc_id, title}`.
+- `doc_write` — Replace the ENTIRE content of a document. Only use for full rewrites — always pass the complete text. `{"action":"doc_write","params":{"doc_id":"…","content":"…"}}` → returns `{doc_id, title}`.
 - `doc_list` — List the user's documents. `{"action":"doc_list","params":{}}` → `{documents:[{doc_id,title,updated_at}], count}`
-- `doc_delete` — Delete a document. `{"action":"doc_delete","params":{"doc_id":"…"}}`
-- `doc_design` — Set how the document looks when exported. `{"action":"doc_design","params":{"doc_id":"…","template":"modern","cover":true,"toc":true,"subtitle":"…","author":"…","date":"…","lang":"it"}}` — templates: `plain`, `classic` (serif, centred title, navy), `modern` (sans, blue), `minimal` (sans, black and grey). Other keys: `header`, `page_numbers` (both on when a template is chosen), `paper` (`a4` default, `letter`), `accent` (`#RRGGBB`), `margin_top`/`margin_right`/`margin_bottom`/`margin_left` (millimetres, 5–80; 0 = 25 mm). Only the keys you pass change.
-- `doc_insert_image` — Put a picture from the user's files into a document. `{"action":"doc_insert_image","params":{"doc_id":"…","path":"Pictures/generated/….png","after":"Introduction","caption":"…","width":80}}` — `path` is home-relative (exactly the `path` that `generate_image` returns); `after` is the text of the heading or paragraph to place it after (default: the end); `width` is a percentage of the text width (default 100).
-- `doc_export` — Save the document as a file in the user's Documents folder. `{"action":"doc_export","params":{"doc_id":"…","format":"pdf"}}` — formats: `docx`, `pdf`, `odt`, `md`, `html`. The design is applied.
+- `doc_delete` — Delete a document. `{"action":"doc_delete","params":{"doc_id":"…"}}` — `doc_id` is required here.
+- `doc_design` — Set how the document looks when exported. `{"action":"doc_design","params":{"doc_id":"…","template":"modern","cover":true,"toc":true,"subtitle":"…","author":"…","date":"…","lang":"it"}}` — templates: `plain`, `classic` (serif, centred title, navy), `modern` (sans, blue), `minimal` (sans, black and grey). Other keys: `header`, `page_numbers` (both on when a template is chosen), `paper` (`a4` default, `letter`), `accent` (`#RRGGBB`). Only the keys you pass change. Returns `{doc_id, title, design}`.
+- `doc_insert_image` — Put a picture from the user's files into a document. `{"action":"doc_insert_image","params":{"doc_id":"…","path":"Pictures/generated/….png","after":"Introduction","caption":"…","width":80}}` — `path` is home-relative (exactly the `path` that `generate_image` returns); `after` is the text of the heading or paragraph to place it after (default: the end); `width` is a percentage of the text width, 10–100 (default 100). Returns `{doc_id, title}`, plus a `note` when `after` was not found and the picture went at the end.
+- `doc_export` — Save the document as a file in the user's Documents folder. `{"action":"doc_export","params":{"doc_id":"…","format":"pdf"}}` — formats: `docx` (default), `pdf`, `odt`, `md`, `html`. The design is applied. Returns `{doc_id, title, format, filename, url}`; the Word window saves the file.
 
 Rules:
 - To change a word, name, number or sentence → `doc_edit` with the old and new text. NEVER rewrite the whole document for a small change.
 - To add something at the end → `doc_append`.
 - `doc_write` DELETES the previous content and replaces it — only use when the user asks for a full rewrite, and always pass the complete text.
-- Without `doc_id`, tools target the most recently used document.
+- Without `doc_id`, tools target the most recently used document (except `doc_delete`, which needs it).
 - Content is **Markdown**: `# Heading`, `## Subheading`, `### Sub-subheading`, paragraphs separated by a blank line, `- ` bullet and `1. ` numbered lists, tables (`| Col | Col |` + `|---|---|` rows), `**bold**`, `*italic*`, `> quote`, `[text](url)`.
 - When `doc_design` adds a cover or a title, do not start the content with a `#` line repeating the document title (a repeated first heading is dropped on export anyway).
 

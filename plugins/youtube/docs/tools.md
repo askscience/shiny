@@ -3,7 +3,7 @@
 | Tool | Params | Returns / behaviour |
 |---|---|---|
 | `youtube_search` | `{ query, limit? }` (default 8) | Videos with title, channel, duration, thumbnail, `video_id`; each also becomes a tappable card. |
-| `youtube_play` | `{ video_id }` or `{ query }` | Starts playback in the YouTube window. With a query it plays the first search hit. |
+| `youtube_play` | `{ video_id, title?, channel?, thumbnail? }` or `{ query }` | Starts playback in the YouTube window. With a query it plays the first search hit. |
 | `youtube_suggest` | `{ video_id?, title?, channel?, query?, limit? }` | Recommendations ranked by keyword overlap, same-channel affinity and watch history. |
 
 ## Guidance (from [`skills/youtube.md`](../skills/youtube.md))

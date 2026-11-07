@@ -382,7 +382,7 @@ pub struct PdfReplaceText;
 #[async_trait]
 impl Tool for PdfReplaceText {
     fn name(&self) -> &str { "pdf_replace_text" }
-    fn aliases(&self) -> &[&str] { &["replace_text", "edit_pdf_text", "find_and_replace"] }
+    fn aliases(&self) -> &[&str] { &["edit_pdf_text", "find_and_replace"] }
     fn step_label(&self) -> &str { "Editing PDF text…" }
     fn doc_fragment(&self) -> Option<&str> {
         Some("- `pdf_replace_text` — Find & replace text. params: `{ pdf_id?: string, page?: number, old: string, new: string }` — replaces every occurrence of `old` with `new` on `page`, or on every page when `page` is omitted. Fails (nothing saved) when `old` is not found. New characters must exist in the PDF's embedded font.")
@@ -424,7 +424,7 @@ pub struct PdfAnnotate;
 #[async_trait]
 impl Tool for PdfAnnotate {
     fn name(&self) -> &str { "pdf_annotate" }
-    fn aliases(&self) -> &[&str] { &["add_annotation", "highlight_pdf", "add_note", "add_pdf_note", "annotate_pdf"] }
+    fn aliases(&self) -> &[&str] { &["add_annotation", "highlight_pdf", "add_pdf_note", "annotate_pdf"] }
     fn step_label(&self) -> &str { "Annotating PDF…" }
     fn doc_fragment(&self) -> Option<&str> {
         Some("- `pdf_annotate` — Add an annotation to a page. params: `{ pdf_id?: string, page?: number, kind: string, rect: [x,y,width,height], text?: string, color?: [r,g,b] }` — `kind` is one of `highlight` (translucent marker), `underline`, `strikeout`, `squiggly`, `box`, `note`, `free_text`, `link`. `rect` is in PDF points (origin bottom-left; a Letter page is 612×792). For `link` the `text` is the URL; for `note`/`free_text` it is the note/box text. `color` is 0..1 RGB.")

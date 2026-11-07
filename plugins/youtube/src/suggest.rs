@@ -505,6 +505,20 @@ pub async fn suggest(
     seed: Option<Seed>,
     limit: usize,
 ) -> Result<(Vec<VideoResult>, Seed), AppError> {
+    // A bare `video_id` gives the searches nothing to go on (they are built
+    // from the title and channel): fill those in from what this user watched,
+    // and treat a video we know nothing about as no seed at all.
+    let seed = seed.and_then(|mut s| {
+        if s.title.trim().is_empty() && !s.video_id.is_empty() {
+            if let Some(known) = recent(user, HISTORY_CAP).into_iter().find(|w| w.video_id == s.video_id) {
+                s.title = known.title;
+                if s.channel.trim().is_empty() {
+                    s.channel = known.channel;
+                }
+            }
+        }
+        (!s.title.trim().is_empty() || !s.channel.trim().is_empty()).then_some(s)
+    });
     let seed = match seed.filter(Seed::is_usable) {
         Some(s) => s,
         // No seed: prefer the last watch, then the category this user leans on

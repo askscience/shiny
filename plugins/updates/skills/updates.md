@@ -17,17 +17,29 @@ The plugin detects the distribution and uses its native package manager:
 ## Tools
 
 - **`updates_status`** — Detect the distro and list pending package and Ollama
-  updates. params: `{ force?: boolean }`. Read-only, no password.
+  updates. params: `{ force?: boolean }` (`force: true` re-queries instead of
+  using the cache). Read-only, no password. Returns
+  `{ distro, packages: [{name, current, candidate, repo}], count, checked_at,
+  stale, error, ollama: {installed, path, version, service, update_command,
+  can_update}, summary }`.
 - **`updates_distro`** — Report the detected distribution and package manager.
-  params: `{}`. Read-only.
+  params: `{}`. Read-only. Returns `{ distro: {id, name, version, id_like,
+  manager, manager_label, supported} }`.
 - **`updates_refresh`** — Refresh the package manager's metadata (e.g.
   `apt update`). params: `{ password?: string }`. **Root** on a normal server.
 - **`updates_apply`** — Install updates. params:
   `{ password?: string, all?: boolean, packages?: string[], include_ollama?: boolean }`.
-  `all` installs everything; `packages` installs the named ones; `include_ollama`
-  also updates Ollama. **Root** on a normal server.
+  `all` installs everything (the default when neither `packages` nor
+  `include_ollama` is given); `packages` installs the named ones (a
+  comma-separated string also works); `include_ollama` also updates Ollama.
+  **Root** on a normal server.
 - **`update_ollama`** — Install/update Ollama with the official installer.
   params: `{ password?: string }`. **Root** on a normal server.
+
+The three write tools start a background job and return at once with
+`{ job, status: "started" }` (`updates_apply` adds `include_ollama`); the user
+gets a desktop notification when the job finishes. Do not claim the update is
+done — say it has started.
 
 ## Safety
 

@@ -23,7 +23,17 @@ pub struct MailSync;
 pub struct MailSend;
 pub struct MailSaveAttachment;
 
+/// A list of strings, or one string (comma- or semicolon-separated): models
+/// often pass `"to":"a@x.com"` for a single recipient.
 fn str_array(v: &Value) -> Vec<String> {
+    if let Some(s) = v.as_str() {
+        return s
+            .split([',', ';'])
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(String::from)
+            .collect();
+    }
     v.as_array()
         .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect())
         .unwrap_or_default()

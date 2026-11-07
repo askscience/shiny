@@ -234,6 +234,10 @@ description/summary and active flag. It drives three blocks:
 - `plugins_hint` — a compact one-line catalog ("`traveler: Trip tracking;
   hello: Demo`", inactive plugins suffixed `(inactive)`) passed to the
   continuation prompt so the model can still activate/deactivate mid-loop.
+  Each usable plugin also names its tools (`word: … [tools: doc_create,
+  doc_edit, …]`, from `ToolRegistry::names_owned_by`; in focus mode only the
+  focused plugins'): the continuation prompt carries no tool docs, and without
+  the names a model past its first tool guesses them.
 
 ### 3.6 Desktop block
 
@@ -392,6 +396,15 @@ Key behaviours:
 
 - The **first** model call uses the full planning prompt (system + user). Every
   later call uses the slim continuation prompt.
+- A plugin's skill is handed back as a step note, once per plugin per turn,
+  when the step shows the model needs it: one of its tools ran, it was
+  activated (also when it was **already** active — the model asks because it
+  lacks the tools), its window was opened, or the model called a tool that does
+  not exist under its name (`word_create_document`, `{"plugin":"word"}`). An
+  unknown name that points at no plugin gets a note to use the listed names and
+  not to search the disk. `tests/skills_contract.rs` checks that every plugin
+  with tools hands over a skill naming all of them, and that its examples call
+  real tools.
 - `MAX_TOOL_STEPS = 40` caps how many model round-trips one turn may take.
 - A prompt over 200 000 characters logs a warning but still proceeds ("slim
   context" is a debugging aid, not a hard cap).

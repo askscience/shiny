@@ -1,8 +1,9 @@
 # Browser plugin — agent tools
 
 Three tools let the AI drive the Browser window. They are registered in
-`BrowserPlugin::register` via `builder.tool_arc(shiny_plugin_sdk::tools::bridged(tool))`,
-so their `invoke` futures run on the plugin-owned runtime. All three return an
+`BrowserPlugin::register` with `builder.tools([...])`, which wraps each in
+`shiny_plugin_sdk::tools::bridged`, so their `invoke` futures run on the
+plugin-owned runtime. All three return an
 `ActionOutcome`, and every `browser_open` / `browser_search` call attaches a
 `browser_page` **artifact** whose `narrative` field carries the URL — that is
 how the window learns where to navigate and how core chooses to focus the

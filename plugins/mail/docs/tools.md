@@ -6,7 +6,7 @@ first verified account. List/search/read use the **local cache**; call
 
 | Tool | Params | Returns / behaviour |
 |---|---|---|
-| `mail_status` | `{}` | Which accounts are configured, verified and connected. |
+| `mail_status` | `{}` | `{ configured, accounts }`: which accounts are configured and verified. |
 | `mail_sync` | `{ account?, folder? }` | Downloads new mail into the cache (default `INBOX`). |
 | `mail_list` | `{ account?, folder?, page? }` | Up to 60 cached messages: subject, sender, date, `seen`. |
 | `mail_search` | `{ account?, folder?, query }` | Cached subject/sender/body search; omit `folder` to search all. |

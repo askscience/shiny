@@ -59,6 +59,25 @@ async fn resolve_image_id(
     Ok(by_title)
 }
 
+/// `resolve_image_id`, or — with no `image_id` at all — the user's most
+/// recently updated image, as `image_get` / `image_edit` promise the AI.
+/// Never used for `image_delete`: a delete always names its image.
+async fn resolve_or_latest(
+    pool: &SqlitePool,
+    user_id: &str,
+    id_or_title: Option<String>,
+) -> Result<Option<String>, AppError> {
+    if id_or_title.as_deref().is_some_and(|s| !s.trim().is_empty()) {
+        return resolve_image_id(pool, user_id, id_or_title).await;
+    }
+    Ok(sqlx::query_scalar(
+        "SELECT id FROM images WHERE user_id = ?1 ORDER BY updated_at DESC LIMIT 1",
+    )
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await?)
+}
+
 /// Normalize the operations the LLM emits into an ordered list.
 fn operations_param(req: &ToolRequest<'_>) -> Result<Vec<Value>, AppError> {
     if let Some(arr) = req.params.get("operations").and_then(|v| v.as_array()) {
@@ -121,7 +140,7 @@ impl Tool for ImageGet {
     }
 
     async fn invoke(&self, ctx: &PluginCtx, req: ToolRequest<'_>) -> Result<ActionOutcome, AppError> {
-        let image_id = resolve_image_id(ctx.pool().await, req.traveler_id, req.params.param_str("image_id"))
+        let image_id = resolve_or_latest(ctx.pool().await, req.traveler_id, req.params.param_str("image_id"))
             .await?
             .ok_or_else(|| AppError::NotFound("Image not found".into()))?;
 
@@ -158,7 +177,7 @@ impl Tool for ImageEdit {
 
     async fn invoke(&self, ctx: &PluginCtx, req: ToolRequest<'_>) -> Result<ActionOutcome, AppError> {
         let operations = operations_param(&req)?;
-        let image_id = resolve_image_id(ctx.pool().await, req.traveler_id, req.params.param_str("image_id"))
+        let image_id = resolve_or_latest(ctx.pool().await, req.traveler_id, req.params.param_str("image_id"))
             .await?
             .ok_or_else(|| AppError::NotFound("Image not found".into()))?;
         let db = ctx.db();

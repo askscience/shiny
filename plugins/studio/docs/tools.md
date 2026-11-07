@@ -29,7 +29,7 @@ exhaustive reference. See also [`routes.md`](routes.md) for the equivalent REST 
 | `studio_arrangement_list` | `list_arrangements`, `arrangements` | `{}` | `{ arrangements[], count }` |
 | `studio_arrangement_save` | `save_arrangement`, `create_arrangement` | arrangement (+ optional `id`) | `{ id, title }` |
 | `studio_arrangement_get` | `get_arrangement` | `{ id }` | arrangement with `tracks` + `clips` |
-| `studio_arrangement_delete` | `delete_arrangement` | `{ id, confirm:true }` | `{ id, title }` |
+| `studio_arrangement_delete` | `delete_arrangement` | `{ id (UUID only), confirm:true }` | `{ id, title }` |
 | `studio_arrangement_edit` | `edit_arrangement`, `studio_edit` | `{ arrangement_id?, ops[] }` | summary + `id`, `applied[]` |
 | `studio_import_audio` | `import_song`, `add_audio_track`, `studio_add_song` | `{ path, arrangement_id?, create?, track_name?, start_beat?, match_tempo?, level? }` | `{ id, track_id, duration, bpm, project_bpm, … }` |
 | `studio_mix_analyze` | `analyze_mix`, `studio_arrangement_analyze` | `{ arrangement_id? }` | `{ id, master, trim_db, tracks[] }` |
@@ -44,11 +44,11 @@ arrangement is used. Audio `path`s are relative to the user's Files home.
 | Op | Fields |
 | --- | --- |
 | `set` | `title?`, `bpm?`, `length_beats?`, `master?`, `fx?` (merged key by key), `master_fx?`, `returns?` |
-| `add_track` | `name`, `id?`, `kind?`, `level?`, `pan?`, `mute?`, `solo?`, `sends?`, `fx?`, `color?`, `automation?` |
+| `add_track` | `name?` (default `Track`), `id?`, `kind?`, `level?`, `pan?`, `mute?`, `solo?`, `sends?`, `fx?`, `color?`, `automation?` |
 | `update_track` | `track` (id or name) + any of `name`, `kind`, `level`, `pan`, `mute`, `solo`, `sends`, `fx`, `color` |
 | `remove_track` | `track` (its clips go too) |
-| `add_clip` | `track`, `start`, `pattern` or `audio`, `length_beats?`, `gain_db?`, `loop?` |
-| `update_clip` | `index` + any of `track`, `start`, `length_beats`, `gain_db`, `loop`, `pattern`, `audio` |
+| `add_clip` | `track`, `start`, `pattern` or `audio`, `length_beats?`, `gain_db?`, `loop?`, `offset_beats?` |
+| `update_clip` | `index` + any of `track`, `start`, `length_beats`, `gain_db`, `loop`, `offset_beats`, `pattern`, `audio` |
 | `remove_clip` | `index` |
 | `set_automation` | `track`, `param`, `points` (empty clears the lane) |
 

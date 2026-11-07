@@ -47,6 +47,18 @@ impl ToolRegistry {
         map.insert(key, tool.clone());
         for alias in tool.aliases() {
             let alias_key = normalize_action_name(alias);
+            // An alias another tool already answers to: the later plugin wins,
+            // and the model's call lands in a tool it did not mean. Say so.
+            if let Some(other) = map.get(&alias_key) {
+                if other.name() != tool.name() {
+                    tracing::warn!(
+                        "tool alias '{alias}' of {plugin_name}'s {} replaces {}'s {}",
+                        tool.name(),
+                        owner.get(&alias_key).map(String::as_str).unwrap_or("core"),
+                        other.name()
+                    );
+                }
+            }
             owner.insert(alias_key.clone(), plugin_name.to_string());
             map.insert(alias_key, tool.clone());
         }
@@ -89,6 +101,23 @@ impl ToolRegistry {
     pub fn has(&self, name: &str) -> bool {
         let map = self.tools.read();
         map.contains_key(&normalize_action_name(name))
+    }
+
+    /// The tools one plugin owns, by their own names (no aliases), sorted.
+    /// The continuation prompt carries no tool docs, so this list is what
+    /// keeps the model from guessing names (`word_create_document` for
+    /// `doc_create`) once a turn is past its first tool.
+    pub fn names_owned_by(&self, plugin_name: &str) -> Vec<String> {
+        let map = self.tools.read();
+        let owner_map = self.owner.read();
+        let mut names: Vec<String> = map
+            .iter()
+            .filter(|(key, _)| owner_map.get(*key).is_some_and(|o| o == plugin_name))
+            .map(|(_, tool)| tool.name().to_string())
+            .collect();
+        names.sort();
+        names.dedup();
+        names
     }
 
     /// Owning plugin of an action key ("" = core built-in).
