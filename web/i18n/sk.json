@@ -1413,5 +1413,10 @@
   "plugins.subtitleCraft": "Balík Craft, každá aplikácia vo vlastnom okne — nainštalovaná jedným krokom, stále aktuálna a ak chcete, prístupná asistentovi.",
   "system.update.reconnecting": "Obnovuje sa pripojenie k serveru…",
   "system.update.pluginsReloaded": "Aktualizované: {names}",
-  "system.update.reloading": "Aktualizuje sa rozhranie…"
+  "system.update.reloading": "Aktualizuje sa rozhranie…",
+  "wearable.label": "Nositeľné zariadenie",
+  "wearable.wallpaper": "Tapeta",
+  "wearable.animation": "Animácia",
+  "settings.desktop.wearable": "Nositeľné zariadenie",
+  "settings.desktop.wearableHint": "Hodiny nad animáciou asistenta, žiadne okná, vždy počúva svoje meno."
 }

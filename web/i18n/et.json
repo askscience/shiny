@@ -1377,5 +1377,10 @@
   "plugins.subtitleCraft": "Craft'i komplekt, iga rakendus omaette aknas — paigaldub ühe sammuga, püsib ajakohasena ja on soovi korral ka assistendile kasutatav.",
   "system.update.reconnecting": "Taasühendamine serveriga…",
   "system.update.pluginsReloaded": "Uuendatud: {names}",
-  "system.update.reloading": "Liidese uuendamine…"
+  "system.update.reloading": "Liidese uuendamine…",
+  "wearable.label": "Kantav seade",
+  "wearable.wallpaper": "Taustapilt",
+  "wearable.animation": "Animatsioon",
+  "settings.desktop.wearable": "Kantav seade",
+  "settings.desktop.wearableHint": "Kell assistendi animatsiooni kohal, aknaid pole, kuulab alati oma nime."
 }

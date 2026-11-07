@@ -36,7 +36,41 @@ arrangement, never a rewrite of it.
 | `web/js/viewport.js` | Breakpoint queries (phone / mobile portrait and landscape) |
 | `web/js/phoneShell.js` | Phone: home screen, the bottom bar (home, switcher, chat and voice by gesture), Back goes home |
 | `web/js/controlCenter.js` | Phone: the host status chips and bar actions in a sheet |
+| `web/js/wearable.js` | The wearable face: clock over the full-screen dot grid, no windows, always listening for the wake word |
 | `web/js/preferences.js` | Per-user storage for all of the above |
+
+## Wearable face
+
+Settings → Desktop → **Wearable** (`ui.wearable`, per user, server-backed;
+`getWearable` / `setWearable` in `preferences.js`) replaces the whole desktop
+with a face meant for a watch, on any screen — desktop, phone or watch.
+`wearable.js` owns it:
+
+- **The face.** The user's wallpaper (`#background`) under the voice bar's dot
+  grid stretched over the screen — `mountVoiceDots(host, { face: true })`:
+  dots sized to the screen, semi-transparent, faded by a circular vignette
+  inscribed in the screen, a tool's mark drawn in blocks of dots. It is the
+  same renderer, signal and effect (`orb_effect`, `orb_react`) as the voice bar.
+  On top: the time large, the date small under it and the weather, from
+  `hudLeft.js` (`getWeatherState`, `weather:update`) and `clockShared.js`.
+- **No windows.** `html[data-wearable]` hides `#app` and every body-level piece
+  of the desktop (`css/wearable.css`): windows keep running hidden, so plugins
+  work in the background; the Browser keeps its native pages off screen
+  (`wearable-active` on `<body>`). Trackpad gestures and the workspace
+  shortcuts are ignored. Dialogs, toasts and the lock screen stay above.
+- **The assistant is told.** `getDesktopSnapshot()` sends `wearable: true` with
+  no windows and no focus scope; the server swaps the desktop block for
+  `WEARABLE_BLOCK` (no `show_plugin`, no window talk, short spoken replies).
+- **Always listening.** Whenever the voice state returns to idle (and every
+  5 s as a safety net) the wake listener is armed again — not while a turn
+  runs, a reply plays, the keyboard is open or the screen is locked; a
+  microphone that will not open is retried with a back-off up to a minute. A
+  tap on the face listens once.
+- **Settings.** One icon button opens a dialog with the wallpaper grid
+  (`renderBackgroundPresets`, `uploadBackground` from `background.js`), the AI
+  model (`loadAiModelChoices` from `settings/assistant.js`), the theme, the
+  animation (`orbEffectOptions` from `voiceDots.js`) and the switch back — the
+  same helpers Settings → Appearance and Assistant use.
 
 ## Phone shell
 

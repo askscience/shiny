@@ -249,6 +249,14 @@ and the active workspace, and advises moving windows into existing workspaces
 rather than creating empty ones. `plugin_windows_block` keeps `show_plugin`
 ("bring the window to the front") distinct from focus mode.
 
+With `wearable: true` (the wearable face, `web/js/wearable.js`) the block is
+`WEARABLE_BLOCK` (`src/services/agent_steps.rs`) instead: no window is ever
+shown, so no `show_plugin`, `desktop_*` or workspace tools, `plugin_activate`
+for an inactive plugin's tools, and one to three short spoken sentences. The
+same block is appended to the continuation prompt (`AgentRunInput::wearable`),
+the runner skips its "the window is not open" hint, and `workspaces_enabled`
+is forced off so the workspace actions refuse.
+
 ### 3.7 Focus-mode block
 
 `focus_state_line` always contributes one line to `## Context` —

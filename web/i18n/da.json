@@ -1377,5 +1377,10 @@
   "plugins.subtitleCraft": "Craft-pakken, hver app i sit eget vindue — installeret i ét trin, holdt opdateret og åben for assistenten, hvis du vil.",
   "system.update.reconnecting": "Genopretter forbindelsen til serveren…",
   "system.update.pluginsReloaded": "Opdateret: {names}",
-  "system.update.reloading": "Opdaterer grænsefladen…"
+  "system.update.reloading": "Opdaterer grænsefladen…",
+  "wearable.label": "Wearable",
+  "wearable.wallpaper": "Baggrund",
+  "wearable.animation": "Animation",
+  "settings.desktop.wearable": "Wearable",
+  "settings.desktop.wearableHint": "Et ur over assistentens animation, ingen vinduer, lytter altid efter sit navn."
 }

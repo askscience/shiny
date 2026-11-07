@@ -4,6 +4,29 @@ import { t, tp } from '../i18n.js';
 import { getAiName, setAiName, getAiProvider, setAiProvider, getOllamaModel, setOllamaModel, getOpenAiBaseUrl, setOpenAiBaseUrl, getOpenAiApiKey, setOpenAiApiKey, getOpenAiModel, setOpenAiModel, flushPreferencesNow, isAiEnabled, setAiEnabled } from '../preferences.js';
 import { el, field } from './controls.js';
 
+/**
+ * The models the AI provider offers, as select options with the server's
+ * default first (value ''), and the one stored for this user. Shared by this
+ * section and the wearable face's settings. Throws when the list cannot load.
+ */
+export async function loadAiModelChoices() {
+  const res = await apiFetch('/api/ai/models');
+  const { provider = 'ollama', models = [], default: fallback = '', available = false } = res.data || {};
+  const options = [
+    { value: '', label: fallback ? t('settings.assistant.defaultModel', { model: fallback }, `Default (${fallback})`) : t('common.defaultServer', null, 'Default (server)') },
+    ...models.map((n) => ({ value: n, label: n })),
+  ];
+  const stored = provider === 'openai' ? getOpenAiModel() : getOllamaModel();
+  return { provider, models, fallback, available, options, value: stored && models.includes(stored) ? stored : '' };
+}
+
+/** Store the model picked from `loadAiModelChoices` for the provider in use. */
+export function setAiModelChoice(provider, value) {
+  if (provider === 'openai') setOpenAiModel(value);
+  else setOllamaModel(value);
+  void flushPreferencesNow();
+}
+
 /** Build the assistant section with resources owned by its current mount. */
 export function createAssistantSection({ on, cleanups, resources }) {
   function buildAssistant() {
@@ -72,17 +95,13 @@ export function createAssistantSection({ on, cleanups, resources }) {
     async function loadAiModels() {
       const seq = ++modelRequest;
       try {
-        const res = await apiFetch('/api/ai/models');
+        const choices = await loadAiModelChoices();
         if (seq !== modelRequest) return;
-        const { provider: who, models = [], default: fallback, available } = res.data || {};
-        serverDefaultModel = fallback || '';
+        const { provider: who, models, fallback, available } = choices;
+        serverDefaultModel = fallback;
 
-        model.setOptions([
-          { value: '', label: serverDefaultModel ? t('settings.assistant.defaultModel', { model: serverDefaultModel }, `Default (${serverDefaultModel})`) : t('common.defaultServer', null, 'Default (server)') },
-          ...models.map((n) => ({ value: n, label: n })),
-        ]);
-        const stored = getOllamaModel();
-        model.select.value = stored && models.includes(stored) ? stored : '';
+        model.setOptions(choices.options);
+        model.select.value = choices.value;
 
         if (who === 'openai') {
           modelHint.textContent = '';

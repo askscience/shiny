@@ -60,6 +60,7 @@ import { initShellMotion } from './shellMotion.js';
 import { hideBootScreen } from './bootScreen.js';
 import { initGreeterLook } from './greeterLook.js';
 import { closeOrphanNativeViews } from './nativeViews.js';
+import { initWearable, setWearableActions } from './wearable.js';
 
 let appInitialized = false;
 // null = not yet evaluated — the first check must always apply show/hide,
@@ -239,6 +240,10 @@ async function initApp() {
   });
   wireSphere();
   wireVoiceResults();
+  // The wearable face (Settings → Desktop): a tap on it listens once, like a
+  // double tap on the voice bar; the wake word is armed on its own.
+  setWearableActions({ listen: () => (isAiEnabled() ? tapOrb() : null) });
+  initWearable();
   initTouchBar({ talk: () => (isAiEnabled() ? tapOrb() : openLauncher()) });
   reveal();
 }

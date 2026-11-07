@@ -1413,5 +1413,10 @@
   "plugins.subtitleCraft": "Sada Craft, každá aplikace ve vlastním okně — nainstalovaná jedním krokem, stále aktuální a na přání dostupná i asistentovi.",
   "system.update.reconnecting": "Obnovuje se připojení k serveru…",
   "system.update.pluginsReloaded": "Aktualizováno: {names}",
-  "system.update.reloading": "Aktualizuje se rozhraní…"
+  "system.update.reloading": "Aktualizuje se rozhraní…",
+  "wearable.label": "Nositelné zařízení",
+  "wearable.wallpaper": "Tapeta",
+  "wearable.animation": "Animace",
+  "settings.desktop.wearable": "Nositelné zařízení",
+  "settings.desktop.wearableHint": "Hodiny nad animací asistenta, žádná okna, vždy naslouchá svému jménu."
 }

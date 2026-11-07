@@ -1431,5 +1431,10 @@
   "plugins.subtitleCraft": "Sraith Craft, gach aip ina fuinneog féin — suiteáilte in aon chéim amháin, coinnithe cothrom le dáta, agus oscailte don chúntóir más mian leat.",
   "system.update.reconnecting": "Ag athcheangal leis an bhfreastalaí…",
   "system.update.pluginsReloaded": "Nuashonraithe: {names}",
-  "system.update.reloading": "An comhéadan á nuashonrú…"
+  "system.update.reloading": "An comhéadan á nuashonrú…",
+  "wearable.label": "Inchaite",
+  "wearable.wallpaper": "Cúlbhrat",
+  "wearable.animation": "Beochan",
+  "settings.desktop.wearable": "Inchaite",
+  "settings.desktop.wearableHint": "Clog os cionn bheochan an chúntóra, gan fuinneoga, ag éisteacht i gcónaí lena ainm."
 }

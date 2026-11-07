@@ -1,16 +1,15 @@
-import { apiFetch } from '../api.js';
 import { icon, toast, button, input, select, slider, toggleRow, listThemes, getActiveTheme, getThemeManifest, applyAppearance, getAccent, setAccent, getGradient, setGradient, accentPresets, gradientPresets, gradientToCss, getFont, setFont, FONT_THEME, iconsetOptions, getIconsetChoice, setIconset, tintEnabled, setTint, refreshIcons, switchTheme } from '../../ui/index.js';
 import { refreshPluginIcons } from '../pluginIcon.js';
 import { listFonts } from '../fonts.js';
 import { t } from '../i18n.js';
 import { isPluginActive } from '../activePlugins.js';
-import { MOTION_CHOICES, TERMINAL_STYLES, getTerminalStyle, setTerminalStyle, getDesktopSurface, setDesktopSurface, getImmersive, setImmersive, getHudChips, setHudChips, getHudWidgets, setHudWidgets, orbIsAttached, ORB_EFFECTS, ORB_REACTS, BAR_SCALE_MIN, BAR_SCALE_MAX, LAUNCHER_STYLES, getLauncher, setLauncher } from '../preferences.js';
+import { MOTION_CHOICES, TERMINAL_STYLES, getTerminalStyle, setTerminalStyle, getDesktopSurface, setDesktopSurface, getImmersive, setImmersive, getHudChips, setHudChips, getHudWidgets, setHudWidgets, orbIsAttached, ORB_REACTS, BAR_SCALE_MIN, BAR_SCALE_MAX, LAUNCHER_STYLES, getLauncher, setLauncher } from '../preferences.js';
 import { SCALE_OPTIONS, getDisplayScale, setDisplayScale } from '../display.js';
-import { getBackground, setBackground, renderBackgroundPresets } from '../background.js';
+import { getBackground, setBackground, renderBackgroundPresets, uploadBackground as uploadBackgroundFile, removeBackgroundImage as removeBackgroundPhoto } from '../background.js';
 import { pickFiles } from '../files.js';
 import { el, field, sliderField, pageHeading, pageTabs } from './controls.js';
 import { stylePreview, windowPreview, barPreview, launcherPreview } from './previews.js';
-import { mountVoiceDots } from '../voiceDots.js';
+import { mountVoiceDots, orbEffectOptions } from '../voiceDots.js';
 import { revealRegion, disposeMotion } from '../../ui/motion.js';
 
 /** Build the appearance section with resources owned by its current mount. */
@@ -162,33 +161,12 @@ export function createAppearancePanelSection({ on, cleanups, resources }) {
   }
 
   async function uploadBackground(file, sync) {
-    if (!file.type?.startsWith('image/')) {
-      toast(t('settings.appearance.background.chooseImage', null, 'Choose an image file'), { type: 'error' });
-      return;
-    }
-    if (file.size > 12 * 1024 * 1024) {
-      toast(t('settings.appearance.background.tooLarge', null, 'Image must be under 12 MB'), { type: 'error' });
-      return;
-    }
-    try {
-      const form = new FormData();
-      form.append('file', file);
-      await apiFetch('/api/background', { method: 'POST', body: form });
-      setBackground({ mode: 'image', url: `/api/background?v=${Date.now()}`, preset: null });
-      sync();
-      toast(t('settings.appearance.background.updated', null, 'Background image updated'), { type: 'info' });
-    } catch (e) {
-      toast(e.message || t('settings.appearance.background.uploadFailed', null, 'Could not upload image'), { type: 'error' });
-    }
+    if (await uploadBackgroundFile(file)) sync();
   }
 
   async function removeBackgroundImage(sync) {
-    try {
-      await apiFetch('/api/background', { method: 'DELETE' });
-    } catch (_) { /* 404 or transient — proceed */ }
-    setBackground({ mode: 'image', url: null, preset: null });
+    await removeBackgroundPhoto();
     sync();
-    toast(t('settings.appearance.background.removed', null, 'Background image removed'), { type: 'info' });
   }
 
   /* ── Account ────────────────────────────────────────────────── */
@@ -399,19 +377,13 @@ export function createAppearancePanelSection({ on, cleanups, resources }) {
     /* The dot grid inside the bar (voiceDots.js): how it moves and what it
        follows. The preview beside the effect is the same renderer on a looped
        demo exchange (listen → tools → speak), in the bar's own colours. */
-    const effectLabels = {
-      glyph: t('settings.appearance.orbEffect.glyph', null, 'Glyph'),
-      eq: t('settings.appearance.orbEffect.eq', null, 'Equaliser'),
-      ripple: t('settings.appearance.orbEffect.ripple', null, 'Ripple'),
-      firefly: t('settings.appearance.orbEffect.firefly', null, 'Fireflies'),
-    };
     const reactLabels = {
       voice: t('settings.appearance.orbReact.voice', null, 'Voice'),
       tools: t('settings.appearance.orbReact.tools', null, 'Tools'),
       both: t('settings.appearance.orbReact.both', null, 'Both'),
     };
     const orbEffect = select({
-      options: ORB_EFFECTS.map((value) => ({ value, label: effectLabels[value] })),
+      options: orbEffectOptions(),
       onChange: (value) => setImmersive({ orb_effect: value }),
     });
     orbEffect.select.value = immersive.orb_effect;

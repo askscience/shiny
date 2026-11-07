@@ -414,6 +414,17 @@ export function workspaceLabel(wsOrIndex) {
  *  which plugins the user has focused (`focused`), which decides whether the
  *  turn runs in focus mode. */
 export function getDesktopSnapshot() {
+  // The wearable face shows no window at all (wearable.js): the assistant is
+  // told so, and no focus scope applies.
+  if (document.documentElement.dataset.wearable === '1') {
+    return {
+      active: 1,
+      workspaces: [{ index: 1, windows: [] }],
+      workspaces_enabled: false,
+      focused: [],
+      wearable: true,
+    };
+  }
   if (!workspacesEnabled()) {
     return {
       active: 1,
@@ -931,6 +942,7 @@ function isEditableEl(el) {
 function wireShortcuts() {
   document.addEventListener('keydown', (e) => {
     if (!WS_SHORTCUT_ENABLED) return;
+    if (document.documentElement.dataset.wearable === '1') return; // no desktop
     if (e.ctrlKey || e.metaKey) return;           // don't fight browser/OS
     if (isEditableEl(e.target)) return;           // typing wins
     if (!e.altKey) return;

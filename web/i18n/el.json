@@ -1377,5 +1377,10 @@
   "plugins.subtitleCraft": "Η σουίτα Craft, κάθε εφαρμογή στο δικό της παράθυρο — εγκαθίσταται σε ένα βήμα, μένει ενημερωμένη και, αν θέλετε, είναι διαθέσιμη και στον βοηθό.",
   "system.update.reconnecting": "Επανασύνδεση με τον διακομιστή…",
   "system.update.pluginsReloaded": "Ενημερώθηκαν: {names}",
-  "system.update.reloading": "Ενημέρωση της διεπαφής…"
+  "system.update.reloading": "Ενημέρωση της διεπαφής…",
+  "wearable.label": "Φορητή συσκευή",
+  "wearable.wallpaper": "Ταπετσαρία",
+  "wearable.animation": "Κίνηση",
+  "settings.desktop.wearable": "Φορητή συσκευή",
+  "settings.desktop.wearableHint": "Ένα ρολόι πάνω από την κίνηση του βοηθού, χωρίς παράθυρα, πάντα σε αναμονή για το όνομά του."
 }

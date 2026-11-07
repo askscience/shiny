@@ -1377,5 +1377,10 @@
   "plugins.subtitleCraft": "De Craft-suite, elke app in een eigen venster — in één stap geïnstalleerd, up-to-date gehouden en desgewenst open voor de assistent.",
   "system.update.reconnecting": "Opnieuw verbinden met de server…",
   "system.update.pluginsReloaded": "Bijgewerkt: {names}",
-  "system.update.reloading": "De interface wordt bijgewerkt…"
+  "system.update.reloading": "De interface wordt bijgewerkt…",
+  "wearable.label": "Wearable",
+  "wearable.wallpaper": "Achtergrond",
+  "wearable.animation": "Animatie",
+  "settings.desktop.wearable": "Wearable",
+  "settings.desktop.wearableHint": "Een klok boven de animatie van de assistent, geen vensters, luistert altijd naar zijn naam."
 }

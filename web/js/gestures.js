@@ -146,8 +146,12 @@ const KEY_DIRECTIONS = {
   ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right',
 };
 
+/** The wearable face (wearable.js) has no desktop to swipe around. */
+const wearableOn = () => document.documentElement.dataset.wearable === '1';
+
 export function initGestures() {
   window.addEventListener('trackpad:gesture', (e) => {
+    if (wearableOn()) return;
     if (e.detail && typeof e.detail === 'object') onGesture(e.detail);
   });
 
@@ -155,6 +159,7 @@ export function initGestures() {
   // Touch Bar's, no Super — the OS's) is free everywhere else in the app.
   window.addEventListener('keydown', (e) => {
     if (!e.ctrlKey || !e.altKey || e.shiftKey || e.metaKey) return;
+    if (wearableOn()) return;
     const direction = KEY_DIRECTIONS[e.key];
     if (!direction) return;
     e.preventDefault();

@@ -1377,5 +1377,10 @@
   "plugins.subtitleCraft": "A Craft csomag, minden app a saját ablakában — egy lépésben települ, naprakész marad, és ha kívánja, az asszisztens is használhatja.",
   "system.update.reconnecting": "Újracsatlakozás a kiszolgálóhoz…",
   "system.update.pluginsReloaded": "Frissítve: {names}",
-  "system.update.reloading": "A felület frissítése…"
+  "system.update.reloading": "A felület frissítése…",
+  "wearable.label": "Hordható",
+  "wearable.wallpaper": "Háttérkép",
+  "wearable.animation": "Animáció",
+  "settings.desktop.wearable": "Hordható",
+  "settings.desktop.wearableHint": "Óra az asszisztens animációja fölött, ablakok nélkül, mindig figyel a nevére."
 }

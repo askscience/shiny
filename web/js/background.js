@@ -10,8 +10,9 @@ import { controlButton } from '../ui/components/button.js';
  *   animated  — a CSS-animated preset ("aurora" drift or "shimmer" sweep)
  */
 
-import { getGradient, gradientToCss, icon, themeMode, getThemeManifest } from '../ui/index.js';
+import { getGradient, gradientToCss, icon, themeMode, getThemeManifest, toast } from '../ui/index.js';
 import { t } from './i18n.js';
+import { apiFetch } from './api.js';
 
 const BG_KEY = 'ui.background';
 
@@ -252,4 +253,40 @@ export function renderBackgroundPresets(container, { onSelect, onUpload } = {}) 
   }
   custom.addEventListener('click', () => onUpload?.());
   container.appendChild(custom);
+}
+
+/**
+ * Make an image file the user's own wallpaper (uploaded to /api/background).
+ * Shared by Settings → Appearance and the wearable face's settings. Resolves
+ * to true once it is set; says why in a toast when it is not.
+ */
+export async function uploadBackground(file) {
+  if (!file?.type?.startsWith('image/')) {
+    toast(t('settings.appearance.background.chooseImage', null, 'Choose an image file'), { type: 'error' });
+    return false;
+  }
+  if (file.size > 12 * 1024 * 1024) {
+    toast(t('settings.appearance.background.tooLarge', null, 'Image must be under 12 MB'), { type: 'error' });
+    return false;
+  }
+  try {
+    const form = new FormData();
+    form.append('file', file);
+    await apiFetch('/api/background', { method: 'POST', body: form });
+    setBackground({ mode: 'image', url: `/api/background?v=${Date.now()}`, preset: null });
+    toast(t('settings.appearance.background.updated', null, 'Background image updated'), { type: 'info' });
+    return true;
+  } catch (e) {
+    toast(e.message || t('settings.appearance.background.uploadFailed', null, 'Could not upload image'), { type: 'error' });
+    return false;
+  }
+}
+
+/** Remove the user's own wallpaper photo (back to the built-in default). */
+export async function removeBackgroundImage() {
+  try {
+    await apiFetch('/api/background', { method: 'DELETE' });
+  } catch (_) { /* 404 or transient — proceed */ }
+  setBackground({ mode: 'image', url: null, preset: null });
+  toast(t('settings.appearance.background.removed', null, 'Background image removed'), { type: 'info' });
 }

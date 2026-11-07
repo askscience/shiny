@@ -1377,5 +1377,10 @@
   "plugins.subtitleCraft": "Пакетът Craft, всяко приложение в собствен прозорец — инсталира се с една стъпка, поддържа се актуален и при желание е достъпен и за асистента.",
   "system.update.reconnecting": "Повторно свързване със сървъра…",
   "system.update.pluginsReloaded": "Обновени: {names}",
-  "system.update.reloading": "Обновяване на интерфейса…"
+  "system.update.reloading": "Обновяване на интерфейса…",
+  "wearable.label": "Носимо устройство",
+  "wearable.wallpaper": "Тапет",
+  "wearable.animation": "Анимация",
+  "settings.desktop.wearable": "Носимо устройство",
+  "settings.desktop.wearableHint": "Часовник върху анимацията на асистента, без прозорци, винаги слуша за името му."
 }

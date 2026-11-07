@@ -153,6 +153,8 @@ function nativeShouldShow(tab) {
     if (body.classList.contains('workspace-sliding')) return false;
     // The lock screen covers the desktop: the page must not paint over it.
     if (body.classList.contains('lock-active')) return false;
+    // The wearable face hides the whole desktop (core wearable.js).
+    if (body.classList.contains('wearable-active')) return false;
   }
   return true;
 }

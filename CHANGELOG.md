@@ -4,6 +4,14 @@
 
 ### Added
 
+- A wearable face, for a watch but available on any screen (Settings →
+  Desktop → Wearable): your wallpaper under the assistant's dots, now spread
+  over the whole screen — semi-transparent, fading out in a circle, moving
+  with the effect you chose — and a large clock with the date and the weather.
+  No window ever opens: plugins work in the background and the assistant
+  answers by voice, always listening for its name. One button changes the
+  wallpaper, the AI model, the theme and the animation, or turns the face off.
+
 - The voice bar is now a grid of dots that fills it edge to edge and moves
   with the assistant: with the voice while it listens and speaks, with the
   tools while it works. Settings → Appearance → "Voice bar effect" picks

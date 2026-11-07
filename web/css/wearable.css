@@ -1,0 +1,133 @@
+/* wearable.css — the wearable face (web/js/wearable.js).
+ *
+ * While `html[data-wearable]` is set the desktop is not shown at all: the
+ * user's wallpaper (#background) stays, the dot grid covers it edge to edge
+ * and the clock sits in the middle. Windows keep running underneath, hidden,
+ * so plugins work in the background. Toasts, dialogs and the lock screen
+ * stay above the face. */
+
+html[data-wearable] #app,
+html[data-wearable] #app *,
+html[data-wearable] #phone-dock,
+html[data-wearable] #keyboard-bar,
+html[data-wearable] #control-center {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+.wearable {
+  position: fixed;
+  inset: 0;
+  /* Above the desktop's chrome, below dialogs (--z-overlay), toasts and the
+     lock screen. */
+  z-index: calc(var(--z-overlay, 40) - 1);
+  display: grid;
+  place-items: center;
+  color: var(--text, #fff);
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+  overflow: hidden;
+}
+
+.wearable-dots {
+  position: absolute;
+  inset: 0;
+  /* The dots are the theme's text colour; voiceDots.js applies the
+     semi-transparency and the circular vignette. */
+  color: var(--text, #fff);
+  pointer-events: none;
+}
+
+.wearable-dots .voice-dots {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.wearable-clock {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35em;
+  text-align: center;
+  pointer-events: none;
+  /* Legible over any wallpaper and any dot. */
+  text-shadow: 0 1px 12px color-mix(in srgb, var(--bg, #000) 55%, transparent);
+}
+
+.wearable-time {
+  font-family: var(--font-display, system-ui, sans-serif);
+  font-size: clamp(56px, 22vmin, 220px);
+  font-weight: 300;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+.wearable-date {
+  font-size: clamp(13px, 3.4vmin, 24px);
+  opacity: 0.8;
+  text-transform: capitalize;
+}
+
+.wearable-weather {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  font-size: clamp(13px, 3.4vmin, 22px);
+  opacity: 0.85;
+}
+
+.wearable-weather-icon {
+  display: inline-flex;
+  width: 1.3em;
+  height: 1.3em;
+}
+
+.wearable-weather-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* One icon button, low in the face — inside the circle on a round watch. */
+.wearable-settings.ui-btn {
+  position: absolute;
+  bottom: max(18px, 9vmin);
+  /* Centred without a transform: the button's own hover/press motion uses it. */
+  left: calc(50% - 22px);
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  color: var(--text, #fff);
+  background: color-mix(in srgb, var(--bg, #000) 45%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  opacity: 0.85;
+}
+
+.wearable-settings:hover,
+.wearable-settings:focus-visible {
+  opacity: 1;
+}
+
+.wearable-settings-dialog .ui-modal-card {
+  width: min(420px, 92vw);
+  max-height: 86vh;
+  overflow: auto;
+}
+
+.wearable-field {
+  display: grid;
+  gap: 6px;
+}
+
+.wearable-field-label {
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.wearable-wallpapers {
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+}

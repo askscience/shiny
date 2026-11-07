@@ -1413,5 +1413,10 @@
   "plugins.subtitleCraft": "Zbirka Craft, vsaka aplikacija v svojem oknu — nameščena v enem koraku, vedno posodobljena in po želji dostopna pomočniku.",
   "system.update.reconnecting": "Ponovno povezovanje s strežnikom…",
   "system.update.pluginsReloaded": "Posodobljeno: {names}",
-  "system.update.reloading": "Posodabljanje vmesnika…"
+  "system.update.reloading": "Posodabljanje vmesnika…",
+  "wearable.label": "Nosljiva naprava",
+  "wearable.wallpaper": "Ozadje",
+  "wearable.animation": "Animacija",
+  "settings.desktop.wearable": "Nosljiva naprava",
+  "settings.desktop.wearableHint": "Ura nad animacijo pomočnika, brez oken, vedno posluša svoje ime."
 }

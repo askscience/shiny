@@ -1413,5 +1413,10 @@
   "plugins.subtitleCraft": "Pakiet Craft, każda aplikacja we własnym oknie — instalowany w jednym kroku, stale aktualny i, jeśli chcesz, dostępny dla asystenta.",
   "system.update.reconnecting": "Ponowne łączenie z serwerem…",
   "system.update.pluginsReloaded": "Zaktualizowano: {names}",
-  "system.update.reloading": "Aktualizowanie interfejsu…"
+  "system.update.reloading": "Aktualizowanie interfejsu…",
+  "wearable.label": "Urządzenie noszone",
+  "wearable.wallpaper": "Tapeta",
+  "wearable.animation": "Animacja",
+  "settings.desktop.wearable": "Urządzenie noszone",
+  "settings.desktop.wearableHint": "Zegar nad animacją asystenta, bez okien, zawsze nasłuchuje swojego imienia."
 }

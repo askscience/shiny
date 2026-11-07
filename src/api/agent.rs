@@ -95,6 +95,11 @@ pub struct DesktopState {
     /// which is the normal, unscoped mode.
     #[serde(default)]
     pub focused: Vec<String>,
+    /// The wearable face is on (Settings → Wearable): a clock over the dot
+    /// grid, no window ever shown, the assistant reached by voice only.
+    /// Missing (older clients) means off.
+    #[serde(default)]
+    pub wearable: bool,
 }
 
 #[derive(Deserialize)]
@@ -273,6 +278,9 @@ fn desktop_state_block(desktop: Option<&DesktopState>) -> String {
     let Some(d) = desktop else {
         return String::new();
     };
+    if d.wearable {
+        return crate::services::agent_steps::WEARABLE_BLOCK.to_string();
+    }
     if d.workspaces.is_empty() {
         return String::new();
     }
@@ -473,10 +481,11 @@ async fn prepare_agent(
         heading: ctx_body.heading,
         lang: lang.clone(),
         ollama_model: requested_model.clone(),
+        // The wearable face has no desktop at all: no workspaces either.
         workspaces_enabled: body
             .desktop
             .as_ref()
-            .and_then(|d| d.workspaces_enabled)
+            .and_then(|d| if d.wearable { Some(false) } else { d.workspaces_enabled })
             .unwrap_or(true),
         // Filled in below, once the active set is known: the focus set is the
         // focused windows intersected with it.
@@ -845,6 +854,7 @@ async fn prepare_agent(
             ctx,
             craft_open: open,
             craft_home,
+            wearable: body.desktop.as_ref().is_some_and(|d| d.wearable),
             // Attached by the transport handler: it needs the SSE sink.
             approval: None,
         },
@@ -1335,6 +1345,7 @@ mod tests {
             ],
             workspaces_enabled: Some(true),
             focused: vec!["wordcraft".into()],
+            wearable: false,
         };
         assert_eq!(
             open_windows(Some(&desktop), &active),
@@ -1344,6 +1355,27 @@ mod tests {
             open_windows(None, &active).is_empty(),
             "no desktop in the request means no window to drive"
         );
+    }
+
+    /// The wearable face replaces the desktop block: no windows, voice only.
+    #[test]
+    fn the_wearable_face_tells_the_model_no_window_shows() {
+        let desktop: DesktopState = serde_json::from_value(serde_json::json!({
+            "active": 1,
+            "workspaces": [{ "index": 1, "windows": [] }],
+            "workspaces_enabled": false,
+            "wearable": true,
+        }))
+        .unwrap();
+        let block = super::desktop_state_block(Some(&desktop));
+        assert!(block.contains("Wearable face"), "{block}");
+        assert!(block.contains("Never call show_plugin"));
+        let older: DesktopState = serde_json::from_value(serde_json::json!({
+            "active": 1,
+            "workspaces": [{ "index": 1, "windows": ["word"] }],
+        }))
+        .unwrap();
+        assert!(!older.wearable, "a client that does not send it is not on the wearable face");
     }
 
     /// The prompt says where a Craft app's tools act: live on the window when the

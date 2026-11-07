@@ -1413,5 +1413,10 @@
   "plugins.subtitleCraft": "Craft rinkinys, kiekviena programa savo lange — įdiegiama vienu žingsniu, nuolat atnaujinama ir, jei norite, prieinama asistentui.",
   "system.update.reconnecting": "Iš naujo jungiamasi prie serverio…",
   "system.update.pluginsReloaded": "Atnaujinta: {names}",
-  "system.update.reloading": "Atnaujinama sąsaja…"
+  "system.update.reloading": "Atnaujinama sąsaja…",
+  "wearable.label": "Dėvimas įrenginys",
+  "wearable.wallpaper": "Fonas",
+  "wearable.animation": "Animacija",
+  "settings.desktop.wearable": "Dėvimas įrenginys",
+  "settings.desktop.wearableHint": "Laikrodis virš asistento animacijos, jokių langų, visada klausosi savo vardo."
 }

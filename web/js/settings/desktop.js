@@ -1,7 +1,7 @@
 import { setLayout } from '../desktop.js';
-import { select, slider, segmented, revealRegion, disposeMotion } from '../../ui/index.js';
+import { select, slider, segmented, toggleRow, revealRegion, disposeMotion } from '../../ui/index.js';
 import { t } from '../i18n.js';
-import { getDesktopLayout, setDesktopLayout } from '../preferences.js';
+import { getDesktopLayout, setDesktopLayout, getWearable, setWearable } from '../preferences.js';
 import { el, field, sliderField } from './controls.js';
 
 /** Build the desktop section with resources owned by its current mount. */
@@ -69,7 +69,17 @@ export function createDesktopSection({ on, cleanups, resources }) {
     const shortcuts = el('p', 'settings-hint');
     shortcuts.innerHTML = t('settings.desktop.shortcuts', null, 'Shortcuts: <strong>Alt+Enter</strong> full screen · <strong>Alt+H/L</strong> focus · <strong>Alt+,/.</strong> workspace · <strong>Alt+1..9</strong> jump · <strong>Alt+N</strong> new · <strong>Alt+Shift+N</strong> remove.');
 
+    // The wearable face replaces the whole desktop (wearable.js); its own
+    // settings button is the way back.
+    const wearable = toggleRow({
+      label: t('settings.desktop.wearable', null, 'Wearable'),
+      hint: t('settings.desktop.wearableHint', null, 'A clock over the assistant\'s animation, no windows, always listening for its name.'),
+      checked: getWearable(),
+      onChange: (on) => setWearable(on),
+    });
+
     return [
+      wearable,
       field(t('settings.desktop.layout', null, 'Layout'), mode, {
         details: tilingControls,
         hint: t('settings.desktop.layoutHint', null, 'Tiling snaps windows into workspaces; Columns lines them up side by side; Windows floats them as draggable, resizable desktop windows.'),

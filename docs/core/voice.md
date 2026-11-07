@@ -291,6 +291,9 @@ tapOrb })`). `voice:level` events (`{ level, pan }`) feed the dot grid directly;
 
 ## Wake word
 
+On the wearable face (`wearable.js`, see desktop.md) the listener is armed on
+its own whenever the assistant is idle, so the name is always enough.
+
 Long-press **arms** wake recognition; the listener stays armed until the phrase
 is heard or the user taps to cancel. There is deliberately no "waiting for the
 wake word" timeout — being timed out mid-thought is the complaint this avoids.

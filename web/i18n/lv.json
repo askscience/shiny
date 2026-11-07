@@ -1395,5 +1395,10 @@
   "plugins.subtitleCraft": "Craft komplekts, katra lietotne savā logā — instalējama vienā solī, vienmēr atjaunināta un, ja vēlaties, pieejama asistentam.",
   "system.update.reconnecting": "Atkārtoti savienojas ar serveri…",
   "system.update.pluginsReloaded": "Atjaunināti: {names}",
-  "system.update.reloading": "Atjaunina saskarni…"
+  "system.update.reloading": "Atjaunina saskarni…",
+  "wearable.label": "Valkājama ierīce",
+  "wearable.wallpaper": "Fona attēls",
+  "wearable.animation": "Animācija",
+  "settings.desktop.wearable": "Valkājama ierīce",
+  "settings.desktop.wearableHint": "Pulkstenis virs asistenta animācijas, bez logiem, vienmēr klausās savu vārdu."
 }

@@ -1395,5 +1395,10 @@
   "plugins.subtitleCraft": "A suíte Craft, cada app em sua própria janela — instalada em um passo, sempre atualizada e, se você quiser, aberta ao assistente.",
   "system.update.reconnecting": "A religar ao servidor…",
   "system.update.pluginsReloaded": "Atualizados: {names}",
-  "system.update.reloading": "A atualizar a interface…"
+  "system.update.reloading": "A atualizar a interface…",
+  "wearable.label": "Wearable",
+  "wearable.wallpaper": "Fundo",
+  "wearable.animation": "Animação",
+  "settings.desktop.wearable": "Wearable",
+  "settings.desktop.wearableHint": "Um relógio sobre a animação do assistente, sem janelas, sempre à escuta do seu nome."
 }

@@ -1395,5 +1395,10 @@
   "plugins.subtitleCraft": "Paket Craft, svaka aplikacija u vlastitom prozoru — instalira se u jednom koraku, ostaje ažurna i, ako želite, dostupna je i asistentu.",
   "system.update.reconnecting": "Ponovno povezivanje s poslužiteljem…",
   "system.update.pluginsReloaded": "Ažurirano: {names}",
-  "system.update.reloading": "Ažuriranje sučelja…"
+  "system.update.reloading": "Ažuriranje sučelja…",
+  "wearable.label": "Nosivi uređaj",
+  "wearable.wallpaper": "Pozadina",
+  "wearable.animation": "Animacija",
+  "settings.desktop.wearable": "Nosivi uređaj",
+  "settings.desktop.wearableHint": "Sat iznad animacije asistenta, bez prozora, uvijek osluškuje svoje ime."
 }

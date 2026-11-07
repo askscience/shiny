@@ -1395,5 +1395,10 @@
   "plugins.subtitleCraft": "Suita Craft, fiecare aplicație în propria fereastră — instalată dintr-un pas, ținută la zi și deschisă asistentului dacă vrei.",
   "system.update.reconnecting": "Reconectare la server…",
   "system.update.pluginsReloaded": "Actualizate: {names}",
-  "system.update.reloading": "Se actualizează interfața…"
+  "system.update.reloading": "Se actualizează interfața…",
+  "wearable.label": "Purtabil",
+  "wearable.wallpaper": "Fundal",
+  "wearable.animation": "Animație",
+  "settings.desktop.wearable": "Purtabil",
+  "settings.desktop.wearableHint": "Un ceas peste animația asistentului, fără ferestre, mereu atent la numele său."
 }

@@ -23,8 +23,20 @@
  * The Settings preview mounts the same renderer on a demo signal instead.
  */
 
-import { getImmersive } from './preferences.js';
+import { getImmersive, ORB_EFFECTS } from './preferences.js';
+import { t } from './i18n.js';
 import { GLYPHS, dotGlyph } from './voiceDotGlyphs.js';
+
+/** The effects as select options, in the active language (Settings, wearable). */
+export function orbEffectOptions() {
+  const labels = {
+    glyph: t('settings.appearance.orbEffect.glyph', null, 'Glyph'),
+    eq: t('settings.appearance.orbEffect.eq', null, 'Equaliser'),
+    ripple: t('settings.appearance.orbEffect.ripple', null, 'Ripple'),
+    firefly: t('settings.appearance.orbEffect.firefly', null, 'Fireflies'),
+  };
+  return ORB_EFFECTS.map((value) => ({ value, label: labels[value] || value }));
+}
 
 /* ── Signals ─────────────────────────────────────────────────── */
 
@@ -175,9 +187,14 @@ const EFFECTS = {
       }
       const rows = GLYPHS[sig.tool.glyph] || GLYPHS.spark;
       const gw = rows[0].length;
-      const gx = c - Math.round(g.cx - (gw - 1) / 2);
-      const gy = r - Math.round(g.cy - 2);
-      if (gy < 0 || gy >= 5 || gx < 0 || gx >= gw || rows[gy][gx] !== '#') return 0;
+      // A full-screen face draws the mark with blocks of dots, not single ones.
+      const k = g.glyphScale || 1;
+      const ox = Math.round(g.cx - (gw * k - 1) / 2);
+      const oy = Math.round(g.cy - (5 * k - 1) / 2);
+      if (c < ox || r < oy) return 0;
+      const gx = Math.floor((c - ox) / k);
+      const gy = Math.floor((r - oy) / k);
+      if (gy >= 5 || gx >= gw || rows[gy][gx] !== '#') return 0;
       // The mark assembles dot by dot, then a scan line runs across it.
       const appear = clamp01((now - sig.tool.t0 - hash(c, r, st.seed) * 320) / 120);
       const scan = (now / 9) % (gw + 8) - 4;
@@ -313,13 +330,20 @@ const reducedMotion = typeof matchMedia === 'function'
   ? matchMedia('(prefers-reduced-motion: reduce)')
   : { matches: false };
 
+/** The wearable face's dots: semi-transparent, faded out past a circle. */
+const FACE_OPACITY = 0.55;
+/** The circle's fade starts at this share of its radius. */
+const FACE_FADE_FROM = 0.45;
+
 /**
  * Mount the dot grid on `host` (its box is the grid's, its `color` the dots').
  * `demo: true` runs the Settings preview's looped exchange instead of the live
  * signal; `effect` / `react` then come from `options()` rather than the stored
- * settings. Returns `{ destroy }`.
+ * settings. `face: true` is the wearable face (wearable.js): the grid fills a
+ * whole screen with larger dots, semi-transparent, under a circular vignette
+ * centred on the screen. Returns `{ destroy }`.
  */
-export function mountVoiceDots(host, { demo: isDemo = false, options = null } = {}) {
+export function mountVoiceDots(host, { demo: isDemo = false, options = null, face = false } = {}) {
   const canvas = document.createElement('canvas');
   // No 2D canvas (a stubbed DOM, a locked-down renderer): the bar stays a plate.
   const ctx = typeof canvas.getContext === 'function' ? canvas.getContext('2d') : null;
@@ -356,12 +380,15 @@ export function mountVoiceDots(host, { demo: isDemo = false, options = null } = 
     const dpr = window.devicePixelRatio || 1;
     canvas.width = Math.round(w * dpr);
     canvas.height = Math.round(h * dpr);
-    // A side rail stands the bar up: the grid runs along its long side.
-    const vertical = h > w * 1.2;
+    // A side rail stands the bar up: the grid runs along its long side. The
+    // face is a screen, not a bar: always rows across.
+    const vertical = !face && h > w * 1.2;
     const long = vertical ? h : w;
     const short = vertical ? w : h;
     // Five rows on a thin bar, more as it grows tall — the pitch stays near 7px.
-    const rows = Math.max(5, Math.round(short / 7));
+    // A face sizes its dots to the screen: about 34 across its short side.
+    const target = face ? Math.min(34, Math.max(12, Math.min(w, h) / 34)) : 7;
+    const rows = Math.max(5, Math.round(short / target));
     const pitch = short / rows;
     const cols = Math.ceil(long / pitch);
     const grid = {
@@ -378,6 +405,21 @@ export function mountVoiceDots(host, { demo: isDemo = false, options = null } = 
     for (let r = rows - 2; r > 0; r--) grid.perimeter.push([0, r]);
     grid.perIndex = new Int16Array(cols * rows).fill(-1);
     grid.perimeter.forEach(([c, r], i) => { grid.perIndex[r * cols + c] = i; });
+    if (face) {
+      // A tool's mark about a third of the screen tall.
+      grid.glyphScale = Math.max(1, Math.floor(rows / 15));
+      // The circular vignette, per dot: 1 inside, fading to 0 at the circle
+      // inscribed in the screen (a round watch shows it whole).
+      const radius = Math.min(w, h) / 2;
+      grid.fade = new Float32Array(cols * rows);
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const d = Math.hypot(grid.ox + c * pitch - w / 2, grid.oy + r * pitch - h / 2) / radius;
+          const k = clamp01((d - FACE_FADE_FROM) / (1 - FACE_FADE_FROM));
+          grid.fade[r * cols + c] = (1 - k * k * (3 - 2 * k)) * FACE_OPACITY;
+        }
+      }
+    }
     g = grid;
   }
 
@@ -415,6 +457,8 @@ export function mountVoiceDots(host, { demo: isDemo = false, options = null } = 
     const reduced = reducedMotion.matches;
     for (let r = 0; r < g.rows; r++) {
       for (let c = 0; c < g.cols; c++) {
+        const fade = g.fade ? g.fade[r * g.cols + c] : 1;
+        if (fade < 0.01) continue;
         let v = 0;
         if (wIdle > 0.01) {
           const idle = fx.idle ? fx.idle(c, r, g, now, st, sig) : idleShimmer(c, r, g, now, reduced);
@@ -424,7 +468,7 @@ export function mountVoiceDots(host, { demo: isDemo = false, options = null } = 
         if (wTool > 0.01) v = Math.max(v, fx.tool(c, r, g, now, st, sig) * wTool);
         const along = g.ox + c * g.pitch;
         const across = g.oy + r * g.pitch;
-        ctx.globalAlpha = 0.2 + 0.8 * v;
+        ctx.globalAlpha = (0.2 + 0.8 * v) * fade;
         ctx.beginPath();
         if (g.vertical) ctx.arc(across, along, rMin + (rMax - rMin) * v, 0, Math.PI * 2);
         else ctx.arc(along, across, rMin + (rMax - rMin) * v, 0, Math.PI * 2);

@@ -41,6 +41,7 @@ const TOUCHBAR_KEY = 'touchbar.enabled';
 const AI_ENABLED_KEY = 'ai.enabled';
 const UI_LOCALE_KEY = 'ui.locale';
 const STORE_AUTO_UPDATE_KEY = 'store.autoUpdate';
+const WEARABLE_KEY = 'ui.wearable';
 const DEFAULT_AI_NAME = 'Laura';
 
 function scopedKey(base) {
@@ -117,6 +118,8 @@ export async function loadUserPreferences() {
   // The interface language may have just arrived from the server; re-apply it
   // (i18n.js owns the value, this is only the persistence side of it).
   await refreshLocaleFromStorage();
+  // Modules that follow a per-user setting on their own (wearable.js) re-read it.
+  window.dispatchEvent(new CustomEvent('preferences:loaded'));
 }
 
 export function getAiName() {
@@ -996,6 +999,23 @@ export function setWakeWord(on) {
   if (on) localStorage.removeItem(key); // default true
   else localStorage.setItem(key, 'false');
   persist(VOICE_WAKE_KEY, on ? 'true' : 'false');
+}
+
+/* ── Wearable face (per-user, server-backed) ──────────────────
+ * The interface for a watch-sized screen, which also runs on a desktop or a
+ * phone: a clock over the full-screen dot grid, no windows, the assistant
+ * always listening for its wake word (wearable.js). Off by default. */
+
+export function getWearable() {
+  return localStorage.getItem(scopedKey(WEARABLE_KEY)) === 'true';
+}
+
+export function setWearable(on) {
+  const key = scopedKey(WEARABLE_KEY);
+  if (on) localStorage.setItem(key, 'true');
+  else localStorage.removeItem(key);
+  persist(WEARABLE_KEY, on ? 'true' : 'false');
+  window.dispatchEvent(new CustomEvent('wearable:change', { detail: { on: !!on } }));
 }
 
 /* ── Conversation window (per-user, server-backed) ────────────

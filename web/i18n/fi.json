@@ -1377,5 +1377,10 @@
   "plugins.subtitleCraft": "Craft-sarja, jokainen sovellus omassa ikkunassaan — asennetaan yhdellä kertaa, pidetään ajan tasalla ja halutessasi myös avustajan käytössä.",
   "system.update.reconnecting": "Yhdistetään palvelimeen uudelleen…",
   "system.update.pluginsReloaded": "Päivitetty: {names}",
-  "system.update.reloading": "Päivitetään käyttöliittymää…"
+  "system.update.reloading": "Päivitetään käyttöliittymää…",
+  "wearable.label": "Puettava",
+  "wearable.wallpaper": "Taustakuva",
+  "wearable.animation": "Animaatio",
+  "settings.desktop.wearable": "Puettava",
+  "settings.desktop.wearableHint": "Kello avustajan animaation päällä, ei ikkunoita, kuuntelee aina nimeään."
 }

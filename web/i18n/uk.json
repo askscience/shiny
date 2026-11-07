@@ -1413,5 +1413,10 @@
   "plugins.subtitleCraft": "Набір Craft, кожен застосунок у власному вікні — встановлюється за один крок, оновлюється сам і, якщо хочете, доступний асистентові.",
   "system.update.reconnecting": "Повторне підключення до сервера…",
   "system.update.pluginsReloaded": "Оновлено: {names}",
-  "system.update.reloading": "Оновлення інтерфейсу…"
+  "system.update.reloading": "Оновлення інтерфейсу…",
+  "wearable.label": "Носимий пристрій",
+  "wearable.wallpaper": "Шпалери",
+  "wearable.animation": "Анімація",
+  "settings.desktop.wearable": "Носимий пристрій",
+  "settings.desktop.wearableHint": "Годинник над анімацією асистента, без вікон, завжди слухає своє ім'я."
 }

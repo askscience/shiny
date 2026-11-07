@@ -1395,5 +1395,10 @@
   "plugins.subtitleCraft": "La suite Craft, chaque appli dans sa propre fenêtre — installée en une étape, tenue à jour, et ouverte à l'assistant si vous le souhaitez.",
   "system.update.reconnecting": "Reconnexion au serveur…",
   "system.update.pluginsReloaded": "Mis à jour : {names}",
-  "system.update.reloading": "Mise à jour de l'interface…"
+  "system.update.reloading": "Mise à jour de l'interface…",
+  "wearable.label": "Montre",
+  "wearable.wallpaper": "Fond d'écran",
+  "wearable.animation": "Animation",
+  "settings.desktop.wearable": "Montre",
+  "settings.desktop.wearableHint": "Une horloge sur l'animation de l'assistant, aucune fenêtre, toujours à l'écoute de son nom."
 }

@@ -155,6 +155,8 @@ pub struct AgentRunInput {
     /// turn always carries one, so a command cannot run without passing the
     /// hard-coded guard and the chat's allow/deny answer.
     pub approval: Option<ApprovalGate>,
+    /// The wearable face is on: no window is ever shown (`WEARABLE_BLOCK`).
+    pub wearable: bool,
 }
 
 pub struct ActionTaken {
@@ -250,6 +252,11 @@ where
         input.voice,
         input.correction,
     );
+    let continuation_system = if input.wearable {
+        format!("{continuation_system}{}", crate::services::agent_steps::WEARABLE_BLOCK)
+    } else {
+        continuation_system
+    };
     let mut continuation_messages = vec![
         ("system".to_string(), continuation_system),
         ("user".to_string(), input.message.clone()),
@@ -623,7 +630,7 @@ where
                 // "Write it in a document and open it": the document exists but
                 // its window is closed, and models then claim it is on screen.
                 // Say so once per plugin, with the call that opens it.
-                if outcome.result == "ok" {
+                if outcome.result == "ok" && !input.wearable {
                     if let Some(owner) = outcome.owner.as_deref().filter(|o| *o != "core") {
                         if !on_screen.contains(owner) && hinted.insert(owner.to_string()) {
                             note.push_str(&format!(

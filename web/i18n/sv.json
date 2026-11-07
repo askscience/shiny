@@ -1377,5 +1377,10 @@
   "plugins.subtitleCraft": "Craft-sviten, varje app i ett eget fönster — installerad i ett steg, hålls uppdaterad och öppen för assistenten om du vill.",
   "system.update.reconnecting": "Återansluter till servern…",
   "system.update.pluginsReloaded": "Uppdaterade: {names}",
-  "system.update.reloading": "Uppdaterar gränssnittet…"
+  "system.update.reloading": "Uppdaterar gränssnittet…",
+  "wearable.label": "Wearable",
+  "wearable.wallpaper": "Bakgrund",
+  "wearable.animation": "Animation",
+  "settings.desktop.wearable": "Wearable",
+  "settings.desktop.wearableHint": "En klocka över assistentens animation, inga fönster, lyssnar alltid efter sitt namn."
 }

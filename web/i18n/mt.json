@@ -1431,5 +1431,10 @@
   "plugins.subtitleCraft": "Is-suite Craft, kull app fit-tieqa tagħha — tinstalla f'pass wieħed, tibqa' aġġornata, u miftuħa għall-assistent jekk trid.",
   "system.update.reconnecting": "Qed jerġa' jikkonnettja mas-server…",
   "system.update.pluginsReloaded": "Aġġornati: {names}",
-  "system.update.reloading": "Qed tiġi aġġornata l-interfaċċa…"
+  "system.update.reloading": "Qed tiġi aġġornata l-interfaċċa…",
+  "wearable.label": "Wearable",
+  "wearable.wallpaper": "Sfond",
+  "wearable.animation": "Animazzjoni",
+  "settings.desktop.wearable": "Wearable",
+  "settings.desktop.wearableHint": "Arloġġ fuq l-animazzjoni tal-assistent, l-ebda tieqa, dejjem jisma' għal ismu."
 }
