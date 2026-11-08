@@ -94,10 +94,49 @@ snapshot() {
     for unit in display-manager lightdm shiny-t2-live-setup liteaura-collect-logs; do
         systemctl --no-pager --full status "$unit" >> "$tmp/systemctl-failed.txt" 2>&1
     done
+
+    # T2 hardware and the services added for it: firmware from macOS, the T2
+    # bridge network profile, Touch ID, fans, Touch Bar, and the installer.
+    for unit in liteaura-t2-firmware liteaura-t2-ncm kait2en-t2-touchid t2fanrd tiny-dfr \
+        shiny-installer-helper NetworkManager bluetooth; do
+        echo "=== $unit"
+        systemctl --no-pager --full status "$unit" 2>&1 | head -n 25
+    done > "$tmp/t2-services.txt" 2>&1
+    for f in t2-firmware t2-live-setup; do
+        [ -f "/var/log/shiny/$f.log" ] && gzip -9 -c "/var/log/shiny/$f.log" > "$tmp/$f.log.gz"
+    done
+    {
+        echo "=== modules (T2, APFS, Wi-Fi, Bluetooth, GPU)"
+        lsmod | grep -E '^(apfs|brcmfmac|brcmutil|hci_bcm4377|t2bce|apple|applesmc|appletb|bce|snd_|amdgpu|i915|nouveau|nvidia)' || true
+        echo "=== Apple Wi-Fi/Bluetooth firmware present (names only)"
+        ls -1 /lib/firmware/brcm 2>/dev/null | grep -i apple || echo "none"
+        echo "=== kernel messages: brcmfmac, bluetooth, apfs, t2"
+        dmesg 2>/dev/null | grep -iE 'brcmf|bcm4377|bluetooth|apfs|t2bce|apple-bce|firmware' | tail -n 80
+        echo "=== kernels and boot"
+        ls -1 /lib/modules 2>/dev/null
+        ls -1 /boot 2>/dev/null
+        echo "=== apt sources"
+        ls -1 /etc/apt/sources.list.d 2>/dev/null
+        echo "=== APFS volumes"
+        lsblk -rno PATH,FSTYPE,SIZE 2>/dev/null | awk '$2=="apfs"'
+    } > "$tmp/t2-hardware.txt" 2>&1
+    {
+        echo "=== devices"
+        nmcli -f DEVICE,TYPE,STATE,CONNECTION device 2>&1
+        echo "=== connections"
+        nmcli -f NAME,TYPE,DEVICE,AUTOCONNECT connection show 2>&1
+        echo "=== links"
+        ip -brief link 2>&1
+        ip -brief addr 2>&1
+        echo "=== rfkill"
+        rfkill 2>&1
+    } > "$tmp/network.txt" 2>&1
+    for f in /var/log/shiny/session-*.log; do
+        [ -f "$f" ] || continue
+        tail -n 4000 "$f" | gzip -9 > "$tmp/$(basename "$f").gz"
+    done
     lsblk -o NAME,SIZE,TYPE,FSTYPE,LABEL,MOUNTPOINTS > "$tmp/lsblk.txt" 2>&1
     cat /proc/asound/cards > "$tmp/asound-cards.txt" 2>&1
-    [ -f /var/log/shiny/t2-live-setup.log ] && \
-        gzip -9 -c /var/log/shiny/t2-live-setup.log > "$tmp/t2-live-setup.log.gz"
 
     local u uid home
     for u in $(awk -F: '$3>=1000 && $3<60000 && $7 !~ /(nologin|false)$/ {print $1}' /etc/passwd); do
