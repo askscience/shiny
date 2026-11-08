@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-11-08
+
 ### Changed
 
 - New defaults: the accent is black on the light theme (Dusk) and white on
