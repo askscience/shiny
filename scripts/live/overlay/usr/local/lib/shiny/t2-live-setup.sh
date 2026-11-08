@@ -102,12 +102,25 @@ ln -sfn /etc/systemd/user/shiny-t2-audio-watchdog.service \
 
 # Seed a fresh account with the working host's WirePlumber state before its user
 # manager starts. Existing user choices are preserved on subsequent boots.
+# `install -d -o` owns only the last directory of a path; the parents it
+# creates belong to root. A root-owned ~/.config made every other program of
+# the account fail with "Permission denied" (the display scale, for one), so
+# each missing level is created with the account's owner.
+mkdir_owned() {
+    local home="$1" uid="$2" gid="$3" rel="$4" path="$1" part
+    local IFS=/
+    for part in $rel; do
+        [ -n "$part" ] || continue
+        path="$path/$part"
+        [ -d "$path" ] || install -d -m 0755 -o "$uid" -g "$gid" "$path"
+    done
+}
+
 seed_audio_home() {
     local home="$1" uid="$2" gid="$3" state
     [ -d "$home" ] || return 0
-    install -d -m 0755 -o "$uid" -g "$gid" \
-        "$home/.config/wireplumber/wireplumber.conf.d" \
-        "$home/.local/state/wireplumber"
+    mkdir_owned "$home" "$uid" "$gid" .config/wireplumber/wireplumber.conf.d
+    mkdir_owned "$home" "$uid" "$gid" .local/state/wireplumber
     if [ ! -e "$home/.config/wireplumber/wireplumber.conf.d/50-t2-audio.conf" ]; then
         install -m 0644 -o "$uid" -g "$gid" \
             /etc/xdg/wireplumber/wireplumber.conf.d/50-t2-audio.conf \

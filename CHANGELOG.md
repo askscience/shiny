@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Live session: changing the interface scale in Settings no longer fails with
+  "Permission denied". The boot scripts that prepare the live account created
+  `~/.config` and `~/.local` as root, so nothing in the account could write
+  its settings there.
+- T2 Macs: the Wi-Fi and Bluetooth firmware found in macOS is now installed.
+  The renaming step used a command of get-apple-firmware that only exists on
+  macOS, so the firmware was found but never put in place.
+
 ## [0.2.3] - 2026-11-08
 
 ### Changed
