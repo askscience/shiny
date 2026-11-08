@@ -32,6 +32,8 @@
   "plugin.browser.bookmarks.add": "Προσθήκη σελιδοδείκτη",
   "plugin.browser.bookmarks.empty": "Δεν υπάρχουν σελιδοδείκτες ακόμη — χρησιμοποιήστε το ☆ στη γραμμή εργαλείων",
   "plugin.browser.bookmarks.remove": "Αφαίρεση σελιδοδείκτη",
+  "plugin.browser.bookmarks.saved": "Αποθηκεύτηκε στους σελιδοδείκτες",
+  "plugin.browser.bookmarks.saveFailed": "Δεν ήταν δυνατή η αποθήκευση του σελιδοδείκτη",
   "plugin.browser.bookmarks.title": "Σελιδοδείκτες",
   "plugin.browser.downloads.cancel": "Άκυρο",
   "plugin.browser.downloads.clearFinished": "Εκκαθάριση ολοκληρωμένων",
@@ -147,5 +149,6 @@
   "plugin.browser.import.looking": "Αναζήτηση…",
   "plugin.browser.import.thisComputer": "Σε αυτόν τον υπολογιστή",
   "plugin.browser.import.noneFound": "Δεν βρέθηκε άλλο πρόγραμμα περιήγησης σε αυτόν τον υπολογιστή.",
-  "plugin.browser.import.file": "Αρχείο"
+  "plugin.browser.import.file": "Αρχείο",
+  "plugin.browser.suggest.title": "Προτάσεις"
 }

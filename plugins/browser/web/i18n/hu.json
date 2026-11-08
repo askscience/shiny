@@ -32,6 +32,8 @@
   "plugin.browser.bookmarks.add": "Az oldal könyvjelzőzése",
   "plugin.browser.bookmarks.empty": "Még nincsenek könyvjelzők — használja a ☆ jelet az eszköztáron",
   "plugin.browser.bookmarks.remove": "Könyvjelző eltávolítása",
+  "plugin.browser.bookmarks.saved": "Mentve a könyvjelzők közé",
+  "plugin.browser.bookmarks.saveFailed": "A könyvjelzőt nem sikerült menteni",
   "plugin.browser.bookmarks.title": "Könyvjelzők",
   "plugin.browser.downloads.cancel": "Mégse",
   "plugin.browser.downloads.clearFinished": "Befejezettek törlése",
@@ -147,5 +149,6 @@
   "plugin.browser.import.looking": "Keresés…",
   "plugin.browser.import.thisComputer": "Ezen a számítógépen",
   "plugin.browser.import.noneFound": "Ezen a számítógépen nincs más böngésző.",
-  "plugin.browser.import.file": "Fájl"
+  "plugin.browser.import.file": "Fájl",
+  "plugin.browser.suggest.title": "Javaslatok"
 }

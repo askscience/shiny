@@ -2,7 +2,7 @@
  * hudAudio.js — the top-bar sound chip: the default output device, its
  * volume and its mute state.
  *
- * Fed by `/api/audio/events` (SSE, pushed whenever PipeWire reports a change)
+ * Fed by the `audio` topic of the shared event stream (`eventBus.js`, pushed whenever PipeWire reports a change)
  * with a slow poll as a fallback while the stream is down. The icon bucket
  * (0–3) is computed server-side (`volume_level`), so this module only maps a
  * bucket to a theme icon:
@@ -26,7 +26,7 @@ const labelEl = document.getElementById('hud-audio-label');
 const pctEl = document.getElementById('hud-audio-pct');
 
 const stream = createHudStream({
-  eventsUrl: '/api/audio/events',
+  topic: 'audio',
   statusUrl: '/api/audio/status',
   pollMs: 15000,
   label: 'audio',

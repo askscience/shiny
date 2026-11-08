@@ -32,6 +32,8 @@
   "plugin.browser.bookmarks.add": "Добави тази страница в отметки",
   "plugin.browser.bookmarks.empty": "Още няма отметки — използвайте ☆ в лентата с инструменти",
   "plugin.browser.bookmarks.remove": "Премахни отметката",
+  "plugin.browser.bookmarks.saved": "Добавено в отметките",
+  "plugin.browser.bookmarks.saveFailed": "Отметката не можа да бъде запазена",
   "plugin.browser.bookmarks.title": "Отметки",
   "plugin.browser.downloads.cancel": "Отказ",
   "plugin.browser.downloads.clearFinished": "Изчисти завършените",
@@ -147,5 +149,6 @@
   "plugin.browser.import.looking": "Търсене…",
   "plugin.browser.import.thisComputer": "На този компютър",
   "plugin.browser.import.noneFound": "На този компютър няма друг браузър.",
-  "plugin.browser.import.file": "Файл"
+  "plugin.browser.import.file": "Файл",
+  "plugin.browser.suggest.title": "Предложения"
 }

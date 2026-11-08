@@ -65,15 +65,29 @@ during setup is never dropped (`src/api/audio.rs`, `src/api/network.rs`,
 | `GET /api/battery/events` | `battery` | `BatteryStatus` |
 | `GET /api/bluetooth/events` | `bluetooth` | `BluetoothStatus` |
 
+**The shell uses one combined stream.** `GET /api/events?topics=a,b,…`
+(`src/api/events.rs`) multiplexes the four panels above plus each open Craft
+app's live-control link (`craft:<app>`) on a single connection; every SSE event
+is named after its topic and carries the same payload as the per-panel stream
+(gated `available:false` for remote clients, like `status`). Unknown topics are
+skipped. Chromium opens at most six HTTP/1.1 connections per origin, and one
+stream per panel and per Craft window used to fill the pool at login, so every
+other request (HUD menus, the browser's suggestions, an app's WebAssembly)
+queued for up to a minute. The per-panel routes stay for older pages and tools
+such as `curl`.
+
 The SSE payload is the raw snapshot object (no `{success, data}` wrapper); the
 `status` endpoints wrap theirs. Power, display, Touch Bar and the backlights
 have no event stream — their menus re-read on open (Power), and the backlight
 sliders read once and write optimistically.
 
 The chips (`web/js/hudAudio.js`, `hudBattery.js`, `hudBluetooth.js`,
-`hudNetwork.js`) all use the same pattern: a `for(;;)` loop opens the SSE stream,
-and if it ends or fails, starts a slow poll of the `status` endpoint every 15 s
-(30 s for battery) while reconnecting after 5 s. This keeps the chip honest when
+`hudNetwork.js`) all use the same pattern through `web/js/hudStream.js`: each
+subscribes to its topic on the shared bus (`web/js/eventBus.js`, one
+`/api/events` connection for the whole page), and while the bus is down it
+polls the `status` endpoint every 15 s (30 s for battery); the bus reconnects
+after 5 s. A topic added later (a Craft window opening) moves the bus to a new
+connection, and the old one closes only once the new one answers. This keeps the chip honest when
 the kiosk proxy drops an idle stream.
 
 ### 3. Loopback-only mutations

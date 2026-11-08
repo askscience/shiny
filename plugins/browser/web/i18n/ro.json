@@ -34,6 +34,8 @@
   "plugin.browser.bookmarks.add": "Adaugă pagina la favorite",
   "plugin.browser.bookmarks.empty": "Nicio pagină la favorite încă — folosește ☆ din bara de instrumente",
   "plugin.browser.bookmarks.remove": "Elimină favoritul",
+  "plugin.browser.bookmarks.saved": "Salvat în marcaje",
+  "plugin.browser.bookmarks.saveFailed": "Marcajul nu a putut fi salvat",
   "plugin.browser.bookmarks.title": "Favorite",
   "plugin.browser.downloads.cancel": "Anulează",
   "plugin.browser.downloads.clearFinished": "Golește cele încheiate",
@@ -151,5 +153,6 @@
   "plugin.browser.import.looking": "Se caută…",
   "plugin.browser.import.thisComputer": "Pe acest computer",
   "plugin.browser.import.noneFound": "Niciun alt browser găsit pe acest computer.",
-  "plugin.browser.import.file": "Fișier"
+  "plugin.browser.import.file": "Fișier",
+  "plugin.browser.suggest.title": "Sugestii"
 }

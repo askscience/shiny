@@ -1,5 +1,5 @@
 #!/bin/sh
-# Install a locally built plugin (library, manifest, skills, web) into both
+# Install a locally built plugin (library, manifest, migrations, skills, web) into both
 # plugin roots the server loads from. Build it first:
 #
 #   cargo build --release -p shiny-<name>-plugin
@@ -21,6 +21,9 @@ for d in data/plugins/$name "$HOME/.local/share/shiny/plugins/$name"; do
   [ -d "$d" ] || continue
   cp "$lib" "$d/.lib.new" && mv -f "$d/.lib.new" "$d/libshiny_${name}_plugin.so"
   cp "$src/plugin.toml" "$d/"
+  # Migrations too: the loader runs them from the installed copy, so a library
+  # that expects a new table finds none without them.
+  [ -d "$src/migrations" ] && mkdir -p "$d/migrations" && cp -r "$src/migrations/." "$d/migrations/"
   [ -d "$src/skills" ] && mkdir -p "$d/skills" && cp -r "$src/skills/." "$d/skills/"
   [ -d "$src/web" ] && mkdir -p "$d/web" && cp -r "$src/web/." "$d/web/"
   echo "installed into $d"

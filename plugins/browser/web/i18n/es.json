@@ -34,6 +34,8 @@
   "plugin.browser.bookmarks.add": "Añadir esta página a marcadores",
   "plugin.browser.bookmarks.empty": "Aún no hay marcadores — usa la ☆ de la barra de herramientas",
   "plugin.browser.bookmarks.remove": "Quitar el marcador",
+  "plugin.browser.bookmarks.saved": "Guardado en marcadores",
+  "plugin.browser.bookmarks.saveFailed": "No se pudo guardar el marcador",
   "plugin.browser.bookmarks.title": "Marcadores",
   "plugin.browser.downloads.cancel": "Cancelar",
   "plugin.browser.downloads.clearFinished": "Borrar las completadas",
@@ -151,5 +153,6 @@
   "plugin.browser.import.looking": "Buscando…",
   "plugin.browser.import.thisComputer": "En este ordenador",
   "plugin.browser.import.noneFound": "No se ha encontrado otro navegador en este ordenador.",
-  "plugin.browser.import.file": "Archivo"
+  "plugin.browser.import.file": "Archivo",
+  "plugin.browser.suggest.title": "Sugerencias"
 }

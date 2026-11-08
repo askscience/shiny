@@ -8,15 +8,40 @@
 use std::convert::Infallible;
 
 use axum::response::sse::{Event, KeepAlive, Sse};
+use futures::stream::BoxStream;
 use futures::{Stream, StreamExt};
 use serde::Serialize;
 use tokio::sync::broadcast;
 use tokio_stream::wrappers::BroadcastStream;
 
-fn snapshot_event<T: Serialize>(event: &str, snapshot: &T) -> Event {
+/// How a snapshot is turned into the frame's `data:` (the combined stream
+/// gates host panels for remote clients, the per-panel streams do not).
+type Shape = fn(serde_json::Value) -> serde_json::Value;
+
+fn snapshot_event<T: Serialize>(event: &str, snapshot: &T, shape: Shape) -> Event {
+    let value = shape(serde_json::to_value(snapshot).unwrap_or_default());
     Event::default()
         .event(event)
-        .data(serde_json::to_string(snapshot).unwrap_or_default())
+        .data(serde_json::to_string(&value).unwrap_or_default())
+}
+
+/// One initial snapshot followed by every broadcast change, as SSE events
+/// named `event`. The building block of both the per-panel streams and the
+/// combined `/api/events` stream.
+pub fn snapshot_events<T>(
+    event: &'static str,
+    receiver: broadcast::Receiver<T>,
+    initial: T,
+    shape: Shape,
+) -> BoxStream<'static, Event>
+where
+    T: Serialize + Clone + Send + 'static,
+{
+    let live = BroadcastStream::new(receiver).filter_map(move |message| async move {
+        message.ok().map(|snapshot| snapshot_event(event, &snapshot, shape))
+    });
+    let first = futures::stream::once(async move { snapshot_event(event, &initial, shape) });
+    first.chain(live).boxed()
 }
 
 /// A stream of one initial snapshot followed by every broadcast change.
@@ -28,14 +53,7 @@ pub fn snapshot_stream<T>(
 where
     T: Serialize + Clone + Send + 'static,
 {
-    let live = BroadcastStream::new(receiver).filter_map(move |message| async move {
-        message
-            .ok()
-            .map(|snapshot| Ok::<Event, Infallible>(snapshot_event(event, &snapshot)))
-    });
-    let first = futures::stream::once(async move {
-        Ok::<Event, Infallible>(snapshot_event(event, &initial))
-    });
-
-    Sse::new(first.chain(live)).keep_alive(KeepAlive::default())
+    let stream = snapshot_events(event, receiver, initial, |value| value)
+        .map(Ok::<Event, Infallible>);
+    Sse::new(stream).keep_alive(KeepAlive::default())
 }

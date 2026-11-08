@@ -595,14 +595,14 @@ traveler that started the turn, so another account cannot answer it.
 
 **Connection budget.** The prompt arrives on the turn's SSE stream, but
 answering it is a new `POST`. Chromium allows six HTTP/1.1 connections per
-origin: the four HUD event streams, the Terminal window's stream and the turn
-itself fill every slot, and the approval POST (like any other request) would
-queue forever — the card looks frozen and the turn never resumes. Two things
-keep the budget open: the client cancels the agent-stream reader as soon as the
-turn ends, and `hudStream` pauses the four HUD streams while `agent-awaiting` is
-set (they keep their last state and reconnect afterwards). The stream handler
-also drops its disconnect watcher's sender when the turn ends, so the SSE
-response really closes. See `web/js/agent.js` and `web/js/hudStream.js`.
+origin. Once every slot is held by a stream, the approval POST (like any other
+request) queues forever: the card looks frozen and the turn never resumes. The
+budget stays open because the page's own live streams (HUD panels, Craft
+control) share one connection (`web/js/eventBus.js`), so a turn needs at most
+that one, the Terminal window's stream and the turn itself. The client also
+cancels the agent-stream reader as soon as the turn ends, and the stream
+handler drops its disconnect watcher's sender when the turn ends, so the SSE
+response really closes. See `web/js/agent.js` and `web/js/eventBus.js`.
 
 Every prompt is recorded with its outcome as an `approval` row
 (`{command, decision}`) between the user message and the reply, and each

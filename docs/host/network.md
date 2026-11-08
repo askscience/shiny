@@ -19,7 +19,8 @@ Source: [`src/services/network.rs`](../../src/services/network.rs),
    broadcast channel.
 3. `GET /api/network/status` reads the cache.
 4. `GET /api/network/events` sends the current snapshot, then relays changes as
-   SSE.
+   SSE. The shell reads the same stream as the `network` topic of the combined
+   `GET /api/events` (one connection for every live stream).
 5. Mutations are accepted **only from the local machine** (loopback), because
    the server binds `0.0.0.0`.
 

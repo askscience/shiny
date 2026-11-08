@@ -2,7 +2,7 @@
  * hudBattery.js — the top-bar battery chip: charge level, whether the machine
  * is on wall power, and (when the kernel can estimate it) time remaining.
  *
- * Fed by `/api/battery/events` (SSE, pushed whenever the snapshot changes) with
+ * Fed by the `battery` topic of the shared event stream (`eventBus.js`, pushed whenever the snapshot changes) with
  * a slow poll as a fallback while the stream is down. The label, icon and state
  * class come from `batteryShared.js`, so the chip never disagrees with itself.
  *
@@ -31,7 +31,7 @@ const labelEl = document.getElementById('hud-battery-label');
 const pctEl = document.getElementById('hud-battery-pct');
 
 const stream = createHudStream({
-  eventsUrl: '/api/battery/events',
+  topic: 'battery',
   statusUrl: '/api/battery/status',
   pollMs: 30000,
   label: 'battery',

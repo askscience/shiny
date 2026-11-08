@@ -20,6 +20,7 @@
  */
 
 import { apiFetch } from './api.js';
+import { subscribe } from './eventBus.js';
 import { installFileInputShim, readFileBytes } from './filePicker.js';
 import { getLocale } from './i18n.js';
 import { getActiveTheme, themeMode } from '../ui/theme-loader.js';
@@ -102,13 +103,12 @@ function attachControl(name, frame, surface) {
   surface.control?.close();
   surface.controlFor = frame.contentWindow;
 
-  const source = new EventSource(
-    new URL(`../api/plugins/craft/control/events?app=${encodeURIComponent(name)}`, import.meta.url),
-  );
-  source.addEventListener('message', (event) => {
+  // The `craft:<app>` topic of the shell's single event stream: one
+  // connection per Craft window would fill Chromium's six-per-origin pool.
+  const onRequest = (data) => {
     let request;
     try {
-      request = JSON.parse(event.data);
+      request = JSON.parse(data);
     } catch {
       return;
     }
@@ -131,9 +131,10 @@ function attachControl(name, frame, surface) {
         console.warn(`craft control: could not answer ${name}`, error);
       }
     })();
-  });
-  // EventSource reconnects by itself; a dead stream is the server's business.
-  surface.control = source;
+  };
+  // The bus reconnects by itself; a dead stream is the server's business.
+  const unsubscribe = subscribe(`craft:${name}`, onRequest);
+  surface.control = { close: unsubscribe };
   return true;
 }
 

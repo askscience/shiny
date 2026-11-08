@@ -32,6 +32,8 @@
   "plugin.browser.bookmarks.add": "Bookmark this page",
   "plugin.browser.bookmarks.empty": "No bookmarks yet — use the ☆ in the toolbar",
   "plugin.browser.bookmarks.remove": "Remove bookmark",
+  "plugin.browser.bookmarks.saved": "Saved to bookmarks",
+  "plugin.browser.bookmarks.saveFailed": "Could not save the bookmark",
   "plugin.browser.bookmarks.title": "Bookmarks",
   "plugin.browser.downloads.cancel": "Cancel",
   "plugin.browser.downloads.clearFinished": "Clear finished",
@@ -147,5 +149,6 @@
   "plugin.browser.import.looking": "Looking…",
   "plugin.browser.import.thisComputer": "On this computer",
   "plugin.browser.import.noneFound": "No other browser found on this computer.",
-  "plugin.browser.import.file": "File"
+  "plugin.browser.import.file": "File",
+  "plugin.browser.suggest.title": "Suggestions"
 }

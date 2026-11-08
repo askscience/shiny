@@ -135,6 +135,7 @@ drops the stale `browser_history` table.
 | `src/settings.rs` | Per-user settings, `SEARCH_ENGINES`, `search_url` |
 | `src/downloads.rs` | Download upsert/list/remove/clear |
 | `src/bookmarks.rs` | Bookmark add/list/remove with URL dedupe |
+| `src/suggest.rs` | Address-bar inline completion and suggestions from bookmarks, history and past searches |
 | `src/preview.rs` | Link preview fetch/parse with SSRF guard + TTL cache |
 | `src/sessions.rs` | In-memory tab sessions (bounded to 64) |
 | `src/news.rs` | Interest profile, topic selection, engine HTML parsing, ranking, home shelf |
@@ -147,6 +148,8 @@ drops the stale `browser_history` table.
 | `web/login-assist.js` | Saving a submitted login, filling the saved one, suggesting a strong password, on the tab's load events |
 | `web/login-assist.test.mjs` | When a login is offered, updated, filled or left alone |
 | `web/import-panel.js` | "Import from another browser" (main menu) |
+| `web/address-suggest.js` | The address bar's inline completion and suggestion list |
+| `web/address-suggest.test.mjs` | Inline tail, deleting, stale replies, arrows/Enter/Escape |
 | `web/import-panel.test.mjs` | Profiles imported by id, files, the locked-vault resume |
 | `web/plugin.css` | Layout-only styles, scoped under `.browser-tile` |
 | `web/icon.svg` | Theme-aware flame glyph (`ui/launcher`) |

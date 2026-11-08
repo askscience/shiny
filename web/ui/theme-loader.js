@@ -131,6 +131,20 @@ function applyTheme(theme) {
   setThemeHrefs(theme);
 }
 
+/**
+ * Tell the LiteAura shell whether the theme is light or dark (Dusk or Ink). It
+ * keeps the answer for browsed pages, which read it as `prefers-color-scheme`
+ * from the next start of the shell (Chromium takes it only at startup), so it
+ * is sent on every boot and switch, whether or not the Browser is open.
+ */
+function tellShellColorScheme() {
+  const mode = themeMode();
+  if (!mode || typeof window === 'undefined' || !window.ipc?.postMessage) return;
+  try {
+    window.ipc.postMessage('liteaura:settings:' + JSON.stringify({ colorScheme: mode }));
+  } catch (_) { /* no shell: a plain browser tab */ }
+}
+
 /** Boot: pick stored theme, point the two <link> slots at it, load manifest. */
 export async function initThemeLoader() {
   const themes = await listThemes();
@@ -141,6 +155,7 @@ export async function initThemeLoader() {
   applyTheme(themes.includes(stored) ? stored : fallback);
   manifest = await loadManifest(activeTheme);
   setAppHref(activeTheme, manifest);
+  tellShellColorScheme();
   return manifest;
 }
 
@@ -152,6 +167,7 @@ export async function setTheme(name) {
   applyTheme(name);
   manifest = await loadManifest(name);
   setAppHref(name, manifest);
+  tellShellColorScheme();
   window.dispatchEvent(new CustomEvent('theme:change', { detail: { theme: name } }));
   return true;
 }

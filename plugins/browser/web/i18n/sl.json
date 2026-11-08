@@ -36,6 +36,8 @@
   "plugin.browser.bookmarks.add": "Dodaj stran med zaznamke",
   "plugin.browser.bookmarks.empty": "Ni še zaznamkov — uporabite ☆ v orodni vrstici",
   "plugin.browser.bookmarks.remove": "Odstrani zaznamek",
+  "plugin.browser.bookmarks.saved": "Shranjeno med zaznamke",
+  "plugin.browser.bookmarks.saveFailed": "Zaznamka ni bilo mogoče shraniti",
   "plugin.browser.bookmarks.title": "Zaznamki",
   "plugin.browser.downloads.cancel": "Prekliči",
   "plugin.browser.downloads.clearFinished": "Počisti končane",
@@ -155,5 +157,6 @@
   "plugin.browser.import.looking": "Iskanje…",
   "plugin.browser.import.thisComputer": "V tem računalniku",
   "plugin.browser.import.noneFound": "V tem računalniku ni drugega brskalnika.",
-  "plugin.browser.import.file": "Datoteka"
+  "plugin.browser.import.file": "Datoteka",
+  "plugin.browser.suggest.title": "Predlogi"
 }

@@ -59,7 +59,8 @@ The shell is split by concern. Grouped:
 | `menuState.js` | Shared menu state helpers. |
 | `menuFactory.js` | The shared HUD-popup lifecycle (build once, open/close, outside click, Escape, placement). |
 | `nativeOccluders.js` | Core HTML that must stay above a native page: the occluder registry, `setMask` rects and the visibility watcher (see [desktop.md](desktop.md#native-pages-and-masks)). |
-| `hudStream.js` | Shared SSE + poll fallback for the top-bar chips. Pauses while the page is hidden and during an agent turn, so the four HUD streams do not exhaust Chromium's six HTTP/1.1 connections when the chat and a terminal window need one. |
+| `eventBus.js` | The page's single live stream (`GET /api/events`): modules `subscribe(topic, onEvent, onState)` and every topic (HUD panels, `craft:<app>`) rides one connection, because Chromium allows six HTTP/1.1 connections per origin. Reconnects by itself. |
+| `hudStream.js` | A top-bar chip's topic on `eventBus.js` plus a `status` poll while the bus is down. |
 | `officeMenu.js` | Shared document-menu footer and date label for Calc/Impress/Word/PDF. |
 
 ### HUD & host panels

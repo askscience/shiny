@@ -2,7 +2,7 @@
  * hudBluetooth.js — the top-bar Bluetooth chip: whether the adapter is on and
  * which device is connected.
  *
- * Fed by `/api/bluetooth/events` (SSE, pushed whenever BlueZ reports a change)
+ * Fed by the `bluetooth` topic of the shared event stream (`eventBus.js`, pushed whenever BlueZ reports a change)
  * with a slow poll as a fallback while the stream is down. The label and icon
  * come from `bluetoothShared.js` so the chip and the menu always agree.
  *
@@ -27,7 +27,7 @@ const labelEl = document.getElementById('hud-bluetooth-label');
 const pctEl = document.getElementById('hud-bluetooth-pct');
 
 const stream = createHudStream({
-  eventsUrl: '/api/bluetooth/events',
+  topic: 'bluetooth',
   statusUrl: '/api/bluetooth/status',
   pollMs: 15000,
   label: 'bluetooth',

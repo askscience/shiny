@@ -56,13 +56,35 @@ const COPY_LEGACY_ROWS: &str = "INSERT OR IGNORE INTO liteaura_history \
 
 const DROP_LEGACY_TABLE: &str = "DROP TABLE IF EXISTS peakd_history";
 
+/// [`TABLE`] exactly as `008_liteaura_history.sql` creates it. Repeated here
+/// because the migration can be missing from an install: a library copied
+/// without its `migrations/` directory then wrote every visit into a table that
+/// did not exist, and history and the news shelf went silently dead.
+const CREATE_TABLE: &str = "CREATE TABLE IF NOT EXISTS liteaura_history (
+    id          TEXT PRIMARY KEY,
+    traveler_id TEXT NOT NULL,
+    url         TEXT NOT NULL,
+    mode        TEXT NOT NULL DEFAULT 'page',
+    query       TEXT,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+)";
+const CREATE_INDEX: &str = "CREATE INDEX IF NOT EXISTS idx_liteaura_history_traveler_created
+    ON liteaura_history (traveler_id, created_at DESC)";
+
 /// Move the history of an install made before the rename into [`TABLE`].
 ///
-/// Runs on load, after the migrations have created [`TABLE`]. Best-effort:
+/// Runs on load. Creates [`TABLE`] when the migration did not, then moves the
+/// legacy rows. Best-effort:
 /// never fatal, never blocks the browser. The legacy table is dropped only
 /// once its rows are copied, so a failed copy is retried on the next load.
 pub fn ensure_schema(ctx: &PluginCtx) {
     let db = ctx.db();
+    for sql in [CREATE_TABLE, CREATE_INDEX] {
+        if let Err(err) = db.execute(sql, &[]) {
+            tracing::warn!("browser: could not create {TABLE}: {err}");
+            return;
+        }
+    }
     let legacy_exists = db
         .query(
             "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'peakd_history'",
@@ -439,6 +461,36 @@ mod tests {
         // Nothing left to move: a no-op.
         ensure_schema(&ctx);
         assert_eq!(recent_rows(&ctx, "u1", 10).unwrap().len(), 1);
+    }
+
+    /// The install that broke history: the new library without migration 008,
+    /// so only the legacy table exists. Loading must create the new table and
+    /// move the rows instead of leaving every insert failing.
+    #[test]
+    fn missing_migration_still_gets_the_table_and_the_legacy_rows() {
+        let path = "/tmp/browser-history-no-008.db";
+        let ctx = ctx_with_db(path);
+        let db = Db::open(&format!("sqlite://{path}")).unwrap();
+        db.execute(
+            &format!(
+                "CREATE TABLE {LEGACY_TABLE} (id TEXT PRIMARY KEY, traveler_id TEXT NOT NULL,
+                 url TEXT NOT NULL, mode TEXT NOT NULL DEFAULT 'page', query TEXT,
+                 created_at TEXT NOT NULL DEFAULT (datetime('now')))"
+            ),
+            &[],
+        )
+        .unwrap();
+        db.execute(
+            &format!("INSERT INTO {LEGACY_TABLE} (id, traveler_id, url, query) VALUES ('old','u1','https://old/','aurora')"),
+            &[],
+        )
+        .unwrap();
+
+        ensure_schema(&ctx);
+        let rows = recent_rows(&ctx, "u1", 10).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].query.as_deref(), Some("aurora"));
+        assert!(db.query(&format!("SELECT 1 FROM {LEGACY_TABLE}"), &[]).is_err(), "legacy table dropped");
     }
 
     #[test]

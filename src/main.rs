@@ -25,22 +25,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!("Starting Shiny AI assistant…");
     tracing::info!("Logging to {}", config.log_file);
 
-    // "No slop": with the AI switched off no speech sidecar is started; the
-    // watchdog starts them later if the user turns the AI back on.
     shiny::services::ai_switch::init();
-    let ai_on = shiny::services::ai_switch::machine_on();
 
+    // "No slop": with the AI switched off no speech sidecar is started; the
+    // watchdog starts them later if the user turns the AI back on. They start
+    // now, in parallel with the session, at a low priority (`launcher`).
+    let ai_on = shiny::services::ai_switch::machine_on();
     if config.auto_start_supertonic && ai_on {
         spawn_supertonic_sidecar(&config);
     }
-
-    // faster-whisper is the default speech engine, so try to bring its sidecar
-    // up with the server. The launcher is idempotent (it probes /health first)
-    // and exits quietly when the package is not installed — Vosk still works.
+    // faster-whisper is the default speech engine, so bring its sidecar up with
+    // the server. The launcher is idempotent (it probes /health first) and
+    // exits quietly when the package is not installed; Vosk still works.
     if config.auto_start_whisper && ai_on {
         spawn_whisper_sidecar(&config);
     }
-
     // Qwen3-TTS is opt-in: the first start may build qwentts.cpp and fetch a
     // ~600 MB model, which must never happen behind the user's back.
     if config.auto_start_qwen_tts && ai_on {

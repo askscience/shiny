@@ -181,8 +181,28 @@ re-pushes (and reloads the open page) when that save lands.
   "Refreshing…" text swap keeps it. Blocks enter in a CSS cascade inside the
   frame (`.rv` with `--i`), following `data-motion` (kinetic wipe, fluid rise,
   depth blur) and `prefers-reduced-motion`.
-- A bookmark tile posts `browser:open-bookmark`, and both the grid and the
-  bookmarks popover open the URL in a new tab.
+- A bookmark tile posts `browser:open-bookmark`. A start page is a tab
+  waiting for a destination, so the bookmark opens **in that tab**.
+  `openInNewTab(from, url)` reuses the tab it comes from (or, with none, the
+  active tab) whenever that tab is a blank start page, which covers the grid,
+  the bookmarks popover and links handed over by core; anywhere else it opens a
+  new tab. News cards always navigate their own tab.
+
+## Address bar suggestions
+
+`address-suggest.js` (`createAddressSuggest`) completes the address bar from
+`GET /api/browser/suggest` on every keystroke:
+
+- **Inline completion.** Typing `you` fills in `youtube.com` with the added
+  tail selected: Enter goes there, the next letter replaces it. Only the tail is
+  added, so the typed letters (scheme, `www.`, capitals) stay as typed.
+  Deleting or pasting never completes. A reply for older text is dropped.
+- **The list** (`.browser-suggest`, one of `browserPopovers()` so the native
+  page is masked under it) hangs under the address field (`placeSuggest`):
+  bookmarks (star), visited pages (clock) and past searches (magnifier).
+  ArrowDown/ArrowUp move through it, Enter or a click opens the row (a past
+  search is searched again), Escape drops the inline tail and closes it, and
+  leaving the bar closes it.
 
 ## Custom events and globals
 
@@ -191,8 +211,8 @@ re-pushes (and reloads the open page) when that save lands.
 | Event | Source | Effect |
 |---|---|---|
 | `artifact:saved` | core artifact store | `onArtifactSaved` navigates to `art.narrative` (falls back to `payload.url`/`params.url`/`title`) for `artifact_type === 'browser_page'` |
-| `url:open` | core link router (`web/js/linkRouter.js`) | `openCoreUrl` — a link clicked anywhere in the app opens as a new tab |
-| `message` | sandboxed home surface | `browser:open-card` → `news/click` POST + navigate; `browser:open-bookmark` → open in a new tab; `browser:refresh-news` → reload the shelf |
+| `url:open` | core link router (`web/js/linkRouter.js`) | `openCoreUrl` — a link clicked anywhere in the app opens as a new tab, or in the active tab when that is a blank start page |
+| `message` | sandboxed home surface | `browser:open-card` → `news/click` POST + navigate; `browser:open-bookmark` → open in the start page's own tab; `browser:refresh-news` → reload the shelf |
 | `theme:change` | core theme | `pushSettings()`; `refreshHomeTheme()` repaints open home tabs |
 | `appearance:change` | core appearance (accent) | `refreshHomeTheme()` |
 | `settings:change` | core Settings window (browser section) | `onSettingsChanged` — re-fetches `/api/browser/settings`, re-pushes to the shell, and reloads the active page when `adblock` changed |
@@ -222,7 +242,7 @@ re-pushes (and reloads the open page) when that save lands.
 | Prefix | Payload | Purpose |
 |---|---|---|
 | `liteaura:view:` | `{ op, id, … }` | Native child-webview commands |
-| `liteaura:settings:` | `{ adblock, downloadsDir, colorScheme }` | Shell settings. `colorScheme: "dark"` turns on the engine's dark mode for every page view (`settings.forceDarkMode`, bound to `shell.darkPages`): pages report `prefers-color-scheme: dark`, so sites with a dark style use it and the rest are darkened. Re-sent on `theme:change` / `appearance:change`. |
+| `liteaura:settings:` | `{ adblock, downloadsDir, colorScheme }` | Shell settings. `colorScheme` (`"dark"` for Ink, `"light"` for Dusk) is what pages report as `prefers-color-scheme`: a site with a dark style uses it, one without stays as its author made it (no automatic darkening). Chromium takes it only at startup (`--blink-settings=preferredColorScheme`), so the shell saves it in `<data dir>/qtwebengine/color-scheme` and pages follow a theme switch from the next start of the shell. Core `web/ui/theme-loader.js` sends it on every boot and switch; this window re-sends it on `theme:change` / `appearance:change`. |
 | `liteaura:filter:` | `{ enabled }` | Live shield toggle |
 | `liteaura:download:` | `{ id, action }` | `pause`/`resume`/`cancel`/`remove`/`clear` |
 | `liteaura:downloads:list` | raw (no JSON) | Ask the shell to push its live list via `window.__liteauraDownloads` |
@@ -254,7 +274,8 @@ above the page.
 | `POST /api/browser/downloads/clear` | `downloadAction('', 'clear')` |
 | `GET/POST/DELETE /api/browser/history*` | history panel open/clear |
 | `GET /api/browser/vault`, `POST …/vault/{unlock,lock,reset}`, `GET /api/browser/passwords`, `POST …/passwords/{reveal,save,remove}` | the password manager (`passwords.js`) |
-| `GET /api/browser/bookmarks`, `POST …/add`, `POST …/remove` | bookmarks panel and the star toggle |
+| `GET /api/browser/bookmarks`, `POST …/add`, `POST …/remove` | bookmarks panel and the star toggle (a toast confirms the save or says it failed; a failure is also logged with its reason) |
+| `GET /api/browser/suggest?q=` | the address bar's completion (`address-suggest.js`) |
 | `GET /api/browser/import/sources`, `POST …/import/{profile,file}` | the import panel (`import-panel.js`) |
 
 ## Tab model

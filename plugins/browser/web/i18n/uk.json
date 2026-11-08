@@ -36,6 +36,8 @@
   "plugin.browser.bookmarks.add": "Додати сторінку до закладок",
   "plugin.browser.bookmarks.empty": "Ще немає закладок — скористайтеся ☆ на панелі інструментів",
   "plugin.browser.bookmarks.remove": "Видалити закладку",
+  "plugin.browser.bookmarks.saved": "Додано до закладок",
+  "plugin.browser.bookmarks.saveFailed": "Не вдалося зберегти закладку",
   "plugin.browser.bookmarks.title": "Закладки",
   "plugin.browser.downloads.cancel": "Скасувати",
   "plugin.browser.downloads.clearFinished": "Очистити завершені",
@@ -155,5 +157,6 @@
   "plugin.browser.import.looking": "Пошук…",
   "plugin.browser.import.thisComputer": "На цьому комп'ютері",
   "plugin.browser.import.noneFound": "На цьому комп'ютері не знайдено інших браузерів.",
-  "plugin.browser.import.file": "Файл"
+  "plugin.browser.import.file": "Файл",
+  "plugin.browser.suggest.title": "Підказки"
 }

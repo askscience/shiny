@@ -75,11 +75,18 @@ long utterances.
 
 - **Server-spawned (default).** `AUTO_START_WHISPER=true` (default) and
   `AUTO_START_SUPERTONIC=true` (default) make `main.rs` spawn the launchers
-  detached. The child is reaped on a background thread so it never becomes a
-  zombie when it exits after finding an existing daemon.
-- **Session-spawned.** [`scripts/shiny-session`](../../scripts/shiny-session)
-  starts both launchers before opening the kiosk so the engines are warm by the
-  first spoken word; on a real multi-user box each user gets their own.
+  detached, at once, only with the AI switched on, and at a **low CPU and I/O
+  priority** (`nice -n 10 ionice -c 2 -n 7`, see `launcher` in
+  `src/application/sidecars.rs`; the Python daemon inherits it). Each sidecar
+  loads its model on start (seconds of CPU on every core), and at login the
+  desktop being built gets the machine first while idle cores still go to the
+  sidecars, so they are ready about as early as at full priority. (Delaying
+  them by a fixed time was tried and only made voice ready later.) The child is
+  reaped on a background thread so it never becomes a zombie when it exits
+  after finding an existing daemon.
+- **Not session-spawned.** [`scripts/shiny-session`](../../scripts/shiny-session)
+  used to start both launchers before opening the kiosk, at full priority and
+  ignoring the AI switch; it no longer does.
 - **Supervised.** [`src/application/voice_watchdog.rs`](../../src/application/voice_watchdog.rs)
   probes each enabled engine every 15 s (Whisper `/health`, Supertonic `/docs`,
   Qwen `/v1/audio/voices`) and re-runs the matching launcher once one has been

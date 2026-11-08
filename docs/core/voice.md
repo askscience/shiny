@@ -116,6 +116,15 @@ evaluate a string as JavaScript"*), every model load fails, and the user sees
 every engine choice, because the failure is in the loader, not in the engine.
 `web/js/tests/cspHomeShelfHash.test.mjs` fails if either directive disappears.
 
+### Boot timing
+
+Voice prepares as soon as the shell starts (`prepareVoice()` from `app.js`),
+in parallel with the desktop: the Vosk model loads in its own worker, and the
+speech sidecars run at a low priority (see
+[sidecars](../deployment/sidecars.md#lifecycles)). The session log records
+`boot: desktop shown … ms` and `boot: voice ready (<engine>) … ms`, measured
+from the page start, so login timing can be read on the real kiosk.
+
 ### Engine selection, fallback and upgrade
 
 The browser resolves the STT engine in `prepareVoice()` (`web/js/voice.js`) from

@@ -84,20 +84,44 @@ Object.defineProperty(globalThis, 'localStorage', {
   },
 });
 
-const sources = [];
-globalThis.EventSource = class {
-  constructor(url) {
-    this.url = String(url);
-    this.listeners = {};
-    this.closed = false;
-    sources.push(this);
-  }
-  addEventListener(type, listener) { this.listeners[type] = listener; }
-  close() { this.closed = true; }
-};
+// The shell's single event stream (`eventBus.js` → `/api/events`): each
+// fetch is one connection carrying the topics in its query.
+const streams = [];
+const encoder = new TextEncoder();
+function eventStream(url, signal) {
+  const queue = [];
+  let wake = null;
+  const topics = new URL(String(url), 'http://local/').searchParams.get('topics') || '';
+  const stream = {
+    url: String(url),
+    topics,
+    aborted: false,
+    push(event, data) {
+      queue.push(encoder.encode(`event: ${event}\ndata: ${data}\n\n`));
+      wake?.();
+    },
+  };
+  signal?.addEventListener('abort', () => { stream.aborted = true; wake?.(); });
+  streams.push(stream);
+  const reader = {
+    async read() {
+      for (;;) {
+        if (stream.aborted) throw new DOMException('aborted', 'AbortError');
+        if (queue.length) return { done: false, value: queue.shift() };
+        await new Promise((resolve) => { wake = resolve; });
+        wake = null;
+      }
+    },
+  };
+  return { ok: true, status: 200, body: { getReader: () => reader } };
+}
+const open = () => streams.filter((stream) => !stream.aborted);
+const liveTopics = () => open().at(-1)?.topics ?? '';
+const settle = () => new Promise((resolve) => setTimeout(resolve, 80));
 
 const posted = [];
 globalThis.fetch = async (url, options = {}) => {
+  if (String(url).includes('/api/events?')) return eventStream(url, options.signal);
   // The file picker probes the Files plugin; none is installed in this test, so
   // the shim must degrade quietly (no dialog, no throw) instead of hanging.
   if (String(url).includes('/api/files/home')) {
@@ -244,9 +268,10 @@ const vframe = vsurface.mount().children.find((el) => el.tagName === 'IFRAME');
 // charge and nothing about the window changes.
 vframe.contentWindow = {};
 vframe.fire('load');
-check('no page API: nothing is attached', sources.length === 0, `${sources.length} sources`);
+await settle();
+check('no page API: nothing is attached', streams.length === 0, `${streams.length} streams`);
 
-// A build with it attaches one stream, looked up by plugin id.
+// A build with it subscribes its topic on the shell's one event stream.
 const calls = [];
 vframe.contentWindow = {
   vectorcraft: {
@@ -254,14 +279,14 @@ vframe.contentWindow = {
   },
 };
 vframe.fire('load');
-check('the page API opens one control stream', sources.length === 1, `${sources.length}`);
-check('the stream is scoped to this app id',
-  sources[0].url.includes('/api/plugins/craft/control/events?app=vectorcraft'), sources[0].url);
+await settle();
+check('the page API opens one stream', open().length === 1, `${open().length}`);
+check('the stream carries this app id', liveTopics() === 'craft:vectorcraft', liveTopics());
 
 // A forwarded request runs in the app and its answer goes back on the wire.
-sources[0].listeners.message({ data: JSON.stringify({
+open()[0].push('craft:vectorcraft', JSON.stringify({
   id: 7, method: 'engine.execute', params: { command: 'select.all' },
-}) });
+}));
 await new Promise((resolve) => setTimeout(resolve, 10));
 check('the request reaches the app with its params',
   calls.length === 1 && calls[0].method === 'engine.execute'
@@ -271,30 +296,45 @@ check('the answer goes back to the proxy',
   && posted[0].body.app === 'vectorcraft' && posted[0].body.id === 7
   && posted[0].body.ok === true, JSON.stringify(posted));
 
-// An app-side refusal comes back as an error line with the same id.
+// A reload re-attaches the new document on the same connection.
 vframe.contentWindow = {
   vectorcraft: { request: async () => { throw new Error('nothing selected'); } },
 };
 vframe.fire('load');
-check('a reload replaces the stream', sources.length === 2 && sources[0].closed === true);
-sources[1].listeners.message({ data: JSON.stringify({ id: 8, method: 'engine.execute' }) });
+await settle();
+check('a reload keeps the one stream', open().length === 1 && streams.length === 1,
+  `${open().length}/${streams.length}`);
+open()[0].push('craft:vectorcraft', JSON.stringify({ id: 8, method: 'engine.execute' }));
 await new Promise((resolve) => setTimeout(resolve, 10));
 check('an app error is reported, not swallowed',
   posted.length === 2 && posted[1].body.id === 8 && posted[1].body.ok === false
   && posted[1].body.error === 'nothing selected', JSON.stringify(posted[1]));
 
 forgetWebAppSurface('vectorcraft');
-check('forgetting a surface closes its stream', sources[1].closed === true);
+await settle();
+check('forgetting a surface closes its stream', open().length === 0, `${open().length}`);
 
 // The detection is by plugin id, so the same code serves any Craft app.
 const other = webAppSurface('photocraft');
 const otherFrame = other.mount().children.find((el) => el.tagName === 'IFRAME');
 otherFrame.contentWindow = { photocraft: { request: async () => ({}) } };
 otherFrame.fire('load');
-check('another app id gets its own stream',
-  sources.length === 3 && sources[2].url.includes('app=photocraft'), `${sources.length}`);
+await settle();
+check('another app id gets its own topic', liveTopics() === 'craft:photocraft', liveTopics());
+
+// Two open apps share one connection.
+const second = webAppSurface('vectorcraft');
+const secondFrame = second.mount().children.find((el) => el.tagName === 'IFRAME');
+secondFrame.contentWindow = { vectorcraft: { request: async () => ({}) } };
+secondFrame.fire('load');
+await settle();
+check('two apps ride one connection',
+  open().length === 1 && liveTopics() === 'craft:photocraft,craft:vectorcraft',
+  `${open().length} open, topics ${liveTopics()}`);
+forgetWebAppSurface('vectorcraft');
 forgetWebAppSurface('photocraft');
-check('its stream closes with it', sources[2].closed === true);
+await settle();
+check('their stream closes with them', open().length === 0, `${open().length}`);
 
 // A Craft app's API is defined by its WebAssembly, seconds after `load`
 // (VectorCraft: ~3.7 s). The surface keeps looking and attaches when it lands.
@@ -303,15 +343,17 @@ const lateFrame = late.mount().children.find((el) => el.tagName === 'IFRAME');
 const lateWindow = {};
 lateFrame.contentWindow = lateWindow;
 lateFrame.fire('load');
-check('an API not there yet at load attaches nothing at first', sources.length === 3, `${sources.length}`);
+await settle();
+check('an API not there yet at load attaches nothing at first', open().length === 0, `${open().length}`);
 lateWindow.lightcraft = { request: async () => ({}) };
 await new Promise((resolve) => setTimeout(resolve, 600));
-check('an API that appears after load is attached',
-  sources.length === 4 && sources[3].url.includes('app=lightcraft'), `${sources.length}`);
+check('an API that appears after load is attached', liveTopics() === 'craft:lightcraft', liveTopics());
 forgetWebAppSurface('lightcraft');
-check('its stream closes with it too', sources[3].closed === true);
+await settle();
+check('its stream closes with it too', open().length === 0, `${open().length}`);
 
 // Closing the window while the app is still starting ends the wait.
+const before = streams.length;
 const gone = webAppSurface('deckcraft');
 const goneFrame = gone.mount().children.find((el) => el.tagName === 'IFRAME');
 const goneWindow = {};
@@ -320,7 +362,7 @@ goneFrame.fire('load');
 forgetWebAppSurface('deckcraft');
 goneWindow.deckcraft = { request: async () => ({}) };
 await new Promise((resolve) => setTimeout(resolve, 600));
-check('a forgotten surface stops looking', sources.length === 4, `${sources.length}`);
+check('a forgotten surface stops looking', streams.length === before, `${streams.length}`);
 
 /* ── In-app Open…: file inputs are served by the shell picker ── */
 

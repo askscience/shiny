@@ -246,6 +246,9 @@ async function initApp() {
   initWearable();
   initTouchBar({ talk: () => (isAiEnabled() ? tapOrb() : openLauncher()) });
   reveal();
+  // Lands in the session log (/var/log/shiny/session-*.log): login timing is
+  // measured there, on the real kiosk, not guessed.
+  console.info(`boot: desktop shown ${Math.round(performance.now())} ms after the page started`);
 }
 
 /// The live image has exactly one job: open the installer window as soon as

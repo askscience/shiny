@@ -34,6 +34,8 @@
   "plugin.browser.bookmarks.add": "Pievienot šo lapu grāmatzīmēm",
   "plugin.browser.bookmarks.empty": "Vēl nav grāmatzīmju — izmantojiet ☆ rīkjoslā",
   "plugin.browser.bookmarks.remove": "Noņemt grāmatzīmi",
+  "plugin.browser.bookmarks.saved": "Saglabāts grāmatzīmēs",
+  "plugin.browser.bookmarks.saveFailed": "Neizdevās saglabāt grāmatzīmi",
   "plugin.browser.bookmarks.title": "Grāmatzīmes",
   "plugin.browser.downloads.cancel": "Atcelt",
   "plugin.browser.downloads.clearFinished": "Notīrīt pabeigtās",
@@ -151,5 +153,6 @@
   "plugin.browser.import.looking": "Meklē…",
   "plugin.browser.import.thisComputer": "Šajā datorā",
   "plugin.browser.import.noneFound": "Šajā datorā nav atrasta cita pārlūkprogramma.",
-  "plugin.browser.import.file": "Fails"
+  "plugin.browser.import.file": "Fails",
+  "plugin.browser.suggest.title": "Ieteikumi"
 }

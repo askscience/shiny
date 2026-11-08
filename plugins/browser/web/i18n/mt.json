@@ -38,6 +38,8 @@
   "plugin.browser.bookmarks.add": "Żid bookmark għal din il-paġna",
   "plugin.browser.bookmarks.empty": "Għad m'hemmx bookmarks — uża l-☆ fil-barra tal-għodda",
   "plugin.browser.bookmarks.remove": "Neħħi l-bookmark",
+  "plugin.browser.bookmarks.saved": "Issejvjat fil-bookmarks",
+  "plugin.browser.bookmarks.saveFailed": "Ma setax jiġi ssejvjat il-bookmark",
   "plugin.browser.bookmarks.title": "Bookmarks",
   "plugin.browser.downloads.cancel": "Ikkanċella",
   "plugin.browser.downloads.clearFinished": "Neħħi dawk lesti",
@@ -159,5 +161,6 @@
   "plugin.browser.import.looking": "Qed ifittex…",
   "plugin.browser.import.thisComputer": "F'dan il-kompjuter",
   "plugin.browser.import.noneFound": "Ma nstab l-ebda browser ieħor f'dan il-kompjuter.",
-  "plugin.browser.import.file": "Fajl"
+  "plugin.browser.import.file": "Fajl",
+  "plugin.browser.suggest.title": "Suġġerimenti"
 }

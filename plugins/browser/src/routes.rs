@@ -32,6 +32,7 @@ pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
         "browser_history_clear" => Some(history_clear(ctx.clone())),
         "browser_history_record" => Some(history_record(ctx.clone())),
         "browser_bookmarks" => Some(bookmarks_route(ctx.clone())),
+        "browser_suggest" => Some(suggest_route(ctx.clone())),
         "browser_bookmark_add" => Some(bookmark_add(ctx.clone())),
         "browser_bookmark_remove" => Some(bookmark_remove(ctx.clone())),
         "browser_news" => Some(news_route(ctx.clone())),
@@ -364,6 +365,21 @@ fn bookmarks_route(ctx: Arc<PluginCtx>) -> RouteHandler {
             let uid = user_id(&req)?;
             let limit = query_limit(&req).unwrap_or(100);
             Ok(ok(json!({ "bookmarks": bookmarks::list(&ctx, &uid, limit) })))
+        }
+    })
+}
+
+/// GET /api/browser/suggest?q=<typed>&limit=<n> — the address bar's inline
+/// completion and the rows under it (see [`crate::suggest`]).
+fn suggest_route(ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req: axum::extract::Request| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            let typed = query_param(&req, "q").unwrap_or_default();
+            let limit = query_limit(&req).unwrap_or(crate::suggest::DEFAULT_LIMIT);
+            let suggestions = crate::suggest::suggest(&ctx, &uid, &typed, limit);
+            Ok(ok(json!(suggestions)))
         }
     })
 }

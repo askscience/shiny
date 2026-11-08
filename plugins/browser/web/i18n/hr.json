@@ -34,6 +34,8 @@
   "plugin.browser.bookmarks.add": "Dodaj ovu stranicu u zabilješke",
   "plugin.browser.bookmarks.empty": "Još nema zabilješki — upotrijebite ☆ u alatnoj traci",
   "plugin.browser.bookmarks.remove": "Ukloni zabilješku",
+  "plugin.browser.bookmarks.saved": "Spremljeno u oznake",
+  "plugin.browser.bookmarks.saveFailed": "Oznaku nije moguće spremiti",
   "plugin.browser.bookmarks.title": "Zabilješke",
   "plugin.browser.downloads.cancel": "Odustani",
   "plugin.browser.downloads.clearFinished": "Očisti dovršena",
@@ -151,5 +153,6 @@
   "plugin.browser.import.looking": "Traženje…",
   "plugin.browser.import.thisComputer": "Na ovom računalu",
   "plugin.browser.import.noneFound": "Na ovom računalu nije pronađen drugi preglednik.",
-  "plugin.browser.import.file": "Datoteka"
+  "plugin.browser.import.file": "Datoteka",
+  "plugin.browser.suggest.title": "Prijedlozi"
 }

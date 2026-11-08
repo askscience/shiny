@@ -34,6 +34,8 @@
   "plugin.browser.bookmarks.add": "Ajouter cette page aux favoris",
   "plugin.browser.bookmarks.empty": "Aucun favori pour l'instant — utilisez la ☆ dans la barre d'outils",
   "plugin.browser.bookmarks.remove": "Supprimer le favori",
+  "plugin.browser.bookmarks.saved": "Ajouté aux favoris",
+  "plugin.browser.bookmarks.saveFailed": "Impossible d’enregistrer le favori",
   "plugin.browser.bookmarks.title": "Favoris",
   "plugin.browser.downloads.cancel": "Annuler",
   "plugin.browser.downloads.clearFinished": "Effacer les téléchargements terminés",
@@ -151,5 +153,6 @@
   "plugin.browser.import.looking": "Recherche…",
   "plugin.browser.import.thisComputer": "Sur cet ordinateur",
   "plugin.browser.import.noneFound": "Aucun autre navigateur trouvé sur cet ordinateur.",
-  "plugin.browser.import.file": "Fichier"
+  "plugin.browser.import.file": "Fichier",
+  "plugin.browser.suggest.title": "Suggestions"
 }

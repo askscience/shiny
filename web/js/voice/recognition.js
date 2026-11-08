@@ -953,6 +953,7 @@ async function prepareVoiceInner() {
 
   setVoiceReady(true);
   setSphereState('idle');
+  console.info(`boot: voice ready (${sttEngine}) ${Math.round(performance.now())} ms after the page started`);
 }
 
 /** Ask the server to fetch and pack the Vosk archive for `lang`. */

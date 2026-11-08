@@ -3,6 +3,33 @@
 use crate::config::Config;
 use std::process::{Child, Command, Stdio};
 
+/// The command that runs a sidecar launcher.
+///
+/// Launched at once, in parallel with the session, but at a lower CPU and I/O
+/// priority (`nice -n 10`, `ionice -c 2 -n 7`, inherited by the Python daemon):
+/// loading a speech model takes seconds of CPU on every core, and at login the
+/// desktop being built must get the machine first. Idle cores still go to the
+/// sidecars, so they are ready about as early as at full priority. Falls back
+/// to plain `bash` where those tools are missing.
+fn launcher(script: &str) -> Command {
+    let has = |tool: &str| {
+        ["/usr/bin", "/bin"].iter().any(|dir| std::path::Path::new(dir).join(tool).exists())
+    };
+    let mut cmd;
+    if has("nice") {
+        cmd = Command::new("nice");
+        cmd.args(["-n", "10"]);
+        if has("ionice") {
+            cmd.args(["ionice", "-c", "2", "-n", "7"]);
+        }
+        cmd.args(["bash", script]);
+    } else {
+        cmd = Command::new("bash");
+        cmd.arg(script);
+    }
+    cmd
+}
+
 /// Reap a detached sidecar in the background.
 ///
 /// The sidecars are deliberately detached: they outlive the server, and a
@@ -34,8 +61,8 @@ pub fn spawn_supertonic_sidecar(config: &Config) {
         .and_then(|p| p.trim_end_matches('/').parse::<u16>().ok())
         .unwrap_or(7788);
 
-    let mut cmd = Command::new("bash");
-    cmd.arg("voice/start_supertonic.sh")
+    let mut cmd = launcher("voice/start_supertonic.sh");
+    cmd
         .env("SUPERTONIC_PORT", port.to_string());
     if let Some(python) = &config.supertonic_python {
         cmd.env("SUPERTONIC_PYTHON", python);
@@ -74,8 +101,8 @@ pub fn spawn_whisper_sidecar(config: &Config) {
         .and_then(|p| p.trim_end_matches('/').parse::<u16>().ok())
         .unwrap_or(7789);
 
-    let mut cmd = Command::new("bash");
-    cmd.arg("voice/start_whisper.sh")
+    let mut cmd = launcher("voice/start_whisper.sh");
+    cmd
         .env("WHISPER_PORT", port.to_string())
         .env("WHISPER_MODELS_DIR", &config.whisper_models_dir);
     if let Some(python) = &config.whisper_python {
@@ -112,8 +139,8 @@ pub fn spawn_qwen_tts_sidecar(config: &Config) {
         .and_then(|p| p.trim_end_matches('/').parse::<u16>().ok())
         .unwrap_or(7787);
 
-    let mut cmd = Command::new("bash");
-    cmd.arg("voice/start_qwen_tts.sh")
+    let mut cmd = launcher("voice/start_qwen_tts.sh");
+    cmd
         .env("QWEN_TTS_PORT", port.to_string())
         .env("QWEN_TTS_MODELS_DIR", &config.qwen_tts_models_dir);
 
@@ -128,5 +155,23 @@ pub fn spawn_qwen_tts_sidecar(config: &Config) {
             tracing::info!("Starting Qwen3-TTS sidecar on port {}", port)
         }
         Err(e) => tracing::warn!("Could not auto-start Qwen3-TTS: {}", e),
+    }
+}
+
+#[cfg(test)]
+mod launcher_tests {
+    use super::launcher;
+
+    /// The launcher runs the script at a low priority when `nice` exists.
+    #[test]
+    fn launches_the_script_at_low_priority() {
+        let cmd = launcher("voice/start_whisper.sh");
+        let args: Vec<String> = cmd.get_args().map(|a| a.to_string_lossy().into_owned()).collect();
+        assert_eq!(args.last().map(String::as_str), Some("voice/start_whisper.sh"));
+        if std::path::Path::new("/usr/bin/nice").exists() {
+            assert_eq!(cmd.get_program(), "nice");
+            assert_eq!(&args[..2], ["-n", "10"]);
+            assert!(args.contains(&"bash".to_string()));
+        }
     }
 }

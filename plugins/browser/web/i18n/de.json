@@ -32,6 +32,8 @@
   "plugin.browser.bookmarks.add": "Diese Seite als Lesezeichen speichern",
   "plugin.browser.bookmarks.empty": "Noch keine Lesezeichen — verwenden Sie das ☆ in der Symbolleiste",
   "plugin.browser.bookmarks.remove": "Lesezeichen entfernen",
+  "plugin.browser.bookmarks.saved": "Zu Lesezeichen hinzugefügt",
+  "plugin.browser.bookmarks.saveFailed": "Lesezeichen konnte nicht gespeichert werden",
   "plugin.browser.bookmarks.title": "Lesezeichen",
   "plugin.browser.downloads.cancel": "Abbrechen",
   "plugin.browser.downloads.clearFinished": "Abgeschlossene entfernen",
@@ -147,5 +149,6 @@
   "plugin.browser.import.looking": "Suche…",
   "plugin.browser.import.thisComputer": "Auf diesem Computer",
   "plugin.browser.import.noneFound": "Kein anderer Browser auf diesem Computer gefunden.",
-  "plugin.browser.import.file": "Datei"
+  "plugin.browser.import.file": "Datei",
+  "plugin.browser.suggest.title": "Vorschläge"
 }

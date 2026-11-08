@@ -2,8 +2,48 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- After login, the top-bar menus (power, battery, Wi-Fi), the browser's
+  suggestions and the Craft apps took up to a minute to load. Chromium opens at
+  most six connections to the shell's server, and each live feed held one for
+  good: one per top-bar icon plus one per open Craft app, which filled them all,
+  so every other request waited in line. All the live feeds now share a single
+  connection (`GET /api/events`), leaving the rest free.
+- Login is lighter. The speech engines (Supertonic, faster-whisper) still
+  start with the server, in parallel with the desktop, but at a low CPU and
+  I/O priority, so building the desktop gets the machine first. The session
+  script no longer starts a second copy of them at full priority (which also
+  ignored the AI switch). The session log now records when the desktop is shown
+  and when voice is ready.
+- Browser: a link or bookmark opened from a new tab's start page now opens
+  in that tab, instead of in another new tab beside it.
+- Browser: saving a bookmark now says whether it worked, and a failure is
+  written to the session log with its reason.
+- Browser: history was no longer saved and the home page had no news. The
+  plugin wrote visits into its renamed history table, but the development
+  install had copied the library without the migration that creates it. The
+  plugin now creates the table itself when it is missing and moves the old
+  history into it, and `scripts/install-plugin-dev.sh` copies migrations too.
+- Browser: a page no longer goes blank while a menu is open over it (the
+  Browser's own menus or a top-bar menu such as the battery one). The shell
+  keeps the last masks that cut menus out of the page, and once it held more
+  than 24 it evicted one at random, often the mask just made for the open menu.
+  It now always drops the oldest.
+- Browser: pages no longer get Chromium's automatic dark mode, which inverted
+  their colours. They are told the system theme instead, Ink as dark and Dusk
+  as light, through `prefers-color-scheme`: a site with its own dark style uses
+  it and every other site looks as its author made it. Chromium reads this only
+  when it starts, so after a theme switch pages follow from the next start of
+  the shell.
+
 ### Changed
 
+- Browser 0.2.2: the address bar completes what you type. Typing `you` fills
+  in `youtube.com` (Enter goes there, the next letter replaces it), and a short
+  list under the bar offers matching bookmarks, visited pages and past
+  searches, with arrow keys, Enter and Escape. New route
+  `GET /api/browser/suggest`.
 - The shell's file dialog (Open… in the web apps, the wallpaper and plugin
   upload pickers) is redrawn. Names no longer run into the next row: they wrap
   to two lines and end with an ellipsis, and the grid no longer depends on the

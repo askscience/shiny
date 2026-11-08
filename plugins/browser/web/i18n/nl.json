@@ -32,6 +32,8 @@
   "plugin.browser.bookmarks.add": "Deze pagina aan favorieten toevoegen",
   "plugin.browser.bookmarks.empty": "Nog geen favorieten — gebruik de ☆ in de werkbalk",
   "plugin.browser.bookmarks.remove": "Favoriet verwijderen",
+  "plugin.browser.bookmarks.saved": "Opgeslagen in bladwijzers",
+  "plugin.browser.bookmarks.saveFailed": "Bladwijzer kon niet worden opgeslagen",
   "plugin.browser.bookmarks.title": "Favorieten",
   "plugin.browser.downloads.cancel": "Annuleren",
   "plugin.browser.downloads.clearFinished": "Voltooide wissen",
@@ -147,5 +149,6 @@
   "plugin.browser.import.looking": "Zoeken…",
   "plugin.browser.import.thisComputer": "Op deze computer",
   "plugin.browser.import.noneFound": "Geen andere browser gevonden op deze computer.",
-  "plugin.browser.import.file": "Bestand"
+  "plugin.browser.import.file": "Bestand",
+  "plugin.browser.suggest.title": "Suggesties"
 }

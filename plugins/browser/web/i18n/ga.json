@@ -38,6 +38,8 @@
   "plugin.browser.bookmarks.add": "Cuir leabharmharc leis an leathanach seo",
   "plugin.browser.bookmarks.empty": "Níl aon leabharmharc ann fós — úsáid an ☆ sa bharra uirlisí",
   "plugin.browser.bookmarks.remove": "Bain an leabharmharc",
+  "plugin.browser.bookmarks.saved": "Sábháilte sna leabharmharcanna",
+  "plugin.browser.bookmarks.saveFailed": "Níorbh fhéidir an leabharmharc a shábháil",
   "plugin.browser.bookmarks.title": "Leabharmharcanna",
   "plugin.browser.downloads.cancel": "Cealaigh",
   "plugin.browser.downloads.clearFinished": "Glan na cinn críochnaithe",
@@ -159,5 +161,6 @@
   "plugin.browser.import.looking": "Ag cuardach…",
   "plugin.browser.import.thisComputer": "Ar an ríomhaire seo",
   "plugin.browser.import.noneFound": "Níor aimsíodh brabhsálaí eile ar an ríomhaire seo.",
-  "plugin.browser.import.file": "Comhad"
+  "plugin.browser.import.file": "Comhad",
+  "plugin.browser.suggest.title": "Moltaí"
 }

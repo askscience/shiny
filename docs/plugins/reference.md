@@ -442,7 +442,7 @@ Both isolate panics so one bad job cannot wedge the worker.
 | `GET` | `/api/plugins/store/icon?id=<app>` | Bearer | The app's own icon (PNG): from its repository, else the copy the ArtCraft launcher ships. Cached for the process; 404 when there is none. |
 | `POST` | `/api/plugins/store/install` | Bearer | `{ "id": "photocraft" }` — download, verify (SHA-256) and install one app's web build **and its command-line tool (AI control)**, in the background. |
 | `POST` | `/api/plugins/store/mcp` | Bearer | `{ "id": "photocraft", "enable": true }` — the AI-control switch: records the decision and installs/removes the app's CLI (its MCP server). On by default; off is remembered (`.craft-mcp/<id>/disabled`), so installs and updates respect it. |
-| `GET` | `/api/plugins/craft/control/events` | Bearer | SSE, the page's side of a live Craft app link (`?app=<id>`): each message is one control request the page runs through `window.<app>.request`. |
+| `GET` | `/api/plugins/craft/control/events` | Bearer | SSE, the page's side of a live Craft app link (`?app=<id>`): each message is one control request the page runs through `window.<app>.request`. The shell itself subscribes to the `craft:<id>` topic of `GET /api/events` instead, so every open app shares one connection. |
 | `POST` | `/api/plugins/craft/control/reply` | Bearer | `{ "app": "vectorcraft", "id": 42, "ok": true, "result": … }` — the page's answer to one forwarded request. |
 
 Connectivity failures are transient, not catalog answers. When a lookup cannot

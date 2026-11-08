@@ -910,7 +910,9 @@ keeps the headless fallback, so the feature lights up per app as its releases
 ship the API — for the whole suite, including apps installed later. The prompt
 says which mode each open app is in; focus mode still decides *which* apps have a
 server at all. Routes: `GET /api/plugins/craft/control/events?app=<id>` (SSE,
-page side) and `POST /api/plugins/craft/control/reply`.
+page side; the shell uses the `craft:<id>` topic of the combined `GET
+/api/events` so all open apps share one connection) and `POST
+/api/plugins/craft/control/reply`.
 
 **Opening files inside an app.** The web builds ask for files with a classic
 `<input type=file>`, which the kiosk's web engine cannot answer on its own (it is

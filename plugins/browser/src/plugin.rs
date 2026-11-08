@@ -64,6 +64,7 @@ impl Plugin for BrowserPlugin {
             (HttpMethod::Post, "/api/browser/history/clear", "browser_history_clear"),
             (HttpMethod::Post, "/api/browser/history/record", "browser_history_record"),
             (HttpMethod::Get, "/api/browser/bookmarks", "browser_bookmarks"),
+            (HttpMethod::Get, "/api/browser/suggest", "browser_suggest"),
             (HttpMethod::Post, "/api/browser/bookmarks/add", "browser_bookmark_add"),
             (HttpMethod::Post, "/api/browser/bookmarks/remove", "browser_bookmark_remove"),
             (HttpMethod::Get, "/api/browser/news", "browser_news"),

@@ -28,6 +28,7 @@ pub mod touchbar;
 pub mod keyboard_backlight;
 pub mod screen_brightness;
 pub mod remote;
+pub mod events;
 pub mod system;
 mod sse;
 
@@ -740,6 +741,10 @@ pub fn build_router(state: AppState) -> Router {
     // never mutate the machine — even though the transparent proxy makes the
     // request's TCP peer loopback.
     let host_routes = Router::new()
+        // Every live stream on one connection (panels + Craft control): see
+        // events.rs for why the per-stream routes below are kept only for
+        // older pages.
+        .route("/api/events", get(events::events))
         .route("/api/network/status", get(network::status))
         .route("/api/network/events", get(network::events))
         .route("/api/network/scan", post(network::scan))

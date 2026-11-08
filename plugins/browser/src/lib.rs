@@ -13,6 +13,8 @@
 //! * [`history`] — best-effort browsing history, and the interest profile's
 //!   raw material.
 //! * [`bookmarks`] — per-user saved pages for the toolbar.
+//! * [`suggest`] — address-bar completion and suggestions from bookmarks,
+//!   history and past searches.
 //! * [`settings`] — per-user Browser settings (the shield toggle, the search
 //!   engine).
 //! * [`filter`] — the server half of the ad-filter engine: fetch + compile the
@@ -35,6 +37,7 @@ pub mod routes;
 pub mod sessions;
 pub mod settings;
 pub mod sites;
+pub mod suggest;
 pub mod tools;
 pub mod vault;
 

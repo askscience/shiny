@@ -156,6 +156,9 @@ liteaura_clipboard_cb g_clipboard_cb = nullptr;
 
 // Debug hooks (probe / LITEAURA_QT_EVAL) and their result routing.
 bool g_probe = false;
+/// The shell's data dir, where the last app colour scheme is kept for the next
+/// start (`apply_page_color_scheme`).
+QString g_data_dir;
 bool g_eval_exit = false;
 
 /// Intercepts every request in a profile: asks the Rust engine whether to
@@ -196,8 +199,13 @@ public:
         painter.end();
         const QString key = QString::number(++seq_);
         images_.insert(key, image);
-        // One page is in view at a time; a small cache is plenty.
-        while (images_.size() > 24) images_.remove(images_.constBegin().key());
+        order_.append(key);
+        // One page is in view at a time; a small cache is plenty. Always drop
+        // the *oldest* mask: QHash has no order, and evicting `constBegin()`
+        // used to throw away the mask just made for the menu being opened
+        // (from the 25th mask on), so the Image found nothing ("Failed to get
+        // image from provider") and the whole page went blank under any menu.
+        while (order_.size() > 24) images_.remove(order_.takeFirst());
         return QStringLiteral("image://liteauramask/") + key;
     }
 
@@ -209,6 +217,7 @@ public:
 
 private:
     QHash<QString, QImage> images_;
+    QList<QString> order_; // keys, oldest first
     int seq_ = 0;
 };
 
@@ -676,9 +685,10 @@ WebEngineView {
     settings.playbackRequiresUserGesture: false
     settings.fullScreenSupportEnabled: true
     settings.javascriptCanOpenWindows: true
-    // Dark app theme: pages see `prefers-color-scheme: dark` (sites with a dark
-    // style switch to it), and the engine darkens the ones that have none.
-    settings.forceDarkMode: shell.darkPages
+    // No settings.forceDarkMode: that is Chromium's automatic dark mode, which
+    // inverts a page's colours and still reports `prefers-color-scheme: light`.
+    // Pages learn the app theme from `preferredColorScheme` instead (see
+    // `apply_page_color_scheme`), so a site uses its own dark style or none.
     // Browsed pages follow the interface scale, like the app view itself.
     // Assigned rather than bound: Chromium keeps zoom per host and may reset
     // it on a cross-site navigation, so it is re-applied on every load too
@@ -705,10 +715,6 @@ class Shell : public QObject {
     Q_PROPERTY(QObject *childBridge READ childBridge CONSTANT)
     Q_PROPERTY(QObject *maskItem READ maskItem CONSTANT)
     Q_PROPERTY(QObject *appChannel READ appChannel CONSTANT)
-    /// The app theme is dark: browsed pages render with the engine's dark mode,
-    /// which also makes them report `prefers-color-scheme: dark` (see
-    /// `liteaura_qt_set_color_scheme`). Every page view binds its settings to it.
-    Q_PROPERTY(bool darkPages READ darkPages NOTIFY darkPagesChanged)
     /// The interface scale (`liteaura_qt_main_zoom`): every page view takes it as
     /// its zoom, so browsed pages scale with the app around them.
     Q_PROPERTY(double pageZoom READ pageZoom NOTIFY pageZoomChanged)
@@ -718,7 +724,6 @@ signals:
     /// the setters on purpose: moc parses the class in one pass and rejects
     /// `emit` of a signal it has not seen yet.
     void appUrlChanged();
-    void darkPagesChanged();
     void pageZoomChanged();
 
 public:
@@ -730,12 +735,6 @@ public:
     QObject *childBridge() const { return child_bridge_; }
     QObject *maskItem() const { return mask_item_; }
     QObject *appChannel() const { return app_channel_; }
-    bool darkPages() const { return dark_pages_; }
-    void set_dark_pages(bool dark) {
-        if (dark_pages_ == dark) return;
-        dark_pages_ = dark;
-        emit darkPagesChanged();
-    }
     double pageZoom() const { return page_zoom_; }
     void set_page_zoom(double factor) {
         if (page_zoom_ == factor) return;
@@ -1030,7 +1029,6 @@ private:
     QObject *child_bridge_ = nullptr;
     QObject *mask_item_ = nullptr;
     QObject *app_channel_ = nullptr;
-    bool dark_pages_ = false;
     double page_zoom_ = 1.0;
 };
 
@@ -1170,10 +1168,51 @@ void liteaura_qt_set_strings(const char *strings_json) {
     }
 }
 
+static QString color_scheme_file() {
+    return g_data_dir.isEmpty() ? QString() : g_data_dir + QStringLiteral("/color-scheme");
+}
+
+/// Keep the app's scheme for the next start. Written only when it changes.
+static void save_page_color_scheme(bool dark) {
+    const QString path = color_scheme_file();
+    if (path.isEmpty()) return;
+    const QByteArray value = dark ? QByteArrayLiteral("dark") : QByteArrayLiteral("light");
+    QFile file(path);
+    if (file.open(QIODevice::ReadOnly) && file.readAll().trimmed() == value) return;
+    file.close();
+    QDir().mkpath(g_data_dir);
+    if (file.open(QIODevice::WriteOnly | QIODevice::Truncate)) file.write(value + '\n');
+}
+
+/// Hand Blink the saved scheme as `preferredColorScheme` (0 dark, 1 light), so
+/// every page reports it through `prefers-color-scheme`. Must run before
+/// QtWebEngine initialises: Chromium reads its switches once. No saved scheme
+/// means light, the app's default theme (dusk).
+static void apply_page_color_scheme() {
+    QFile file(color_scheme_file());
+    const bool dark = file.open(QIODevice::ReadOnly) && file.readAll().trimmed() == "dark";
+    QByteArray flags = qgetenv("QTWEBENGINE_CHROMIUM_FLAGS");
+    const QByteArray setting =
+        QByteArrayLiteral("preferredColorScheme=") + (dark ? "0" : "1");
+    static const QRegularExpression existing(QStringLiteral("--blink-settings=(\\S+)"));
+    const QRegularExpressionMatch match = existing.match(QString::fromUtf8(flags));
+    if (match.hasMatch()) {
+        // Merge into a --blink-settings already given, so neither is lost.
+        flags.replace(match.captured(0).toUtf8(),
+                      match.captured(0).toUtf8() + ',' + setting);
+    } else {
+        if (!flags.isEmpty()) flags += ' ';
+        flags += QByteArrayLiteral("--blink-settings=") + setting;
+    }
+    qputenv("QTWEBENGINE_CHROMIUM_FLAGS", flags);
+}
+
 int liteaura_qt_run(const char *url, const char *data_dir, int probe, liteaura_ipc_cb ipc,
                  liteaura_view_cb view_cb, liteaura_pump_cb pump, liteaura_js_cb js, void *userdata) {
     // QtWebEngine wants a shared OpenGL context group; set before QApplication.
     QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
+    g_data_dir = QString::fromLocal8Bit(data_dir);
+    apply_page_color_scheme();
     QtWebEngineQuick::initialize();
 
     int argc = 1;
@@ -1473,17 +1512,18 @@ void liteaura_qt_view_mask(const char *id, const char *holes_json) {
 // kiosk's display). A palette touches no window, and the app styles its pages
 // itself (the Browser plugin pushes the scheme for browsed pages).
 //
-// Browsed pages learn the scheme through the engine's per-view dark mode
-// (`settings.forceDarkMode`, bound to `shell.darkPages`): with it on, Blink
-// reports `prefers-color-scheme: dark`, so a site with its own dark style
-// switches to it, and only a site without one is darkened by the engine. It is
-// a WebEngine setting, so -- unlike setColorScheme -- no platform window is
-// touched.
+// Browsed pages learn the scheme from Blink's `preferredColorScheme`, which is
+// what `prefers-color-scheme` reports: a site with a dark style uses it, one
+// without stays as its author made it (never Chromium's automatic darkening).
+// QtWebEngine 6.8 has no runtime API for it -- QStyleHints::colorScheme and the
+// palette are ignored on X11, `settings.forceDarkMode` only inverts colours --
+// so it goes in as a Chromium switch before the engine starts. The scheme is
+// therefore saved here and applied on the next start of the shell.
 void liteaura_qt_set_color_scheme(const char *scheme) {
     if (!scheme) return;
     const bool dark =
         QString::fromUtf8(scheme).compare(QStringLiteral("dark"), Qt::CaseInsensitive) == 0;
-    g_shell.set_dark_pages(dark);
+    save_page_color_scheme(dark);
     static int applied = -1; // -1 unset, 0 light, 1 dark
     if (applied == (dark ? 1 : 0)) return;
     applied = dark ? 1 : 0;

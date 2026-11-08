@@ -1,6 +1,6 @@
 import {
   toolbar, button, controlButton, icon, iconButton, searchBar, themeMode, listReveal, COMPACT_MAX,
-  tabStrip, tab as tabItem, paneStack, loadIconSvg,
+  tabStrip, tab as tabItem, paneStack, loadIconSvg, toast,
 } from '../../ui/index.js';
 /**
  * browser.js — the Browser plugin's window.
@@ -35,6 +35,7 @@ import { forgetNativeView, rememberNativeView } from '../../js/nativeViews.js';
 import { createPasswordsPanel, fillScript, readScript } from './passwords.js';
 import { createLoginAssist } from './login-assist.js';
 import { createImportPanel } from './import-panel.js';
+import { createAddressSuggest } from './address-suggest.js';
 import { openCoreWindow } from '../../js/tiles.js';
 
 export const BROWSER_PLUGIN = 'browser';
@@ -256,6 +257,8 @@ let tabstripEl = null;
 let frameWrapEl = null;
 let viewportEl = null;
 let addressEl = null;
+/** The address bar's inline completion and list (address-suggest.js). */
+let addressSuggest = null;
 let backBtn = null;
 let forwardBtn = null;
 let statusEl = null;
@@ -303,7 +306,8 @@ let passwords = null;
 
 /** Every popover this window owns, open or not. */
 function browserPopovers() {
-  return [downloadsPanel, browserMenu, historyPanel, bookmarksPanel, tabsPanel, passwordsPanel, loginOfferEl, importPanel]
+  return [downloadsPanel, browserMenu, historyPanel, bookmarksPanel, tabsPanel, passwordsPanel, loginOfferEl, importPanel,
+    addressSuggest?.panel]
     .filter(Boolean);
 }
 
@@ -902,6 +906,12 @@ function buildToolbar() {
   });
   addressEl.input = input;
   addressEl.search = search;
+  addressSuggest = createAddressSuggest({
+    input,
+    onPick: (value) => void navigateTo(value),
+    onChange: () => onMenuChange(),
+    place: placeSuggest,
+  });
 
   // The right cluster: the ad-block shield (the requested toggle), the
   // downloads manager, and a new incognito tab. Appended after the flexible
@@ -983,6 +993,18 @@ function placePopovers() {
   const tile = tileEl.getBoundingClientRect?.();
   const barBottom = bar && tile ? bar.bottom - tile.top : 0;
   if (barBottom > 0) tileEl.style?.setProperty?.('--browser-pop-top', `${barBottom}px`);
+}
+
+/** The suggestion list hangs under the address field, as wide as it. */
+function placeSuggest(panel) {
+  if (!tileEl || !addressEl) return;
+  placePopovers();
+  const field = addressEl.getBoundingClientRect?.();
+  const tile = tileEl.getBoundingClientRect?.();
+  if (!field || !tile) return;
+  panel.style.left = `${Math.max(8, field.left - tile.left)}px`;
+  panel.style.right = 'auto';
+  panel.style.width = `${Math.max(220, field.width)}px`;
 }
 
 /**
@@ -2067,21 +2089,33 @@ function updateBookmarkButton() {
 
 async function toggleBookmark() {
   const tab = activeTab();
-  if (!tab || !tab.url || !/^https?:/.test(tab.url)) return;
+  if (!tab || !tab.url || !/^https?:/.test(tab.url)) {
+    // Logged: it lands in the session log, which is where a "nothing happens"
+    // report starts.
+    console.warn(`browser: nothing to bookmark (tab ${tab?.id || 'none'}, url "${tab?.url || ''}")`);
+    return;
+  }
   const existing = bookmarks.find((b) => b.url === tab.url);
   if (existing) {
     await removeBookmark(existing);
     return;
   }
+  let bookmark = null;
   try {
     const res = await apiFetch('/api/browser/bookmarks/add', {
       method: 'POST',
       body: JSON.stringify({ url: tab.url, title: tab.title || tab.url }),
     });
-    const bookmark = res?.data?.bookmark;
-    if (bookmark) bookmarks.unshift(bookmark);
-  } catch (_) {
-    /* best-effort */
+    bookmark = res?.data?.bookmark || null;
+    if (!bookmark) console.warn('browser: the server did not save the bookmark', JSON.stringify(res));
+  } catch (error) {
+    console.warn('browser: saving the bookmark failed', String(error?.message || error));
+  }
+  if (bookmark) {
+    bookmarks = [bookmark, ...bookmarks.filter((b) => b.url !== bookmark.url)];
+    toast(t('plugin.browser.bookmarks.saved', null, 'Saved to bookmarks'), { type: 'info', duration: 2000 });
+  } else {
+    toast(t('plugin.browser.bookmarks.saveFailed', null, 'Could not save the bookmark'), { type: 'error' });
   }
   updateBookmarkButton();
   renderBookmarks();
@@ -2608,9 +2642,19 @@ function onHomeCard(tab, url, topic) {
   void navigateTo(url, { tab });
 }
 
-/** Open a URL in a fresh tab. */
-function openInNewTab(_from, url) {
+/**
+ * Open a URL in a fresh tab — unless the tab it comes from (or, with none, the
+ * active tab) is a blank start page. That page is a new tab waiting for a
+ * destination, so a bookmark or link opened from it replaces it instead of
+ * piling up a second tab next to it.
+ */
+function openInNewTab(from, url) {
   if (!url) return;
+  const origin = from || activeTab();
+  if (origin?.home && !origin.url) {
+    void navigateTo(url, { tab: origin });
+    return;
+  }
   if (tabs.length >= MAX_TABS) {
     // At the cap, reuse the active tab rather than silently dropping the click.
     void navigateTo(url, { tab: activeTab() });
@@ -2659,8 +2703,8 @@ function onFrameMessage(event) {
   if (data.type === 'browser:open-card') {
     void onHomeCard(tab, String(data.url || ''), data.topic ? String(data.topic) : undefined);
   } else if (data.type === 'browser:open-bookmark') {
-    // Both the start page's grid and the toolbar menu open saved pages in a
-    // fresh tab, so the start page stays where it is.
+    // The start page is a tab waiting for a destination: the bookmark opens
+    // in it (`openInNewTab` reuses a blank start page).
     const url = String(data.url || '');
     if (url) openInNewTab(tab, url);
   } else if (data.type === 'browser:refresh-news') {
@@ -3114,7 +3158,7 @@ export function mountBrowserTile() {
   tileEl.append(
     tabstripEl, buildToolbar(), viewportEl,
     downloadsPanel, browserMenu, historyPanel, bookmarksPanel, tabsPanel, passwordsPanel, loginOfferEl,
-    importPanel,
+    importPanel, addressSuggest.panel,
   );
 
   // On a phone every panel is a full-height pane over the page, with the
@@ -3256,7 +3300,8 @@ export function wireBrowserEvents() {
   // The Settings window's own ad-block switch writes the same preference:
   // follow it live instead of waiting for this window to mount again.
   window.addEventListener('settings:change', onSettingsChanged);
-  // Keep the pages' `prefers-color-scheme` in step with the app theme.
+  // Keep the pages' `prefers-color-scheme` in step with the app theme (the
+  // shell applies it from its next start: Chromium reads it only then).
   window.addEventListener('theme:change', pushSettings);
   window.addEventListener('appearance:change', pushSettings);
   // The start page is a separate document holding the theme's resolved values.

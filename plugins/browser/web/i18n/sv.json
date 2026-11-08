@@ -32,6 +32,8 @@
   "plugin.browser.bookmarks.add": "Bokmärk den här sidan",
   "plugin.browser.bookmarks.empty": "Inga bokmärken än — använd ☆ i verktygsfältet",
   "plugin.browser.bookmarks.remove": "Ta bort bokmärke",
+  "plugin.browser.bookmarks.saved": "Sparat i bokmärken",
+  "plugin.browser.bookmarks.saveFailed": "Bokmärket kunde inte sparas",
   "plugin.browser.bookmarks.title": "Bokmärken",
   "plugin.browser.downloads.cancel": "Avbryt",
   "plugin.browser.downloads.clearFinished": "Rensa slutförda",
@@ -147,5 +149,6 @@
   "plugin.browser.import.looking": "Söker…",
   "plugin.browser.import.thisComputer": "På den här datorn",
   "plugin.browser.import.noneFound": "Ingen annan webbläsare hittades på den här datorn.",
-  "plugin.browser.import.file": "Fil"
+  "plugin.browser.import.file": "Fil",
+  "plugin.browser.suggest.title": "Förslag"
 }

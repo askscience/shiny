@@ -2,7 +2,7 @@
  * hudNetwork.js — the top-bar network chip: the active link, its signal
  * strength and whether the internet actually works.
  *
- * Fed by `/api/network/events` (SSE, pushed whenever NetworkManager reports a
+ * Fed by the `network` topic of the shared event stream (`eventBus.js`, pushed whenever NetworkManager reports a
  * change) with a slow poll as a fallback while the stream is down. The icon
  * bucket (0–4) is computed server-side (`signal_level`, GNOME's thresholds),
  * so this module only maps a bucket to a theme icon: `hud/wifi-<n>`. States
@@ -30,7 +30,7 @@ const labelEl = document.getElementById('hud-network-label');
 const pctEl = document.getElementById('hud-network-pct');
 
 const stream = createHudStream({
-  eventsUrl: '/api/network/events',
+  topic: 'network',
   statusUrl: '/api/network/status',
   pollMs: 15000,
   label: 'network',

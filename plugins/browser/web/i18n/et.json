@@ -32,6 +32,8 @@
   "plugin.browser.bookmarks.add": "Lisa see leht järjehoidjatesse",
   "plugin.browser.bookmarks.empty": "Järjehoidjaid veel pole — kasuta tööriistariba ☆",
   "plugin.browser.bookmarks.remove": "Eemalda järjehoidja",
+  "plugin.browser.bookmarks.saved": "Salvestatud järjehoidjatesse",
+  "plugin.browser.bookmarks.saveFailed": "Järjehoidjat ei õnnestunud salvestada",
   "plugin.browser.bookmarks.title": "Järjehoidjad",
   "plugin.browser.downloads.cancel": "Loobu",
   "plugin.browser.downloads.clearFinished": "Tühjenda lõpetatud",
@@ -147,5 +149,6 @@
   "plugin.browser.import.looking": "Otsimine…",
   "plugin.browser.import.thisComputer": "Selles arvutis",
   "plugin.browser.import.noneFound": "Selles arvutis ei leitud teist brauserit.",
-  "plugin.browser.import.file": "Fail"
+  "plugin.browser.import.file": "Fail",
+  "plugin.browser.suggest.title": "Soovitused"
 }

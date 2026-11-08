@@ -27,7 +27,8 @@ use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::IntoResponse;
 use axum::Extension;
 use axum::Json;
-use futures::stream::Stream;
+use futures::stream::{BoxStream, Stream};
+use futures::StreamExt;
 use parking_lot::Mutex;
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -234,23 +235,39 @@ pub async fn events(
     Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>>,
     AppError,
 > {
-    let app = query.app.trim().to_string();
+    let stream = page_events(&state, query.app.trim(), None).await?;
+    Ok(Sse::new(stream.map(Ok)).keep_alive(KeepAlive::default()))
+}
+
+/// The page side of `app`'s link as a stream of SSE events (one per vendor
+/// request), named `event` when given. Shared by the per-app route and the
+/// shell's combined `/api/events` stream, so one connection can carry every
+/// open Craft window. The page stays attached until the stream is dropped.
+pub async fn page_events(
+    state: &AppState,
+    app: &str,
+    event: Option<String>,
+) -> Result<BoxStream<'static, Event>, AppError> {
+    let app = app.to_string();
     if crate::plugins::store::CraftApp::by_id(&app).is_none() {
         return Err(AppError::BadRequest(format!("unknown Craft app '{app}'")));
     }
     let link = state.craft_control.link(&app).await?;
     let (page, receiver) = link.attach();
     let guard = PageGuard { link: link.clone(), page };
-    let stream = futures::stream::unfold((receiver, guard), |(mut receiver, guard)| async move {
-        match receiver.recv().await {
-            Some(message) => Some((
-                Ok(Event::default().data(message)),
-                (receiver, guard),
-            )),
-            None => None,
+    let stream = futures::stream::unfold((receiver, guard), move |(mut receiver, guard)| {
+        let event = event.clone();
+        async move {
+            let message = receiver.recv().await?;
+            let frame = Event::default().data(message);
+            let frame = match event {
+                Some(name) => frame.event(name),
+                None => frame,
+            };
+            Some((frame, (receiver, guard)))
         }
     });
-    Ok(Sse::new(stream).keep_alive(KeepAlive::default()))
+    Ok(stream.boxed())
 }
 
 /// Removes the page from the link when its stream ends (tab closed, window

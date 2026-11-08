@@ -36,6 +36,8 @@
   "plugin.browser.bookmarks.add": "Pridať stránku medzi záložky",
   "plugin.browser.bookmarks.empty": "Zatiaľ žiadne záložky — použite ☆ v lište",
   "plugin.browser.bookmarks.remove": "Odstrániť záložku",
+  "plugin.browser.bookmarks.saved": "Uložené do záložiek",
+  "plugin.browser.bookmarks.saveFailed": "Záložku sa nepodarilo uložiť",
   "plugin.browser.bookmarks.title": "Záložky",
   "plugin.browser.downloads.cancel": "Zrušiť",
   "plugin.browser.downloads.clearFinished": "Vymazať dokončené",
@@ -155,5 +157,6 @@
   "plugin.browser.import.looking": "Hľadá sa…",
   "plugin.browser.import.thisComputer": "V tomto počítači",
   "plugin.browser.import.noneFound": "V tomto počítači sa nenašiel iný prehliadač.",
-  "plugin.browser.import.file": "Súbor"
+  "plugin.browser.import.file": "Súbor",
+  "plugin.browser.suggest.title": "Návrhy"
 }

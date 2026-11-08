@@ -394,6 +394,56 @@
   cursor: pointer;
 }
 
+/* ── Address suggestions ─────────────────────────────────────── */
+
+/* Hung under the address field (left and width set by `placeSuggest`). */
+.browser-suggest {
+  padding: 4px;
+}
+
+.browser-suggest-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.browser-suggest-row > .ui-icon {
+  flex: none;
+  opacity: 0.7;
+}
+
+.browser-suggest-row.is-active,
+.browser-suggest-row:hover {
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}
+
+.browser-suggest-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.browser-suggest-main,
+.browser-suggest-sub {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.browser-suggest-sub {
+  font-size: 0.85em;
+  opacity: 0.65;
+}
+
 .browser-engine-list {
   display: flex;
   flex-direction: column;

@@ -32,6 +32,8 @@
   "plugin.browser.bookmarks.add": "Gem denne side som bogmærke",
   "plugin.browser.bookmarks.empty": "Ingen bogmærker endnu — brug ☆ i værktøjslinjen",
   "plugin.browser.bookmarks.remove": "Fjern bogmærke",
+  "plugin.browser.bookmarks.saved": "Gemt i bogmærker",
+  "plugin.browser.bookmarks.saveFailed": "Bogmærket kunne ikke gemmes",
   "plugin.browser.bookmarks.title": "Bogmærker",
   "plugin.browser.downloads.cancel": "Annuller",
   "plugin.browser.downloads.clearFinished": "Ryd afsluttede",
@@ -147,5 +149,6 @@
   "plugin.browser.import.looking": "Søger…",
   "plugin.browser.import.thisComputer": "På denne computer",
   "plugin.browser.import.noneFound": "Ingen anden browser fundet på denne computer.",
-  "plugin.browser.import.file": "Fil"
+  "plugin.browser.import.file": "Fil",
+  "plugin.browser.suggest.title": "Forslag"
 }

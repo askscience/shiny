@@ -34,6 +34,8 @@
   "plugin.browser.bookmarks.add": "Aggiungi questa pagina ai segnalibri",
   "plugin.browser.bookmarks.empty": "Nessun segnalibro — usa la ☆ nella barra degli strumenti",
   "plugin.browser.bookmarks.remove": "Rimuovi segnalibro",
+  "plugin.browser.bookmarks.saved": "Aggiunto ai segnalibri",
+  "plugin.browser.bookmarks.saveFailed": "Impossibile salvare il segnalibro",
   "plugin.browser.bookmarks.title": "Segnalibri",
   "plugin.browser.downloads.cancel": "Annulla",
   "plugin.browser.downloads.clearFinished": "Rimuovi i completati",
@@ -151,5 +153,6 @@
   "plugin.browser.import.looking": "Ricerca…",
   "plugin.browser.import.thisComputer": "Su questo computer",
   "plugin.browser.import.noneFound": "Nessun altro browser trovato su questo computer.",
-  "plugin.browser.import.file": "File"
+  "plugin.browser.import.file": "File",
+  "plugin.browser.suggest.title": "Suggerimenti"
 }

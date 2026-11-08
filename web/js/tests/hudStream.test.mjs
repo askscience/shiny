@@ -1,16 +1,15 @@
 /**
  * HUD stream test.
  *
- * The top-bar chips share one SSE reader. This covers the part that used to be
- * copied four times: split frames, multiple events per chunk, keep-alive
- * comments without data, and the Authorization header. The stream is left
- * pending (the helper reconnects forever by design), so the process exits
- * without waiting on it.
+ * The top-bar chips listen to their topic on the shell's single event stream
+ * (`eventBus.js`). This covers what a chip relies on: all four chips share one
+ * connection, each gets only its own topic's snapshots (split frames, several
+ * events per chunk, keep-alive comments), the Authorization header is sent,
+ * and the status poll stops once the stream is up (the drop and reconnect
+ * path is covered by eventBus.test.mjs).
  *
  * Run:  node web/js/tests/hudStream.test.mjs
  */
-
-import { createHudStream } from '../hudStream.js';
 
 let failures = 0;
 function check(name, condition, detail = '') {
@@ -27,8 +26,9 @@ globalThis.localStorage = { getItem: () => 'test-token' };
 const encoder = new TextEncoder();
 const frames = [
   ': keep-alive\n\n',
-  'data: {"percent":42}\n\n',
-  'data: {"percent":43}\n\ndata: {"percent":44}\n\n',
+  'event: audio\ndata: {"percent":42}\n\nevent: batt',
+  'ery\ndata: {"percent":90}\n\n',
+  'event: audio\ndata: {"percent":43}\n\nevent: audio\ndata: {"percent":44}\n\n',
 ];
 let reads = 0;
 const reader = {
@@ -37,34 +37,56 @@ const reader = {
     : new Promise(() => {})),
 };
 
-let calledUrl = '';
-let calledHeaders = null;
-globalThis.fetch = async (url, init) => {
-  calledUrl = url;
-  calledHeaders = init.headers;
-  return { ok: true, status: 200, body: { getReader: () => reader } };
+const eventCalls = [];
+const polls = [];
+globalThis.fetch = async (url, init = {}) => {
+  if (String(url).includes('/api/events?')) {
+    eventCalls.push({ url: String(url), headers: init.headers });
+    return { ok: true, status: 200, body: { getReader: () => reader } };
+  }
+  polls.push(String(url));
+  return new Response('{"success":true,"data":{"percent":1}}', {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  });
 };
 
-const received = [];
-const stream = createHudStream({
-  eventsUrl: '/api/audio/events',
-  statusUrl: '/api/audio/status',
+const { createHudStream } = await import('../hudStream.js');
+
+const received = { audio: [], battery: [], network: [], bluetooth: [] };
+const chips = Object.keys(received).map((topic) => createHudStream({
+  topic,
+  statusUrl: `/api/${topic}/status`,
   pollMs: 15000,
-  label: 'audio',
-  apply: (status) => received.push(status),
-});
+  label: topic,
+  apply: (status) => received[topic].push(status),
+}));
+for (const chip of chips) chip.start();
+await new Promise((resolve) => setTimeout(resolve, 80));
 
-stream.start();
-await new Promise((resolve) => setTimeout(resolve, 20));
+const topics = new URL(eventCalls[0]?.url ?? 'http://x/').searchParams.get('topics');
+check('four chips open one connection', eventCalls.length === 1, `${eventCalls.length}`);
+check('the connection carries every chip topic',
+  topics === 'audio,battery,bluetooth,network', topics);
+check('sends the auth header', eventCalls[0]?.headers?.Authorization === 'Bearer test-token');
 
-check('subscribes to the events URL', calledUrl === '/api/audio/events');
-check('sends the auth header', calledHeaders?.Authorization === 'Bearer test-token');
-check('parses one event per frame', received.length === 3, JSON.stringify(received));
-check('parses frames in order', received.map((s) => s.percent).join(',') === '42,43,44');
-check('ignores keep-alive frames', received.every((s) => typeof s.percent === 'number'));
+// Each chip polled once while the stream was still opening (a fast first
+// paint); the stream's own snapshots follow.
+const audio = received.audio.filter((s) => s.percent !== 1).map((s) => s.percent).join(',');
+check('parses audio frames in order, across chunks', audio === '42,43,44', audio);
+check('routes other topics to their own chip',
+  received.battery.some((s) => s.percent === 90)
+  && !received.network.some((s) => s.percent !== 1), JSON.stringify(received));
+const pollsAtStart = polls.length;
+await new Promise((resolve) => setTimeout(resolve, 50));
+check('no extra poll while the stream is up', polls.length === pollsAtStart,
+  `${polls.length} vs ${pollsAtStart}`);
+
+for (const chip of chips) chip.stop();
 
 if (failures) {
   console.error(`\n${failures} HUD stream check(s) failed`);
   process.exit(1);
 }
 console.log('\nall HUD stream checks passed');
+process.exit(0);

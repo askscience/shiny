@@ -36,6 +36,8 @@
   "plugin.browser.bookmarks.add": "Dodaj stronę do zakładek",
   "plugin.browser.bookmarks.empty": "Brak zakładek — użyj ☆ na pasku narzędzi",
   "plugin.browser.bookmarks.remove": "Usuń zakładkę",
+  "plugin.browser.bookmarks.saved": "Zapisano w zakładkach",
+  "plugin.browser.bookmarks.saveFailed": "Nie udało się zapisać zakładki",
   "plugin.browser.bookmarks.title": "Zakładki",
   "plugin.browser.downloads.cancel": "Anuluj",
   "plugin.browser.downloads.clearFinished": "Wyczyść ukończone",
@@ -155,5 +157,6 @@
   "plugin.browser.import.looking": "Wyszukiwanie…",
   "plugin.browser.import.thisComputer": "Na tym komputerze",
   "plugin.browser.import.noneFound": "Nie znaleziono innej przeglądarki na tym komputerze.",
-  "plugin.browser.import.file": "Plik"
+  "plugin.browser.import.file": "Plik",
+  "plugin.browser.suggest.title": "Sugestie"
 }

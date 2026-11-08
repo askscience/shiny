@@ -10,6 +10,12 @@ check. See [host overview](../host/README.md).
 `…/events` routes are SSE: they send the current snapshot first, then a
 `<name>` event on every change, with keep-alives.
 
+`GET /api/events?topics=audio,battery,bluetooth,network,craft:<app>` carries
+any of these streams (and Craft live-control links) on one connection, each
+event named after its topic. The shell uses only this one, because Chromium
+allows six HTTP/1.1 connections per origin. See
+[host overview](../host/README.md#2-sse-event-streams).
+
 ---
 
 ## Network

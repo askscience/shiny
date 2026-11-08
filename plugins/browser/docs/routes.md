@@ -184,6 +184,37 @@ Newest first.
 
 ---
 
+## GET `/api/browser/suggest`
+
+Tag `browser_suggest` · `routes.rs` → `suggest_route` · `suggest.rs`.
+
+**Query**: `q` (what is typed in the address bar), `limit` (rows, default 6,
+clamped 1–12).
+
+**Response** `data`:
+
+```json
+{
+  "completion": "youtube.com",
+  "items": [
+    { "kind": "history", "value": "https://www.youtube.com/", "display": "youtube.com", "title": null },
+    { "kind": "bookmark", "value": "https://yourls.org/", "display": "yourls.org", "title": "YOURLS" },
+    { "kind": "search", "value": "youtube music", "display": "", "title": null }
+  ]
+}
+```
+
+`completion` is the address the bar fills in inline, without scheme or `www.`:
+the most-used site whose address starts with `q` (bookmarks count as fifty
+visits), or, once `q` reaches past the first `/`, the most-used full address.
+`null` for a phrase with spaces, an address already complete, or no match.
+`items` are bookmarks, visited pages and past searches containing every typed
+word in their address, title or phrase, ranked bookmark first, then by visits,
+then by recency. The completed address, when listed, is the first row. An
+unreadable database gives empty results, never an error.
+
+---
+
 ## POST `/api/browser/bookmarks/add`
 
 Tag `browser_bookmark_add` · `routes.rs` → `bookmark_add`.

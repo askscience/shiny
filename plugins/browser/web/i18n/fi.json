@@ -32,6 +32,8 @@
   "plugin.browser.bookmarks.add": "Lisää sivu kirjanmerkkeihin",
   "plugin.browser.bookmarks.empty": "Ei vielä kirjanmerkkejä — käytä työkalurivin ☆-merkkiä",
   "plugin.browser.bookmarks.remove": "Poista kirjanmerkki",
+  "plugin.browser.bookmarks.saved": "Tallennettu kirjanmerkkeihin",
+  "plugin.browser.bookmarks.saveFailed": "Kirjanmerkin tallentaminen epäonnistui",
   "plugin.browser.bookmarks.title": "Kirjanmerkit",
   "plugin.browser.downloads.cancel": "Peruuta",
   "plugin.browser.downloads.clearFinished": "Tyhjennä valmiit",
@@ -147,5 +149,6 @@
   "plugin.browser.import.looking": "Etsitään…",
   "plugin.browser.import.thisComputer": "Tällä tietokoneella",
   "plugin.browser.import.noneFound": "Tältä tietokoneelta ei löytynyt muuta selainta.",
-  "plugin.browser.import.file": "Tiedosto"
+  "plugin.browser.import.file": "Tiedosto",
+  "plugin.browser.suggest.title": "Ehdotukset"
 }

@@ -34,6 +34,7 @@ rewriting rules, but not on the render path.
 | `src/settings.rs` | `SEARCH_ENGINES`, `DEFAULT_SEARCH_ENGINE`, `Settings`, `get`, `set`, `search_url`, `ensure_schema` | Per-user settings |
 | `src/downloads.rs` | `TABLE`, `ensure_schema`, `upsert`, `list`, `remove`, `clear_finished` | Persisted download rows |
 | `src/bookmarks.rs` | `TABLE`, `ensure_schema`, `Bookmark`, `list`, `add`, `remove` | Saved pages, URL-deduped |
+| `src/suggest.rs` | `suggest`, `rank`, `visits`, `display` | Address-bar completion and suggestions |
 | `src/preview.rs` | `Preview`, `is_allowed`, `fetch`, `parse` | Hover link metadata + SSRF guard + cache |
 | `src/sessions.rs` | `Session`, create/get/update/close/list | In-memory bounded tabs |
 | `src/news.rs` | `NewsCard`, `HomeNews`, `Profile`, `Interest`, `RawResult`, `tokenize`, `profile_from_history`, `select_topics`, `parse_results`, `rank_results`, `interests_for`, `home_news` | Related-news recommender |

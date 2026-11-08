@@ -140,17 +140,10 @@ systemctl --user start shiny.service 2>/dev/null || true
 # that are not T2 Macs.
 systemctl --user start shiny-t2-audio-watchdog.service 2>/dev/null || true
 
-# Speech sidecars. Both launchers probe their own port first (idempotent) and
-# exit quietly when their Python package is absent — the server starts them too,
-# but doing it here means the engines are warm by the time the first word is
-# spoken. `--install` for whisper is opt-in via WHISPER_AUTO_INSTALL; Supertonic
-# provisions `.venv-supertonic` on demand (SUPERTONIC_AUTO_INSTALL, default on).
-if [ "${WHISPER_AUTO_INSTALL:-0}" = "1" ]; then
-    nohup bash "$SHINY_REPO/voice/start_whisper.sh" --install >/dev/null 2>&1 &
-else
-    nohup bash "$SHINY_REPO/voice/start_whisper.sh" >/dev/null 2>&1 &
-fi
-nohup bash "$SHINY_REPO/voice/start_supertonic.sh" >/dev/null 2>&1 &
+# Speech sidecars: the server starts them, a few seconds after it is up
+# (`sidecar_boot_delay`, SHINY_SIDECAR_DELAY_SECS), and only with the AI on.
+# Starting them here too, at once, put their model loading (seconds of CPU on
+# every core) right on top of the desktop being built at login.
 
 # Wait until it answers (up to ~30s) so liteaura does not open on a dead port.
 waited=0

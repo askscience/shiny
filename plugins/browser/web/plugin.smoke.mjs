@@ -174,7 +174,13 @@ const readClipboardText = async () => 'https://copied.example/';
 /** What `GET /api/browser/settings` would report right now. */
 let serverAdblock = true;
 
+const bookmarkCalls = { add: [] };
 const apiFetch = async (path, options = {}) => {
+  if (path === '/api/browser/bookmarks/add') {
+    const body = JSON.parse(options.body);
+    bookmarkCalls.add.push(body);
+    return { success: true, data: { bookmark: { id: 'b1', ...body } } };
+  }
   if (path === '/api/browser/settings' && (!options.method || options.method === 'GET')) {
     return { success: true, data: { adblock: serverAdblock, incognito: false, downloads_dir: '/home/u/Downloads', rules: 12345 } };
   }
@@ -354,6 +360,14 @@ const createImportPanel = (deps) => ({
  *  must feed it the tab's load and address events. */
 const assistEvents = [];
 let assistDeps = null;
+/** The address bar's suggestions (address-suggest.js has its own test). */
+let suggestDeps = null;
+const createAddressSuggest = (deps) => {
+  suggestDeps = deps;
+  const panel = makeElement('div');
+  panel.className = 'browser-popover browser-suggest hidden';
+  return { panel, close: () => {}, isOpen: () => false };
+};
 const createLoginAssist = (deps) => {
   assistDeps = deps;
   const record = (name) => (tab) => { assistEvents.push({ name, id: tab?.id }); };
@@ -404,6 +418,8 @@ const context = vm.createContext({
   watchNativeOccluders,
   createPasswordsPanel,
   createLoginAssist,
+  createAddressSuggest,
+  toast: () => {},
   createImportPanel,
   rememberNativeView: () => {},
   forgetNativeView: () => {},
@@ -495,6 +511,15 @@ const navOpen = lastView('open');
 check('navigating opens a native view', navOpen?.op === 'open' && navOpen.url === 'https://example.com/story', JSON.stringify(navOpen));
 check('a normal tab is not incognito', navOpen?.incognito === false);
 check('the address bar reflects the navigation', addressForm.input.value === 'https://example.com/story');
+
+/* The star saves the page in the active tab. */
+const bookmarkPosts = [];
+const starBtn = findAll(tile, (el) => String(el.className).includes('browser-bookmark'))[0];
+check('there is a bookmark star', !!starBtn);
+starBtn?.dispatch('click', {});
+await tick(30);
+check('the star asks the server to save the page', bookmarkCalls.add.some((b) => b.url === 'https://example.com/story'),
+  JSON.stringify(bookmarkCalls.add));
 
 /* The native child view is positioned and its mask contract is exercised. */
 check('the native view is told its bounds', !!lastView('setBounds'), JSON.stringify(lastView('setBounds')));
@@ -857,6 +882,28 @@ check(
    before the tile exists (module load precedes mount), so it must wait for
    mount instead of being dropped. */
 check('the window registers as a core link handler', typeof linkHandlers.browser === 'function');
+
+/* A blank start page is a tab waiting for a destination: a link or bookmark
+   opened from it replaces it instead of adding a tab next to it. */
+byLabel('New tab')?.dispatch('click', {});
+await tick(40);
+const tabsOnHome = frames().length;
+const homeNavBefore = calls.navigate.length;
+linkHandlers.browser('https://links.example/from-home');
+await tick(60);
+check('a link opened over a blank start page reuses it',
+  frames().length === tabsOnHome
+    && calls.navigate.length === homeNavBefore + 1
+    && calls.navigate.at(-1).input === 'https://links.example/from-home',
+  `${frames().length} vs ${tabsOnHome}`);
+
+/* The address bar's suggestion list navigates the active tab. */
+const pickNavBefore = calls.navigate.length;
+suggestDeps?.onPick('https://picked.example/');
+await tick(60);
+check('a picked suggestion navigates', calls.navigate.length === pickNavBefore + 1
+  && calls.navigate.at(-1).input === 'https://picked.example/', JSON.stringify(calls.navigate.at(-1)));
+check('the suggestion list is one of the masked popovers', !!suggestDeps && typeof suggestDeps.onChange === 'function');
 const linksBefore = calls.navigate.length;
 linkHandlers.browser('https://links.example/story');
 await tick(60);

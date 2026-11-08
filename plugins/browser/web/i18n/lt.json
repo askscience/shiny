@@ -36,6 +36,8 @@
   "plugin.browser.bookmarks.add": "Įrašyti šį puslapį į adresyną",
   "plugin.browser.bookmarks.empty": "Dar nėra adresyno įrašų — naudokite ☆ įrankių juostoje",
   "plugin.browser.bookmarks.remove": "Pašalinti adresyno įrašą",
+  "plugin.browser.bookmarks.saved": "Įrašyta į žymes",
+  "plugin.browser.bookmarks.saveFailed": "Nepavyko įrašyti žymės",
   "plugin.browser.bookmarks.title": "Adresynas",
   "plugin.browser.downloads.cancel": "Atšaukti",
   "plugin.browser.downloads.clearFinished": "Išvalyti baigtus",
@@ -155,5 +157,6 @@
   "plugin.browser.import.looking": "Ieškoma…",
   "plugin.browser.import.thisComputer": "Šiame kompiuteryje",
   "plugin.browser.import.noneFound": "Šiame kompiuteryje kitos naršyklės nerasta.",
-  "plugin.browser.import.file": "Failas"
+  "plugin.browser.import.file": "Failas",
+  "plugin.browser.suggest.title": "Pasiūlymai"
 }
