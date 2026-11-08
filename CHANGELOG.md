@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Changed
+
+- New defaults: the accent is black on the light theme (Dusk) and white on
+  the dark one (Ink), with the matching monochrome gradient, instead of
+  orange, and both themes open on the Lattice wallpaper. Colours anyone
+  already picked stay as they are. The Dusk wallpaper is gone; a desktop
+  that used it shows Lattice.
+
 ### Fixed
 
 - Live session: changing the interface scale in Settings no longer fails with

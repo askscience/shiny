@@ -103,6 +103,9 @@ can't be listed over HTTP.
   reads on your canvas (White on Ink shows as Ink on Dusk), any other colour
   becomes `defaultAccent`. Declare one neutral accent so a neutral choice
   survives the switch.
+- **Defaults** — both shipped themes default to their neutral accent (Dusk:
+  Ink `#0b0b0c`, Ink: White `#f2f2f0`, listed first among the swatches), the
+  `mono` gradient and the Lattice wallpaper (`defaultBackground: "grid"`).
 - **Semantic colors** — `--ok`, `--warn`, `--error` are functional, not
   decorative. Keep them legible.
 - **Shared search field** — `/ui/ui.css` draws the search pill from three

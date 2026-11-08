@@ -40,11 +40,11 @@
   --muted: rgba(255, 255, 255, 0.5);
 
   /* Accent — user-selectable. appearance.js rewrites these. */
-  --accent: #ff6a3d;
-  --accent-2: #f59e0b;
-  --accent-soft: rgba(255, 106, 61, 0.14);
-  --accent-glow: rgba(255, 106, 61, 0.3);
-  --accent-contrast: #ffffff;
+  --accent: #f2f2f0;
+  --accent-2: #7a7a7e;
+  --accent-soft: rgba(242, 242, 240, 0.14);
+  --accent-glow: rgba(242, 242, 240, 0.3);
+  --accent-contrast: #0a0a0a;
   /* The accent on the always-dark islands (top bar, chat glass, menus) */
   --accent-on-dark: var(--accent);
   --accent-on-dark-soft: var(--accent-soft);

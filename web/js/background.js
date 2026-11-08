@@ -43,7 +43,6 @@ export const BACKGROUND_PRESETS = [
   makePreset('halo',   'background.preset.halo',      'Halo',      '/backgrounds/halo.svg',    0.05),
   makePreset('offset', 'background.preset.ripple',    'Ripple',    '/backgrounds/ripple.svg',  0.18),
   makePreset('paper',  'background.preset.parchment', 'Parchment', '/backgrounds/paper.svg',   0.55),
-  makePreset('dusk',   'background.preset.dusk',      'Dusk',      '/backgrounds/dusk.svg',    0.08),
   makePreset('ink',    'background.preset.ink',       'Ink',       '/backgrounds/ink.svg',     0),
 ];
 
@@ -106,7 +105,8 @@ export function defaultPreset() {
  * when an uploaded photo takes precedence.
  */
 export function activePreset(bg = getBackground()) {
-  if (bg.preset) return presetById(bg.preset);
+  // A preset that no longer ships (Dusk) gives way to the default.
+  if (bg.preset) return presetById(bg.preset) || defaultPreset();
   if (bg.url) return null;
   return defaultPreset();
 }
