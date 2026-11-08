@@ -339,12 +339,40 @@ async fn find_feed(host: &str) -> Option<String> {
 /// discovered feed URL is kept: it rarely changes).
 pub async fn site_items(host: &str, refresh: bool) -> Result<Vec<FeedItem>, String> {
     if !refresh {
-        if let Some((items, at)) = items_cache().lock().get(host) {
+        let hit = items_cache().lock().get(host).cloned();
+        if let Some((items, at)) = hit {
             if at.elapsed() < ITEMS_TTL {
-                return Ok(items.clone());
+                return Ok(items);
+            }
+            // Stale but recent enough: show it now, fetch the feed again for
+            // the next load (the home shelf must not wait on a slow site).
+            if at.elapsed() < ITEMS_STALE_TTL {
+                if refreshing_hosts().lock().insert(host.to_string()) {
+                    let host = host.to_string();
+                    shiny_plugin_sdk::rt::spawn(async move {
+                        let _ = fetch_items(&host).await;
+                        refreshing_hosts().lock().remove(&host);
+                    });
+                }
+                return Ok(items);
             }
         }
     }
+    fetch_items(host).await
+}
+
+/// Feeds whose items are past [`ITEMS_TTL`] are still shown, while refreshed in
+/// the background, up to this age.
+const ITEMS_STALE_TTL: Duration = Duration::from_secs(6 * 60 * 60);
+
+fn refreshing_hosts() -> &'static parking_lot::Mutex<std::collections::HashSet<String>> {
+    static SET: std::sync::OnceLock<parking_lot::Mutex<std::collections::HashSet<String>>> =
+        std::sync::OnceLock::new();
+    SET.get_or_init(|| parking_lot::Mutex::new(std::collections::HashSet::new()))
+}
+
+/// Fetch a site's feed items now and cache them.
+async fn fetch_items(host: &str) -> Result<Vec<FeedItem>, String> {
     let known = feed_urls().lock().get(host).cloned();
     let feed = match known {
         Some((feed, at)) if at.elapsed() < FEED_URL_TTL => feed,

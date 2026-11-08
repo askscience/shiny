@@ -127,19 +127,33 @@ cards.
 news::home_news(ctx, uid, limit, refresh)
   history::recent_rows(ctx, uid, 200)              # best-effort
   profile_from_history(rows, now)
-      tokenize(query + URL slug, skipping search hosts)
+      distinct_pages(rows): one row per page (canonical URL), strongest
+          visit kind and any typed phrase kept; `support` remembers which
+          page each term came from
+      tokenize(query + URL slug, skipping search hosts and NO_TOPIC_HOSTS:
+          code hosting, AI chats, localhost)
       weight = row_base_weight(row) * 0.5^(age_days / 7)
       + adjacent bigrams (weight * 1.25), adjacency order kept
   select_topics(profile, MAX_TOPIC_FETCHES=4)
-      skip over-connected filler words; prefer the richest typed phrase
-  for each topic (concurrently, cached 10 min):
+      skip over-connected filler words; prefer the richest typed phrase;
+      skip a topic whose pages a chosen topic already covers (one article's
+      address is one subject, not four)
+  for each topic and favourite-site feed, as background jobs (`within`),
+  waited for until SHELF_DEADLINE (2.5 s; a refresh waits FETCH_TIMEOUT):
+      a late source keeps running and fills the cache for the next load
+      cached 10 min; past that and up to 6 h the cached results are shown at
+      once and refreshed in the background (topics and feeds alike)
       engine_url(topic, SEARXNG_URL) -> brave.com/news or SearXNG news
       fetch with the impersonating client; parse_results(html)
       rank_results(results, topic, weights, now)
           drop blocked/junk hosts and junk URL slugs
           score = (topic*2 + recency*3 + publisher*1 + overlap*2) * freshness_tier
           fresh (<=30d) first, then stale backfill; cap 2 cards/host
-  interleave by topic (per-topic cap), backfill, truncate to limit
+  dedupe_stories: one card per canonical URL across topics, and per story
+      (most of a headline's 5-letter stems shared, or 3 shared by the same
+      publisher, e.g. its English and Italian editions)
+  picked_cards: per-topic cap (relaxed to fill the shelf), at most 2 cards
+      per host and per publisher name across the whole shelf, truncate
 ```
 
 The shelf is rendered by `homeDocument()` in a sandboxed `srcdoc` iframe

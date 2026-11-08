@@ -10,7 +10,8 @@
 //! `bridge` sends each future to a dedicated thread that drives a
 //! single-threaded (`current_thread`) runtime; the host awaits the result over
 //! an executor-agnostic oneshot channel. The host worker never blocks; the
-//! plugin's own Tokio services its IO serially on one thread.
+//! plugin's own Tokio services its IO on one thread, with the jobs running as
+//! concurrent tasks there (a slow job never holds up the others).
 //!
 //! The worker and its runtime belong to **this plugin's copy of the SDK** (each
 //! cdylib links the SDK statically), so all bridged tools/routes of one plugin
@@ -31,8 +32,8 @@ use crate::errors::AppError;
 type Job = Pin<Box<dyn Future<Output = ()> + Send>>;
 
 /// This plugin's sender queueing jobs onto its single worker thread. Every
-/// `bridge` call from this plugin queues here and is serviced serially; other
-/// plugins have their own copy of this queue.
+/// `bridge` call from this plugin queues here; the jobs run concurrently as
+/// tasks of that one thread. Other plugins have their own copy of this queue.
 fn plugin_tx() -> &'static mpsc::UnboundedSender<Job> {
     static TX: OnceLock<mpsc::UnboundedSender<Job>> = OnceLock::new();
     TX.get_or_init(|| {
@@ -45,19 +46,26 @@ fn plugin_tx() -> &'static mpsc::UnboundedSender<Job> {
                 .expect("failed to build plugin runtime");
             rt.block_on(async move {
                 while let Some(job) = rx.recv().await {
-                    // Isolate panics: without this, one panicking plugin
-                    // future would unwind the worker thread, drop the
-                    // channel receiver, and wedge every later bridge call.
-                    if let Err(panic) =
-                        FutureExt::catch_unwind(std::panic::AssertUnwindSafe(job)).await
-                    {
-                        let msg = panic
-                            .downcast_ref::<&str>()
-                            .map(|s| s.to_string())
-                            .or_else(|| panic.downcast_ref::<String>().cloned())
-                            .unwrap_or_else(|| "unknown panic".into());
-                        tracing::error!("plugin runtime job panicked: {msg}");
-                    }
+                    // Each job is a task on this one thread: jobs interleave at
+                    // their await points instead of queueing behind each other.
+                    // Awaiting each in turn meant one slow route (a news fetch
+                    // waiting on the network for seconds) held up every other
+                    // route of the plugin, down to saving a bookmark. Still one
+                    // thread, so nothing SQLite-related ever crosses threads.
+                    tokio::spawn(async move {
+                        // Isolate panics: a panicking job is logged and its
+                        // awaiting caller gets an error; the worker keeps going.
+                        if let Err(panic) =
+                            FutureExt::catch_unwind(std::panic::AssertUnwindSafe(job)).await
+                        {
+                            let msg = panic
+                                .downcast_ref::<&str>()
+                                .map(|s| s.to_string())
+                                .or_else(|| panic.downcast_ref::<String>().cloned())
+                                .unwrap_or_else(|| "unknown panic".into());
+                            tracing::error!("plugin runtime job panicked: {msg}");
+                        }
+                    });
                 }
             });
         });
@@ -115,6 +123,27 @@ mod tests {
     async fn bridge_returns_value() {
         let v: u32 = bridge(async { 41 + 1 }).await.expect("value");
         assert_eq!(v, 42);
+    }
+
+    /// A job waiting on another job must not wedge the plugin: with jobs
+    /// awaited one after another this never completes.
+    #[tokio::test]
+    async fn jobs_run_concurrently() {
+        let (tx, rx) = tokio::sync::oneshot::channel::<u32>();
+        let waiting = tokio::spawn(bridge(async move { rx.await.unwrap_or(0) }));
+        // Let the waiting job reach the worker first.
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        bridge(async move {
+            let _ = tx.send(5);
+        })
+        .await
+        .expect("second job runs while the first waits");
+        let value = tokio::time::timeout(std::time::Duration::from_secs(2), waiting)
+            .await
+            .expect("the first job finished")
+            .unwrap()
+            .unwrap();
+        assert_eq!(value, 5);
     }
 
     #[tokio::test]

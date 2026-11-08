@@ -198,6 +198,11 @@ pub struct Profile {
     /// aurora": only the order a query was typed in can. Values are `(before,
     /// after)` lists, deduplicated.
     pub adjacency: HashMap<String, Vec<(String, String)>>,
+    /// Which history rows (one per page, see [`distinct_pages`]) each term came
+    /// from. Two topics drawn from the same rows are one interest: the words of
+    /// one article's address are not separate subjects. Empty in hand-built
+    /// profiles, where it is simply not consulted.
+    pub support: HashMap<String, HashSet<usize>>,
 }
 
 impl Profile {
@@ -476,6 +481,15 @@ fn row_base_weight(row: &HistoryRow) -> f64 {
     }
 }
 
+/// Sites whose addresses name accounts, projects or conversations, not
+/// subjects: `github.com/askscience/shiny` made "askscience shiny" a news
+/// topic, and the engine answered with Pokémon guides.
+const NO_TOPIC_HOSTS: &[&str] = &[
+    "github.com", "gitlab.com", "bitbucket.org", "codeberg.org", "sourceforge.net",
+    "claude.ai", "chatgpt.com", "chat.openai.com", "chat.deepseek.com", "gemini.google.com",
+    "localhost", "127.0.0.1",
+];
+
 /// Raw material for one row's tokens: the typed query, plus the URL's slug.
 fn row_text(row: &HistoryRow) -> String {
     let mut text = String::new();
@@ -484,7 +498,7 @@ fn row_text(row: &HistoryRow) -> String {
         text.push(' ');
     }
     let host = host_of(&row.url);
-    if !is_search_host(&host) {
+    if !is_search_host(&host) && !host_matches(&host, NO_TOPIC_HOSTS) {
         if let Ok(parsed) = url::Url::parse(&row.url) {
             text.push_str(parsed.path());
             text.push(' ');
@@ -499,7 +513,41 @@ fn row_text(row: &HistoryRow) -> String {
 /// phrase inherits the average of its parts, which is enough to make
 /// "wireless keyboard" outrank a bare "keyboard" when both words keep
 /// appearing together.
+/// The history with each page once: newest first, the strongest kind of visit
+/// and any typed phrase kept.
+///
+/// One page read leaves several rows (the typed navigation, the load, a click
+/// on its card), and counting each made every word pair of that page's address
+/// look repeated, so a single article became four "interests" and the shelf
+/// filled with that one story from every outlet.
+pub fn distinct_pages(rows: &[HistoryRow]) -> Vec<HistoryRow> {
+    let mut out: Vec<HistoryRow> = Vec::new();
+    let mut index: HashMap<String, usize> = HashMap::new();
+    for row in rows {
+        let key = canonical_url(&row.url);
+        match index.get(&key) {
+            Some(&at) => {
+                let kept = &mut out[at];
+                if row_base_weight(row) > row_base_weight(kept) {
+                    kept.mode = row.mode.clone();
+                }
+                if kept.query.is_none() {
+                    kept.query = row.query.clone();
+                }
+            }
+            None => {
+                index.insert(key, out.len());
+                out.push(row.clone());
+            }
+        }
+    }
+    out
+}
+
 pub fn profile_from_history(rows: &[HistoryRow], now: chrono::DateTime<chrono::Utc>) -> Profile {
+    let rows = distinct_pages(rows);
+    let rows = rows.as_slice();
+    let mut support: HashMap<String, HashSet<usize>> = HashMap::new();
     let mut tokens: HashMap<String, f64> = HashMap::new();
     // Adjacent token pairs, counted per row so a phrase is not double-counted
     // by repetition inside one row.
@@ -524,6 +572,7 @@ pub fn profile_from_history(rows: &[HistoryRow], now: chrono::DateTime<chrono::U
         let terms = tokenize(&row_text(row));
         for term in &terms {
             *tokens.entry(term.clone()).or_insert(0.0) += weight;
+            support.entry(term.clone()).or_default().insert(index);
         }
         let mut seen_pairs: HashSet<String> = HashSet::new();
         for pair in terms.windows(2) {
@@ -571,6 +620,7 @@ pub fn profile_from_history(rows: &[HistoryRow], now: chrono::DateTime<chrono::U
         interests,
         pairs: pair_counts,
         adjacency,
+        support,
     }
 }
 
@@ -600,6 +650,20 @@ pub(crate) fn elapsed_days(created_at: &str, now: chrono::DateTime<chrono::Utc>)
 pub fn select_topics(profile: &Profile, limit: usize) -> Vec<String> {
     let mut chosen: Vec<String> = Vec::new();
     let mut covered: HashSet<String> = HashSet::new();
+    // The history rows the chosen topics already stand for.
+    let mut covered_rows: HashSet<usize> = HashSet::new();
+    // The rows a search's words all come from (empty when unknown).
+    let rows_of = |search: &str| -> Option<HashSet<usize>> {
+        let mut rows: Option<HashSet<usize>> = None;
+        for word in search.split_whitespace() {
+            let word_rows = profile.support.get(word)?;
+            rows = Some(match rows {
+                None => word_rows.clone(),
+                Some(acc) => acc.intersection(word_rows).copied().collect(),
+            });
+        }
+        rows
+    };
 
     for interest in &profile.interests {
         if chosen.len() >= limit {
@@ -647,8 +711,19 @@ pub fn select_topics(profile: &Profile, limit: usize) -> Vec<String> {
             }
         };
 
+        // Everything this search stands for was read in pages a chosen topic
+        // already covers: it is that same subject in other words.
+        let rows = rows_of(&search);
+        if let Some(rows) = &rows {
+            if !rows.is_empty() && rows.is_subset(&covered_rows) {
+                continue;
+            }
+        }
         for word in search.split_whitespace() {
             covered.insert(word.to_string());
+        }
+        if let Some(rows) = rows {
+            covered_rows.extend(rows);
         }
         if !chosen.contains(&search) {
             chosen.push(search);
@@ -1326,14 +1401,27 @@ fn cache() -> &'static parking_lot::Mutex<HashMap<String, CacheEntry>> {
     CACHE.get_or_init(|| parking_lot::Mutex::new(HashMap::new()))
 }
 
-fn cached(engine_url: &str) -> Option<Vec<RawResult>> {
+/// Results kept past [`CACHE_TTL`] are still shown (and refreshed in the
+/// background) up to this age; older ones are fetched again before showing.
+const STALE_TTL: Duration = Duration::from_secs(6 * 60 * 60);
+
+/// A cached result set and whether it is past [`CACHE_TTL`].
+fn cached(engine_url: &str) -> Option<(Vec<RawResult>, bool)> {
     let mut guard = cache().lock();
     let entry = guard.get(engine_url)?;
-    if entry.at.elapsed() > CACHE_TTL {
+    let age = entry.at.elapsed();
+    if age > STALE_TTL {
         guard.remove(engine_url);
         return None;
     }
-    Some(entry.results.clone())
+    Some((entry.results.clone(), age > CACHE_TTL))
+}
+
+/// Engine URLs being refreshed in the background, so one stale topic is not
+/// fetched again by every home load while its refresh is in flight.
+fn refreshing() -> &'static parking_lot::Mutex<HashSet<String>> {
+    static SET: OnceLock<parking_lot::Mutex<HashSet<String>>> = OnceLock::new();
+    SET.get_or_init(|| parking_lot::Mutex::new(HashSet::new()))
 }
 
 fn store(engine_url: &str, results: Vec<RawResult>) {
@@ -1375,17 +1463,34 @@ fn engine_url(topic: &str, searxng: Option<&str>) -> String {
 /// Fetch and parse one topic's news results. Cached; never fatal.
 async fn fetch_topic(topic: &str, searxng: Option<&str>) -> Result<Vec<RawResult>, String> {
     let url = engine_url(topic, searxng);
-    if let Some(hit) = cached(&url) {
+    if let Some((hit, stale)) = cached(&url) {
+        // Stale: show what we have now and fetch the new results for the next
+        // load, instead of making this one wait for the engine.
+        if stale && refreshing().lock().insert(url.clone()) {
+            let url = url.clone();
+            shiny_plugin_sdk::rt::spawn(async move {
+                if let Ok(results) = fetch_engine(&url).await {
+                    store(&url, results);
+                }
+                refreshing().lock().remove(&url);
+            });
+        }
         return Ok(hit);
     }
+    let results = fetch_engine(&url).await?;
+    store(&url, results.clone());
+    Ok(results)
+}
 
+/// One engine round trip, parsed. Not cached: see [`fetch_topic`].
+async fn fetch_engine(url: &str) -> Result<Vec<RawResult>, String> {
     let client = shiny_filter::proxy::impersonated_client_builder()
         .timeout(FETCH_TIMEOUT)
         .build()
         .map_err(|e| format!("http client: {e}"))?;
 
     let response = client
-        .get(&url)
+        .get(url)
         // The engine is asked for a document, exactly like the page fetch: the
         // classification and the mislabelled-HTML fallback both key off this.
         .header("accept", crate::fetch::ACCEPT_HTML)
@@ -1399,10 +1504,108 @@ async fn fetch_topic(topic: &str, searxng: Option<&str>) -> Result<Vec<RawResult
         .text()
         .await
         .map_err(|e| format!("could not read results: {e}"))?;
-    let results = parse_results(&body);
-    store(&url, results.clone());
-    Ok(results)
+    Ok(parse_results(&body))
 }
+/// How long a home load waits for its sources before showing what it has.
+const SHELF_DEADLINE: Duration = Duration::from_millis(2500);
+/// Cards one publisher (by name, across its domains) may hold on the shelf.
+const MAX_PER_SOURCE: usize = 2;
+
+/// Run `fut` as a background job and wait for it until `deadline`. `None`
+/// when it is late; the job still finishes (and fills its cache).
+async fn within<T: Send + 'static>(
+    deadline: tokio::time::Instant,
+    fut: impl std::future::Future<Output = T> + Send + 'static,
+) -> Option<T> {
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    shiny_plugin_sdk::rt::spawn(async move {
+        let _ = tx.send(fut.await);
+    });
+    tokio::time::timeout_at(deadline, rx).await.ok()?.ok()
+}
+
+/// A headline's words, cut to their first five letters so "limits"/"limiti" and
+/// "clone"/"clones" meet. Stopwords and short words are already gone
+/// ([`tokenize`]).
+fn headline_stems(title: &str) -> HashSet<String> {
+    tokenize(title)
+        .into_iter()
+        .map(|t| t.chars().take(5).collect::<String>())
+        .collect()
+}
+
+fn source_key(card: &NewsCard) -> String {
+    let name = card.source.trim().to_lowercase();
+    if name.is_empty() { host_of(&card.url) } else { name }
+}
+
+/// Whether two cards tell the same story: the same headline in other words
+/// (most of the shorter one's stems shared), or the same publisher running it
+/// again in another edition (three stems shared, e.g. its English and Italian
+/// sites).
+fn same_story(a: &NewsCard, b: &NewsCard, a_stems: &HashSet<String>, b_stems: &HashSet<String>) -> bool {
+    let shared = a_stems.intersection(b_stems).count();
+    let smaller = a_stems.len().min(b_stems.len());
+    if smaller >= 3 && shared * 10 >= smaller * 6 {
+        return true;
+    }
+    shared >= 3 && source_key(a) == source_key(b)
+}
+
+/// Cards in score order with each story once: the same URL (any topic, any
+/// tracking parameters) or the same story ([`same_story`]) keeps only its best
+/// card.
+pub fn dedupe_stories(cards: Vec<NewsCard>) -> Vec<NewsCard> {
+    let mut seen_urls: HashSet<String> = HashSet::new();
+    let mut kept: Vec<(NewsCard, HashSet<String>)> = Vec::new();
+    for card in cards {
+        if !seen_urls.insert(canonical_url(&card.url)) {
+            continue;
+        }
+        let stems = headline_stems(&card.title);
+        if kept.iter().any(|(other, other_stems)| same_story(&card, other, &stems, other_stems)) {
+            continue;
+        }
+        kept.push((card, stems));
+    }
+    kept.into_iter().map(|(card, _)| card).collect()
+}
+
+/// The shelf: best first, at most `per_topic_cap` cards per topic and
+/// [`MAX_PER_HOST`] per site / [`MAX_PER_SOURCE`] per publisher overall. The
+/// topic cap is relaxed to fill a short shelf; the publisher caps are not.
+pub fn picked_cards(cards: &[NewsCard], limit: usize, per_topic_cap: usize) -> Vec<NewsCard> {
+    let mut picked: Vec<NewsCard> = Vec::new();
+    let mut per_host: HashMap<String, usize> = HashMap::new();
+    let mut per_source: HashMap<String, usize> = HashMap::new();
+    let mut per_topic: HashMap<String, usize> = HashMap::new();
+    for pass in 0..2 {
+        for card in cards {
+            if picked.len() >= limit {
+                return picked;
+            }
+            if picked.iter().any(|c| c.url == card.url) {
+                continue;
+            }
+            let host = host_of(&card.url);
+            let source = source_key(card);
+            if per_host.get(&host).copied().unwrap_or(0) >= MAX_PER_HOST
+                || per_source.get(&source).copied().unwrap_or(0) >= MAX_PER_SOURCE
+            {
+                continue;
+            }
+            if pass == 0 && per_topic.get(&card.topic).copied().unwrap_or(0) >= per_topic_cap {
+                continue;
+            }
+            *per_host.entry(host).or_insert(0) += 1;
+            *per_source.entry(source).or_insert(0) += 1;
+            *per_topic.entry(card.topic.clone()).or_insert(0) += 1;
+            picked.push(card.clone());
+        }
+    }
+    picked
+}
+
 /// Build the home shelf: (profile → topics) + (favourite sites → feeds) →
 /// fetch → rank → best N.
 ///
@@ -1463,21 +1666,35 @@ pub async fn home_news(
     let mut cards: Vec<NewsCard> = Vec::new();
     let mut error: Option<String> = None;
 
-    // Fetch the topics concurrently. Serially, a cold home load was one engine
-    // round trip after another (~3.7s measured); the requests are independent,
-    // so there is no reason to queue them.
-    let fetches = topics
-        .iter()
-        .take(MAX_TOPIC_FETCHES)
-        .map(|topic| fetch_topic(topic, searxng.as_deref()));
-    let site_fetches = sites
-        .iter()
-        .map(|site| crate::sites::site_items(&site.host, refresh));
+    // Fetch the topics and feeds concurrently, each as its own background job,
+    // and wait for them only until the deadline: the shelf used to wait for the
+    // slowest engine or feed (up to its 12 s timeout) before showing anything.
+    // A source that misses the deadline keeps going and fills the cache, so the
+    // next load has it. A refresh the user asked for waits for the new results.
+    let deadline = tokio::time::Instant::now() + if refresh { FETCH_TIMEOUT } else { SHELF_DEADLINE };
+    let fetches = topics.iter().take(MAX_TOPIC_FETCHES).map(|topic| {
+        let topic = topic.clone();
+        let searxng = searxng.clone();
+        within(deadline, async move { fetch_topic(&topic, searxng.as_deref()).await })
+    });
+    let site_fetches = sites.iter().map(|site| {
+        let host = site.host.clone();
+        within(deadline, async move { crate::sites::site_items(&host, refresh).await })
+    });
     let (topic_results, site_results) = futures::future::join(
         futures::future::join_all(fetches),
         futures::future::join_all(site_fetches),
     )
     .await;
+    let late = "still loading".to_string();
+    let topic_results: Vec<Result<Vec<RawResult>, String>> = topic_results
+        .into_iter()
+        .map(|r| r.unwrap_or_else(|| Err(late.clone())))
+        .collect();
+    let site_results: Vec<Result<Vec<crate::sites::FeedItem>, String>> = site_results
+        .into_iter()
+        .map(|r| r.unwrap_or_else(|| Err(late.clone())))
+        .collect();
     let max_site_weight = sites.iter().map(|s| s.weight).fold(0.0f64, f64::max);
     let mut fed_sites: Vec<String> = Vec::new();
     for (site, result) in sites.iter().zip(site_results) {
@@ -1509,29 +1726,12 @@ pub async fn home_news(
             .partial_cmp(&a.score)
             .unwrap_or(std::cmp::Ordering::Equal)
     });
+    // One card per story: the topics are searched separately, so the same
+    // article came back once per topic, and near-identical headlines once per
+    // syndicating outlet.
+    let cards = dedupe_stories(cards);
     let per_topic_cap = (limit / (topics.len() + fed_sites.len()).max(1)).max(3);
-    let mut counts: HashMap<String, usize> = HashMap::new();
-    let mut picked: Vec<NewsCard> = Vec::new();
-    for card in cards.iter() {
-        let seen = counts.entry(card.topic.clone()).or_insert(0);
-        if *seen >= per_topic_cap {
-            continue;
-        }
-        *seen += 1;
-        picked.push(card.clone());
-    }
-    // Backfill if the cap left the shelf short.
-    if picked.len() < limit {
-        for card in cards.iter() {
-            if picked.len() >= limit {
-                break;
-            }
-            if !picked.iter().any(|c| c.url == card.url) {
-                picked.push(card.clone());
-            }
-        }
-    }
-    picked.truncate(limit);
+    let picked = picked_cards(&cards, limit, per_topic_cap);
 
     if picked.is_empty() && error.is_none() {
         error = Some("no results for your recent searches".into());
@@ -1662,6 +1862,7 @@ mod tests {
             .into_iter()
             .collect(),
             adjacency: HashMap::new(),
+            support: HashMap::new(),
         };
         let topics = select_topics(&profile, 4);
         // The strongest interest leads, but as the specific phrase rather than
@@ -1711,6 +1912,7 @@ mod tests {
             .into_iter()
             .collect(),
             adjacency: HashMap::new(),
+            support: HashMap::new(),
         };
         let topics = select_topics(&profile, 4);
         assert_eq!(topics[0], "quantum computing", "{topics:?}");
@@ -1775,6 +1977,7 @@ mod tests {
             ],
             pairs: HashMap::new(),
             adjacency: HashMap::new(),
+            support: HashMap::new(),
         };
         let topics = select_topics(&profile, 3);
         // The phrase goes first — it is a more specific query than either word —
@@ -2208,4 +2411,100 @@ mod tests {
             assert!(news.error.is_none(), "{news:?}");
         });
     }
+
+    fn news_card(title: &str, url: &str, source: &str, topic: &str, score: f64) -> NewsCard {
+        NewsCard {
+            title: title.into(),
+            url: url.into(),
+            source: source.into(),
+            snippet: String::new(),
+            image: None,
+            topic: topic.into(),
+            age: None,
+            score,
+        }
+    }
+
+    /// The shelf measured live on 2026-11-08: one article three times (once per
+    /// topic), its Italian edition, and a syndicated rewrite.
+    fn live_shelf() -> Vec<NewsCard> {
+        let toms = "https://www.tomshardware.com/tech-industry/artificial-intelligence/anthropic-confirms-new-claude-code-limits";
+        vec![
+            news_card("Anthropic confirms new Claude Code limits to prevent game cloning — users report Opus 5.5 is also actively blocking reverse engineering", toms, "Tom's Hardware", "reverse engineering", 9.0),
+            news_card("Anthropic confirms new Claude Code limits to prevent game cloning — users report Opus 5.5 is also actively blocking reverse engineering", &format!("{toms}?utm_source=x"), "Tom's Hardware", "actively blocking", 8.9),
+            news_card("Anthropic confirms new Claude Code limits to prevent game cloning — users report Opus 5.5 is also actively blocking reverse engineering", toms, "Tom's Hardware", "anthropic confirms", 8.8),
+            news_card("La festa è finita: i nuovi limiti di Claude Code bloccano reverse engineering e cloni di giochi", "https://www.tomshw.it/business/claude-code-limiti", "Tom's Hardware", "claude code", 8.0),
+            news_card("Developers are downgrading their AI on purpose — and it's working", "https://thenewstack.io/downgrading-ai/", "The New Stack", "reverse engineering", 7.0),
+            news_card("Anthropic confirms Claude Code limits to prevent game cloning, users report", "https://pasqualepillitteri.it/claude-code-limits", "Pasquale Pillitteri", "anthropic confirms", 6.5),
+            news_card("Anthropic Says Claude Wrote About 90% of Claude Code's Code, Discloses Supply Chain Risk", "https://finance.biggo.com/news/claude-90", "BigGo Finance", "claude code", 6.0),
+        ]
+    }
+
+    #[test]
+    fn one_article_is_one_card_across_topics_and_editions() {
+        let cards = dedupe_stories(live_shelf());
+        let titles: Vec<&str> = cards.iter().map(|c| c.title.as_str()).collect();
+        let toms = cards.iter().filter(|c| c.source == "Tom's Hardware").count();
+        assert_eq!(toms, 1, "the article and its Italian edition are one story: {titles:#?}");
+        assert!(
+            !titles.iter().any(|t| t.starts_with("Anthropic confirms Claude Code limits to prevent")),
+            "a rewrite of the same headline is the same story: {titles:#?}"
+        );
+        // Different stories on the same subject stay.
+        assert!(titles.iter().any(|t| t.starts_with("Developers are downgrading")));
+        assert!(titles.iter().any(|t| t.starts_with("Anthropic Says Claude Wrote")));
+        // The best-scored copy is the one kept.
+        assert_eq!(cards[0].topic, "reverse engineering");
+    }
+
+    #[test]
+    fn the_shelf_caps_each_publisher_across_its_domains() {
+        let mut cards = Vec::new();
+        for (i, host) in ["a.example.com", "b.example.com", "c.example.com"].iter().enumerate() {
+            cards.push(news_card(&format!("Distinct story number {i} about rockets"), &format!("https://{host}/{i}"), "Example News", "space", 9.0 - i as f64));
+        }
+        cards.push(news_card("Another outlet on oceans", "https://other.org/x", "Other", "space", 1.0));
+        let picked = picked_cards(&cards, 10, 10);
+        assert_eq!(picked.iter().filter(|c| c.source == "Example News").count(), MAX_PER_SOURCE);
+        assert!(picked.iter().any(|c| c.source == "Other"));
+    }
+
+    #[test]
+    fn code_hosting_addresses_are_not_topics() {
+        let rows = vec![
+            row("https://github.com/askscience/shiny/tree/main", None, "visit", "2026-09-13 10:00:00"),
+            row("https://github.com/askscience/shiny", None, "visit", "2026-09-13 09:00:00"),
+        ];
+        assert!(select_topics(&profile_from_history(&rows, now()), 4).is_empty());
+    }
+
+    #[test]
+    fn a_page_read_several_times_counts_once() {
+        let url = "https://www.tomshardware.com/tech-industry/artificial-intelligence/anthropic-confirms-new-claude-code-limits-to-prevent-game-cloning-users-report-opus-is-also-actively-blocking-reverse-engineering";
+        let rows = vec![
+            row(url, None, "visit", "2026-09-13 10:00:00"),
+            row(url, None, "page", "2026-09-13 09:59:00"),
+            row(&format!("{url}?utm_source=news"), None, "news_click", "2026-09-13 09:58:00"),
+        ];
+        let pages = distinct_pages(&rows);
+        assert_eq!(pages.len(), 1);
+        assert_eq!(pages[0].mode, "news_click", "the strongest visit kind is kept");
+
+        // Its address is one subject, not four searches for the same story.
+        let profile = profile_from_history(&rows, now());
+        let topics = select_topics(&profile, 4);
+        assert_eq!(topics.len(), 1, "{topics:?}");
+    }
+
+    #[test]
+    fn distinct_searches_still_give_distinct_topics() {
+        let rows = vec![
+            row("https://search.brave.com/search?q=aurora+borealis", Some("aurora borealis"), "page", "2026-09-13 10:00:00"),
+            row("https://search.brave.com/search?q=electric+battery", Some("electric battery"), "page", "2026-09-13 09:00:00"),
+            row("https://search.brave.com/search?q=quantum+computing", Some("quantum computing"), "page", "2026-09-13 08:00:00"),
+        ];
+        let topics = select_topics(&profile_from_history(&rows, now()), 4);
+        assert_eq!(topics.len(), 3, "{topics:?}");
+    }
 }
+

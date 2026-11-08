@@ -76,6 +76,12 @@ is idle, that the shell relaunches at the next lock.
 
 - A plugin with background work must stop it in `on_unload`, or two copies run
   after a reload (the loader keeps the old library mapped).
+- A reload `dlopen`s the new library under a fresh name, a hard link
+  `.lib<name>.so.<nanos>` removed right after (`reload_path` in
+  `src/plugins/loader.rs`). glibc hands back the library it already loaded for
+  a name it has seen, so reopening the same path after an upgrade kept running
+  the old code while the digest reported the new one. The first load of a path
+  opens it directly.
 - The loader keeps at most 100 retired libraries per process; past that a
   restart is needed (the next server swap does it).
 - A window without `saveState()` shows the old code until it is reopened.

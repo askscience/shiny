@@ -369,15 +369,29 @@ impl Loader {
             // while it is mapped (the kernel keeps the inode alive), so a re-install
             // still works. Copying every cdylib was several GiB of disk I/O on every
             // startup — the plugin loaders' real cost — for no benefit here.
+            //
+            // A reload needs one thing on Unix, though: a path `dlopen` has not
+            // seen. glibc matches a requested name against the libraries already
+            // loaded and hands back the old handle, so loading the same path
+            // again after an upgrade silently kept running the old code while
+            // the digest said the new one was live. `reload_path` gives a second
+            // load of a path a fresh name (a hard link, no copy).
             #[cfg(windows)]
             let load_path = make_loadable_copy(&lib_path);
             #[cfg(not(windows))]
-            let load_path = lib_path;
+            let (load_path, reload_link) = reload_path(&lib_path);
 
             // SAFETY: cdylib plugins must be `Send + Sync` and free of statics
             // accessible after `dlclose`. We retain `Library` in `LoadedPlugin` so
             // it lives as long as the plugin is registered.
-            let library = unsafe { Library::new(&load_path) }
+            let library = unsafe { Library::new(&load_path) };
+            // The link has done its job once the library is mapped (the inode
+            // lives on while it is), and must not litter the plugin directory.
+            #[cfg(not(windows))]
+            if reload_link {
+                let _ = std::fs::remove_file(&load_path);
+            }
+            let library = library
                 .map_err(|e| AppError::Internal(format!(
                     "Failed to dlopen {}: {}", load_path.display(), e
                 )))?;
@@ -654,6 +668,33 @@ fn warn_if_stale(path: &Path) {
     }
 }
 
+/// The path to `dlopen` `path` from: itself the first time, then a fresh hard
+/// link beside it (`.lib<name>.so.<nanos>`), so glibc maps the file as it is
+/// now instead of returning the library it loaded from that path before. The
+/// bool says whether a link was made (the caller removes it after `dlopen`).
+/// Falls back to a copy when the directory refuses hard links.
+#[cfg(not(windows))]
+fn reload_path(path: &Path) -> (PathBuf, bool) {
+    static OPENED: std::sync::OnceLock<parking_lot::Mutex<std::collections::HashSet<PathBuf>>> =
+        std::sync::OnceLock::new();
+    let opened = OPENED.get_or_init(Default::default);
+    if opened.lock().insert(path.to_path_buf()) {
+        return (path.to_path_buf(), false);
+    }
+    let (Some(dir), Some(file)) = (path.parent(), path.file_name()) else {
+        return (path.to_path_buf(), false);
+    };
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let link = dir.join(format!(".{}.{}", file.to_string_lossy(), nanos));
+    if std::fs::hard_link(path, &link).is_ok() || std::fs::copy(path, &link).is_ok() {
+        return (link, true);
+    }
+    (path.to_path_buf(), false)
+}
+
 /// Windows-only: copy a cdylib to a timestamped sibling so a re-install can
 /// overwrite the original while the previous `Library` still has it locked.
 /// Unix `dlopen`s the original in place — see the call site.
@@ -689,6 +730,31 @@ fn current_target_triple() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A second load of a path goes through a fresh name, so `dlopen` maps the
+    /// file as it is now (glibc returns the old library for a name it has
+    /// already loaded).
+    #[cfg(not(windows))]
+    #[test]
+    fn a_reload_opens_the_library_under_a_fresh_name() {
+        let dir = std::env::temp_dir().join(format!("shiny-reload-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let lib = dir.join("libshiny_probe_plugin.so");
+        std::fs::write(&lib, b"v1").unwrap();
+
+        let (first, linked) = reload_path(&lib);
+        assert_eq!(first, lib, "the first load uses the file itself");
+        assert!(!linked);
+
+        // An upgrade replaces the file, then the plugin is loaded again.
+        std::fs::write(&lib, b"v2").unwrap();
+        let (second, linked) = reload_path(&lib);
+        assert!(linked);
+        assert_ne!(second, lib, "a reload must not reuse the name dlopen has seen");
+        assert_eq!(second.parent(), lib.parent());
+        assert_eq!(std::fs::read(&second).unwrap(), b"v2", "the link is the new file");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn the_built_library_wins_over_a_stale_one_beside_it() {

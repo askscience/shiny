@@ -4,6 +4,24 @@
 
 ### Fixed
 
+- Browser 0.2.3: the start page's news no longer repeats itself or keeps you
+  waiting. One article came back once per topic (the topics were searched
+  separately and never compared) and the topics themselves were words of that
+  same article's address, so the shelf was one story from every outlet. Now a
+  story appears once (same address, or the same headline in other words), each
+  publisher gets at most two cards, each page of the history counts once, and
+  topics drawn from the same pages count as one; code hosting and AI-chat
+  addresses are no longer topics. The shelf shows what arrived within 2.5 s and
+  the rest fills in for the next visit, and news past ten minutes old is shown
+  at once while it refreshes in the background.
+- Plugins: an updated plugin now really runs its new code without a server
+  restart. The reload reopened the library from the same path, and Linux
+  handed back the copy already loaded, so the old code kept running while the
+  server reported the new version.
+- Plugins: a plugin's routes no longer wait for each other. Every request to a
+  plugin ran one after another on its worker, so a slow one (a news search
+  waiting on the network) held up the rest, down to saving a bookmark. They now
+  run concurrently, still on the plugin's single thread.
 - After login, the top-bar menus (power, battery, Wi-Fi), the browser's
   suggestions and the Craft apps took up to a minute to load. Chromium opens at
   most six connections to the shell's server, and each live feed held one for

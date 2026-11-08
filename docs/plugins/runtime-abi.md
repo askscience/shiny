@@ -77,6 +77,16 @@ oneshot channel. Each plugin cdylib statically links its own copy of the SDK,
 so the worker and its queue are per plugin, not process-global. The host worker
 never blocks.
 
+Jobs run **concurrently** as tasks of that one thread (`tokio::spawn` inside
+the worker's `block_on`), so a slow job (a network fetch waiting seconds) never
+holds up the plugin's other routes. They used to be awaited one after another,
+which made a news fetch delay every other Browser route, down to saving a
+bookmark. Still one thread, so SQLite values never cross threads. The rule
+that follows: never hold a **synchronous** lock (`std`/`parking_lot` `Mutex`)
+across an `.await` in plugin code. Another job on the same thread would block
+on it forever. Use an async lock (`tokio::sync`) when a guard must live across
+an await.
+
 ```rust
 // Wrong: aborts the host on the first sqlx/reqwest call.
 builder.tool(MyTool);
