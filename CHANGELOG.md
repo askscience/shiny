@@ -69,6 +69,16 @@
 
 ### Changed
 
+- Installer 0.1.1: the wording is plain and calm in every language, since
+  the installer can erase a disk. Playful titles ("Make yourself at home.",
+  "Ready for the one-way step.") now say what each step is, and leftover
+  development text that made the real install look like a simulation is
+  gone ("destructive engine not wired", "UI preview"). The install on the
+  live ISO is real; a test mode exists only when the installer service is
+  started with `--dry-run`, and it is called "Test mode". Typing the disk
+  serial is no longer required: ticking the confirmation is enough, and the
+  installer service still checks the disk's model, serial and size against
+  a fresh probe before writing.
 - Closing the text chat no longer stops the assistant. The answer carries
   on behind the closed panel with the voice bar's dots showing the work, and
   reopening the chat shows it where it stands, still streaming. Stop (or

@@ -4,16 +4,21 @@ The LiteAura installer is a normal native plugin plus a separate privileged help
 The plugin runs as the live user and can only send a typed JSON plan to a Unix socket;
 the helper runs as root, re-probes the machine and applies the plan.
 
-This build implements:
+It implements:
 
 - read-only disk/hardware probing (`lsblk`, DMI, T2 bridge detection);
 - plan validation (target identity, mounted/removable/live-medium refusal, profile/kernel
   mismatch, minimum disk size);
-- a **dry-run** apply with progress and cancellation.
+- the **real install** (`crates/shiny-installer-helper/src/engine.rs`): partitioning,
+  formatting, copying the live system from the squashfs, configuration and the
+  bootloader, with progress and cancellation between stages;
+- a **test mode** (`--dry-run`) that walks the same stages without writing anything.
 
-The destructive engine is selected by the Phase 0 spike (curtin or a minimal custom
-engine) and is deliberately not wired yet. `apply` refuses to run unless the helper was
-started with `--dry-run`.
+The live ISO starts the helper **without** `--dry-run`
+(`scripts/live/overlay/etc/systemd/system/shiny-installer-helper.service`), so the
+installer on the ISO really installs. The sample unit `scripts/shiny-installer-helper.service`
+keeps `--dry-run` for trying the wizard on a development live image; the UI then says
+"Test mode" on the status line, the review and the progress screen.
 
 ## Live-only guard
 
@@ -61,7 +66,7 @@ components and theme tokens; the disk map and timeline are plugin-local layout, 
 new global components.
 
 The look is the editorial window language: the window bar carries one mono status
-line ("LIVE SESSION · DRY RUN · STEP 2/5"); the step rail is flat (mono number or a
+line ("LIVE SESSION · TEST MODE · STEP 2/5" in test mode); the step rail is flat (mono number or a
 check, the label, the active step on the grey pill); each step opens with a mono
 "02 / 05" kicker over a large display title; disks, intents, choices and partitions
 are hairline rows whose selection is the grey `--ed-pill` fill (disk path, size and
@@ -84,8 +89,7 @@ confirmation.
 clamps and defaults. `web/timeline.js` renders the ruler, tracks, handles, zoom,
 summary and exact-size panel; it uses the real absolute offsets and keeps existing
 partitions read-only. `web/plugin.js` only translates the current wizard state into
-the model and back. Probe/validation are real; the destructive engine is Phase B, so
-apply remains dry-run. The Region step asks the helper for the live system's locale,
+the model and back. The Region step asks the helper for the live system's locale,
 keyboard and timezone lists, so the wizard uses menus instead of free text.
 
 The Profile step detects NVIDIA GPUs. The open driver is the default; the proprietary
@@ -93,9 +97,15 @@ driver and optional CUDA are separate opt-ins with separate license links and ac
 records in `InstallPlan.licenses`. NVIDIA is never preinstalled in the generic profile,
 there is no NVIDIA edition, and the full CUDA Toolkit is not shipped in the base image.
 Secure Boot/MOK and hybrid/datacenter cases are surfaced in the UI and re-checked by the
-helper. The Review step requires the exact disk serial plus an erase acknowledgement
-before the helper's dry-run job can start. The footer's UI-only progress preview never
-calls the helper.
+helper. The Review step requires an explicit acknowledgement (a checkbox naming what
+will be erased) before the job can start. The user is not asked to type the disk
+serial: the UI sends the probed serial and the helper checks it against a fresh probe.
+
+**Copy.** The wizard's text is plain and calm on purpose, in every language: it can
+erase a disk, so titles say what the step is ("Language and keyboard", "Check before
+installing") rather than being playful, and nothing in the live install suggests a
+rehearsal. Development wording ("dry run", "simulation", "helper") is not shown to
+users; test mode is called "Test mode".
 
 ## Routes
 
@@ -105,7 +115,7 @@ calls the helper.
 | GET | `/api/installer/options` | system locales, keyboard layouts and timezones |
 | GET | `/api/installer/probe` | whole disks + DMI/T2 facts |
 | POST | `/api/installer/plan` | validate a typed `InstallPlan` |
-| POST | `/api/installer/apply` | start a dry-run/real job |
+| POST | `/api/installer/apply` | start the install (or a test-mode run) |
 | GET | `/api/installer/status?job=…` | job stage, progress and log |
 | POST | `/api/installer/cancel` | request cancellation between stages |
 
@@ -130,8 +140,9 @@ All routes are authenticated and local-only (`is_remote_request` is refused).
 - The plugin never runs a shell and never opens a block device.
 - The helper re-probes and matches the plan against the disk path, serial, model and
   size before applying anything.
-- `apply` requires the user to type the exact target serial; the helper compares it with
-  a fresh probe and aborts on a mismatch.
+- `apply` carries the target serial (`confirm_serial`, filled by the UI from the probe);
+  the helper compares it with a fresh probe and aborts on a mismatch, so a disk swapped
+  after the review is never written.
 - Non-dry-run apply and `--apply-plan` refuse to run unless `/run/live/medium` exists,
   so a development machine cannot be used as an install target by accident.
 - The live medium, mounted disks, removable/loop/optical/read-only devices and disks
@@ -139,8 +150,7 @@ All routes are authenticated and local-only (`is_remote_request` is refused).
 - Existing partitions are never resized or moved: only the chosen free extent or the
   one explicitly selected partition is written.
 - The T2 profile is refused on non-T2 hardware; the generic profile warns on T2.
-- The dry-run never writes to a disk; the real engine must be added only after the
-  Phase 0 spike and destructive tests.
+- Test mode (`--dry-run`) never writes to a disk.
 
 ## Never test on the development disk
 

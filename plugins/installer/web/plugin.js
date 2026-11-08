@@ -162,7 +162,6 @@ function initialState() {
     acceptedLicenses: {},
     mokAccepted: false,
     selectedDiskPath: '',
-    confirmSerial: '',
     confirmed: false,
     job: null,
     jobStatus: null,
@@ -195,18 +194,18 @@ function reasonLabel(reason) {
 }
 
 function plannedBarLabel(kind) {
-  if (kind === 'efi') return T('disk.efi', 'EFI system');
-  if (kind === 'swap') return T('disk.swapSegment', 'Swap');
-  if (kind === 'home') return T('disk.home', 'Home');
-  return T('disk.root', "LiteAura root");
+  if (kind === 'efi') return T('disk.efi', 'Startup');
+  if (kind === 'swap') return T('disk.swapSegment', 'Support memory');
+  if (kind === 'home') return T('disk.home', 'Personal files');
+  return T('disk.root', "LiteAura system");
 }
 
 function modelBarSegment(segment) {
   let label = segment.label;
   if (segment.planned) label = plannedBarLabel(segment.kind);
   else if (segment.kind === 'free') label = T('disk.free', 'Free space');
-  else if (segment.selectedRoot) label = T('disk.root', "LiteAura root");
-  else if (segment.reused) label = T('disk.efi', 'EFI system');
+  else if (segment.selectedRoot) label = T('disk.root', "LiteAura system");
+  else if (segment.reused) label = T('disk.efi', 'Startup');
   else if (segment.part) label = partitionLabel(segment.part, T);
   // Same colour language as the timeline: existing partitions are grey,
   // whatever they hold; only LiteAura's own pieces are coloured.
@@ -462,7 +461,7 @@ function localFieldErrors() {
     add('password2', T('account.password.mismatch', 'The passwords do not match'));
   }
 
-  if (!state.profile) add('profile', T('profile.required', 'Choose a kernel profile'));
+  if (!state.profile) add('profile', T('profile.required', 'Choose a system version'));
   if (!['off', 'none', 'voice', 'local'].includes(state.aiTier)) add('aiTier', T('profile.ai.required', 'Choose an AI tier'));
 
   if (state.gpuDriver === 'nvidia') {
@@ -489,7 +488,7 @@ function modelErrorLabel(code) {
     swapTooBig: T('disk.timeline.swapTooBig', 'The support memory does not fit in this free space.'),
     homeTooBig: T('disk.manual.homeTooBig', 'Leave at least 20 GiB for the LiteAura system'),
     rootTooBig: T('disk.timeline.rootTooBig', 'The system does not fit in this free space.'),
-    rootSmall: T('disk.manual.rootSmall', 'Leave at least 20 GiB for the system.'),
+    rootSmall: T('disk.manual.rootSmall', 'Leave at least 20 GiB for the system. Reduce the personal-files size or the support memory.'),
     noRoot: T('disk.existing.noRoot', 'Choose a partition for LiteAura (ext4 or empty, not in use)'),
     noEsp: T('disk.existing.noEsp', 'No startup partition found on this disk'),
   };
@@ -624,7 +623,7 @@ function profileLabel(profile = state.profile) {
 }
 
 function aiLabel(tier = state.aiTier) {
-  if (tier === 'off') return T('profile.ai.off.title', 'No slop');
+  if (tier === 'off') return T('profile.ai.off.title', 'No AI');
   if (tier === 'none') return T('profile.ai.none.title', 'Text only');
   if (tier === 'local') return T('profile.ai.local.title', 'Local AI');
   return T('profile.ai.voice.title', 'Voice pack');
@@ -664,7 +663,7 @@ function acceptedLicenseRows() {
 function stageLabel(stage) {
   if (stage === 'queued') return T('progress.queued', 'Queued');
   if (stage === 'done') return T('progress.stage.done', 'Done');
-  if (stage === 'failed') return T('progress.failed', 'Failed');
+  if (stage === 'failed') return T('progress.failed', 'Installation failed');
   const entry = STAGE_KEYS.find(([key]) => key === stage);
   return entry ? T(entry[1], entry[2]) : stage;
 }
@@ -757,7 +756,6 @@ async function refreshData() {
             : null;
           if (gap && changed) {
             applyPreset(state, MODE_MANUAL, state.layoutPreset || 'swap', gap.size_bytes);
-            state.confirmSerial = '';
             state.confirmed = false;
           }
         } else if (state.partitionMode === MODE_EXISTING) {
@@ -818,7 +816,7 @@ function renderChrome() {
   if (state.health) {
     tone = 'ok';
     parts.push(T('chrome.live', 'Live session'));
-    if (state.health.dry_run) parts.push(T('chrome.dryRun', 'Dry run'));
+    if (state.health.dry_run) parts.push(T('chrome.dryRun', 'Test mode'));
     const totalSteps = state.phase === 'progress' ? STEPS.length + 1 : STEPS.length;
     const currentStep = state.phase === 'progress' ? totalSteps : Math.min(state.step + 1, STEPS.length);
     parts.push(T('chrome.stepShort', 'Step {current}/{total}', { current: currentStep, total: totalSteps }));
@@ -920,7 +918,7 @@ function renderMain(options = {}) {
 
 function renderLoading() {
   const wrap = el('div', 'installer-loading');
-  wrap.append(spinner({ size: 22 }), el('p', 'installer-loading-text', T('state.loading', 'Reading the machine and checking the installer helper…')));
+  wrap.append(spinner({ size: 22 }), el('p', 'installer-loading-text', T('state.loading', 'Reading this computer and connecting to the installer service…')));
   refs.inner.appendChild(wrap);
 }
 
@@ -928,8 +926,8 @@ function renderHelperError() {
   const wrap = el('div', 'installer-state');
   wrap.appendChild(emptyState({
     icon: 'ui/warning',
-    title: T('state.helperDown.title', 'The installer helper is not running'),
-    body: state.healthError || T('state.helperDown.body', 'Its background service (shiny-installer-helper) is not running. Restart the live session, then press Retry.'),
+    title: T('state.helperDown.title', 'The installer service is not running'),
+    body: state.healthError || T('state.helperDown.body', 'The installer works through a background service (shiny-installer-helper) that is not running. Restart the computer from the USB stick, then press Retry.'),
     action: button({
       label: T('common.retry', 'Retry'),
       variant: 'primary',
@@ -1019,8 +1017,8 @@ function renderRegion() {
   wrap.appendChild(note(
     'accent',
     'ui/info',
-    T('region.live.title', 'The live session stays yours'),
-    T('region.live.body', "Keep using LiteAura while the installer prepares the disk. Nothing is written until you press Install."),
+    T('region.live.title', 'You can keep using this session'),
+    T('region.live.body', "LiteAura keeps running from the USB stick while you set up. Nothing is written to the disk until you press Install."),
   ));
   const detected = el('div', 'installer-detected');
   detected.append(
@@ -1052,7 +1050,7 @@ function renderDisk() {
   if (!disks.length) {
     wrap.appendChild(emptyState({
       icon: 'ui/monitor',
-      title: T('disk.empty.title', 'No installable disks'),
+      title: T('disk.empty.title', 'No disk available for installation'),
       body: T('disk.empty.body', 'The drive LiteAura is running from, virtual disks and CD/DVD drives are hidden. Plug in a disk or refresh.'),
       action: button({
         label: T('disk.refresh', 'Refresh disks'),
@@ -1244,7 +1242,6 @@ function setPartitionMode(mode) {
   state.existingConfirmed = false;
   state.pendingExistingPath = '';
   state.selectedExtent = null;
-  state.confirmSerial = '';
   state.confirmed = false;
   state.showErrors = false;
   if (disk && mode === MODE_MANUAL) {
@@ -1287,7 +1284,6 @@ function selectGap(gap) {
   state.existingEspPath = '';
   state.existingConfirmed = false;
   state.pendingExistingPath = '';
-  state.confirmSerial = '';
   state.confirmed = false;
   state.showErrors = false;
   applyPreset(state, MODE_MANUAL, state.layoutPreset || 'swap', gap.size_bytes);
@@ -1306,7 +1302,6 @@ function selectExistingPartition(part) {
   state.existingConfirmed = !String(part.fstype || '').trim();
   state.pendingExistingPath = state.existingConfirmed ? '' : part.path;
   state.selectedExtent = null;
-  state.confirmSerial = '';
   state.confirmed = false;
   state.showErrors = false;
   invalidateValidation();
@@ -1378,7 +1373,6 @@ function removePlannedPartition(kind) {
       state.layoutPreset = state.swapGiB > 0 ? 'swap' : 'simple';
     }
   }
-  state.confirmSerial = '';
   state.confirmed = false;
   state.showErrors = false;
   invalidateValidation();
@@ -1396,7 +1390,7 @@ function renderGuidedNotes(disk) {
     wrap.appendChild(note(
       'warn',
       'ui/warning',
-      T('disk.guided.noSpaceTitle', 'No room for LiteAura'),
+      T('disk.guided.noSpaceTitle', 'Not enough space for LiteAura'),
       T('disk.guided.noSpaceBody', 'This disk has no usable free space and no partition LiteAura can reuse. Erase the disk or free some space from the other system, then refresh.'),
     ));
   }
@@ -1443,7 +1437,6 @@ function diskCard(disk) {
 function selectDisk(path) {
   if (state.selectedDiskPath === path) return;
   state.selectedDiskPath = path;
-  state.confirmSerial = '';
   state.confirmed = false;
   state.existingRootPath = '';
   state.existingEspPath = '';
@@ -1498,7 +1491,6 @@ function toggleLayoutPart(kind, on) {
     if (state.partitionMode === MODE_MANUAL) state.manualSwapGiB = 0;
     else state.swapGiB = 0;
   }
-  state.confirmSerial = '';
   state.confirmed = false;
   state.showErrors = false;
   invalidateValidation();
@@ -1607,8 +1599,8 @@ function renderAccount() {
   fields.appendChild(note(
     'warn',
     'ui/lock',
-    T('account.password.dryTitle', 'Your account password'),
-    T('account.password.dryBody', 'The installer will set this password on your new account. It is sent only to the privileged helper and is not written to the plan or logs.'),
+    T('account.password.dryTitle', 'Your password'),
+    T('account.password.dryBody', 'You will use this password to sign in. It is only used to create your account and is never saved in the installation log.'),
   ));
   updatePasswordMeter();
   wrap.appendChild(fields);
@@ -1634,12 +1626,12 @@ function renderProfile() {
   wrap.appendChild(hardware);
 
   wrap.appendChild(sectionHeading(
-    T('profile.kernel.title', 'Kernel profile'),
+    T('profile.kernel.title', 'System version'),
     T('profile.kernel.hint', 'Two system versions are on this USB stick. This choice decides which one the installed system uses.'),
   ));
   const profiles = el('div', 'installer-layout-choices');
   profiles.setAttribute('role', 'radiogroup');
-  profiles.setAttribute('aria-label', T('profile.kernel.title', 'Kernel profile'));
+  profiles.setAttribute('aria-label', T('profile.kernel.title', 'System version'));
   profiles.append(
     choiceCard({
       value: 'backports',
@@ -1677,15 +1669,15 @@ function renderProfile() {
   if (hw.is_t2 && state.profile !== 't2') {
     wrap.appendChild(alertBlock(
       'warn',
-      T('profile.generic.warnTitle', 'Generic profile on T2 hardware'),
-      T('profile.generic.warnBody', 'Keyboard, trackpad, Wi-Fi, Bluetooth or audio may not be enabled. Choose the T2 profile for this machine.'),
+      T('profile.generic.warnTitle', 'Generic PC version on a T2 Mac'),
+      T('profile.generic.warnBody', 'Keyboard, trackpad, Wi-Fi, Bluetooth or audio may not work. Choose the T2 Mac version for this computer.'),
     ));
   }
   wrap.appendChild(note(
     'accent',
     'ui/layers',
-    T('profile.kernel.noteTitle', 'One live image, two profiles'),
-    T('profile.kernel.noteBody', 'The Generic PC profile installs the standard kernel. The T2 Mac profile installs only the kernel for Macs with the T2 chip.'),
+    T('profile.kernel.noteTitle', 'One USB stick, two system versions'),
+    T('profile.kernel.noteBody', 'The Generic PC version installs the standard kernel. The T2 Mac version installs only the kernel for Macs with the T2 chip.'),
   ));
 
   wrap.appendChild(sectionHeading(
@@ -1696,10 +1688,10 @@ function renderProfile() {
   tiers.setAttribute('role', 'radiogroup');
   tiers.setAttribute('aria-label', T('profile.ai.title', 'AI tier'));
   const aiOptions = [
-    ['off', 'ui/brain-off', T('profile.ai.off.title', 'No slop'), T('profile.ai.off.desc', 'No AI at all. The AI button opens the launcher.'), T('profile.ai.off.meta', 'You can turn it on later')],
-    ['none', 'ui/keyboard', T('profile.ai.none.title', 'Text only'), T('profile.ai.none.desc', 'Chat and agent, no voice models.'), T('profile.ai.none.meta', 'Smallest footprint')],
+    ['off', 'ui/brain-off', T('profile.ai.off.title', 'No AI'), T('profile.ai.off.desc', 'No AI at all. The AI button opens the launcher.'), T('profile.ai.off.meta', 'You can turn it on later')],
+    ['none', 'ui/keyboard', T('profile.ai.none.title', 'Text only'), T('profile.ai.none.desc', 'Chat and agent, no voice models.'), T('profile.ai.none.meta', 'Uses the least disk space')],
     ['voice', 'ui/download', T('profile.ai.voice.title', 'Voice pack'), T('profile.ai.voice.desc', 'Speech recognition and neural voices.'), T('profile.ai.voice.meta', 'Recommended')],
-    ['local', 'ui/layers', T('profile.ai.local.title', 'Local AI'), T('profile.ai.local.desc', 'Voice plus local image and music models.'), T('profile.ai.local.meta', 'Needs more disk')],
+    ['local', 'ui/layers', T('profile.ai.local.title', 'Local AI'), T('profile.ai.local.desc', 'Voice plus local image and music models.'), T('profile.ai.local.meta', 'Needs more disk space')],
   ];
   for (const [value, iconName, title, desc, meta] of aiOptions) {
     tiers.appendChild(choiceCard({
@@ -1801,7 +1793,7 @@ function renderNvidiaSection() {
     wrap.appendChild(alertBlock(
       'danger',
       T('profile.nvidia.datacenterTitle', 'Data-center GPU'),
-      T('profile.nvidia.datacenterBody', 'The consumer NVIDIA driver path is not offered for this GPU.'),
+      T('profile.nvidia.datacenterBody', 'The standard NVIDIA driver is not offered for this GPU.'),
     ));
   }
 
@@ -1902,15 +1894,15 @@ function renderReview() {
     wrap.appendChild(note(
       'warn',
       'ui/warning',
-      T('review.dryTitle', 'Simulation mode'),
-      T('review.dryBody', 'Pressing Install simulates the plan. No disk is modified in this build.'),
+      T('review.dryTitle', 'Test mode'),
+      T('review.dryBody', 'The installer is running in test mode: pressing Install only rehearses the steps. No disk is changed.'),
     ));
   } else {
     wrap.appendChild(note(
       'danger',
       'ui/warning',
       T('review.realTitle', 'This will change the disk'),
-      T('review.realBody', 'The partitions shown below will be formatted. Check the disk, the serial and the layout before continuing.'),
+      T('review.realBody', 'The partitions shown below will be formatted and their contents erased. Check the disk and the layout before continuing.'),
     ));
   }
 
@@ -1961,7 +1953,7 @@ function renderReview() {
   ])));
 
   const systemRows = [
-    [T('profile.kernel.title', 'Kernel profile'), profileLabel()],
+    [T('profile.kernel.title', 'System version'), profileLabel()],
     [T('profile.ai.title', 'AI tier'), aiLabel()],
     [T('review.mode', 'Mode'), modeLabel()],
     [T('review.gpu', 'GPU driver'), gpuLabel()],
@@ -1985,7 +1977,7 @@ function renderReview() {
     validating.append(spinner({ size: 16 }), el('span', null, T('review.validating', 'Checking the disk…')));
     wrap.appendChild(validating);
   } else if (state.validationError) {
-    wrap.appendChild(alertBlock('danger', T('review.validationFailed', 'Validation failed'), state.validationError));
+    wrap.appendChild(alertBlock('danger', T('review.validationFailed', 'Disk check failed'), state.validationError));
   } else if (state.validation) {
     const errorsList = state.validation.errors || [];
     const warnings = state.validation.warnings || [];
@@ -2019,29 +2011,10 @@ function renderReview() {
   const confirmCopy = el('div', 'installer-confirm-copy');
   confirmCopy.append(
     el('h3', 'installer-confirm-title', T('review.confirm.title', 'Confirm the disk')),
-    el('p', 'installer-confirm-body', T('review.confirm.body', 'Type the disk serial exactly, then acknowledge the operation.')),
+    el('p', 'installer-confirm-body', T('review.confirm.body', 'Read what will happen to this disk, then tick the box to confirm.')),
   );
   confirmHead.append(confirmMark, confirmCopy);
   confirm.appendChild(confirmHead);
-
-  const serial = input({
-    value: state.confirmSerial,
-    placeholder: disk?.serial || '...',
-    autocomplete: 'off',
-    onInput: (value) => {
-      state.confirmSerial = value;
-      renderFooter();
-    },
-  });
-  serial.id = 'installer-confirm-serial';
-  confirm.appendChild(field({
-    label: T('review.confirm.serial', 'Disk serial'),
-    hint: disk?.serial ? `${T('review.confirm.expected', 'Expected')}: ${disk.serial}` : T('review.confirm.noSerial', 'This disk does not report a serial number, so LiteAura cannot be installed on it.'),
-    control: serial,
-  }));
-  if (disk?.serial && state.confirmSerial && state.confirmSerial.trim() !== disk.serial) {
-    confirm.appendChild(el('p', 'installer-field-error', T('review.serialMismatch', 'Type the exact disk serial')));
-  }
 
   const checkLabel = el('label', 'installer-confirm-check');
   const check = input({ type: 'checkbox' });
@@ -2123,8 +2096,7 @@ function installReady() {
   if (diskLocalErrors().length) return false;
   if (!state.validationKey || state.validationKey !== planKey()) return false;
   if (!state.validation?.ok) return false;
-  if (!state.confirmed) return false;
-  return state.confirmSerial.trim() === disk.serial;
+  return state.confirmed;
 }
 
 function renderFooter() {
@@ -2142,7 +2114,7 @@ function renderFooter() {
     step.textContent = `${T('common.step', 'Step {current} of {total}', {
       current: Math.min(state.step + 1, STEPS.length),
       total: STEPS.length,
-    })} · ${T('review.notReadyShort', 'Serial and confirmation required')}`;
+    })} · ${T('review.notReadyShort', 'Confirmation required')}`;
   } else {
     step.textContent = T('common.step', 'Step {current} of {total}', {
       current: Math.min(state.step + 1, STEPS.length),
@@ -2211,7 +2183,7 @@ function renderFooter() {
         onClick: () => void startInstall(),
       });
       if (!installReady()) {
-        install.title = T('review.notReady', 'Complete the fields and confirm the disk serial');
+        install.title = T('review.notReady', 'Complete the highlighted fields and tick the confirmation box');
       }
       actions.appendChild(install);
     }
@@ -2267,15 +2239,11 @@ async function startInstall() {
   }
   const disk = selectedDisk();
   if (!disk) {
-    toast(T('review.noDisk', 'No disk selected'), { type: 'error' });
+    toast(T('review.noDisk', 'No disk selected.'), { type: 'error' });
     return;
   }
   if (!state.confirmed) {
     toast(T('review.needConfirm', 'Tick the confirmation box first'), { type: 'error' });
-    return;
-  }
-  if (state.confirmSerial.trim() !== disk.serial) {
-    toast(T('review.serialMismatch', 'Type the exact disk serial'), { type: 'error' });
     return;
   }
   if (!state.validation?.ok || state.validationKey !== planKey()) {
@@ -2304,7 +2272,10 @@ async function startInstall() {
       method: 'POST',
       body: JSON.stringify({
         plan: buildPlan(),
-        confirm_serial: state.confirmSerial.trim(),
+        // The helper re-probes the device and refuses unless this is still
+        // the disk the plan names (model, serial, size): the identity check
+        // is the helper's, so the user is not asked to type the serial.
+        confirm_serial: disk.serial || '',
       }),
     });
     if (!tileEl) return;
@@ -2440,7 +2411,7 @@ function renderProgress() {
   ring.append(refs.ringValue, el('span', 'installer-ring-label', T('progress.completeShort', 'complete')));
   const copy = el('div', 'installer-progress-copy');
   copy.append(
-    el('div', 'installer-progress-kicker', dryRun ? T('progress.dryBadge', 'Simulation') : T('progress.liveBadge', 'Install')),
+    el('div', 'installer-progress-kicker', dryRun ? T('progress.dryBadge', 'Test') : T('progress.liveBadge', 'Install')),
     el('h3', 'installer-progress-title', T('progress.stepTitle', 'Preparing the disk')),
     el('p', 'installer-progress-sub', T('progress.body', 'You can keep using this live session while LiteAura is installed on the disk.')),
   );
@@ -2455,15 +2426,15 @@ function renderProgress() {
     wrap.appendChild(note(
       'ok',
       'ui/check',
-      dryRun ? T('progress.dryDoneTitle', 'Simulation complete') : T('progress.installDoneTitle', 'Installation complete'),
+      dryRun ? T('progress.dryDoneTitle', 'Test complete') : T('progress.installDoneTitle', 'Installation complete'),
       dryRun
-        ? T('progress.dryDoneBody', 'No disk was modified. The helper accepted this plan for testing.')
+        ? T('progress.dryDoneBody', 'No disk was changed. The installer went through every step without writing.')
         : T('progress.installDoneBody', 'LiteAura is installed. Restart the computer and remove the USB stick.'),
     ));
   } else if (status.done && !status.success) {
-    wrap.appendChild(alertBlock('danger', T('progress.failed', 'Installation failed'), status.error || T('progress.failedBody', 'The installer stopped.')));
+    wrap.appendChild(alertBlock('danger', T('progress.failed', 'Installation failed'), status.error || T('progress.failedBody', 'The installation stopped before finishing. The log below shows the reason.')));
   } else if (dryRun) {
-    wrap.appendChild(note('warn', 'ui/warning', T('progress.dryNotice', 'Simulation: no writes'), T('progress.dryNoticeBody', 'The helper is simulating the plan. No partition table is modified.')));
+    wrap.appendChild(note('warn', 'ui/warning', T('progress.dryNotice', 'Test mode: nothing is written'), T('progress.dryNoticeBody', 'The installer is rehearsing the steps. No disk is changed.')));
   }
 
   const stages = el('div', 'installer-stage-list');
@@ -2482,9 +2453,9 @@ function renderProgress() {
   wrap.appendChild(stages);
 
   const logWrap = el('section', 'installer-log-wrap');
-  logWrap.appendChild(sectionHeading(T('progress.log', 'Live log'), T('progress.logHint', 'Each step of the installation is shown here.')));
+  logWrap.appendChild(sectionHeading(T('progress.log', 'Installation log'), T('progress.logHint', 'Each step of the installation is shown here.')));
   refs.log = el('pre', 'installer-log');
-  refs.log.textContent = (status.log || []).join('\n') || T('progress.noLog', 'Waiting for the helper…');
+  refs.log.textContent = (status.log || []).join('\n') || T('progress.noLog', 'Waiting for the installer service…');
   logWrap.appendChild(refs.log);
   wrap.appendChild(logWrap);
   refs.inner.appendChild(wrap);
