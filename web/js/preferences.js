@@ -507,7 +507,8 @@ export function applyDesktopSurface() {
   const root = document.documentElement;
   root.style.setProperty('--window-radius', `${s.window_radius}px`);
   root.style.setProperty('--window-opacity', `${s.window_opacity}%`);
-  root.style.setProperty('--window-shadow', s.window_shadow ? 'var(--shadow-glass)' : 'none');
+  // An empty shadow rather than `none`, so a list (the focus glow) can follow it.
+  root.style.setProperty('--window-shadow', s.window_shadow ? 'var(--shadow-glass)' : '0 0 #0000');
   // "Glass blur" drives the backdrop blur of everything frosted: the desktop
   // seen through a translucent window, plugin chrome, and the shared
   // panels/sheets/menus. Writing the base token (not just `-panel`) is what

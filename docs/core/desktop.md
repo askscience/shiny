@@ -478,10 +478,19 @@ single accent the user picked (the colour is what marks focus):
   property resolving: a frame whose background fails to parse is not a subtly
   wrong frame, it is no frame at all (that is exactly how it shipped invisible
   once);
-- the entrance — a plain `tile-focus-in` fade on the frame itself, plus `::after`
-  on top of it: `tile-focus-sweep`, one calm lap over 700ms where a 90deg accent
-  highlight thins to nothing. Decoration only — if the animated custom properties
-  are unavailable the frame is still there;
+- the entrance, 1.1 s — a comet on `::after` (`tile-focus-sweep`: a 2px band
+  with a white head and an accent tail that fades behind it, glowing through
+  `drop-shadow`) laps the contour once from the bottom-left corner and thins to
+  nothing; the frame fades in behind it (`tile-focus-in`, 260ms late); and the
+  tile's own shadow blooms in the accent (`tile-focus-bloom`) and settles into
+  a soft glow (`--focus-glow`) that stays while the window is in focus. The
+  glow is listed after `--window-shadow`, which is why that token is an empty
+  shadow (`0 0 #0000`) rather than `none` when window shadows are off. Comet
+  and bloom are decoration only: if the animated custom properties are
+  unavailable the frame is still there. Reduced motion shows the frame and the
+  glow without the entrance;
+- no other window border is coloured: the active window has none (it reads by
+  its title and stacking), so a coloured frame always means focus mode;
 - the tray underline (`.hud-plugin-btn.is-focused .hud-plugin-line`) —
   `--focus-bar`, the same palette laid out straight;
 - the workspace dot of any workspace holding a focused window
@@ -770,7 +779,9 @@ on `<html>` / a CSS variable):
 | `orb_react` | `voice`, `tools`, `both` (default) | What the dots follow: the audio (`voice:level` while listening or speaking), the assistant's work (`agent:step` from `dockStep.js`, which carries the running tool's `action` — the server sends it with the SSE `step` event), or both — tools win while they run. |
 
 The dots are the bar's **only** effect: there is no audio shadow and no status
-glyph inside it any more (the step line lives in the bubble above). The grid
+glyph inside it any more, and no step text above it: the dots draw each
+step (the text bubble that hung above the bar is gone; the text chat shows
+steps in its own pending bubble). The grid
 runs edge to edge — five rows on a thin bar (more as it grows tall, pitch near
 7px), half a pitch in from every side, so the rounded ends clip the corner
 dots; on a side rail it runs along the bar's long side. At rest a faint wave

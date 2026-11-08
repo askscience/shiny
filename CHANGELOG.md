@@ -4,6 +4,13 @@
 
 ### Fixed
 
+- Voice: the small "Thinking…" bubble above the voice bar is gone. The
+  voice bar's dots already draw every step, and the text chat shows the step
+  in its own pending bubble. The empty pill a voice turn still left above the bar
+  is gone too.
+- Text chat: the thinking, chats and close buttons and the message field
+  have an almost solid plate with a blur, so the conversation scrolling
+  under them no longer shows through and blurs their labels.
 - Appearance: the White accent picked on Ink no longer turns orange on Dusk.
   White cannot be read on a light canvas, so the light theme replaced it with
   its own orange default whatever colour had been chosen. A neutral accent
@@ -62,6 +69,20 @@
 
 ### Changed
 
+- Windows no longer get an accent-coloured border when active. A coloured
+  frame now means focus mode only (the palette frame of the eye button); the
+  active window shows by its title and by stacking.
+- Focus mode has a new entrance: a glowing comet laps the window from the
+  bottom-left corner, the palette frame settles in behind it, and an accent
+  bloom around the window settles into a soft glow that stays while the
+  window is in focus.
+- Focus mode and bring to front are no longer translated alike. In Italian
+  the focus mode is now "focus" ("Metti il plugin in focus"), and every
+  other language was checked: focus mode, bring to front and activating the
+  next window each have their own wording. The English status of the AI
+  raising a window now says "Bringing the window to front…".
+- Kinetic motion no longer draws a line under the focused window's title;
+  the focused title stays at full strength and the others dim.
 - The Sound, Wi-Fi and Bluetooth menus now look like the Battery menu. Each
   opens with its state as one big value (the volume, the Wi-Fi signal, the
   connected device's battery) with the glyph and the switch at its right and the

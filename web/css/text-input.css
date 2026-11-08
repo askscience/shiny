@@ -1,13 +1,9 @@
 /* Compose mode — the chat panel: reply stream + in-panel composer.
    Geometry tokens (--compose-*) live in the theme's tokens.css. */
 
-/* A live voice turn still shows its status pill above the voice bar. */
-body.agent-awaiting #artifact-dock {
-  display: flex !important;
-}
-
-/* Text mode owns its own composer, so the voice dock stands down — this has to
-   come after the voice rule above to win while both classes are set. */
+/* A voice turn no longer forces the dock up: its status text is gone (the
+   voice bar's dots draw the steps), so a forced dock was an empty pill.
+   Text mode owns its own composer, so the voice dock stands down. */
 body.compose-active #artifact-dock {
   display: none !important;
 }

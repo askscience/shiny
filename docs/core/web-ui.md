@@ -85,7 +85,7 @@ The shell is split by concern. Grouped:
 | `agent.js` | Drives `/api/agent` (JSON + SSE), renders replies, answers the terminal `approval` event. |
 | `chatHistory.js` | Conversation list + message bubbles. |
 | `voice.js`, `transcriptGuard.js`, `textInput.js`, `sphere.js` | Voice bar, STT/TTS wiring, the compose chat panel (pending wheel + live step line, "Thinking" fold, image/song blocks, the terminal command approval card, close), the sphere. |
-| `dockStep.js`, `voiceDots.js`, `voiceDotGlyphs.js`, `toolIcons.js` | The assistant's status line and the voice bar: the dock bubble (which re-broadcasts each step, with its tool, as `agent:step`), the bar's dot grid that follows the audio and the tools (four effects, also mounted as the Settings preview), its dot-matrix tool marks, and the tool → catalogue-icon map the tool cards use. |
+| `dockStep.js`, `voiceDots.js`, `voiceDotGlyphs.js`, `toolIcons.js` | The assistant's steps and the voice bar: `dockStep.js` broadcasts each step, with its tool, as `agent:step` (nothing is painted; the old text bubble above the voice bar is gone), the bar's dot grid that follows the audio and the tools (four effects, also mounted as the Settings preview), its dot-matrix tool marks, and the tool → catalogue-icon map the tool cards use. |
 | `thinkToggle.js` | Chat head's brain button + voice-bar menu entry: Ollama thinking on/off, gated by the model's capability (`GET /api/ai/thinking`). |
 | `artifacts.js`, `artifactStore.js` | Artifact cards + dock. |
 | `files.js` | `saveOrDownload` / `openWithPlugin` desktop integration. |
@@ -286,8 +286,9 @@ CSS `linear()` easings and published as `--spring-bouncy|snappy|soft` (+ `-d`
 durations) by `shellMotion.js`, so CSS transitions share the same curves.
 
 `web/ui/motion.css` (loaded after `flow.css`) holds the static half: press
-feedback (a squash that springs back in fluid), the active window (a rule drawn
-under its mono title in kinetic, the others a step back in depth), the spoken
+feedback (a squash that springs back in fluid), the active window (its mono
+title at full strength in kinetic while the others dim, the others a step
+back in depth), the spoken
 words rising as they are said, the voice bar's state label, depth's accent aura
 (`#motion-aura`, following `<html data-voice>`) and pointer parallax, and the
 three theme view transitions (`<html data-vt>` while one runs).

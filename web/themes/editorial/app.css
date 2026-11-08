@@ -155,12 +155,24 @@
   line-height: 1.5;
   letter-spacing: -0.01em;
 }
+/* The head buttons (thinking, chats, close) and the composer float over the
+   thread as it scrolls: an almost solid plate and a blur keep the text under
+   them from showing through. */
+.compose-conversation { --ed-chat-plate: rgba(30, 30, 33, 0.97); --ed-chat-plate-hover: rgb(52, 52, 56); }
+.compose-chats-btn,
 .compose-composer {
-  border-color: transparent;
+  background: var(--ed-chat-plate);
+  backdrop-filter: blur(16px) saturate(1.4);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+}
+.compose-chats-btn { border-color: rgba(255, 255, 255, 0.1); box-shadow: 0 6px 16px -8px rgba(0, 0, 0, 0.6); }
+.compose-chats-btn:hover,
+.compose-chats-btn[disabled]:hover { background: var(--ed-chat-plate-hover); }
+.compose-chats-btn[disabled]:hover { background: var(--ed-chat-plate); }
+.compose-composer {
+  border-color: rgba(255, 255, 255, 0.1);
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
+  box-shadow: 0 -10px 24px -14px rgba(0, 0, 0, 0.7);
 }
 .compose-send { border-radius: 10px; }
 .compose-cot-summary,

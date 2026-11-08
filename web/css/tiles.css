@@ -174,14 +174,12 @@ html[data-window-translucent="1"] .tile {
 /* A plugin window fills its grid cell; with a single plugin it takes the
    whole area but keeps the rounded frame (border + radius). */
 
-/* The active window is marked by the accent border in tiling layouts (below)
-   and by z-order in the floating Windows layout. There is deliberately no
-   animation: a scale pulse on every click reads as the window twitching, and it
-   also fights the drag, which positions the window with a transform. A window
-   in focus mode is excluded — it wears the palette instead (see below). */
-#tile-grid:not(.tile-grid--windows) .tile--focused:not(.tile--plugin-focus) {
-  border-color: var(--accent);
-}
+/* The active window wears no coloured border: colour on a window frame means
+   focus mode (below), and nothing else. The active window reads by its title
+   (motion.css) and by z-order in the floating Windows layout. There is
+   deliberately no animation either: a scale pulse on every click reads as the
+   window twitching, and it fights the drag, which moves the window with a
+   transform. */
 
 /* Focus mode — a deliberate, explicit choice (the eye button, the tray menu or
    the AI), and several windows can carry it at once. Its frame is a 1px hairline
@@ -193,10 +191,12 @@ html[data-window-translucent="1"] .tile {
    Two layers, and the frame is the one that must not fail:
    - `::before` is the frame itself: a plain gradient background plus a plain
      opacity fade. Nothing animated or calculated, so it renders everywhere.
-   - `::after` is the entrance on top of it: a bright accent arc that laps the
-     contour twice and collapses to nothing. Pure enhancement — if the animated
-     custom properties are not available to the engine it simply never draws,
-     and the frame is still there. */
+   - `::after` is the entrance on top of it: a comet (white head, accent tail)
+     that laps the contour once from the bottom-left corner and thins to
+     nothing, while the tile's shadow blooms in the accent and settles into a
+     soft glow. Pure enhancement: if the animated custom properties are not
+     available to the engine the comet never draws, and the frame is still
+     there. */
 @property --focus-sweep { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
 @property --focus-arc { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
 
@@ -224,14 +224,33 @@ html[data-window-translucent="1"] .tile {
 
 #tile-grid .tile--plugin-focus::before {
   background: var(--focus-ring, var(--accent));
-  animation: tile-focus-in 420ms var(--ease-out) 1 both;
+  /* The frame settles in behind the comet (below) as it laps the window. */
+  animation: tile-focus-in 600ms var(--ease-out) 260ms 1 both;
 }
 
+/* The entrance: a comet laps the contour once from the bottom-left corner, a
+   white head with an accent tail that fades out behind it, and thins to
+   nothing as it comes home. */
 #tile-grid .tile--plugin-focus::after {
   background: conic-gradient(from var(--focus-sweep),
-    var(--accent) 0deg calc(var(--focus-arc)),
+    transparent 0deg,
+    color-mix(in srgb, var(--accent) 0%, transparent) 0deg,
+    color-mix(in srgb, var(--accent) 70%, transparent) calc(var(--focus-arc) * 0.8),
+    #ffffff calc(var(--focus-arc) - 1deg),
     transparent calc(var(--focus-arc) + 0.5deg) 360deg);
-  animation: tile-focus-sweep 700ms var(--ease-out) 1 forwards;
+  /* The comet is thicker than the frame it draws, and glows. */
+  padding: 2px;
+  filter: drop-shadow(0 0 4px var(--accent)) drop-shadow(0 0 10px color-mix(in srgb, var(--accent) 60%, transparent));
+  animation: tile-focus-sweep 1100ms cubic-bezier(0.65, 0, 0.35, 1) 1 forwards;
+}
+
+/* Around the window: an accent bloom that swells as the comet sets off and
+   settles into a soft glow while the window stays in focus. The glow sits on
+   the tile's own shadow (outside the clip), after the window shadow. */
+#tile-grid .tile--plugin-focus {
+  --focus-glow: 0 0 34px -12px color-mix(in srgb, var(--accent) 55%, transparent);
+  box-shadow: var(--window-shadow, 0 0 #0000), var(--focus-glow);
+  animation: tile-focus-bloom 1100ms var(--ease-out) 1 both;
 }
 
 @keyframes tile-focus-in {
@@ -239,16 +258,23 @@ html[data-window-translucent="1"] .tile {
   to { opacity: 1; }
 }
 
-/* One calm lap: a 90deg highlight travels the contour once and thins to
-   nothing. Two fast laps on a 1px band read as a flicker, not an entrance. */
 @keyframes tile-focus-sweep {
-  from { --focus-sweep: 0deg; --focus-arc: 90deg; }
-  to { --focus-sweep: 360deg; --focus-arc: 0deg; }
+  0% { --focus-sweep: 225deg; --focus-arc: 0deg; opacity: 1; }
+  30% { --focus-arc: 120deg; }
+  85% { opacity: 1; }
+  100% { --focus-sweep: 585deg; --focus-arc: 0deg; opacity: 0; }
+}
+
+@keyframes tile-focus-bloom {
+  0% { box-shadow: var(--window-shadow, 0 0 #0000), 0 0 0 0 transparent; }
+  35% { box-shadow: var(--window-shadow, 0 0 #0000), 0 0 56px 4px color-mix(in srgb, var(--accent) 45%, transparent); }
+  100% { box-shadow: var(--window-shadow, 0 0 #0000), var(--focus-glow); }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  #tile-grid .tile--plugin-focus { animation: none; }
   #tile-grid .tile--plugin-focus::before { animation: none; }
-  #tile-grid .tile--plugin-focus::after { animation: none; background: none; }
+  #tile-grid .tile--plugin-focus::after { animation: none; background: none; filter: none; }
 }
 
 /* ── Window chrome (title bar + controls) ─────────────────────

@@ -30,7 +30,7 @@ html[data-motion='fluid'] #reply-text .reply-word { transition: transform var(--
 html[data-motion='depth'] #reply-text .reply-word { transform: translateY(0.2em) scale(0.9); filter: blur(6px); }
 html[data-motion='depth'] #reply-text .reply-word.is-said { transform: none; filter: none; }
 
-/* ── Kinetic: titles set in mono capitals, a rule under the active one ── */
+/* ── Kinetic: titles set in mono capitals, the inactive ones dimmed ── */
 html[data-motion='kinetic'] .tile-header-title {
   position: relative;
   justify-self: center;
@@ -45,19 +45,7 @@ html[data-motion='kinetic'] .tile-header-title {
   text-transform: uppercase;
   transition: opacity 0.5s var(--ease-out);
 }
-html[data-motion='kinetic'] .tile-header-title::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 1px;
-  background: currentColor;
-  transform: scaleX(0);
-  transform-origin: 100% 50%;
-  transition: transform 0.7s var(--ease-cinematic, cubic-bezier(0.76, 0, 0.24, 1));
-}
-html[data-motion='kinetic'] .tile--focused .tile-header-title::after { transform: scaleX(1); transform-origin: 0 50%; }
+/* The focused window reads by its full-strength title; no underline under it. */
 html[data-motion='kinetic'] .tile:not(.tile--focused) .tile-header-title { opacity: 0.55; }
 html[data-motion='kinetic'] :is([data-ui-control], .ui-btn, .tile-header-btn, .hud-plugin-btn, .icon-btn):active { scale: 0.95; }
 
