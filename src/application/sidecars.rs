@@ -13,7 +13,9 @@ use std::process::{Child, Command, Stdio};
 /// to plain `bash` where those tools are missing.
 fn launcher(script: &str) -> Command {
     let has = |tool: &str| {
-        ["/usr/bin", "/bin"].iter().any(|dir| std::path::Path::new(dir).join(tool).exists())
+        ["/usr/bin", "/bin"]
+            .iter()
+            .any(|dir| std::path::Path::new(dir).join(tool).exists())
     };
     let mut cmd;
     if has("nice") {
@@ -62,8 +64,7 @@ pub fn spawn_supertonic_sidecar(config: &Config) {
         .unwrap_or(7788);
 
     let mut cmd = launcher("voice/start_supertonic.sh");
-    cmd
-        .env("SUPERTONIC_PORT", port.to_string());
+    cmd.env("SUPERTONIC_PORT", port.to_string());
     if let Some(python) = &config.supertonic_python {
         cmd.env("SUPERTONIC_PYTHON", python);
     }
@@ -102,8 +103,7 @@ pub fn spawn_whisper_sidecar(config: &Config) {
         .unwrap_or(7789);
 
     let mut cmd = launcher("voice/start_whisper.sh");
-    cmd
-        .env("WHISPER_PORT", port.to_string())
+    cmd.env("WHISPER_PORT", port.to_string())
         .env("WHISPER_MODELS_DIR", &config.whisper_models_dir);
     if let Some(python) = &config.whisper_python {
         cmd.env("WHISPER_PYTHON", python);
@@ -140,8 +140,7 @@ pub fn spawn_qwen_tts_sidecar(config: &Config) {
         .unwrap_or(7787);
 
     let mut cmd = launcher("voice/start_qwen_tts.sh");
-    cmd
-        .env("QWEN_TTS_PORT", port.to_string())
+    cmd.env("QWEN_TTS_PORT", port.to_string())
         .env("QWEN_TTS_MODELS_DIR", &config.qwen_tts_models_dir);
 
     match cmd
@@ -166,8 +165,14 @@ mod launcher_tests {
     #[test]
     fn launches_the_script_at_low_priority() {
         let cmd = launcher("voice/start_whisper.sh");
-        let args: Vec<String> = cmd.get_args().map(|a| a.to_string_lossy().into_owned()).collect();
-        assert_eq!(args.last().map(String::as_str), Some("voice/start_whisper.sh"));
+        let args: Vec<String> = cmd
+            .get_args()
+            .map(|a| a.to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(
+            args.last().map(String::as_str),
+            Some("voice/start_whisper.sh")
+        );
         if std::path::Path::new("/usr/bin/nice").exists() {
             assert_eq!(cmd.get_program(), "nice");
             assert_eq!(&args[..2], ["-n", "10"]);

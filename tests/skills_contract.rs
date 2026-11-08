@@ -77,7 +77,10 @@ async fn every_plugin_hands_the_ai_a_whole_and_correct_skill() {
         checked += 1;
         let skill = state.plugins.skills_for(plugin);
         if skill.trim().is_empty() {
-            problems.push(format!("{plugin}: registers {} tools but hands over no skill", owned.len()));
+            problems.push(format!(
+                "{plugin}: registers {} tools but hands over no skill",
+                owned.len()
+            ));
             continue;
         }
         for tool in &owned {
@@ -87,25 +90,44 @@ async fn every_plugin_hands_the_ai_a_whole_and_correct_skill() {
         }
         for example in action_examples(&skill) {
             if !tools.has(&example) && !core_actions.contains(&example) {
-                problems.push(format!("{plugin}: the skill calls `{example}`, which is no tool"));
+                problems.push(format!(
+                    "{plugin}: the skill calls `{example}`, which is no tool"
+                ));
             }
         }
-        println!("{plugin}: {} tools, skill {} bytes", owned.len(), skill.len());
+        println!(
+            "{plugin}: {} tools, skill {} bytes",
+            owned.len(),
+            skill.len()
+        );
     }
 
-    assert!(checked > 0, "no plugin registered tools — did nothing load?");
     assert!(
-        tools.names_owned_by("word").iter().any(|t| t == "doc_create"),
+        checked > 0,
+        "no plugin registered tools — did nothing load?"
+    );
+    assert!(
+        tools
+            .names_owned_by("word")
+            .iter()
+            .any(|t| t == "doc_create"),
         "word's tool list must carry doc_create"
     );
-    assert!(problems.is_empty(), "skill problems:\n{}", problems.join("\n"));
+    assert!(
+        problems.is_empty(),
+        "skill problems:\n{}",
+        problems.join("\n")
+    );
 }
 
 #[test]
 fn reads_action_examples() {
     let md = r#"`{"action":"doc_create","params":{}}` and {"action": "doc_edit"} but not {"action":"<tool>"}"#;
     let found = action_examples(md);
-    assert_eq!(found, BTreeSet::from(["doc_create".to_string(), "doc_edit".to_string()]));
+    assert_eq!(
+        found,
+        BTreeSet::from(["doc_create".to_string(), "doc_edit".to_string()])
+    );
     assert!(mentions("- `doc_create` — make one", "doc_create"));
     assert!(!mentions("doc_create_many", "doc_create"));
 }
