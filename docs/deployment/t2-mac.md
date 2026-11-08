@@ -42,8 +42,8 @@ EFI loader holds only a stub that reads `/boot/grub/grub.cfg` from the root
 filesystem, and [`liteaura-update-boot`](../../packaging/boot/liteaura-update-boot)
 rewrites that menu from `/etc/liteaura/boot.conf` (root UUID, `t2` or
 `generic`, kernel arguments) through the kernel hooks
-`/etc/kernel/postinst.d/zz-liteaura-boot` and `postrm.d`: the newest kernel boots
-by default and the previous one stays in the menu as a fallback. Generic PCs
+`/etc/kernel/postinst.d/zz-liteaura-boot` and `postrm.d`: it always boots the
+newest installed kernel, with no menu and no wait. Generic PCs
 get the same for Debian's kernels. Without `boot.conf` (the package on another
 Debian) the hook does nothing.
 

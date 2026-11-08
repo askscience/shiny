@@ -659,7 +659,7 @@ fn boot_conf(root_uuid: &str, t2: bool) -> String {
 
 fn static_grub_cfg(root_uuid: &str, version: &str) -> String {
     format!(
-        "set timeout=5\nset default=0\ninsmod part_gpt\ninsmod ext2\ninsmod search_fs_uuid\n\
+        "set timeout=0\nset default=0\ninsmod part_gpt\ninsmod ext2\ninsmod search_fs_uuid\n\
          search --no-floppy --fs-uuid --set=root {root_uuid}\n\
          menuentry \"LiteAura\" {{\n linux /boot/vmlinuz-{version} root=UUID={root_uuid} {KERNEL_CMDLINE}\n initrd /boot/initrd.img-{version}\n}}\n"
     )
