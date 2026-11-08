@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-11-08
+
 ### Fixed
 
 - Voice: the small "Thinking…" bubble above the voice bar is gone. The
