@@ -539,53 +539,300 @@ html[data-motion='depth'] .pw-object-body { transition-timing-function: var(--sp
 }
 
 /* ── Shell file window (filePicker.js) ─────────────────────────────────────
-   Every web app's Open… and the shell's own pickers use this window. Layout
-   only: the chrome is the desktop's (`.tile-header`), the grid is the Files
-   window's (`.files-*`), and every colour comes from the theme tokens. */
+   Every web app's Open… and the shell's own pickers (wallpaper, plugin
+   upload) use this window. Self-contained: it does not lean on the Files
+   window's variables, which only exist inside that window. Desktop: a
+   floating window; phone: a bottom sheet; wearable: a round full-screen
+   panel. Every colour comes from the theme tokens. */
+.file-picker {
+  --fp-tint: color-mix(in srgb, var(--text) 6%, transparent);
+  --fp-tint-hover: color-mix(in srgb, var(--text) 10%, transparent);
+  --fp-radius: 14px;
+  width: min(680px, calc(100vw - 32px));
+  height: min(560px, calc(100vh - 64px));
+}
+.file-picker .ui-floating-body { gap: 10px; padding: 8px 12px 12px; }
+
+/* Path bar: up, then the trail of folders on one line that scrolls. */
 .file-picker-path {
+  flex: none;
   display: flex;
   align-items: center;
-  gap: 6px;
-  min-height: 26px;
+  gap: 4px;
+  min-width: 0;
+  height: 34px;
+  padding: 0 4px 0 2px;
+  border-radius: 999px;
+  background: var(--fp-tint);
 }
-.file-picker-path-text {
+.file-picker-up { flex: none; }
+.file-picker-crumbs {
   flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 12px;
-  color: var(--muted);
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
+.file-picker-crumbs::-webkit-scrollbar { display: none; }
+.file-picker-crumb {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 180px;
+  height: 26px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: 500 12.5px/1 var(--font-body);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--motion-feedback) var(--motion-ease), color var(--motion-feedback) var(--motion-ease);
+}
+.file-picker-crumb > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+button.file-picker-crumb:hover { background: var(--fp-tint); color: var(--text); }
+.file-picker-crumb.is-current { color: var(--text); cursor: default; }
+.file-picker-sep { flex: none; display: inline-flex; color: var(--muted); opacity: 0.6; }
+
+/* Grid: borderless tiles; the name wraps to two lines, never more. */
 .file-picker-grid {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  grid-auto-rows: min-content;
   align-content: start;
-  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
   gap: 14px 10px;
-  padding: 2px;
+  padding: 4px 2px 8px;
+  transition: opacity var(--motion-feedback) var(--motion-ease);
 }
+.file-picker.is-loading .file-picker-grid { opacity: 0.55; }
+.file-picker-grid .ui-empty { grid-column: 1 / -1; align-self: center; }
 .file-picker-entry {
+  position: relative;
+  min-width: 0;
+  height: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 7px;
   padding: 0;
   border: 0;
   background: none;
+  color: var(--text);
   font: inherit;
-  color: inherit;
-  text-align: left;
+  text-align: center;
   cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  outline: none;
 }
-.file-picker-actions {
+.file-picker-thumb {
+  position: relative;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  border-top: 1px solid var(--glass-border);
-  padding-top: 8px;
+  justify-content: center;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border-radius: var(--fp-radius);
+  background: var(--fp-tint);
+  color: var(--text);
+  transition: background var(--motion-feedback) var(--motion-ease),
+    transform var(--motion-feedback) var(--motion-ease);
 }
-.file-picker-summary {
-  margin-right: auto;
-  font-size: 12px;
+/* Folders have no box at all: just the artwork. */
+.file-picker-thumb.is-folder { background: none; }
+.file-picker-thumb.is-folder .ui-icon { width: 44px; height: 44px; }
+.file-picker-entry:hover .file-picker-thumb { background: var(--fp-tint-hover); }
+.file-picker-entry:hover .file-picker-thumb.is-folder { background: var(--fp-tint); }
+.file-picker-entry:active .file-picker-thumb { transform: scale(0.97); }
+.file-picker-thumb::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  pointer-events: none;
+  transition: box-shadow var(--motion-feedback) var(--motion-ease);
+}
+/* Focus and selection rings are drawn inside the box, over the picture, so
+   the grid's edge never clips them. */
+.file-picker-entry:focus-visible .file-picker-thumb::after { box-shadow: inset 0 0 0 2px var(--accent); }
+.file-picker-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform var(--duration-slow, 0.7s) var(--ease-out, ease);
+}
+.file-picker-entry:hover .file-picker-img { transform: scale(1.05); }
+.file-picker-play {
+  position: absolute;
+  inset: auto auto 6px 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.file-picker-ext {
+  position: absolute;
+  right: 7px;
+  bottom: 6px;
+  font: 600 9px/1 var(--font-mono, ui-monospace, monospace);
+  letter-spacing: 0.04em;
   color: var(--muted);
 }
+.file-picker-name {
+  min-width: 0;
+  padding: 0 2px;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  font: 500 12px/1.3 var(--font-body);
+  color: var(--text);
+}
+/* Selected: an accent ring around the picture and a check in its corner. */
+.file-picker-check {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-contrast, #fff);
+  z-index: 2;
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity var(--motion-feedback) var(--motion-ease), transform var(--motion-feedback) var(--motion-ease);
+  pointer-events: none;
+}
+.file-picker-entry.is-selected .file-picker-check { opacity: 1; transform: none; }
+.file-picker-entry.is-selected .file-picker-thumb::after { box-shadow: inset 0 0 0 2.5px var(--accent); }
+.file-picker-entry.is-selected .file-picker-thumb {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.file-picker-entry.is-selected .file-picker-name { color: var(--accent); }
 
-.file-picker-grid .ui-empty { grid-column: 1 / -1; }
+/* Footer: what is picked on the left, the two actions on the right. */
+.file-picker-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--glass-border);
+}
+.file-picker-summary {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 500 12.5px/1.2 var(--font-body);
+  color: var(--text);
+}
+.file-picker-summary.is-empty { color: var(--muted); font-weight: 400; }
+.file-picker-actions .ui-btn { flex: none; }
+
+/* Phone: a bottom sheet across the whole width, no dragging. */
+html[data-phone='1'] .file-picker.ui-floating {
+  left: 0 !important;
+  right: 0;
+  top: auto !important;
+  bottom: 0;
+  width: 100%;
+  height: min(86dvh, calc(100dvh - 24px));
+  border-width: 1px 0 0;
+  border-radius: 24px 24px 0 0;
+}
+/* A phone app's sheet: a grabber instead of a title bar; Cancel closes. */
+html[data-phone='1'] .file-picker .ui-floating-head { display: none; }
+html[data-phone='1'] .file-picker::before {
+  content: '';
+  flex: none;
+  align-self: center;
+  width: 36px;
+  height: 4px;
+  margin: 8px 0 4px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text) 22%, transparent);
+}
+html[data-phone='1'] .file-picker .ui-floating-body {
+  padding: 6px max(14px, env(safe-area-inset-left)) calc(12px + env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-right));
+}
+html[data-phone='1'] .file-picker-path { height: 44px; }
+html[data-phone='1'] .file-picker-crumb { height: 36px; font-size: 14px; }
+html[data-phone='1'] .file-picker-grid { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 16px 10px; }
+html[data-phone='1'] .file-picker-name { font-size: 12.5px; }
+
+/* Wearable: the panel covers the round face; the content stays inside its
+   inscribed circle (about 15% in from each edge), two columns of pictures,
+   one line of name, icon-only actions centred at the bottom. */
+html[data-wearable] .file-picker.ui-floating {
+  left: 0 !important;
+  top: 0 !important;
+  width: 100vw;
+  height: 100vh;
+  border: 0 !important;
+  border-radius: 0;
+  box-shadow: none;
+}
+html[data-wearable] .file-picker .ui-floating-head { display: none; }
+html[data-wearable] .file-picker .ui-floating-body {
+  gap: 6px;
+  padding: 13vmin 15vmin 8vmin;
+}
+html[data-wearable] .file-picker-path { height: 30px; justify-content: center; }
+html[data-wearable] .file-picker-up { width: 28px; height: 28px; }
+html[data-wearable] .file-picker-crumb { max-width: 100px; height: 24px; padding: 0 6px; font-size: 11px; }
+html[data-wearable] .file-picker-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 6px;
+  padding: 2px 0 6px;
+  scroll-snap-type: y proximity;
+}
+html[data-wearable] .file-picker-entry { gap: 3px; scroll-snap-align: start; }
+html[data-wearable] .file-picker-thumb { --fp-radius: 12px; aspect-ratio: 1; }
+html[data-wearable] .file-picker-thumb.is-folder .ui-icon { width: 30px; height: 30px; }
+html[data-wearable] .file-picker-name { -webkit-line-clamp: 1; line-clamp: 1; font-size: 10px; }
+html[data-wearable] .file-picker-ext { display: none; }
+html[data-wearable] .file-picker-summary { display: none; }
+html[data-wearable] .file-picker-actions { justify-content: center; gap: 14px; padding-top: 6px; border-top: 0; }
+html[data-wearable] .file-picker-actions .ui-btn {
+  width: 40px;
+  height: 40px;
+  min-width: 0;
+  min-height: 0;
+  aspect-ratio: 1;
+  padding: 0;
+  gap: 0;
+  border-radius: 50%;
+  justify-content: center;
+}
+html[data-wearable] .file-picker-actions .ui-btn > span:not(.ui-icon, .ui-spinner) { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .file-picker-thumb,
+  .file-picker-img,
+  .file-picker-check { transition: none; }
+}

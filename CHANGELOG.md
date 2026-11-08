@@ -4,6 +4,21 @@
 
 ### Changed
 
+- The shell's file dialog (Open… in the web apps, the wallpaper and plugin
+  upload pickers) is redrawn. Names no longer run into the next row: they wrap
+  to two lines and end with an ellipsis, and the grid no longer depends on the
+  Files window's styles. A path bar with a breadcrumb replaces the bare path,
+  folders come first, videos show a still, the footer names the picked file,
+  and the selection wears an accent ring with a check. On a phone the dialog
+  is a bottom sheet with icon buttons; on the wearable face it fills the round
+  screen with two columns and round actions instead of collapsing to a broken
+  strip.
+- Files quick look: the file keeps no frame or background but now has rounded
+  corners (images, video, PDF pages, slides). The video player is new: a
+  floating glass control pill with an accent play disc, a filled seek track, a
+  volume level that slides out of the speaker, a full-screen toggle (also on
+  double-click) and a big play button while paused, in place of the accent
+  gradient bar over a black box.
 - Debug builds are much smaller: the workspace keeps only file and line
   tables (backtraces still show `file:line`) and dependencies carry no debug
   info. `target/debug` had grown past 200 GB with full debug info on every

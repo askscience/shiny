@@ -146,5 +146,7 @@
   "plugin.files.share.message": "Nachricht",
   "plugin.files.share.e2e": "Ende-zu-Ende-verschlüsselt",
   "plugin.files.share.e2eHint": "Langsamerer Download, kein Fortschrittsbalken.",
-  "plugin.files.share.e2eSet": "Ende-zu-Ende-verschlüsselt"
+  "plugin.files.share.e2eSet": "Ende-zu-Ende-verschlüsselt",
+  "plugin.files.player.play": "Abspielen",
+  "plugin.files.player.volume": "Lautstärke"
 }

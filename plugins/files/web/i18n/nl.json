@@ -146,5 +146,7 @@
   "plugin.files.share.message": "Bericht",
   "plugin.files.share.e2e": "End-to-end versleuteld",
   "plugin.files.share.e2eHint": "Tragere download, geen voortgangsbalk.",
-  "plugin.files.share.e2eSet": "End-to-end versleuteld"
+  "plugin.files.share.e2eSet": "End-to-end versleuteld",
+  "plugin.files.player.play": "Afspelen",
+  "plugin.files.player.volume": "Volume"
 }

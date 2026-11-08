@@ -120,53 +120,73 @@ function folderIconFor(name) {
 /** A live thumbnail for images, the Files artwork for everything else. */
 function thumbFor(entry) {
   const thumb = document.createElement('span');
-  thumb.className = 'files-thumb';
+  thumb.className = 'file-picker-thumb';
+  const glyph = (name) => {
+    thumb.classList.add('is-glyph');
+    thumb.appendChild(icon(name, { size: 30 }));
+  };
   if (entry.kind === 'dir') {
-    thumb.classList.add('files-thumb--folder');
-    thumb.appendChild(icon(folderIconFor(entry.name), { size: 24 }));
+    thumb.classList.add('is-folder');
+    glyph(folderIconFor(entry.name));
     return thumb;
   }
-  if (entry.is_image) {
+  if (entry.is_image || entry.is_video) {
     const img = document.createElement('img');
-    img.className = 'files-grid-img';
+    img.className = 'file-picker-img';
     img.alt = '';
     img.loading = 'lazy';
-    const typeIcon = () => {
-      img.remove();
-      thumb.classList.add('files-thumb--icon');
-      thumb.appendChild(icon(entryIcon(entry), { size: 24 }));
-    };
+    img.decoding = 'async';
     img.addEventListener('error', () => {
-      if (img.dataset.fallback) {
-        typeIcon();
+      if (entry.is_image && !img.dataset.fallback) {
+        img.dataset.fallback = '1';
+        img.src = `/api/files/raw?path=${encodeURIComponent(entry.path)}`;
         return;
       }
-      img.dataset.fallback = '1';
-      img.src = `/api/files/raw?path=${encodeURIComponent(entry.path)}`;
+      img.remove();
+      glyph(entryIcon(entry));
     });
-    img.src = `/api/files/thumb?path=${encodeURIComponent(entry.path)}&size=320`;
+    img.src = entry.is_video
+      ? `/api/files/video-frame?path=${encodeURIComponent(entry.path)}&t=1&size=320`
+      : `/api/files/thumb?path=${encodeURIComponent(entry.path)}&size=320`;
     thumb.appendChild(img);
+    if (entry.is_video) {
+      const play = document.createElement('span');
+      play.className = 'file-picker-play';
+      play.appendChild(icon('ui/play', { size: 12 }));
+      thumb.appendChild(play);
+    }
     return thumb;
   }
-  thumb.classList.add('files-thumb--icon');
-  thumb.appendChild(icon(entryIcon(entry), { size: 24 }));
+  glyph(entryIcon(entry));
+  const ext = String(entry.ext || '').toUpperCase();
+  if (ext && ext.length <= 5) {
+    const badge = document.createElement('span');
+    badge.className = 'file-picker-ext';
+    badge.textContent = ext;
+    thumb.appendChild(badge);
+  }
   return thumb;
 }
 
 /**
- * One grid cell (the Files window's classes, so the grid reads the same):
- * click picks a file / opens a folder, double-click or Enter opens the file.
+ * One grid cell: click picks a file / opens a folder, double-click or Enter
+ * opens the file. The name gets two lines and then an ellipsis, so a long
+ * name never runs into the next row.
  */
 function entryCell(entry, { onPick, onOpen }) {
   const cell = document.createElement('button');
   cell.type = 'button';
-  cell.className = 'files-entry files-entry--grid file-picker-entry';
+  cell.className = 'file-picker-entry';
   cell.dataset.path = entry.path;
+  cell.dataset.kind = entry.kind === 'dir' ? 'dir' : 'file';
   cell.title = entry.name;
   const name = document.createElement('span');
-  name.className = 'files-grid-name';
+  name.className = 'file-picker-name';
   name.textContent = entry.name;
-  cell.append(thumbFor(entry), name);
+  const check = document.createElement('span');
+  check.className = 'file-picker-check';
+  check.appendChild(icon('ui/check', { size: 12 }));
+  cell.append(thumbFor(entry), name, check);
   cell.addEventListener('click', (event) => {
     if (entry.kind === 'dir') onOpen(entry);
     else if (event.detail === 2) onOpen(entry);
@@ -184,10 +204,22 @@ function entryCell(entry, { onPick, onOpen }) {
   return cell;
 }
 
+/** Folders first, then files, each by name (the server order is not promised). */
+function byKindThenName(a, b) {
+  const da = a.kind === 'dir' ? 0 : 1;
+  const db = b.kind === 'dir' ? 0 : 1;
+  if (da !== db) return da - db;
+  return String(a.name).localeCompare(String(b.name), undefined, { numeric: true, sensitivity: 'base' });
+}
+
 /**
  * The picker window. Resolves the chosen entries (`{name, path, kind, ext,
  * size}`), an empty array on Cancel, and `null` when the Files plugin is not
  * available (callers then keep their old behavior).
+ *
+ * Desktop: a floating window. Phone: a bottom sheet (css/plugins.css). The
+ * wearable face: a full-screen round panel whose content stays inside the
+ * inscribed circle.
  */
 export async function pickPaths({ accept = '', multiple = false } = {}) {
   if (!(await pickerAvailable())) return null;
@@ -195,24 +227,27 @@ export async function pickPaths({ accept = '', multiple = false } = {}) {
 
   return new Promise((resolve) => {
     let current = '';
+    let home = '';
     let entries = [];
     let settled = false;
     const chosen = new Map();
 
-    const pathLabel = document.createElement('div');
-    pathLabel.className = 'file-picker-path';
+    // Path bar: up, then the home and each folder as a crumb.
+    const pathBar = document.createElement('div');
+    pathBar.className = 'file-picker-path';
     const upBtn = iconButton({
       icon: 'ui/arrow-up',
       label: t('files.pickerUp', null, 'Up one folder'),
       size: 'sm',
       variant: 'quiet',
     });
-    const pathText = document.createElement('span');
-    pathText.className = 'file-picker-path-text';
-    pathLabel.append(upBtn, pathText);
+    upBtn.classList.add('file-picker-up');
+    const crumbs = document.createElement('nav');
+    crumbs.className = 'file-picker-crumbs';
+    pathBar.append(upBtn, crumbs);
 
     const gridHost = document.createElement('div');
-    gridHost.className = 'files-grid file-picker-grid';
+    gridHost.className = 'file-picker-grid';
     const cells = new Map();
 
     const footer = document.createElement('div');
@@ -221,24 +256,31 @@ export async function pickPaths({ accept = '', multiple = false } = {}) {
     summary.className = 'file-picker-summary';
     const cancelBtn = button({
       label: t('files.pickerCancel', null, 'Cancel'),
+      icon: 'ui/close',
       variant: 'ghost',
       size: 'sm',
     });
+    cancelBtn.classList.add('file-picker-cancel');
     const openBtn = button({
       label: t('files.pickerOpen', null, 'Open'),
+      icon: 'ui/check',
       variant: 'primary',
       size: 'sm',
       disabled: true,
     });
+    openBtn.classList.add('file-picker-open');
     footer.append(summary, cancelBtn, openBtn);
 
     const dialog = floating({
       key: 'file-picker',
       title: t('files.pickerTitle', null, 'Open a file'),
-      body: [pathLabel, gridHost, footer],
+      label: t('files.pickerTitle', null, 'Open a file'),
+      wide: true,
+      body: [pathBar, gridHost, footer],
       removeOnClose: true,
       onClose: () => finish([]),
     });
+    dialog.el.classList.add('file-picker');
 
     function finish(result) {
       if (settled) return;
@@ -258,31 +300,78 @@ export async function pickPaths({ accept = '', multiple = false } = {}) {
       void load(current.includes('/') ? current.replace(/\/[^/]+$/, '') : '');
     });
 
+    function crumb(label, path, isCurrent, iconName = null) {
+      const el = document.createElement(isCurrent ? 'span' : 'button');
+      el.className = 'file-picker-crumb' + (isCurrent ? ' is-current' : '');
+      if (!isCurrent) {
+        el.type = 'button';
+        el.addEventListener('click', () => void load(path));
+      }
+      if (iconName) el.appendChild(icon(iconName, { size: 14 }));
+      const text = document.createElement('span');
+      text.textContent = label;
+      el.appendChild(text);
+      el.title = label;
+      return el;
+    }
+
+    function paintCrumbs() {
+      crumbs.textContent = '';
+      const homeName = String(home || '~').split('/').filter(Boolean).pop() || '~';
+      crumbs.appendChild(crumb(homeName, '', !current, 'ui/home'));
+      const parts = current ? current.split('/') : [];
+      parts.forEach((part, i) => {
+        const sep = document.createElement('span');
+        sep.className = 'file-picker-sep';
+        sep.appendChild(icon('ui/chevron-right', { size: 12 }));
+        crumbs.appendChild(sep);
+        crumbs.appendChild(crumb(part, parts.slice(0, i + 1).join('/'), i === parts.length - 1));
+      });
+      // The current folder is the end of the trail: keep it in view.
+      crumbs.scrollLeft = crumbs.scrollWidth;
+    }
+
     function refresh() {
-      summary.textContent = chosen.size
-        ? t('files.pickerSelected', { count: chosen.size }, `${chosen.size} selected`)
-        : t('files.pickerNoSelection', null, 'Nothing selected');
+      const picked = [...chosen.values()];
+      summary.textContent = picked.length === 1
+        ? picked[0].name
+        : picked.length
+          ? t('files.pickerSelected', { count: picked.length }, `${picked.length} selected`)
+          : t('files.pickerNoSelection', null, 'Nothing selected');
+      summary.classList.toggle('is-empty', !picked.length);
       openBtn.disabled = chosen.size === 0;
-      for (const [path, cell] of cells) cell.classList.toggle('is-selected', chosen.has(path));
+      dialog.el.classList.toggle('has-selection', chosen.size > 0);
+      for (const [path, cell] of cells) {
+        const on = chosen.has(path);
+        cell.classList.toggle('is-selected', on);
+        cell.setAttribute('aria-pressed', String(on));
+      }
     }
 
     function choose(entry) {
-      if (!multiple) chosen.clear();
-      if (chosen.has(entry.path)) chosen.delete(entry.path);
-      else {
-        if (entry.size > MAX_PICK_BYTES) {
-          toast(t('files.pickerTooLarge', { name: entry.name }, `${entry.name} is too large to open`), {
-            type: 'error',
-          });
-          return;
-        }
-        chosen.set(entry.path, entry);
+      if (!multiple) {
+        const was = chosen.has(entry.path);
+        chosen.clear();
+        if (was) { refresh(); return; }
+      } else if (chosen.has(entry.path)) {
+        chosen.delete(entry.path);
+        refresh();
+        return;
       }
+      if (entry.size > MAX_PICK_BYTES) {
+        toast(t('files.pickerTooLarge', { name: entry.name }, `${entry.name} is too large to open`), {
+          type: 'error',
+        });
+        refresh();
+        return;
+      }
+      chosen.set(entry.path, entry);
       refresh();
     }
 
     function render() {
       gridHost.textContent = '';
+      gridHost.scrollTop = 0;
       cells.clear();
       for (const entry of entries) {
         const cell = entryCell(entry, {
@@ -293,7 +382,7 @@ export async function pickPaths({ accept = '', multiple = false } = {}) {
               return;
             }
             if (!chosen.has(picked.path)) choose(picked);
-            close([...chosen.values()]);
+            if (chosen.size) close([...chosen.values()]);
           },
         });
         cells.set(entry.path, cell);
@@ -309,22 +398,26 @@ export async function pickPaths({ accept = '', multiple = false } = {}) {
     }
 
     async function load(path) {
+      dialog.el.classList.add('is-loading');
       try {
         const query = path ? `?path=${encodeURIComponent(path)}` : '';
         const response = await apiFetch(path ? `/api/files/list${query}` : '/api/files/home');
         const data = response?.data ?? {};
         current = data.path ?? '';
-        entries = (data.entries ?? []).filter(
-          (entry) => entry && entry.name && !entry.hidden && (entry.kind === 'dir' || matches(entry)),
-        );
-        pathText.textContent = `${data.home ?? '~'}${current ? `/${current}` : ''}`;
+        if (data.home) home = data.home;
+        entries = (data.entries ?? [])
+          .filter((entry) => entry && entry.name && !entry.hidden && (entry.kind === 'dir' || matches(entry)))
+          .sort(byKindThenName);
         upBtn.disabled = !current;
         chosen.clear();
+        paintCrumbs();
         render();
       } catch (error) {
         toast(error?.message || t('files.pickerUnavailable', null, 'Could not read this folder'), {
           type: 'error',
         });
+      } finally {
+        dialog.el.classList.remove('is-loading');
       }
     }
 

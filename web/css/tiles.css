@@ -7872,34 +7872,38 @@ button.files-path-crumb:hover { color: var(--text); }
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
+  border-radius: var(--radius-md, 16px);
   cursor: zoom-in;
   transition: transform var(--motion-reveal) var(--motion-ease);
 }
 .files-preview-img.is-zoomed { transform: scale(1.8); cursor: zoom-out; }
 
-/* In-app media player (quick look) — a QuickTime-style overlay of app-chrome
-   controls over the file. The bar is absolutely positioned so it can never be
-   clipped by the player's overflow or a short window (which is what hid the
-   buttons before), it wears the theme's accent rather than a baked-in black,
-   and it steps out of the way while playing once the pointer rests. */
+/* In-app media player (quick look). The picture itself is the surface: no
+   black box, no frame, only rounded corners. The controls float over it as
+   a glass pill (theme surface, blurred), a big round play button sits in the
+   middle while paused, and everything steps away once the pointer rests
+   during playback. */
 .files-player {
+  --player-radius: var(--radius-md, 16px);
+  --player-glass: color-mix(in srgb, var(--surface-strong, var(--bg-elevated)) 72%, transparent);
   position: relative;
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   max-width: 100%;
   max-height: 72vh;
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-  background: #000;
-  box-shadow: var(--shadow-glass);
+  background: none;
 }
 .files-player-media {
   display: block;
-  width: 100%;
+  width: auto;
+  height: auto;
   max-width: 100%;
   max-height: 72vh;
-  background: #000;
+  border-radius: var(--player-radius);
+  background: none;
   object-fit: contain;
+  cursor: pointer;
 }
 /* Music preview: same controls, an album-art panel instead of a video stage. */
 .files-player--audio .files-player-media { display: none; }
@@ -7907,96 +7911,193 @@ button.files-path-crumb:hover { color: var(--text); }
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 240px;
-  aspect-ratio: 16 / 9;
+  width: min(420px, 100%);
+  aspect-ratio: 1;
+  border-radius: calc(var(--player-radius) * 1.5);
   color: var(--accent);
   background:
     radial-gradient(120% 120% at 30% 20%, var(--accent-soft), transparent 60%),
     linear-gradient(135deg, color-mix(in srgb, var(--accent) 16%, var(--bg-elevated)), var(--bg));
+  cursor: pointer;
 }
 .files-player-art .ui-icon { width: 72px; height: 72px; opacity: 0.9; }
+
+/* The big play button, centred while paused. */
+.files-player-big {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 68px;
+  height: 68px;
+  padding: 0 0 0 4px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--player-glass);
+  color: var(--text);
+  box-shadow: var(--shadow-glass);
+  backdrop-filter: blur(var(--glass-blur-light, 14px)) saturate(var(--glass-saturate, 160%));
+  -webkit-backdrop-filter: blur(var(--glass-blur-light, 14px)) saturate(var(--glass-saturate, 160%));
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.85);
+  pointer-events: none;
+  cursor: pointer;
+  transition: opacity var(--motion-feedback) var(--motion-ease), transform var(--motion-feedback) var(--motion-ease);
+}
+.files-player.is-paused .files-player-big { opacity: 1; transform: translate(-50%, -50%); pointer-events: auto; }
+.files-player-big:hover { transform: translate(-50%, -50%) scale(1.06); }
+.files-player--audio .files-player-big { display: none; }
+
+/* The control pill: floats near the bottom edge, never wider than 640px. */
 .files-player-bar {
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  left: 50%;
+  bottom: 14px;
+  z-index: 3;
+  width: min(640px, calc(100% - 28px));
+  transform: translateX(-50%);
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 22px 12px 10px;
-  /* Accent chrome: fades in from the file, with the accent's own ink on it. */
-  background: linear-gradient(to top,
-    color-mix(in srgb, var(--accent) 92%, transparent),
-    color-mix(in srgb, var(--accent) 0%, transparent));
-  transition: opacity var(--motion-feedback) var(--motion-ease);
+  gap: 6px;
+  padding: 5px 10px 5px 5px;
+  border-radius: 999px;
+  background: var(--player-glass);
+  color: var(--text);
+  box-shadow: var(--shadow-glass);
+  backdrop-filter: blur(var(--glass-blur-panel, 24px)) saturate(var(--glass-saturate, 160%));
+  -webkit-backdrop-filter: blur(var(--glass-blur-panel, 24px)) saturate(var(--glass-saturate, 160%));
+  transition: opacity var(--motion-feedback) var(--motion-ease), transform var(--motion-feedback) var(--motion-ease);
 }
-.files-player.is-idle .files-player-bar { opacity: 0; pointer-events: none; }
-.files-player-btn {
+.files-player.is-idle .files-player-bar {
+  opacity: 0;
+  transform: translate(-50%, 8px);
+  pointer-events: none;
+}
+.files-player.is-idle .files-player-media { cursor: none; }
+.files-player-btn.ui-btn {
   flex: none;
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
+  min-width: 0;
   padding: 0;
-  border-color: transparent;
-  border-radius: var(--radius-sm);
+  border: 0;
+  border-radius: 50%;
   background: transparent;
   box-shadow: none;
-  color: var(--accent-contrast);
+  color: var(--text);
 }
-.files-player-btn:hover { color: var(--accent-contrast); background: color-mix(in srgb, var(--accent-contrast) 16%, transparent); }
-.files-player-btn.is-muted { color: color-mix(in srgb, var(--accent-contrast) 45%, transparent); }
+.files-player-btn:hover { color: var(--text); background: color-mix(in srgb, var(--text) 10%, transparent); }
+/* Play/pause is the accent disc at the start of the pill. */
+.files-player-bar > .files-player-play { width: 36px; height: 36px; background: var(--accent); color: var(--accent-contrast, #fff); }
+.files-player-bar > .files-player-play:hover { background: color-mix(in srgb, var(--accent) 86%, var(--text)); }
+.files-player-btn.is-muted { position: relative; color: var(--muted); }
+.files-player-btn.is-muted::after {
+  content: '';
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: 50%;
+  height: 1.5px;
+  border-radius: 2px;
+  background: currentColor;
+  transform: rotate(-45deg);
+}
 .files-player-time {
   flex: none;
-  min-width: 42px;
+  min-width: 38px;
   text-align: center;
   font-family: var(--font-mono, ui-monospace, monospace);
   font-size: 11px;
-  color: color-mix(in srgb, var(--accent-contrast) 88%, transparent);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary, var(--muted));
 }
-.files-player-seek {
+/* Sliders: a thin track filled with the accent up to the position; the
+   track thickens and the knob appears under the pointer. */
+.files-player-seek,
+.files-player-volume {
+  --fill: 0%;
   flex: 1;
   min-width: 0;
-  background: color-mix(in srgb, var(--accent-contrast) 24%, transparent);
+  height: 4px;
+  margin: 0;
+  background: linear-gradient(to right, var(--accent) var(--fill), color-mix(in srgb, var(--text) 18%, transparent) var(--fill));
+  transition: height var(--motion-feedback) var(--motion-ease);
 }
-.files-player-seek::-webkit-slider-thumb { background: var(--accent-contrast); }
-.files-player-seek::-moz-range-thumb { background: var(--accent-contrast); }
+.files-player-seek:hover,
+.files-player-volume:hover { height: 6px; }
+.files-player-seek::-webkit-slider-thumb,
+.files-player-volume::-webkit-slider-thumb {
+  width: 12px;
+  height: 12px;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent);
+  transform: scale(0);
+  transition: transform var(--motion-feedback) var(--motion-ease);
+}
+.files-player-seek::-moz-range-thumb,
+.files-player-volume::-moz-range-thumb { width: 12px; height: 12px; background: var(--accent); }
+.files-player-seek:hover::-webkit-slider-thumb,
+.files-player-seek:active::-webkit-slider-thumb,
+.files-player-seek:focus-visible::-webkit-slider-thumb,
+.files-player-volume:hover::-webkit-slider-thumb,
+.files-player-volume:active::-webkit-slider-thumb { transform: scale(1); }
+.files-player-vol { flex: none; display: flex; align-items: center; }
+.files-player-volume {
+  flex: none;
+  width: 0;
+  opacity: 0;
+  transition: width var(--motion-feedback) var(--motion-ease), opacity var(--motion-feedback) var(--motion-ease), height var(--motion-feedback) var(--motion-ease);
+}
+.files-player-vol:hover .files-player-volume,
+.files-player-vol:focus-within .files-player-volume { width: 72px; margin: 0 6px 0 2px; opacity: 1; }
 .files-player-error {
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 58px;
-  padding: 12px 16px;
+  left: 50%;
+  top: 18px;
+  z-index: 3;
+  max-width: calc(100% - 32px);
+  transform: translateX(-50%);
+  padding: 8px 14px;
+  border-radius: 999px;
   font-size: 12px;
-  line-height: 1.5;
+  line-height: 1.4;
   text-align: center;
   color: #fff;
-  background: color-mix(in srgb, var(--error) 60%, rgba(0, 0, 0, 0.6));
+  background: color-mix(in srgb, var(--error) 70%, rgba(0, 0, 0, 0.5));
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 .files-player-error.hidden { display: none; }
-.files-player:fullscreen .files-player-media { max-height: 100vh; }
+.files-player:fullscreen { background: #000; }
+.files-player:fullscreen .files-player-media { max-width: 100vw; max-height: 100vh; border-radius: 0; }
+.files-player:fullscreen .files-player-bar { bottom: 28px; }
 
-/* In the quick look the player fills the surface like any other file. Its bar
-   keeps its own gradient and is lifted clear of the info scrim. */
+/* In the quick look the player fills the surface; the picture keeps its own
+   proportions (and rounded corners) in the middle of it. */
 .files-look .files-player {
   align-self: stretch;
   flex: 1;
   min-height: 0;
   width: 100%;
   max-height: none;
-  border-radius: 0;
-  box-shadow: none;
 }
 .files-look .files-player-media {
-  flex: 1;
-  min-height: 0;
-  max-height: none;
-  width: 100%;
-  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
 }
-.files-look .files-player-art {
-  flex: 1;
-  min-height: 0;
-  aspect-ratio: auto;
+.files-look .files-player-art { max-height: calc(100% - 96px); }
+/* Touch: no hover, so the volume level stays out and the pill gets bigger
+   targets. */
+@media (pointer: coarse) {
+  .files-player-btn { width: 40px; height: 40px; }
+  .files-player-bar > .files-player-play { width: 42px; height: 42px; }
+  .files-player-volume { display: none; }
+  .files-player-seek::-webkit-slider-thumb { transform: scale(1); }
 }
+html[data-phone='1'] .files-player-time:last-of-type { display: none; }
 
 /* Text and documents read directly on the surface: a readable measure, no
    panel, and enough room at the bottom to scroll clear of the scrim. */
@@ -8082,8 +8183,8 @@ button.files-path-crumb:hover { color: var(--text); }
   gap: 14px;
   min-height: 132px;
   padding: 20px 22px;
-  border: 1px solid var(--glass-border);
-  border-radius: 10px;
+  border: 0;
+  border-radius: var(--radius-md, 16px);
   background: var(--bg-elevated);
   text-align: left;
 }
@@ -8121,7 +8222,7 @@ button.files-path-crumb:hover { color: var(--text); }
 .files-preview-pdf-page {
   background: #fff;
   box-shadow: var(--shadow-glass);
-  border-radius: 2px;
+  border-radius: 12px;
   overflow: hidden;
 }
 .files-preview-pdf-page canvas { display: block; max-width: 100%; height: auto; }
@@ -8360,7 +8461,7 @@ html[data-phone='1'] .files-main { min-height: 0; }
 }
 /* A player owns the bottom edge: the details sit above its control bar. */
 .files-look-surface.is-media .files-look-info {
-  padding-bottom: calc(62px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(78px + env(safe-area-inset-bottom, 0px));
 }
 
 /* ════════════════════════════════════════════════════════════════

@@ -154,5 +154,7 @@
   "plugin.files.share.message": "Mensagem",
   "plugin.files.share.e2e": "Criptografado de ponta a ponta",
   "plugin.files.share.e2eHint": "Download mais lento, sem barra de progresso.",
-  "plugin.files.share.e2eSet": "Criptografado de ponta a ponta"
+  "plugin.files.share.e2eSet": "Criptografado de ponta a ponta",
+  "plugin.files.player.play": "Reproduzir",
+  "plugin.files.player.volume": "Volume"
 }

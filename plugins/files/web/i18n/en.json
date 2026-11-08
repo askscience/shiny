@@ -150,5 +150,7 @@
   "plugin.files.share.message": "Message",
   "plugin.files.share.e2e": "End-to-end encrypted",
   "plugin.files.share.e2eHint": "Slower download, no progress bar.",
-  "plugin.files.share.e2eSet": "End-to-end encrypted"
+  "plugin.files.share.e2eSet": "End-to-end encrypted",
+  "plugin.files.player.play": "Play",
+  "plugin.files.player.volume": "Volume"
 }

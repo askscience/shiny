@@ -158,5 +158,7 @@
   "plugin.files.share.message": "Messaggio",
   "plugin.files.share.e2e": "Cifrato end-to-end",
   "plugin.files.share.e2eHint": "Download più lento, senza barra di avanzamento.",
-  "plugin.files.share.e2eSet": "Cifrato end-to-end"
+  "plugin.files.share.e2eSet": "Cifrato end-to-end",
+  "plugin.files.player.play": "Riproduci",
+  "plugin.files.player.volume": "Volume"
 }

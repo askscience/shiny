@@ -1351,12 +1351,12 @@ function buildMediaPlayer(entry, { audio = false } = {}) {
 
   const bar = toolbar([], { className: 'files-player-bar' });
 
-  const playBtn = button({ variant: 'ghost', onClick: () => togglePlay() });
-  playBtn.classList.add('files-player-btn');
-  // A dedicated icon node: `setIcon` on the button itself replaced the whole
-  // button content and could leave it blank.
-  const playIcon = icon('ui/play', { size: 16 });
-  playBtn.appendChild(playIcon);
+  // Icon buttons from the library; `setIcon` repaints their own icon node
+  // (on the button itself it replaced the whole content and could blank it).
+  const playBtn = iconButton({ icon: 'ui/play', iconSize: 16, label: t('plugin.files.player.play', null, 'Play'),
+    onClick: () => togglePlay() });
+  playBtn.classList.add('files-player-btn', 'files-player-play');
+  const playIcon = playBtn.querySelector('.ui-icon');
 
   const curEl = document.createElement('span');
   curEl.className = 'files-player-time';
@@ -1374,24 +1374,56 @@ function buildMediaPlayer(entry, { audio = false } = {}) {
   durEl.className = 'files-player-time';
   durEl.textContent = '0:00';
 
-  const muteBtn = button({ icon: 'ui/volume', variant: 'ghost', onClick: () => {
+  const muteBtn = iconButton({ icon: 'ui/volume', iconSize: 16, label: t('plugin.files.player.mute', null, 'Mute'), onClick: () => {
     media.muted = !media.muted;
+    if (!media.muted && media.volume === 0) media.volume = 0.6;
     syncVolume();
   } });
   muteBtn.classList.add('files-player-btn');
-  muteBtn.title = t('plugin.files.player.mute', null, 'Mute');
-  muteBtn.setAttribute('aria-label', t('plugin.files.player.mute', null, 'Mute'));
+
+  // The level slides out of the speaker button under the pointer.
+  const volume = uiSlider();
+  volume.min = '0';
+  volume.max = '100';
+  volume.step = '1';
+  volume.classList.add('files-player-volume');
+  volume.setAttribute('aria-label', t('plugin.files.player.volume', null, 'Volume'));
+  volume.addEventListener('input', () => {
+    media.volume = Number(volume.value) / 100;
+    media.muted = media.volume === 0;
+    syncVolume();
+  });
+  const volumeGroup = document.createElement('div');
+  volumeGroup.className = 'files-player-vol';
+  volumeGroup.append(muteBtn, volume);
 
   function syncVolume() {
-    muteBtn.classList.toggle('is-muted', media.muted || media.volume === 0);
+    const silent = media.muted || media.volume === 0;
+    muteBtn.classList.toggle('is-muted', silent);
+    const level = silent ? 0 : Math.round(media.volume * 100);
+    volume.value = String(level);
+    volume.style.setProperty('--fill', `${level}%`);
   }
+  media.addEventListener('volumechange', syncVolume);
 
-  const fsBtn = button({ icon: 'ui/expand', variant: 'ghost', onClick: () => toggleFullscreen() });
+  const fsBtn = iconButton({ icon: 'ui/expand', iconSize: 16,
+    label: t('plugin.files.player.fullscreen', null, 'Full screen'), onClick: () => toggleFullscreen() });
   fsBtn.classList.add('files-player-btn');
-  fsBtn.title = t('plugin.files.player.fullscreen', null, 'Full screen');
-  fsBtn.setAttribute('aria-label', t('plugin.files.player.fullscreen', null, 'Full screen'));
+  const fsIcon = fsBtn.querySelector('.ui-icon');
 
-  bar.append(playBtn, curEl, seek, durEl, muteBtn, fsBtn);
+  bar.append(playBtn, curEl, seek, durEl, volumeGroup, fsBtn);
+
+  // A big round play button in the middle while the file is paused.
+  const bigPlay = document.createElement('button');
+  bigPlay.type = 'button';
+  bigPlay.className = 'files-player-big';
+  bigPlay.setAttribute('aria-label', t('plugin.files.player.play', null, 'Play'));
+  const bigIcon = icon('ui/play', { size: 28 });
+  bigPlay.appendChild(bigIcon);
+  bigPlay.addEventListener('click', (event) => {
+    event.stopPropagation();
+    togglePlay();
+  });
 
   // The controls are a hover affordance: they follow the pointer and step out
   // of the way once it rests — but only while the file is playing, since a
@@ -1446,13 +1478,26 @@ function buildMediaPlayer(entry, { audio = false } = {}) {
   }
   function syncPlay() {
     void setIcon(playIcon, media.paused ? 'ui/play' : 'ui/pause', { size: 16 });
+    wrap.classList.toggle('is-paused', media.paused);
     showBar();   // play/pause is worth seeing; paused keeps the bar up
+  }
+  function syncFullscreen() {
+    const on = document.fullscreenElement === wrap;
+    wrap.classList.toggle('is-fullscreen', on);
+    void setIcon(fsIcon, on ? 'ui/compress' : 'ui/expand', { size: 16 });
+  }
+  document.addEventListener('fullscreenchange', () => {
+    if (wrap.isConnected) syncFullscreen();
+  });
+  function paintSeek() {
+    seek.style.setProperty('--fill', `${Number(seek.value) / 10}%`);
   }
   function syncTime() {
     if (!scrubbing) {
       if (Number.isFinite(media.duration) && media.duration > 0) duration = media.duration;
       const pos = duration ? (media.currentTime / duration) * 1000 : 0;
       seek.value = String(Math.max(0, Math.min(1000, Math.round(pos))));
+      paintSeek();
       curEl.textContent = fmtClock(media.currentTime);
     }
     durEl.textContent = fmtClock(duration);
@@ -1486,6 +1531,7 @@ function buildMediaPlayer(entry, { audio = false } = {}) {
 
   seek.addEventListener('pointerdown', () => { scrubbing = true; });
   seek.addEventListener('input', () => {
+    paintSeek();
     if (duration) curEl.textContent = fmtClock((Number(seek.value) / 1000) * duration);
   });
   const commitSeek = () => {
@@ -1500,11 +1546,15 @@ function buildMediaPlayer(entry, { audio = false } = {}) {
     art.className = 'files-player-art';
     art.appendChild(icon('ui/music', { size: 72 }));
     art.addEventListener('click', togglePlay);
-    wrap.append(media, art, errorBox, bar);
+    wrap.append(media, art, bigPlay, errorBox, bar);
   } else {
     media.addEventListener('click', togglePlay);
-    wrap.append(media, errorBox, bar);
+    media.addEventListener('dblclick', toggleFullscreen);
+    wrap.append(media, bigPlay, errorBox, bar);
   }
+  wrap.classList.add('is-paused');
+  syncVolume();
+  paintSeek();
 
   // Autoplay on preview. Webviews may block *sound* autoplay without a direct
   // gesture, so if the first attempt is rejected we retry muted (always

@@ -154,5 +154,7 @@
   "plugin.files.share.message": "Message",
   "plugin.files.share.e2e": "Chiffré de bout en bout",
   "plugin.files.share.e2eHint": "Téléchargement plus lent, sans barre de progression.",
-  "plugin.files.share.e2eSet": "Chiffré de bout en bout"
+  "plugin.files.share.e2eSet": "Chiffré de bout en bout",
+  "plugin.files.player.play": "Lire",
+  "plugin.files.player.volume": "Volume"
 }

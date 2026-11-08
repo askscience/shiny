@@ -60,7 +60,8 @@ export default {
 - Styling lives in core CSS — the *Files plugin window* section of
   [`web/css/tiles.css`](../../../web/css/tiles.css) — from theme tokens only
   (the `--ed-*` skin tokens with generic fallbacks). The shell's file picker
-  (`web/js/filePicker.js`) reuses the same grid classes.
+  (`web/js/filePicker.js`) has its own self-contained `file-picker-*` styles in
+  `web/css/plugins.css`, since the Files variables only exist in this window.
 - **Double-click** opens a file: known types open in their owning app
   (`onOpenFromFiles`/`openWithPlugin` in
   [`web/js/files.js`](../../../web/js/files.js)), otherwise the OS handler.
@@ -68,15 +69,22 @@ export default {
   documents (via `/render`), text mini, and a streaming video player using
   byte-ranged `/raw`.
 - The quick-look is a **compact bare lightbox**, not a window: a centered
-  surface (up to 920×620) with no frame or padding, the arrows that step through
+  surface (up to 920×620) with no frame, background or padding; the file
+  itself (image, video, PDF page, slide) wears rounded corners. The arrows that step through
   the folder appear only under the pointer (`← →` do the same from the keyboard),
   and the details ride a gradient mixed from the theme's canvas. Clicking the
   veil outside the surface (or Escape) closes it. `openPreview`/`showPreview`
   reuse the open overlay, so stepping repaints the file instead of rebuilding
   it.
-- Video and music keep their QuickTime-style bar on the accent colour
-  (`--accent`/`--accent-contrast`); it follows the pointer and steps aside while
-  playing (`.files-player.is-idle`).
+- Video and music play under a floating glass control pill (theme surface,
+  blurred): an accent play/pause disc, elapsed time, a seek track filled with
+  the accent up to the position (`--fill`), the duration, the speaker with a
+  volume level that slides out under the pointer, and full screen (double-click
+  on the picture does the same). A big round play button sits in the middle
+  while paused (`.files-player.is-paused`). The video keeps its own
+  proportions with rounded corners and no black box. The pill steps aside
+  while playing once the pointer rests (`.files-player.is-idle`); on touch the
+  buttons grow and the volume level is left to the device.
 - A **`.Trash`** view with restore / empty-trash.
 
 ## Events & integration
