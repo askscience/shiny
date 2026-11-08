@@ -115,6 +115,8 @@
   "chat.approval.allowedChat": "Atļauts šajā tērzēšanā",
   "chat.approval.failed": "Neizdevās nosūtīt izvēli",
   "chat.approval.expired": "Atbilde jau beigusies",
+  "chat.approval.waiting": "Asistents gaida tavu apstiprinājumu",
+  "chat.approval.open": "Atvērt tērzēšanu",
   "chat.imagePending": "Zīmē jūsu attēlu — tas var aizņemt dažas minūtes…",
   "chat.songPending": "Komponē jūsu dziesmu — tas var aizņemt vairākas minūtes…",
   "chat.noChatsYet": "Vēl nav tērzēšanu",

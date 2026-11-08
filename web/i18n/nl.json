@@ -115,6 +115,8 @@
   "chat.approval.allowedChat": "Toegestaan voor deze chat",
   "chat.approval.failed": "Je keuze kon niet worden verzonden",
   "chat.approval.expired": "Beurt beëindigd",
+  "chat.approval.waiting": "De assistent wacht op je bevestiging",
+  "chat.approval.open": "Chat openen",
   "chat.imagePending": "Je afbeelding wordt gemaakt — dit kan een paar minuten duren…",
   "chat.songPending": "Je nummer wordt gecomponeerd — dit kan enkele minuten duren…",
   "chat.noChatsYet": "Nog geen chats",

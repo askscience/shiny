@@ -115,6 +115,8 @@
   "chat.approval.allowedChat": "Permis pentru acest chat",
   "chat.approval.failed": "Nu s-a putut trimite alegerea ta",
   "chat.approval.expired": "Răspunsul s-a încheiat",
+  "chat.approval.waiting": "Asistentul așteaptă confirmarea ta",
+  "chat.approval.open": "Deschide chatul",
   "chat.imagePending": "Se pictează imaginea — poate dura câteva minute…",
   "chat.songPending": "Se compune melodia — poate dura câteva minute…",
   "chat.noChatsYet": "Încă nicio conversație",

@@ -115,6 +115,8 @@
   "chat.approval.allowedChat": "Selles vestluses lubatud",
   "chat.approval.failed": "Valiku saatmine ebaõnnestus",
   "chat.approval.expired": "Vestlus lõppes",
+  "chat.approval.waiting": "Assistent ootab sinu kinnitust",
+  "chat.approval.open": "Ava vestlus",
   "chat.imagePending": "Pildi maalimine — see võib võtta paar minutit…",
   "chat.songPending": "Loo komponeerimine — see võib võtta mitu minutit…",
   "chat.noChatsYet": "Vestlusi veel pole",

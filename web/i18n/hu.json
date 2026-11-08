@@ -115,6 +115,8 @@
   "chat.approval.allowedChat": "Engedélyezve ebben a beszélgetésben",
   "chat.approval.failed": "Nem sikerült elküldeni a választását",
   "chat.approval.expired": "A válaszkör véget ért",
+  "chat.approval.waiting": "Az asszisztens a megerősítésedre vár",
+  "chat.approval.open": "Csevegés megnyitása",
   "chat.imagePending": "A kép festése folyamatban — ez eltarthat néhány percig…",
   "chat.songPending": "A dal komponálása folyamatban — ez több percig is eltarthat…",
   "chat.noChatsYet": "Még nincsenek beszélgetések",

@@ -115,6 +115,8 @@
   "chat.approval.allowedChat": "Sallittu tässä keskustelussa",
   "chat.approval.failed": "Valintasi lähettäminen epäonnistui",
   "chat.approval.expired": "Vuoro päättyi",
+  "chat.approval.waiting": "Avustaja odottaa vahvistustasi",
+  "chat.approval.open": "Avaa keskustelu",
   "chat.imagePending": "Maalataan kuvaasi — tämä voi kestää muutaman minuutin…",
   "chat.songPending": "Sävelletään kappalettasi — tämä voi kestää useita minuutteja…",
   "chat.noChatsYet": "Ei vielä keskusteluja",

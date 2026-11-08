@@ -115,6 +115,8 @@
   "chat.approval.allowedChat": "Ceadaithe don chomhrá seo",
   "chat.approval.failed": "Níorbh fhéidir do rogha a sheoladh",
   "chat.approval.expired": "Tá an freagra críochnaithe",
+  "chat.approval.waiting": "Tá an cúntóir ag fanacht le do dhearbhú",
+  "chat.approval.open": "Oscail an comhrá",
   "chat.imagePending": "D'íomhá á péinteáil — féadfaidh sé seo cúpla nóiméad a thógáil…",
   "chat.songPending": "D'amhrán á chumadh — féadfaidh sé seo roinnt nóiméad a thógáil…",
   "chat.noChatsYet": "Níl aon chomhrá ann fós",

@@ -115,6 +115,8 @@
   "chat.approval.allowedChat": "Tilladt for denne chat",
   "chat.approval.failed": "Dit valg kunne ikke sendes",
   "chat.approval.expired": "Samtalen sluttede",
+  "chat.approval.waiting": "Assistenten venter på din bekræftelse",
+  "chat.approval.open": "Åbn chatten",
   "chat.imagePending": "Maler dit billede — det kan tage et par minutter…",
   "chat.songPending": "Komponerer din sang — det kan tage flere minutter…",
   "chat.noChatsYet": "Ingen chats endnu",

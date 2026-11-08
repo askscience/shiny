@@ -323,3 +323,20 @@ html:not([data-orb-style='accent']) #sphere-container.state-error { --voice-ink:
 @media (prefers-reduced-motion: reduce) {
   #sphere-container { transition: none; }
 }
+
+/* An answer running behind a closed chat is waiting for the user to allow a
+   command (textInput.js sets `data-agent-asks`). The bar does not shout: a
+   ring in the accent breathes slowly around it until the question is
+   answered, next to the notification that offers to open the chat. */
+html[data-agent-asks='1'] #sphere-container {
+  outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
+  outline-offset: 2px;
+  animation: voiceAsks 2.8s ease-in-out infinite;
+}
+@keyframes voiceAsks {
+  0%, 100% { outline-offset: 2px; outline-color: color-mix(in srgb, var(--accent) 70%, transparent); }
+  50% { outline-offset: 7px; outline-color: color-mix(in srgb, var(--accent) 0%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-agent-asks='1'] #sphere-container { animation: none; }
+}

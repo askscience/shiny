@@ -115,6 +115,8 @@
   "chat.approval.allowedChat": "Für diesen Chat erlaubt",
   "chat.approval.failed": "Ihre Auswahl konnte nicht gesendet werden",
   "chat.approval.expired": "Runde beendet",
+  "chat.approval.waiting": "Der Assistent wartet auf dich",
+  "chat.approval.open": "Chat öffnen",
   "chat.imagePending": "Ihr Bild wird gemalt — das kann ein paar Minuten dauern…",
   "chat.songPending": "Ihr Song wird komponiert — das kann mehrere Minuten dauern…",
   "chat.noChatsYet": "Noch keine Chats",

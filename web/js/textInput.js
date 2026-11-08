@@ -3,7 +3,7 @@ import { setSphereState } from './sphere.js';
 import { currentConversationId, loadConversationMessages, stopActiveTurn, respondToApproval } from './agent.js';
 import { sanitizeHtml } from './sanitize.js';
 import { ensureMarked } from './vendorLoader.js';
-import { icon, button, cardEnter } from '../ui/index.js';
+import { icon, button, cardEnter, notify } from '../ui/index.js';
 import { t } from './i18n.js';
 import { renderToolCard, insertToolCard } from './toolCards.js';
 
@@ -61,12 +61,13 @@ function finishSending() {
   expireApprovalCards();
   showComposeInput();
   setSphereState('idle');
-  field.focus();
+  // An answer that finished behind a closed chat must not pull the focus.
+  if (isOpen) field.focus();
 }
 
 function showComposeInput() {
   setAwaiting(false);
-  requestAnimationFrame(() => field?.focus());
+  requestAnimationFrame(() => { if (isOpen) field?.focus(); });
 }
 
 function hideComposeInput() {
@@ -218,7 +219,44 @@ function settleApprovalCard(card, tone, label) {
   card.querySelector('.compose-approval-actions')?.remove();
   card.appendChild(makeApprovalStatus(tone, label));
   approvalCards.delete(card);
+  syncAsking();
 }
+
+/* An answer running behind a closed chat may stop to ask for a command. The
+ * chat does not jump open: a notification says so (with a button that opens
+ * the chat) and, until the question is answered, the voice bar breathes
+ * slowly (`<html data-agent-asks>`, sphere.css). */
+let approvalNotice = null;
+const OPEN_FOR_APPROVAL = 'chat:open-approval';
+
+function announceApproval(approval) {
+  approvalNotice?.remove();
+  approvalNotice = notify({
+    icon: 'ui/shield',
+    title: t('chat.approval.waiting', null, 'The assistant is waiting for you'),
+    body: approval?.command
+      ? `${t('chat.approval.title', null, 'Run this command?')} ${approval.command}`
+      : t('chat.approval.title', null, 'Run this command?'),
+    actions: [{ label: t('chat.approval.open', null, 'Open chat'), action: OPEN_FOR_APPROVAL }],
+  });
+}
+
+/** The voice bar breathes while a question waits behind a closed chat. */
+function syncAsking() {
+  const asking = approvalCards.size > 0 && !isOpen;
+  if (asking) document.documentElement.dataset.agentAsks = '1';
+  else delete document.documentElement.dataset.agentAsks;
+  if (!approvalCards.size && approvalNotice) {
+    approvalNotice.classList.add('is-leaving');
+    const el = approvalNotice;
+    setTimeout(() => el.remove(), 260);
+    approvalNotice = null;
+  }
+}
+
+window.addEventListener('app:notification-action', (e) => {
+  if (e.detail?.action === OPEN_FOR_APPROVAL) void openTextInput();
+});
 
 function makeApprovalCard(approval) {
   const card = document.createElement('div');
@@ -404,6 +442,7 @@ function clearConversation() {
     ?.querySelectorAll(':scope > .compose-bubble, :scope > .compose-image-block, :scope > .compose-song-block, :scope > .compose-approval, :scope > .tool-card')
     .forEach((b) => b.remove());
   approvalCards.clear();
+  syncAsking();
   renderedMedia.clear();
   assistantBubble = null;
   imagePlaceholder = null;
@@ -773,8 +812,8 @@ export function initTextInput(onSubmit) {
     stopActiveTurn('button');
   });
 
-  // Close is decisive: a running answer is stopped (the core records the
-  // interruption) before the panel slides away.
+  // Close only hides the panel: a running answer carries on (the voice bar's
+  // dots show the work) and is there, still streaming, when the chat reopens.
   closeBtn?.addEventListener('click', (e) => {
     e.stopPropagation();
     closeChat();
@@ -799,6 +838,23 @@ export async function openTextInput() {
   document.body.classList.add('compose-active');
   compose.classList.remove('hidden');
   compose.setAttribute('aria-hidden', 'false');
+
+  syncAsking();
+  // An answer kept running while the chat was closed: show the thread as it
+  // stands (the bubbles kept streaming while hidden) instead of reloading it,
+  // since the server only stores the turn once it is over.
+  if (isSending) {
+    hideComposeInput();
+    setStopVisible(true);
+    ignoreOutsideClick = true;
+    requestAnimationFrame(() => {
+      compose.classList.add('visible');
+      scrollConversation();
+      requestAnimationFrame(() => { ignoreOutsideClick = false; });
+    });
+    return;
+  }
+
   clearConversation();
   field.value = '';
   field.disabled = false;
@@ -829,13 +885,15 @@ export async function openTextInput() {
 export function closeTextInput(force = false) {
   if (!compose || !isOpen || (isSending && !force)) return;
   isOpen = false;
-  isSending = false;
-  setStopVisible(false);
   document.body.classList.remove('compose-active', 'compose-awaiting');
   compose.classList.remove('visible');
   compose.setAttribute('aria-hidden', 'true');
   field.blur();
-  setSphereState('idle');
+  // A running answer goes on behind the closed panel: the voice bar keeps
+  // its working state, so the dots show that something is still happening.
+  if (isSending) setSphereState('processing');
+  else setSphereState('idle');
+  syncAsking();
   setTimeout(() => {
     if (!isOpen) compose.classList.add('hidden');
   }, 300);
@@ -845,10 +903,11 @@ export function isComposeAwaiting() {
   return isSending;
 }
 
-/** Close the chat from anywhere (head button, voice-bar menu): a running
- *  answer is stopped first, so the panel never outlives a half-live turn. */
+/** Close the chat from anywhere (head button, voice-bar menu). A running
+ *  answer is not stopped: it finishes behind the closed panel, the voice bar
+ *  shows the work, and reopening the chat shows it where it stands. Stop (the
+ *  button, Escape while open) is how an answer is abandoned. */
 export function closeChat() {
-  if (isSending) stopActiveTurn('close');
   closeTextInput(true);
 }
 
@@ -901,7 +960,13 @@ async function submitTextInput() {
       onStream: (partial) => {
         streamAssistantBubble(partial);
       },
-      onApproval: (approval) => makeApprovalCard(approval),
+      onApproval: (approval) => {
+        makeApprovalCard(approval);
+        // The answer waits on the user. A closed chat stays closed: a quiet
+        // notification offers to open it and the voice bar breathes.
+        if (!isOpen) announceApproval(approval);
+        syncAsking();
+      },
       onDone: () => {
         field.value = '';
         finishSending();

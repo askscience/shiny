@@ -115,6 +115,8 @@
   "chat.approval.allowedChat": "Ippermess għal din iċ-chat",
   "chat.approval.failed": "L-għażla tiegħek ma setgħetx tintbagħat",
   "chat.approval.expired": "It-tweġiba ntemmet",
+  "chat.approval.waiting": "L-assistent qed jistenna l-konferma tiegħek",
+  "chat.approval.open": "Iftaħ iċ-chat",
   "chat.imagePending": "Qed tinpinġa l-immaġni tiegħek — dan jista' jieħu ftit minuti…",
   "chat.songPending": "Qed tiġi komposta l-kanzunetta tiegħek — dan jista' jieħu diversi minuti…",
   "chat.noChatsYet": "Għad m'hemmx chats",

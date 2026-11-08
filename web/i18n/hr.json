@@ -115,6 +115,8 @@
   "chat.approval.allowedChat": "Dopušteno za ovaj razgovor",
   "chat.approval.failed": "Vaš izbor nije moguće poslati",
   "chat.approval.expired": "Odgovor je završio",
+  "chat.approval.waiting": "Asistent čeka tvoju potvrdu",
+  "chat.approval.open": "Otvori chat",
   "chat.imagePending": "Crtam vašu sliku — to može potrajati nekoliko minuta…",
   "chat.songPending": "Skladam vašu pjesmu — to može potrajati nekoliko minuta…",
   "chat.noChatsYet": "Još nema razgovora",

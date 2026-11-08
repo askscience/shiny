@@ -115,6 +115,8 @@
   "chat.approval.allowedChat": "Dovoljeno v tem klepetu",
   "chat.approval.failed": "Tvoje izbire ni bilo mogoče poslati",
   "chat.approval.expired": "Klepet se je končal",
+  "chat.approval.waiting": "Pomočnik čaka na tvojo potrditev",
+  "chat.approval.open": "Odpri klepet",
   "chat.imagePending": "Slika nastaja — to lahko traja nekaj minut…",
   "chat.songPending": "Pesem nastaja — to lahko traja nekaj minut…",
   "chat.noChatsYet": "Ni še klepetov",

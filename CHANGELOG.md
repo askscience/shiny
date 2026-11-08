@@ -69,6 +69,12 @@
 
 ### Changed
 
+- Closing the text chat no longer stops the assistant. The answer carries
+  on behind the closed panel with the voice bar's dots showing the work, and
+  reopening the chat shows it where it stands, still streaming. Stop (or
+  Escape while the chat is open) still abandons it. If the answer needs you
+  to allow a command meanwhile, the chat stays closed: a notification offers
+  to open it and the voice bar's ring breathes slowly until you answer.
 - Windows no longer get an accent-coloured border when active. A coloured
   frame now means focus mode only (the palette frame of the eye button); the
   active window shows by its title and by stacking.

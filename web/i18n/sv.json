@@ -115,6 +115,8 @@
   "chat.approval.allowedChat": "Tillåtet för den här chatten",
   "chat.approval.failed": "Ditt val kunde inte skickas",
   "chat.approval.expired": "Chatten avslutades",
+  "chat.approval.waiting": "Assistenten väntar på din bekräftelse",
+  "chat.approval.open": "Öppna chatten",
   "chat.imagePending": "Målar din bild — det kan ta några minuter…",
   "chat.songPending": "Komponerar din låt — det kan ta flera minuter…",
   "chat.noChatsYet": "Inga chattar än",

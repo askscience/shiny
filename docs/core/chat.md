@@ -126,6 +126,17 @@ the chat head's brain button (and the voice-bar menu entry) — it shows
 `ui/brain` while thinking is on and the slashed `ui/brain-off` when it is off,
 and disables itself for a model that cannot think. See [web UI](web-ui.md).
 
+**Closing the chat does not stop the answer.** The close button (and
+`closeChat()` from the voice-bar menu) only hides the panel: the turn keeps
+streaming into the hidden thread and the voice bar stays in its working state,
+so its dots show the steps. Reopening while it runs shows the thread as it
+stands (no reload: the server stores the turn only once it ends). Stop, or
+Escape while the panel is open, is how an answer is abandoned. When a command
+approval arrives behind a closed chat, the chat does not jump open: a
+notification (`notify`, with an "Open chat" action) says the assistant is
+waiting, and the voice bar's accent ring breathes (`<html data-agent-asks>`,
+`web/css/sphere.css`) until the question is answered or the turn ends.
+
 **Asking from a window.** `askInChat(text)` (exported by `textInput.js`) opens
 the chat and sends `text` as the user's own message, so the request, its tool
 cards and the answer appear in the thread exactly like a typed one. It returns

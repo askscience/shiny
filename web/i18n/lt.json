@@ -115,6 +115,8 @@
   "chat.approval.allowedChat": "Leista šiame pokalbyje",
   "chat.approval.failed": "Nepavyko išsiųsti pasirinkimo",
   "chat.approval.expired": "Atsakymas jau baigtas",
+  "chat.approval.waiting": "Asistentas laukia tavo patvirtinimo",
+  "chat.approval.open": "Atidaryti pokalbį",
   "chat.imagePending": "Piešiamas jūsų vaizdas — tai gali užtrukti kelias minutes…",
   "chat.songPending": "Komponuojama jūsų daina — tai gali užtrukti kelias minutes…",
   "chat.noChatsYet": "Dar nėra pokalbių",

@@ -115,6 +115,8 @@
   "chat.approval.allowedChat": "Povoleno pro tento chat",
   "chat.approval.failed": "Váš výběr se nepodařilo odeslat",
   "chat.approval.expired": "Odpověď už skončila",
+  "chat.approval.waiting": "Asistent čeká na tvé potvrzení",
+  "chat.approval.open": "Otevřít chat",
   "chat.imagePending": "Maluji váš obrázek — může to trvat několik minut…",
   "chat.songPending": "Skládám vaši skladbu — může to trvat několik minut…",
   "chat.noChatsYet": "Zatím žádné konverzace",
