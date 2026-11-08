@@ -1,5 +1,5 @@
 /**
- * bluetoothMenu.js — the Bluetooth menu: a popover anchored to the top-bar
+ * bluetoothMenu.js — the Bluetooth menu: a popover anchored to the dock
  * chip with the adapter's state, the connected device and the devices BlueZ
  * knows about.
  *
@@ -12,7 +12,7 @@ import { apiFetch } from './api.js';
 import { createMenu } from './menuFactory.js';
 import { t } from './i18n.js';
 import { button, emptyState, iconButton, modal, setIcon, spinner, toast, toggle } from '../ui/index.js';
-import { el, menuFoot, menuHead, menuLabel, menuNote, menuPill, menuPopup, menuRow, menuValue } from './hudMenuShared.js';
+import { el, menuHero, menuLabel, menuNote, menuPopup, menuRow, menuValue } from './hudMenuShared.js';
 import {
   batteryLabel, deviceIconName, signalLabel,
 } from './bluetoothShared.js';
@@ -24,6 +24,7 @@ let powerToggle = null;
 let powerHint = null;
 let scanBtn = null;
 let headIcon = null;
+let hero = null;
 let scanning = false;
 let pollTimer = null;
 let status = null;
@@ -64,22 +65,25 @@ function buildPopup() {
   const { popup, body: bodyEl } = menuPopup('bluetooth-menu', t('hud.bluetooth'));
   body = bodyEl;
 
-  const head = menuHead({ iconName: 'hud/bluetooth', title: t('bluetooth.label') });
-  headIcon = head.iconEl;
-  powerHint = head.hintEl;
+  // The hero: the connected device's battery (or its name) as the big value.
+  hero = menuHero({ iconName: 'hud/bluetooth' });
+  headIcon = hero.iconEl;
+  powerHint = hero.hintEl;
   powerToggle = toggle({ checked: false, onChange: (next) => void setPower(next) });
   powerToggle.setAttribute('aria-label', t('bluetooth.label'));
-  head.actions.appendChild(powerToggle);
+  hero.actions.appendChild(powerToggle);
 
-  scanBtn = menuPill({
+  // Searching fills the Nearby list, so its button ends that label.
+  scanBtn = iconButton({
+    icon: 'ui/refresh',
     label: t('bt.scan'),
-    iconName: 'ui/refresh',
-    arrow: false,
+    variant: 'quiet',
+    size: 'sm',
     onClick: () => void scan(),
   });
-  const { foot } = menuFoot(scanBtn);
+  scanBtn.classList.add('hud-menu-scan');
 
-  popup.append(head.head, body, foot);
+  popup.append(hero.hero, body);
   return popup;
 }
 
@@ -209,10 +213,29 @@ function render() {
     powerToggle.disabled = !s?.available || !s?.present || busy !== null;
   }
   if (scanBtn) scanBtn.disabled = scanning || !scanAllowed();
+  const on = !!(s?.available && s?.present && s?.powered);
+  const linked = on ? (s.devices || []).filter((d) => d.connected) : [];
   if (headIcon) {
-    void setIcon(headIcon, s?.available && s?.present && s?.powered ? 'hud/bluetooth' : 'hud/bluetooth-off', { size: 18 });
+    void setIcon(headIcon, on ? 'hud/bluetooth' : 'hud/bluetooth-off', { size: 22 });
+    headIcon.classList.toggle('is-on', linked.length > 0);
+  }
+  // Like the charge and the volume, the hero shows a number when there is
+  // one: the battery of the connected device that reports it (headphones,
+  // a mouse). The device's name moves to the line under it.
+  const withBattery = linked.find((d) => d.battery != null);
+  if (hero) {
+    if (withBattery) hero.setValue(batteryLabel(withBattery));
+    else {
+      hero.setValue(linked.length === 1
+        ? (linked[0].name || linked[0].address)
+        : linked.length > 1
+          ? t('bt.connectedCount', { count: linked.length }, `${linked.length} connected`)
+          : t('bluetooth.label'), { text: true });
+    }
+    hero.valueEl.classList.toggle('is-off', !linked.length);
   }
   if (powerHint) {
+    const names = linked.map((d) => d.name || d.address);
     powerHint.textContent = !s
       ? t('bt.reading')
       : !s.available
@@ -223,7 +246,10 @@ function render() {
             ? t('bluetooth.off')
             : s.discovering
               ? t('bt.searching')
-              : s.adapter || t('bt.ready');
+              : withBattery || linked.length > 1
+                ? [...names, s.adapter].filter(Boolean).join(' · ')
+                : s.adapter || t('bt.ready');
+    powerHint.title = powerHint.textContent;
   }
 
   if (!s) {
@@ -254,18 +280,19 @@ function render() {
 
   body.appendChild(deviceSection(t('bt.connected'), connected, 'connected'));
   body.appendChild(deviceSection(t('bt.paired'), paired, 'connect'));
-  body.appendChild(deviceSection(t('bt.nearby'), nearby, 'pair', s.discovering ? 'searching' : null));
+  body.appendChild(deviceSection(t('bt.nearby'), nearby, 'pair', s.discovering ? 'searching' : null, scanBtn));
 
   requestAnimationFrame(() => menu.reposition());
 }
 
-function deviceSection(title, devices, action, mode = null) {
+function deviceSection(title, devices, action, mode = null, labelAction = null) {
   const wrap = el('div', 'hud-menu-section');
   wrap.appendChild(menuLabel(
     title,
     devices.length
       ? menuValue(String(devices.length))
       : mode === 'searching' ? spinner({ size: 12 }) : null,
+    labelAction,
   ));
 
   if (!devices.length) {

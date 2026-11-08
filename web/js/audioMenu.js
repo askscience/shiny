@@ -1,7 +1,7 @@
 /**
- * audioMenu.js — the Sound menu: a popover anchored to the top-bar chip with
- * the default output and input devices, their volume and mute state, and the
- * full device lists.
+ * audioMenu.js — the Sound menu: a popover anchored to the dock chip. Its
+ * hero is the output volume; under it the default output and input devices,
+ * their volume and mute state, and the full device lists.
  *
  * Content is `/api/audio/status` (the server caches the PipeWire snapshot),
  * re-read by a short poll while the popover is open. A volume drag updates
@@ -17,7 +17,7 @@ import { apiFetch } from './api.js';
 import { emptyState, iconButton, slider, toast, setIcon } from '../ui/index.js';
 import { currentNode, isHeadphones, nodeIcon, nodeLabel, nodeSubtitle } from './audioShared.js';
 import {
-  el, menuFoot, menuLabel, menuNote, menuPill, menuPopup, menuRow, menuSlider, syncSliderFill,
+  el, menuHero, menuLabel, menuNote, menuPopup, menuRow, menuSlider, syncSliderFill,
 } from './hudMenuShared.js';
 import { createMenu } from './menuFactory.js';
 import { t } from './i18n.js';
@@ -27,6 +27,8 @@ const VOLUME_DEBOUNCE_MS = 120;
 
 let bodyEl = null;
 let hintEl = null;
+/** The hero: the output volume as the big value, the device under it. */
+let hero = null;
 let errorEl = null;
 let loadingEl = null;
 let status = null;
@@ -80,20 +82,26 @@ function buildPopup() {
   });
   errorEl.classList.add('hidden');
 
-  refs.sink = buildSection(t('audio.output'), 'sink');
+  hero = menuHero({ iconName: 'ui/volume' });
+  hintEl = hero.hintEl;
+
+  // The test chime belongs to the output: its button ends that label.
+  const testBtn = iconButton({
+    icon: 'ui/play',
+    label: t('audio.playTestSound'),
+    variant: 'quiet',
+    size: 'sm',
+    onClick: playTest,
+  });
+  refs.sink = buildSection(t('audio.output'), 'sink', testBtn);
   refs.source = buildSection(t('audio.input'), 'source');
 
   bodyEl.append(loadingEl, errorEl, refs.sink.card, refs.source.card);
-
-  const testBtn = menuPill({ label: t('audio.testSound'), iconName: 'ui/play', arrow: false, onClick: playTest });
-  testBtn.title = t('audio.playTestSound');
-  const { foot, hintEl: footHint } = menuFoot(testBtn);
-  hintEl = footHint;
-  popup.append(bodyEl, foot);
+  popup.append(hero.hero, bodyEl);
   return popup;
 }
 
-function buildSection(label, target) {
+function buildSection(label, target, action = null) {
   const card = el('div', 'hud-menu-section hidden');
 
   const muteBtn = iconButton({
@@ -123,7 +131,7 @@ function buildSection(label, target) {
   emptyEl.classList.add('hidden');
   const listEl = el('div', 'hud-menu-list');
 
-  card.append(menuLabel(label), controls, emptyEl, listEl);
+  card.append(menuLabel(label, action), controls, emptyEl, listEl);
   return { card, pctEl, muteBtn, range, emptyEl, listEl, current: null, listSig: '' };
 }
 
@@ -152,6 +160,7 @@ function render(force = false) {
 
   if (!status) {
     loadingEl.classList.remove('hidden');
+    hero.setValue(t('hud.sound'), { text: true });
     return;
   }
   loadingEl.classList.add('hidden');
@@ -162,14 +171,14 @@ function render(force = false) {
   refs.source.card.classList.toggle('hidden', !available);
 
   if (!available) {
+    hero.setValue(t('hud.sound'), { text: true });
+    void setIcon(hero.iconEl, 'hud/volume-muted', { size: 22 });
     hintEl.textContent = status.reason || t('audio.pipewireNotAvailable');
     const text = errorEl.querySelector('.ui-subtitle');
     if (text) text.textContent = status.reason || t('audio.pipewireUnreachable');
     return;
   }
 
-  hintEl.textContent = status.server || 'PipeWire';
-  hintEl.title = hintEl.textContent;
   const sig = JSON.stringify([
     status.default_sink,
     status.default_source,
@@ -181,7 +190,25 @@ function render(force = false) {
 
   updateSection(refs.sink, 'sink', status.sinks, status.default_sink);
   updateSection(refs.source, 'source', status.sources, status.default_source);
+  renderHero();
   requestAnimationFrame(() => menu.reposition());
+}
+
+/** The output in the hero: its volume (or Muted), its glyph, its name. */
+function renderHero(volume = null) {
+  const node = refs.sink.current;
+  if (!node) {
+    hero.setValue(t('audio.noOutputs'), { text: true });
+    hintEl.textContent = status?.server || 'PipeWire';
+    void setIcon(hero.iconEl, nodeIcon(null, 'sink'), { size: 22 });
+    return;
+  }
+  if (node.muted) hero.setValue(t('audio.muted'), { text: true });
+  else hero.setValue(`${volume ?? node.volume_percent}%`);
+  hero.valueEl.classList.toggle('is-off', !!node.muted);
+  void setIcon(hero.iconEl, nodeIcon(node, 'sink'), { size: 22 });
+  hintEl.textContent = [nodeLabel(node), status?.server].filter(Boolean).join(' · ');
+  hintEl.title = hintEl.textContent;
 }
 
 function updateSection(ref, target, nodes, defaultName) {
@@ -263,6 +290,7 @@ function onVolumeInput(target, value) {
     ref.pctEl.textContent = `${value}`;
     ref.pctEl.classList.toggle('is-over', Number(value) > 100);
   }
+  if (target === 'sink') renderHero(value);
   clearTimeout(volumeTimer);
   volumeTimer = setTimeout(() => void pushVolume(target, value), VOLUME_DEBOUNCE_MS);
 }

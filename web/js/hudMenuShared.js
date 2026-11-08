@@ -4,19 +4,21 @@
  * and one `.hud-menu-*` class family (web/css/app.css; the Dusk/Ink skin in
  * web/themes/editorial/app.css turns the panel into a dark glass island).
  *
- *   popup   `.ui-hud-menu-popup.hud-menu` — head, scrolling body, footer
- *   head    leading icon, title + hint, trailing controls (a power switch)
+ *   popup   `.ui-hud-menu-popup.hud-menu` — hero, scrolling body
+ *   hero    the state as one big value, a glyph and a switch at the right,
+ *           a mono hint under it (every menu opens this way, after Battery)
  *   label   small mono capitals ("OUTPUT"), optional trailing count/button
  *   row     40px: leading monochrome icon, title (+ optional sub line),
  *           trailing bits; the selected row ends in an accent check
  *   slider  a row with a leading icon/button, a thin range and a mono value
- *   foot    a mono hint on the left, a grey pill button on the right
+ *   foot    a mono hint on the left, a grey pill button on the right (kept
+ *           for menus outside the four; these put actions in a label)
  *
  * Motion is not decided here: the popup's open/close belongs to
  * menuFactory.js and the shared motion layer.
  */
 
-import { controlButton, icon } from '../ui/index.js';
+import { controlButton, icon, setIcon } from '../ui/index.js';
 
 export function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -48,6 +50,33 @@ export function menuHead({ iconName, title }) {
   const actions = el('div', 'hud-menu-head-actions');
   head.append(iconEl, main, actions);
   return { head, iconEl, titleEl, hintEl, actions };
+}
+
+/**
+ * The hero every status menu opens with (the Battery menu's look): the state
+ * as one big value (a percentage, or a name with `setValue(text, { text:
+ * true })`), a glyph at the right, a mono capitals hint under it.
+ * `actions` sits after the glyph for a power switch.
+ * Returns `{ hero, valueEl, iconEl, hintEl, actions, setValue }`.
+ */
+export function menuHero({ iconName = null } = {}) {
+  const hero = el('div', 'hud-menu-hero');
+  const top = el('div', 'hud-menu-hero-top');
+  const valueEl = el('div', 'hud-menu-hero-value');
+  const end = el('div', 'hud-menu-hero-end');
+  const iconEl = el('span', 'hud-menu-hero-icon');
+  if (iconName) void setIcon(iconEl, iconName, { size: 22 });
+  const actions = el('div', 'hud-menu-head-actions');
+  end.append(iconEl, actions);
+  top.append(valueEl, end);
+  const hintEl = el('div', 'hud-menu-hero-hint');
+  hero.append(top, hintEl);
+  const setValue = (text, { text: isText = false } = {}) => {
+    valueEl.textContent = text;
+    valueEl.title = isText ? text : '';
+    valueEl.classList.toggle('is-text', isText);
+  };
+  return { hero, valueEl, iconEl, hintEl, actions, setValue };
 }
 
 /** Section label in mono capitals; `trailing` nodes sit at its right end. */

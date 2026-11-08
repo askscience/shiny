@@ -249,8 +249,8 @@ html[data-hud-percent='0'] .hud-battery-pct { display: none; }
 .hud-battery.is-dim { color: var(--muted); }
 
 /* ── Status menus: Sound, Network, Bluetooth, Battery ────────────
-   One anatomy for the four top-bar status popovers (js/hudMenuShared.js):
-   a head, a scrolling body of sections and a footer. A section is a mono
+   One anatomy for the four dock status popovers (js/hudMenuShared.js):
+   a hero (the state as one big value) and a scrolling body of sections. A section is a mono
    capital label and 40px rows; the selected row ends in an accent check.
    Colours are tokens only; the Dusk/Ink skin (themes/editorial/app.css)
    makes the panel a dark glass island on both themes. The popup's
@@ -436,7 +436,8 @@ html[data-hud-percent='0'] .hud-battery-pct { display: none; }
 }
 .hud-menu-pill.has-arrow:hover::after { transform: translateX(3px); }
 .hud-menu-pill.is-danger { color: var(--error); }
-.hud-menu-pill.is-loading .ui-icon { animation: hudMenuSpin 0.9s linear infinite; }
+.hud-menu-pill.is-loading .ui-icon,
+.hud-menu-scan.is-loading .ui-icon { animation: hudMenuSpin 0.9s linear infinite; }
 @keyframes hudMenuSpin { to { transform: rotate(360deg); } }
 .hud-menu-actions { display: flex; justify-content: flex-end; gap: 6px; padding: 4px 4px 2px; }
 .hud-menu-actions .hud-menu-pill { height: 28px; padding: 0 12px; font-size: 12px; }
@@ -463,9 +464,12 @@ html[data-hud-percent='0'] .hud-battery-pct { display: none; }
   white-space: nowrap;
 }
 
-/* Battery hero: the charge as a big number, the state under it */
+/* Hero: every status menu opens with its state as one big value (the
+   charge, the volume, the network or device name), a glyph and a switch at
+   the right, and a mono hint under it */
 .hud-menu-hero { flex: none; padding: 8px 10px 10px; }
-.hud-menu-hero-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.hud-menu-hero-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 40px; }
+.hud-menu-hero-end { display: flex; align-items: center; gap: 12px; flex: none; }
 .hud-menu-hero-value {
   color: var(--text);
   font-family: var(--font-display, inherit);
@@ -474,14 +478,26 @@ html[data-hud-percent='0'] .hud-battery-pct { display: none; }
   line-height: 1;
   letter-spacing: -0.04em;
   font-variant-numeric: tabular-nums;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .hud-menu-hero-value.is-text { font-size: 22px; letter-spacing: -0.02em; }
+.hud-menu-hero-value.is-off { color: var(--muted); }
 .hud-menu-hero-value.is-low,
 .hud-menu-hero-icon.is-low { color: var(--warn); }
 .hud-menu-hero-icon { display: inline-flex; color: var(--text-secondary); }
+.hud-menu-hero-icon:empty { display: none; }
+.hud-menu-hero-icon.is-on { color: var(--accent); }
 .hud-menu-hero-icon.is-charging { color: var(--accent); }
+/* A section's own action (scan, test sound) sits at the end of its label */
+.hud-menu-label .ui-btn--icon { margin: -6px -6px -6px 0; }
 .hud-menu-hero-hint {
   margin-top: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--muted);
   font-family: var(--font-mono, ui-monospace, monospace);
   font-size: 10px;

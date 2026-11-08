@@ -4,6 +4,11 @@
 
 ### Fixed
 
+- Appearance: the White accent picked on Ink no longer turns orange on Dusk.
+  White cannot be read on a light canvas, so the light theme replaced it with
+  its own orange default whatever colour had been chosen. A neutral accent
+  now becomes the other theme's neutral (White on Ink, Ink on Dusk), and the
+  stored choice comes back when you switch again.
 - Browser 0.2.3: the start page's news no longer repeats itself or keeps you
   waiting. One article came back once per topic (the topics were searched
   separately and never compared) and the topics themselves were words of that
@@ -57,6 +62,18 @@
 
 ### Changed
 
+- The Sound, Wi-Fi and Bluetooth menus now look like the Battery menu. Each
+  opens with its state as one big value (the volume, the Wi-Fi signal, the
+  connected device's battery) with the glyph and the switch at its right and the
+  details in small capitals under it. The footers are gone: Scan and Test
+  sound are icon buttons at the end of the section they act on, and the
+  network in use is no longer listed twice (its row carries Disconnect and
+  Forget).
+- The top bar is now called the dock everywhere, since it can sit on any
+  screen edge.
+- The power menu (lock, sleep, restart, power off) is titled Session instead
+  of Power, which read as electricity in Italian ("Alimentazione") and other
+  languages.
 - Browser 0.2.2: the address bar completes what you type. Typing `you` fills
   in `youtube.com` (Enter goes there, the next letter replaces it), and a short
   list under the bar offers matching bookmarks, visited pages and past

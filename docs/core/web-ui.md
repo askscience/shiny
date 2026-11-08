@@ -75,7 +75,7 @@ The shell is split by concern. Grouped:
 | `hudNetwork.js`, `networkMenu.js` | Network chip + menu. |
 | `powerMenu.js`, `powerShared.js` | Power actions. |
 | `hudChipsShared.js` | Shared chip rendering. |
-| `hudMenuShared.js` | Shared anatomy of the Sound, Network, Bluetooth and Battery menus (`.hud-menu-*`: head, mono labels, 40px rows with a check, slider rows, pill footer). |
+| `hudMenuShared.js` | Shared anatomy of the Sound, Network, Bluetooth and Battery menus (`.hud-menu-*`: the hero with the state as one big value, mono labels, 40px rows with a check, slider rows). |
 | `display.js` | Interface scale control. |
 
 ### Chat, voice, agent

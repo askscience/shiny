@@ -29,14 +29,15 @@ networks grouped by state, with a password prompt when connecting to a secured
 SSID. No adapter, or no `networkmanager` daemon, and the chip hides itself.
 
 The menu (`web/js/networkMenu.js`) uses the shared status-menu anatomy (see
-[README](README.md#ui-chips-menus-and-preferences)): a head row (Wi-Fi icon,
-interface or state, power switch); **Connected** — the active link with an
-accent check, its details on a sub line and Disconnect / Forget pills;
-**Available networks** — one row per SSID with its `hud/wifi-<level>` icon, a
-lock when secured and the strength in mono, the active one checked, a click
-connects (asking for a password when needed); **Saved networks** (click to
-connect, trash to forget); **Wired** links; and a footer **Scan for networks**
-pill.
+[README](README.md#ui-chips-menus-and-preferences)): a hero (the signal of the
+network in use as the big percentage, or Ethernet by name; the signal glyph
+and the Wi-Fi switch at the right; SSID, security, band, address and speed
+under it, or the reason there is no link); **Available networks**, with the **Scan for
+networks** button at the end of its label: one row per SSID with its
+`hud/wifi-<level>` icon, a lock when secured and the strength in mono, a
+click connects (asking for a password when needed), and the network in use
+checked with Disconnect and Forget buttons instead of its strength;
+**Saved networks** (click to connect, trash to forget); and **Wired** links.
 
 ---
 

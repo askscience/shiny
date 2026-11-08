@@ -96,6 +96,13 @@ can't be listed over HTTP.
   accent: `--focus-ring` (a conic wheel, for the frame of a focused window) and
   `--focus-bar` (the same palette laid out straight, for the tray underline).
   Declare at least two accents or the frame falls back to `--accent`.
+- **Accent across light and dark** — the accent is stored once per user, not
+  per theme. When the stored colour would vanish on your canvas (near-white on
+  a light theme, near-black on a dark one) the theme shows a stand-in and keeps
+  the stored choice: a neutral accent becomes the first neutral preset that
+  reads on your canvas (White on Ink shows as Ink on Dusk), any other colour
+  becomes `defaultAccent`. Declare one neutral accent so a neutral choice
+  survives the switch.
 - **Semantic colors** — `--ok`, `--warn`, `--error` are functional, not
   decorative. Keep them legible.
 - **Shared search field** — `/ui/ui.css` draws the search pill from three

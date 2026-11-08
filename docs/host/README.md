@@ -139,7 +139,8 @@ shown in the menu, not on the chip.
 
 ## UI: chips, menus and preferences
 
-Each host panel is a top-bar chip plus a popover menu:
+Each host panel is a dock chip plus a popover menu (the dock is the bar of
+chips, clock and tray; it can sit on any screen edge):
 
 | Panel | Chip | Menu | Shared helpers |
 |---|---|---|---|
@@ -153,12 +154,14 @@ Each host panel is a top-bar chip plus a popover menu:
 
 The four status menus (Sound, Network, Bluetooth, Battery) share one anatomy,
 built by `web/js/hudMenuShared.js` and styled by the `.hud-menu-*` family in
-`web/css/app.css`: a ~300px panel with an 18px radius; an optional head row
-(icon, title + hint, a power switch); sections introduced by small mono
-capital labels; 40px rows with a 10px radius, a subtle hover, a leading
-monochrome icon and an accent check on the selected row; slider rows (thin
-track, white knob, value in mono); and a footer with a mono hint and a grey
-pill button. On the Dusk and Ink themes the panel is dark glass on both
+`web/css/app.css`: a ~300px panel with an 18px radius that opens with a
+**hero** (`menuHero`, the Battery menu's look: the state as one big value,
+a glyph and a power switch at the right, a mono capitals hint under it);
+sections introduced by small mono capital labels, where a section's own
+action (scan, test sound) is an icon button at the end of its label; 40px
+rows with a 10px radius, a subtle hover, a leading monochrome icon and an
+accent check on the selected row; and slider rows (thin track, white knob,
+value in mono). There is no footer. On the Dusk and Ink themes the panel is dark glass on both
 (`web/themes/editorial/app.css` re-scopes the colour tokens on `.hud-menu`,
 like the bar). Opening and closing motion belongs to `menuFactory.js`, so the
 panel has no CSS entrance of its own.

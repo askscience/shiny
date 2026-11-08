@@ -70,7 +70,26 @@ function usableAccent(accent) {
     ? lum > LIGHT_CANVAS_MAX_INK
     : lum < DARK_CANVAS_MIN_INK;
   if (!invisible) return accent;
+  // A neutral accent (White on Ink) keeps its intent: the theme's own neutral
+  // that reads on this canvas (Ink on Dusk), not the theme's coloured default.
+  if (chroma(accent) < NEUTRAL_CHROMA) {
+    const neutral = (getThemeManifest()?.accents || [])
+      .map((preset) => String(preset?.value || '').trim())
+      .filter((value) => /^#[0-9a-f]{3,8}$/i.test(value) && chroma(value) < NEUTRAL_CHROMA)
+      .find((value) => (mode === 'light'
+        ? luminance(value) <= LIGHT_CANVAS_MAX_INK
+        : luminance(value) >= DARK_CANVAS_MIN_INK));
+    if (neutral) return neutral;
+  }
   return getThemeManifest()?.defaultAccent || DEFAULT_ACCENT;
+}
+
+/** Below this a colour reads as grey, white or black rather than a hue. */
+const NEUTRAL_CHROMA = 0.15;
+
+function chroma(hex) {
+  const [r, g, b] = hexToRgb(hex);
+  return (Math.max(r, g, b) - Math.min(r, g, b)) / 255;
 }
 
 /* Some surfaces stay dark on every theme (the top bar, the chat glass, the
@@ -84,8 +103,7 @@ const ON_DARK_TARGET = 0.5;
 function accentOnDark(accent) {
   if (luminance(accent) >= DARK_CANVAS_MIN_INK) return accent;
   const [r, g, b] = hexToRgb(accent);
-  const chroma = (Math.max(r, g, b) - Math.min(r, g, b)) / 255;
-  if (chroma < 0.15) return '#ffffff';
+  if (chroma(accent) < NEUTRAL_CHROMA) return '#ffffff';
   for (let t = 0.1; t <= 1; t += 0.05) {
     const mix = [r, g, b].map((c) => Math.round(c + (255 - c) * t));
     const hex = `#${mix.map((c) => c.toString(16).padStart(2, '0')).join('')}`;

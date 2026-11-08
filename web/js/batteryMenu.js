@@ -1,5 +1,5 @@
 /**
- * batteryMenu.js — the top-bar battery quick menu: the full power-management
+ * batteryMenu.js — the dock's battery quick menu: the full power-management
  * panel. It shows the live charge, the power mode and switches, and the
  * screen-brightness and keyboard-backlight sliders.
  *
@@ -13,7 +13,7 @@
 
 import { apiFetch } from './api.js';
 import { icon, setIcon, slider, toggle } from '../ui/index.js';
-import { el, menuLabel, menuNote, menuPopup, menuRow, menuSlider } from './hudMenuShared.js';
+import { el, menuHero, menuLabel, menuNote, menuPopup, menuRow, menuSlider } from './hudMenuShared.js';
 import { createMenu } from './menuFactory.js';
 import {
   getAutoPowerSaver, getEffectivePowerMode, getEffectiveSttEngine,
@@ -75,15 +75,12 @@ function buildPopup() {
   body = bodyEl;
 
   // The hero: the charge as a big number, the state on a line under it.
-  const hero = el('div', 'hud-menu-hero');
-  const top = el('div', 'hud-menu-hero-top');
-  headTitle = el('div', 'hud-menu-hero-value');
-  headIcon = el('span', 'hud-menu-hero-icon');
-  top.append(headTitle, headIcon);
-  headHint = el('div', 'hud-menu-hero-hint');
-  hero.append(top, headHint);
+  const hero = menuHero();
+  headTitle = hero.valueEl;
+  headIcon = hero.iconEl;
+  headHint = hero.hintEl;
 
-  popup.append(hero, body);
+  popup.append(hero.hero, body);
   return popup;
 }
 

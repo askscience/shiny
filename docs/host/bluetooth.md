@@ -132,10 +132,14 @@ Full schemas are in [the host API reference](../api/host.md).
   Hides when `!available` or `!present`. Poll fallback 15 s, reconnect 5 s.
 - **Menu** — `web/js/bluetoothMenu.js`. `/api/bluetooth/status` polled every 3 s
   while open. Built from the shared status-menu anatomy (see
-  [README](README.md#ui-chips-menus-and-preferences)): a head row (Bluetooth
-  icon, adapter state, power switch), sections Connected (accent check,
-  battery, disconnect), Paired (click to connect; battery, forget), Nearby
-  (click to pair), and a footer **Scan for devices** pill. Section labels carry
+  [README](README.md#ui-chips-menus-and-preferences)): a hero (the battery of the
+  connected device that reports one as the big percentage, otherwise its
+  name, how many are connected, or "Bluetooth"; the Bluetooth glyph and the
+  power switch at the right; the connected devices' names and the adapter,
+  or the adapter state, under it),
+  sections Connected (accent check, battery, disconnect), Paired (click to
+  connect; battery, forget) and Nearby (click to pair), with the **Scan for
+  devices** button at the end of the Nearby label. Section labels carry
   the count in mono. Rows show a spinner while an action is in flight (`busy`),
   and "Forget" asks for confirmation first.
 - **Shared helpers** — `web/js/bluetoothShared.js` (import-free, Node-testable):
