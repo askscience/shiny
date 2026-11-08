@@ -1,0 +1,18 @@
+[Unit]
+Description=LiteAura T2 bridge network profile (t2-ncm)
+Documentation=man:nmcli(1)
+# t2-ncm's postinst creates the "Apple T2 Bridge" NetworkManager profile, but
+# the image is built without NetworkManager running, so it cannot then. Run it
+# once NetworkManager is up, on T2 hardware, until the profile exists.
+After=NetworkManager.service
+Wants=NetworkManager.service
+ConditionPathExists=/var/lib/dpkg/info/t2-ncm.postinst
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'grep -qs 0x106b /sys/bus/pci/devices/*/vendor || exit 0; nmcli -g NAME connection show 2>/dev/null | grep -qx "Apple T2 Bridge" && exit 0; /var/lib/dpkg/info/t2-ncm.postinst configure || true'
+RemainAfterExit=yes
+TimeoutStartSec=60
+
+[Install]
+WantedBy=multi-user.target

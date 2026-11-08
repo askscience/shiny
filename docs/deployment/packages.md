@@ -131,7 +131,13 @@ release) and installs from it `linux-t2` (the newest T2 kernel, with headers),
 `t2fanrd`, `t2-touchid`, `t2-ncm`, `apple-t2-audio-config`). The live T2 kernel
 is that package's, so nothing comes from the build machine's own kernel, and
 the image keeps the source: an installed T2 Mac updates its kernel with apt
-(the installer removes the T2 kernel and source on other PCs). Apple's Wi-Fi
+(the installer removes the T2 kernel and source on other PCs). The image's
+apt runs with a private `/proc` (DKMS needs it to link the APFS module), and
+while the packages configure, `nmcli` answers with no profiles and
+`systemctl` enables units without starting them (`build_stubs_on`/`off`):
+`t2-ncm` and `t2-touchid` expect a running system. `liteaura-t2-ncm.service`
+creates the "Apple T2 Bridge" profile at boot instead. The module-signing key
+DKMS makes while building is deleted, so no two machines share one. Apple's Wi-Fi
 and Bluetooth firmware is not part of any LiteAura image or package: each Mac
 provides its own (see [T2 MacBook support](t2-mac.md#wi-fi-and-bluetooth-firmware)).
 

@@ -211,10 +211,16 @@ seed_live_account() {
     rm -rf "$seed"
 }
 
+# A private /proc (own PID namespace) is mounted for the command: kernel
+# packages and DKMS builds need it (objtool reads /proc while linking).
 in_root() {
-    unshare -Ur /usr/sbin/chroot "$ROOTFS" /usr/bin/env \
-        PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
-        DEBIAN_FRONTEND=noninteractive "$@"
+    unshare -Urpf --mount bash -c '
+        root=$1; shift
+        mount -t proc proc "$root/proc" 2>/dev/null || true
+        exec /usr/sbin/chroot "$root" /usr/bin/env \
+            PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+            DEBIAN_FRONTEND=noninteractive "$@"
+    ' in_root "$ROOTFS" "$@"
 }
 
 # apt inside the image, rootless: a user namespace maps only root, so apt may
@@ -225,6 +231,40 @@ apt_in_root() {
     in_root apt-get -o APT::Sandbox::User=root \
         -o Dir::Etc::SourceList=/tmp/liteaura-build.list \
         -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold "$@"
+}
+
+# Maintainer scripts of the T2 packages expect a running system: t2-ncm asks
+# NetworkManager (nmcli) for the T2 bridge's profile, t2-touchid runs
+# `systemctl enable --now`. Nothing runs while building, so for the duration
+# of the install nmcli answers "no profiles" (liteaura-t2-ncm.service makes
+# the profile at boot) and systemctl enables units without starting anything.
+# The real tools are set aside and put back.
+build_stubs_on() {
+    local tool
+    for tool in nmcli systemctl; do
+        [ -e "$ROOTFS/usr/bin/$tool" ] && mv "$ROOTFS/usr/bin/$tool" "$ROOTFS/usr/bin/$tool.liteaura-build"
+    done
+    printf '#!/bin/sh\nexit 0\n' > "$ROOTFS/usr/bin/nmcli"
+    cat > "$ROOTFS/usr/bin/systemctl" <<'STUB'
+#!/bin/bash
+args=()
+for a in "$@"; do [ "$a" = --now ] || args+=("$a"); done
+case "${args[0]:-}" in
+    start|stop|restart|try-restart|reload|reload-or-restart|daemon-reload|daemon-reexec|is-active|is-failed) exit 0 ;;
+esac
+[ -x /usr/bin/systemctl.liteaura-build ] || exit 0
+exec /usr/bin/systemctl.liteaura-build "${args[@]}"
+STUB
+    chmod 0755 "$ROOTFS/usr/bin/nmcli" "$ROOTFS/usr/bin/systemctl"
+}
+
+build_stubs_off() {
+    local tool
+    for tool in nmcli systemctl; do
+        rm -f "$ROOTFS/usr/bin/$tool"
+        [ -e "$ROOTFS/usr/bin/$tool.liteaura-build" ] && mv "$ROOTFS/usr/bin/$tool.liteaura-build" "$ROOTFS/usr/bin/$tool"
+    done
+    return 0
 }
 
 stage_package() {
@@ -270,6 +310,8 @@ EOF
     fi
     cp -L /etc/resolv.conf "$resolv"
 
+    build_stubs_on
+
     : >"$alog"
     local ok=1
     # shellcheck disable=SC2086 # EXTRA_PACKAGES is a word list
@@ -277,6 +319,7 @@ EOF
         && apt_in_root install -y --no-install-recommends liteaura liteaura-archive-keyring $EXTRA_PACKAGES $T2_PACKAGES >>"$alog" 2>&1 \
         || ok=0
     apt_in_root clean >>"$alog" 2>&1 || true
+    build_stubs_off
     find "$ROOTFS/var/lib/apt/lists" -maxdepth 1 -type f -delete 2>/dev/null || true
     rm -f "$ROOTFS/tmp/liteaura-build.list" "$resolv"
     [ "$saved_resolv" = 1 ] && mv "$resolv.liteaura-build" "$resolv"
@@ -295,6 +338,9 @@ EOF
     in_root dkms autoinstall -k "$T2_KVER" >>"$alog" 2>&1 || true
     compgen -G "$ROOTFS/lib/modules/$T2_KVER/updates/dkms/apfs.ko*" >/dev/null \
         || die "the APFS driver was not built for $T2_KVER (see $alog)"
+    # DKMS made a module-signing key while building; every installed system
+    # must make its own, never share one from the image.
+    rm -f "$ROOTFS/var/lib/dkms/mok.key" "$ROOTFS/var/lib/dkms/mok.pub"
 
     PKG_VERSION=$(in_root dpkg-query -W -f='${Version}' liteaura 2>/dev/null || true)
     [ -n "$PKG_VERSION" ] || die "liteaura is not installed in the image"
@@ -482,6 +528,8 @@ stage_overlay() {
         "$ROOTFS/etc/systemd/system/multi-user.target.wants/shiny-t2-live-setup.service"
     ln -sf /etc/systemd/system/liteaura-t2-firmware.service \
         "$ROOTFS/etc/systemd/system/multi-user.target.wants/liteaura-t2-firmware.service"
+    ln -sf /etc/systemd/system/liteaura-t2-ncm.service \
+        "$ROOTFS/etc/systemd/system/multi-user.target.wants/liteaura-t2-ncm.service"
     ln -sf /etc/systemd/system/liteaura-collect-logs.service \
         "$ROOTFS/etc/systemd/system/multi-user.target.wants/liteaura-collect-logs.service"
     ln -sf /etc/systemd/system/shiny-live-seed.service \
