@@ -1,0 +1,7 @@
+#!/bin/sh
+# Kernel hook (postinst.d and postrm.d): refresh the LiteAura boot menu after a
+# kernel is installed or removed. Does nothing unless the LiteAura installer
+# set up this machine's bootloader (/etc/liteaura/boot.conf).
+[ -r /etc/liteaura/boot.conf ] || exit 0
+[ -x /usr/sbin/liteaura-update-boot ] || exit 0
+exec /usr/sbin/liteaura-update-boot >&2

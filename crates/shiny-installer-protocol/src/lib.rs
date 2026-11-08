@@ -63,6 +63,9 @@ pub struct HardwareInfo {
     pub product: String,
     pub board: String,
     pub is_t2: bool,
+    /// T2 Macs: the Wi-Fi/Bluetooth firmware is in place (taken from this
+    /// Mac's macOS at boot by t2-firmware.sh; LiteAura never ships it).
+    pub wireless_firmware: bool,
     pub firmware: String,
     pub secure_boot: bool,
     pub gpus: Vec<GpuInfo>,

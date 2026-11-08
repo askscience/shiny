@@ -91,7 +91,15 @@ chmod 0755 "$PKG/usr/libexec/shiny/shiny-greeter" "$PKG/usr/libexec/shiny/shiny-
 if grep -n '@[A-Z_]*@' "$PKG/usr/libexec/shiny/shiny-greeter" "$PKG/usr/libexec/shiny/shiny-session"; then
     die "unsubstituted placeholder in a packaged launcher"
 fi
-printf '%s\n' /etc/pam.d/shiny /etc/geoclue/conf.d/50-liteaura.conf > "$PKG/DEBIAN/conffiles"
+# The boot menu of a system set up by the LiteAura installer follows kernel
+# updates (packaging/boot). The hook does nothing elsewhere: it needs the
+# installer's /etc/liteaura/boot.conf.
+install -m 0755 "$REPO/packaging/boot/liteaura-update-boot" "$PKG/usr/sbin/liteaura-update-boot"
+install -d "$PKG/etc/kernel/postinst.d" "$PKG/etc/kernel/postrm.d"
+install -m 0755 "$REPO/packaging/boot/zz-liteaura-boot" "$PKG/etc/kernel/postinst.d/zz-liteaura-boot"
+install -m 0755 "$REPO/packaging/boot/zz-liteaura-boot" "$PKG/etc/kernel/postrm.d/zz-liteaura-boot"
+printf '%s\n' /etc/pam.d/shiny /etc/geoclue/conf.d/50-liteaura.conf \
+    /etc/kernel/postinst.d/zz-liteaura-boot /etc/kernel/postrm.d/zz-liteaura-boot > "$PKG/DEBIAN/conffiles"
 
 # ── Gokapi (AGPL-3.0): link sharing in the Files plugin ──────────────────
 # Unmodified upstream release binaries, verified against pinned SHA-256s. The

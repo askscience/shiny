@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+### Changed
+
+- T2 Macs: the live image and installed systems get the T2 kernel and the
+  T2 userspace from the T2 repository, which installed T2 Macs keep, so
+  `apt upgrade` brings new T2 kernels. The boot menu follows kernel updates
+  on every machine set up by the installer: the newest kernel starts by
+  default and the previous one stays in the menu as a fallback
+  (`liteaura-update-boot`, run by the kernel hooks).
+- T2 Macs: Wi-Fi and Bluetooth firmware is read at boot from the Mac's own
+  macOS (read-only), or from a copy on its EFI partition, and the installer
+  carries it to the installed system, so erasing macOS keeps Wi-Fi working.
+  The installer says whether it was found; without macOS, `get-apple-firmware`
+  can fetch it later. Installer 0.1.2.
+
 ## [0.2.2] - 2026-11-08
 
 ### Fixed

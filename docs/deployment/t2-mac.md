@@ -9,6 +9,44 @@ Source: [`scripts/`](../../scripts), [`scripts/t2-audio/`](../../scripts/t2-audi
 
 ---
 
+## Wi-Fi and Bluetooth firmware
+
+The Broadcom chips of T2 Macs need Apple's firmware. It is proprietary, so
+LiteAura never ships it: not in the ISO, not in a package. Each Mac provides its
+own, from its own macOS.
+
+- **At boot** (live session and installed system),
+  `liteaura-t2-firmware.service` runs
+  [`t2-firmware.sh`](../../scripts/live/overlay/usr/local/lib/shiny/t2-firmware.sh)
+  on T2 hardware when the firmware is missing. It mounts the internal macOS
+  partition read-only with the APFS driver (`apfs-dkms`, built for the T2
+  kernel), or reads a copy saved on the EFI partition (`firmware-raw.tar.gz`,
+  from `get-apple-firmware copy_to_efi` in macOS). `get-apple-firmware
+  rename_only` (apple-firmware-script, from the T2 repository) renames the files
+  for Linux into `/lib/firmware/brcm`, then the Wi-Fi and Bluetooth drivers
+  reload. It takes a few seconds and nothing is downloaded.
+- **In the live session** the files land in the RAM overlay. The installer
+  (`copy_wireless_firmware` in the helper's engine) copies them to the installed
+  system, so erasing macOS during the install keeps Wi-Fi working. The System
+  version step says whether the firmware was found (`HardwareInfo.wireless_firmware`).
+- **Not found** (no macOS on the disk): LiteAura installs without it, and
+  `get-apple-firmware` in a terminal can fetch it later, including from a macOS
+  recovery image downloaded from Apple (about 1 GB; needs a wired connection or
+  tethering).
+
+## Kernel updates
+
+The T2 kernel is the T2 repository's `linux-t2` package, and installed T2 Macs
+keep that repository, so `apt upgrade` brings new T2 kernels. The installer's
+EFI loader holds only a stub that reads `/boot/grub/grub.cfg` from the root
+filesystem, and [`liteaura-update-boot`](../../packaging/boot/liteaura-update-boot)
+rewrites that menu from `/etc/liteaura/boot.conf` (root UUID, `t2` or
+`generic`, kernel arguments) through the kernel hooks
+`/etc/kernel/postinst.d/zz-liteaura-boot` and `postrm.d`: the newest kernel boots
+by default and the previous one stays in the menu as a fallback. Generic PCs
+get the same for Debian's kernels. Without `boot.conf` (the package on another
+Debian) the hook does nothing.
+
 ## Speaker DSP (MacBookPro16,1)
 
 The 16-inch MacBook Pro's six speakers are tuned by Apple's audio stack on

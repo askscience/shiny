@@ -581,11 +581,16 @@ fn configure_target(
     )?;
 
     let version = kernel_version(target, plan.is_t2())?;
-    let kernel_source = Path::new(medium).join(if plan.is_t2() { "vmlinuz-t2" } else { "vmlinuz" });
-    if !kernel_source.exists() {
-        return Err(format!("kernel image missing: {}", kernel_source.display()));
+    // The T2 kernel arrives in the live rootfs as a package (/boot is
+    // populated); the base Debian kernel may only exist on the medium.
+    let kernel_dest = target.join(format!("boot/vmlinuz-{version}"));
+    if !kernel_dest.exists() {
+        let kernel_source = Path::new(medium).join(if plan.is_t2() { "vmlinuz-t2" } else { "vmlinuz" });
+        if !kernel_source.exists() {
+            return Err(format!("kernel image missing: {}", kernel_source.display()));
+        }
+        install_file(&kernel_source, &kernel_dest)?;
     }
-    install_file(&kernel_source, &target.join(format!("boot/vmlinuz-{version}")))?;
 
     // The live initramfs hook would search for a squashfs on the target.
     for path in [
@@ -614,18 +619,118 @@ fn configure_target(
         ],
     )?;
 
-    let grub_cfg = format!(
-        "set timeout=5\nset default=0\ninsmod part_gpt\ninsmod ext2\ninsmod search_fs_uuid\n\
-         search --no-floppy --fs-uuid --set=root {root_uuid}\n\
-         menuentry \"LiteAura\" {{\n linux /boot/vmlinuz-{version} root=UUID={root_uuid} rw quiet console=tty0 console=ttyS0,115200\n initrd /boot/initrd.img-{version}\n}}\n"
-    );
-    write(target, "boot/grub/grub.cfg", &grub_cfg)?;
     mount_chroot(target)?;
+    if plan.is_t2() {
+        copy_wireless_firmware(target);
+    } else {
+        drop_t2_kernel(target);
+    }
+
+    // The boot menu follows kernel updates: /etc/liteaura/boot.conf says what
+    // this machine boots, and liteaura-update-boot (run here and by the
+    // kernel hooks after every apt kernel install/removal) writes
+    // /boot/grub/grub.cfg from it. The EFI loader only holds a stub that
+    // reads that file (install_bootloader).
+    write(target, "etc/liteaura/boot.conf", &boot_conf(&root_uuid, plan.is_t2()))?;
+    let updated = run(
+        "chroot",
+        &[target.to_str().ok_or("target path")?, "/usr/sbin/liteaura-update-boot"],
+    );
+    if updated.is_err() || !target.join("boot/grub/grub.cfg").exists() {
+        // An older package without the updater: one fixed entry.
+        write(target, "boot/grub/grub.cfg", &static_grub_cfg(&root_uuid, &version))?;
+    }
+    write(target, "boot/grub/liteaura-efi.cfg", &efi_stub_cfg(&root_uuid))?;
     Ok(())
 }
 
+/// Kernel arguments after `root=`, the same on every installed machine.
+const KERNEL_CMDLINE: &str = "rw quiet console=tty0 console=ttyS0,115200";
+
+fn boot_conf(root_uuid: &str, t2: bool) -> String {
+    format!(
+        "# Written by the LiteAura installer; read by liteaura-update-boot.\n\
+         ROOT_UUID={root_uuid}\n\
+         FLAVOR={}\n\
+         CMDLINE=\"{KERNEL_CMDLINE}\"\n",
+        if t2 { "t2" } else { "generic" }
+    )
+}
+
+fn static_grub_cfg(root_uuid: &str, version: &str) -> String {
+    format!(
+        "set timeout=5\nset default=0\ninsmod part_gpt\ninsmod ext2\ninsmod search_fs_uuid\n\
+         search --no-floppy --fs-uuid --set=root {root_uuid}\n\
+         menuentry \"LiteAura\" {{\n linux /boot/vmlinuz-{version} root=UUID={root_uuid} {KERNEL_CMDLINE}\n initrd /boot/initrd.img-{version}\n}}\n"
+    )
+}
+
+/// The configuration built into the EFI loader: find the root filesystem and
+/// read the menu from it, so a kernel update never needs a new loader.
+fn efi_stub_cfg(root_uuid: &str) -> String {
+    format!(
+        "insmod part_gpt\ninsmod ext2\ninsmod search_fs_uuid\ninsmod configfile\n\
+         search --no-floppy --fs-uuid --set=root {root_uuid}\n\
+         set prefix=($root)/boot/grub\n\
+         configfile ($root)/boot/grub/grub.cfg\n"
+    )
+}
+
+/// T2 Macs: the Wi-Fi/Bluetooth firmware this live session took from the
+/// Mac's own macOS (t2-firmware.sh) lives in the RAM overlay, not in the
+/// squashfs that was copied. Carry it to the installed system, so erasing
+/// macOS does not take Wi-Fi with it. Nothing to copy when it was not found.
+const LIVE_FIRMWARE: &str = "/lib/firmware/brcm";
+
+fn copy_wireless_firmware(target: &Path) {
+    let dest = target.join("lib/firmware/brcm");
+    let Ok(entries) = fs::read_dir(LIVE_FIRMWARE) else { return };
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if !is_apple_wireless_firmware(&name) {
+            continue;
+        }
+        let to = dest.join(&name);
+        if !to.exists() {
+            let _ = install_file(&entry.path(), &to);
+        }
+    }
+}
+
+/// The renamed Apple Broadcom files (`brcmfmac4364b3-pcie.apple,borneo.bin`,
+/// `brcmbt4377b3-apple,formosa.bin`, …) plus the two board files the renamer
+/// keeps under their plain names.
+fn is_apple_wireless_firmware(name: &str) -> bool {
+    (name.starts_with("brcm") && name.contains("apple"))
+        || name == "brcmfmac4364b2-pcie.txt"
+        || name == "brcmfmac4364b2-pcie.txcap_blob"
+}
+
+/// A generic PC needs neither the T2 kernel nor its repository: purge the
+/// kernel packages (their hooks run in the mounted chroot) and drop the
+/// source, so apt does not keep updating a kernel this machine never boots.
+fn drop_t2_kernel(target: &Path) {
+    let Some(root) = target.to_str() else { return };
+    let listed = Command::new("chroot")
+        .args([root, "dpkg-query", "-W", "-f", "${Package}\n"])
+        .output();
+    let Ok(listed) = listed else { return };
+    let packages: Vec<String> = String::from_utf8_lossy(&listed.stdout)
+        .lines()
+        .filter(|p| *p == "linux-t2" || ((p.starts_with("linux-image-") || p.starts_with("linux-headers-")) && p.contains("-t2-")))
+        .map(str::to_string)
+        .collect();
+    if !packages.is_empty() {
+        let mut args = vec![root, "dpkg", "--purge"];
+        args.extend(packages.iter().map(String::as_str));
+        let _ = Command::new("chroot").args(&args).output();
+    }
+    let _ = fs::remove_file(target.join("etc/apt/sources.list.d/t2.list"));
+    let _ = fs::remove_file(target.join("usr/share/keyrings/t2-ubuntu-repo.gpg"));
+}
+
 fn install_bootloader(
-    plan: &InstallPlan,
+    _plan: &InstallPlan,
     target: &Path,
     _root: &str,
     esp_mount: &Path,
@@ -634,16 +739,18 @@ fn install_bootloader(
     let efi_dir = esp_mount.join("EFI/BOOT");
     fs::create_dir_all(&efi_dir).map_err(|e| format!("EFI dir: {e}"))?;
     let efi = efi_dir.join("BOOTX64.EFI");
-    let grub_cfg = target.join("boot/grub/grub.cfg");
+    // The loader carries only the stub (configure_target): the real menu is
+    // /boot/grub/grub.cfg on the root filesystem, kept by liteaura-update-boot.
+    let stub = target.join("boot/grub/liteaura-efi.cfg");
     run(
         "grub-mkstandalone",
         &[
             "-O",
             "x86_64-efi",
-            "--modules=part_gpt part_msdos ext2 search_fs_uuid search_fs_file linux normal",
+            "--modules=part_gpt part_msdos ext2 search search_fs_uuid search_fs_file configfile linux normal",
             "-o",
             efi.to_str().ok_or("EFI path")?,
-            &format!("boot/grub/grub.cfg={}", grub_cfg.display()),
+            &format!("boot/grub/grub.cfg={}", stub.display()),
         ],
     )?;
     if !efi.exists() {
@@ -809,6 +916,31 @@ mod tests {
         plan.mode = MODE_MANUAL.into();
         plan.layout.free_extent = extent;
         plan
+    }
+
+    #[test]
+    fn the_boot_menu_is_read_from_the_root_filesystem() {
+        let stub = efi_stub_cfg("abcd-1234");
+        assert!(stub.contains("search --no-floppy --fs-uuid --set=root abcd-1234"));
+        assert!(stub.contains("configfile ($root)/boot/grub/grub.cfg"));
+        assert!(!stub.contains("vmlinuz"), "the stub must not pin a kernel");
+    }
+
+    #[test]
+    fn boot_conf_names_the_flavor_the_updater_follows() {
+        let t2 = boot_conf("u-1", true);
+        assert!(t2.contains("ROOT_UUID=u-1\n") && t2.contains("FLAVOR=t2\n"), "{t2}");
+        assert!(boot_conf("u-1", false).contains("FLAVOR=generic\n"));
+        assert!(t2.contains(&format!("CMDLINE=\"{KERNEL_CMDLINE}\"")));
+    }
+
+    #[test]
+    fn only_apple_wireless_firmware_is_carried_over() {
+        assert!(is_apple_wireless_firmware("brcmfmac4364b3-pcie.apple,borneo.bin"));
+        assert!(is_apple_wireless_firmware("brcmbt4377b3-apple,formosa.ptb"));
+        assert!(is_apple_wireless_firmware("brcmfmac4364b2-pcie.txcap_blob"));
+        assert!(!is_apple_wireless_firmware("brcmfmac43430-sdio.bin"));
+        assert!(!is_apple_wireless_firmware("cypress"));
     }
 
     #[test]

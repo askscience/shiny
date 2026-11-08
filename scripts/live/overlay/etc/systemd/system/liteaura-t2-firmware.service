@@ -1,0 +1,15 @@
+[Unit]
+Description=LiteAura Wi-Fi and Bluetooth firmware from this Mac's macOS (T2)
+Documentation=file:///usr/local/lib/shiny/t2-firmware.sh
+After=local-fs.target systemd-udev-settle.service
+Before=NetworkManager.service bluetooth.service display-manager.service
+ConditionPathExists=/usr/libexec/get-apple-firmware
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/lib/shiny/t2-firmware.sh
+RemainAfterExit=yes
+TimeoutStartSec=60
+
+[Install]
+WantedBy=multi-user.target

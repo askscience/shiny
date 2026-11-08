@@ -124,6 +124,17 @@ target, so the same source is present after installation and `apt upgrade`
 tracks `liteaura` from the first boot. The live session signs in automatically;
 the installed system uses LiteAura's own login screen (`liteaura-seat`).
 
+**T2 Macs.** The same apt run adds the T2 repository
+(`packaging/t2-ubuntu-repo.gpg`; `t2-ubuntu-repo` pages and its `trixie`
+release) and installs from it `linux-t2` (the newest T2 kernel, with headers),
+`apfs-dkms`, `apple-firmware-script` and the T2 userspace (`tiny-dfr`,
+`t2fanrd`, `t2-touchid`, `t2-ncm`, `apple-t2-audio-config`). The live T2 kernel
+is that package's, so nothing comes from the build machine's own kernel, and
+the image keeps the source: an installed T2 Mac updates its kernel with apt
+(the installer removes the T2 kernel and source on other PCs). Apple's Wi-Fi
+and Bluetooth firmware is not part of any LiteAura image or package: each Mac
+provides its own (see [T2 MacBook support](t2-mac.md#wi-fi-and-bluetooth-firmware)).
+
 ```sh
 ./scripts/build-live-iso.sh   # → ~/liteaura-iso/out/liteaura-live-t2-amd64.iso (+ .sha256)
 ```

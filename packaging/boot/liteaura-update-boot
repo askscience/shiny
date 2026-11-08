@@ -1,0 +1,74 @@
+#!/bin/bash
+# liteaura-update-boot: rewrite /boot/grub/grub.cfg from the kernels installed
+# on a system set up by the LiteAura installer, newest first.
+#
+# The installer's EFI loader holds only a stub that finds the root partition
+# and reads /boot/grub/grub.cfg, so this file is the boot menu. Kernel
+# packages call this script through /etc/kernel/postinst.d and postrm.d
+# (zz-liteaura-boot, after initramfs-tools has written the initrd): a kernel
+# update from apt (the T2 repository's linux-t2, or Debian's linux-image-amd64)
+# boots on the next start, and the previous kernel stays in the menu as a
+# fallback.
+#
+# /etc/liteaura/boot.conf, written by the installer, says which kernels this
+# machine boots and how:
+#   ROOT_UUID=…        the root filesystem
+#   FLAVOR=t2|generic  T2 kernels (*-t2-*) or the others
+#   CMDLINE="…"        kernel arguments after root=
+# Without that file (LiteAura installed as a package on another Debian) the
+# script does nothing: the bootloader is the system's own business.
+set -eu
+
+# LITEAURA_BOOT_ROOT points the script at another tree (tests only).
+R=${LITEAURA_BOOT_ROOT:-}
+CONF=$R/etc/liteaura/boot.conf
+[ -r "$CONF" ] || exit 0
+ROOT_UUID=
+FLAVOR=generic
+CMDLINE="rw quiet"
+# shellcheck disable=SC1090
+. "$CONF"
+[ -n "$ROOT_UUID" ] || { echo "liteaura-update-boot: ROOT_UUID missing in $CONF" >&2; exit 1; }
+
+kernels=()
+for image in "$R"/boot/vmlinuz-*; do
+    [ -f "$image" ] || continue
+    version=${image#"$R"/boot/vmlinuz-}
+    case "$version" in
+        *-t2-*) [ "$FLAVOR" = t2 ] || continue ;;
+        *) [ "$FLAVOR" = t2 ] && continue ;;
+    esac
+    [ -f "$R/boot/initrd.img-$version" ] || continue
+    kernels+=("$version")
+done
+[ "${#kernels[@]}" -gt 0 ] || { echo "liteaura-update-boot: no $FLAVOR kernel with an initrd in /boot" >&2; exit 1; }
+mapfile -t kernels < <(printf '%s\n' "${kernels[@]}" | sort -V -r)
+
+out=$R/boot/grub/grub.cfg
+mkdir -p "$R/boot/grub"
+tmp=$(mktemp "$R/boot/grub/grub.cfg.XXXXXX")
+{
+    echo "# Written by liteaura-update-boot from /etc/liteaura/boot.conf; do not edit."
+    echo "set timeout=5"
+    echo "set default=0"
+    echo "insmod part_gpt"
+    echo "insmod ext2"
+    echo "insmod search_fs_uuid"
+    echo "search --no-floppy --fs-uuid --set=root $ROOT_UUID"
+    first=1
+    for version in "${kernels[@]}"; do
+        if [ "$first" = 1 ]; then
+            title="LiteAura"
+            first=0
+        else
+            title="LiteAura (kernel $version)"
+        fi
+        echo "menuentry \"$title\" {"
+        echo "    linux /boot/vmlinuz-$version root=UUID=$ROOT_UUID $CMDLINE"
+        echo "    initrd /boot/initrd.img-$version"
+        echo "}"
+    done
+} > "$tmp"
+chmod 0644 "$tmp"
+mv -f "$tmp" "$out"
+echo "liteaura-update-boot: ${#kernels[@]} kernel(s), default ${kernels[0]}"

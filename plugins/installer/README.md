@@ -12,6 +12,13 @@ It implements:
 - the **real install** (`crates/shiny-installer-helper/src/engine.rs`): partitioning,
   formatting, copying the live system from the squashfs, configuration and the
   bootloader, with progress and cancellation between stages;
+- a boot menu that follows kernel updates: the EFI loader holds a stub that reads
+  `/boot/grub/grub.cfg`, which `liteaura-update-boot` rewrites from
+  `/etc/liteaura/boot.conf` whenever apt installs or removes a kernel;
+- on T2 Macs, the Wi-Fi/Bluetooth firmware the live session read from the Mac's own
+  macOS is copied to the installed system (never shipped; see
+  `docs/deployment/t2-mac.md`); on other PCs the T2 kernel and its repository are
+  removed;
 - a **test mode** (`--dry-run`) that walks the same stages without writing anything.
 
 The live ISO starts the helper **without** `--dry-run`

@@ -1673,6 +1673,18 @@ function renderProfile() {
       T('profile.generic.warnBody', 'Keyboard, trackpad, Wi-Fi, Bluetooth or audio may not work. Choose the T2 Mac version for this computer.'),
     ));
   }
+  // T2 Macs: the Wi-Fi/Bluetooth firmware is Apple's and is never shipped;
+  // the live session reads it from this Mac's macOS at boot and the install
+  // carries it over. Say whether that worked.
+  if (hw.is_t2 && state.profile === 't2') {
+    wrap.appendChild(hw.wireless_firmware
+      ? note('accent', 'ui/network',
+        T('profile.t2.firmwareFoundTitle', 'Wi-Fi and Bluetooth are ready'),
+        T('profile.t2.firmwareFoundBody', 'Their firmware was read from this Mac’s macOS and will be installed with LiteAura.'))
+      : alertBlock('warn',
+        T('profile.t2.firmwareMissingTitle', 'Wi-Fi and Bluetooth firmware not found'),
+        T('profile.t2.firmwareMissingBody', 'It is read from this Mac’s macOS, which was not found. LiteAura installs without it; to turn on Wi-Fi and Bluetooth later, run get-apple-firmware in a terminal.')));
+  }
   wrap.appendChild(note(
     'accent',
     'ui/layers',

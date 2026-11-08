@@ -21,6 +21,19 @@ const MIN_ROOT_BYTES: u64 = 20 * 1024 * 1024 * 1024;
 /// Headroom for the MiB rounding the engine applies to the chosen extent.
 const PLACEMENT_GUARD_BYTES: u64 = 1024 * 1024;
 
+/// Renamed Apple Broadcom Wi-Fi firmware in /lib/firmware/brcm (see
+/// scripts/live/overlay/usr/local/lib/shiny/t2-firmware.sh).
+fn apple_wireless_firmware_present() -> bool {
+    std::fs::read_dir("/lib/firmware/brcm")
+        .map(|entries| {
+            entries.flatten().any(|e| {
+                let name = e.file_name().to_string_lossy().into_owned();
+                name.starts_with("brcmfmac") && name.contains("apple")
+            })
+        })
+        .unwrap_or(false)
+}
+
 pub fn hardware() -> HardwareInfo {
     let vendor = read_trim("/sys/class/dmi/id/sys_vendor");
     let product = read_trim("/sys/class/dmi/id/product_name");
@@ -32,6 +45,7 @@ pub fn hardware() -> HardwareInfo {
         product,
         board,
         is_t2: detects_t2(),
+        wireless_firmware: apple_wireless_firmware_present(),
         firmware: if Path::new("/sys/firmware/efi").exists() {
             "uefi".into()
         } else {

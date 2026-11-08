@@ -15,7 +15,18 @@ BASE_ISO=${LITEAURA_BASE_ISO:-$BUILD/base.iso}
 OUTDIR=${LITEAURA_ISO_OUT:-$BUILD/out}
 ISO_NAME=liteaura-live-t2-amd64.iso
 LIVE_URL=${LITEAURA_LIVE_URL:-https://cdimage.debian.org/debian-cd/current-live/amd64/iso-hybrid/debian-live-13.7.0-amd64-xfce.iso}
-T2_KVER=${T2_KVER:-$(uname -r)}
+# The T2 kernel comes from the T2 repository (linux-t2, its newest version);
+# the version is read back from the image after the install.
+T2_KVER=
+T2_KEYRING=${LITEAURA_T2_KEYRING:-$REPO/packaging/t2-ubuntu-repo.gpg}
+T2_REPO_PAGES=https://adityagarg8.github.io/t2-ubuntu-repo
+T2_REPO_TRIXIE=https://github.com/AdityaGarg8/t2-ubuntu-repo/releases/download/trixie
+# Installed from the T2 repository: the kernel (with headers, so DKMS modules
+# follow kernel updates), the APFS driver that reads macOS for the Wi-Fi
+# firmware, the firmware renamer, and the T2 userspace. No Apple firmware is
+# shipped: t2-firmware.sh takes it from each Mac's own macOS at boot.
+T2_PACKAGES="linux-t2 apfs-dkms dkms build-essential apple-firmware-script
+    tiny-dfr t2fanrd t2-touchid t2-ncm apple-t2-audio-config"
 # The version installed from the repository; read back after the install.
 PKG_VERSION=
 APT_KEYRING=${LITEAURA_KEYRING:-$REPO/packaging/liteaura-archive.gpg}
@@ -239,6 +250,13 @@ Suites: liteaura
 Components: main
 Signed-By: /usr/share/keyrings/liteaura-archive.gpg
 EOF
+    # The T2 repository, kept on the installed system too so the T2 kernel
+    # and userspace update with apt (the installer drops it on generic PCs).
+    install -m 0644 "$T2_KEYRING" "$ROOTFS/usr/share/keyrings/t2-ubuntu-repo.gpg"
+    cat > "$ROOTFS/etc/apt/sources.list.d/t2.list" <<EOF
+deb [signed-by=/usr/share/keyrings/t2-ubuntu-repo.gpg] $T2_REPO_PAGES ./
+deb [signed-by=/usr/share/keyrings/t2-ubuntu-repo.gpg] $T2_REPO_TRIXIE ./
+EOF
     cat > "$ROOTFS/tmp/liteaura-build.list" <<EOF
 deb $DEBIAN_MIRROR trixie main non-free-firmware
 deb $DEBIAN_MIRROR trixie-updates main non-free-firmware
@@ -256,7 +274,7 @@ EOF
     local ok=1
     # shellcheck disable=SC2086 # EXTRA_PACKAGES is a word list
     apt_in_root update >>"$alog" 2>&1 \
-        && apt_in_root install -y --no-install-recommends liteaura liteaura-archive-keyring $EXTRA_PACKAGES >>"$alog" 2>&1 \
+        && apt_in_root install -y --no-install-recommends liteaura liteaura-archive-keyring $EXTRA_PACKAGES $T2_PACKAGES >>"$alog" 2>&1 \
         || ok=0
     apt_in_root clean >>"$alog" 2>&1 || true
     find "$ROOTFS/var/lib/apt/lists" -maxdepth 1 -type f -delete 2>/dev/null || true
@@ -266,6 +284,17 @@ EOF
         tail -40 "$alog" >&2
         die "could not install liteaura from the repository"
     fi
+
+    T2_KVER=$(find "$ROOTFS/lib/modules" -mindepth 1 -maxdepth 1 -name '*-t2-*' -printf '%f\n' | sort -V | tail -1)
+    [ -n "$T2_KVER" ] && [ -f "$ROOTFS/boot/vmlinuz-$T2_KVER" ] \
+        || die "the T2 kernel was not installed from the T2 repository"
+    log "T2 kernel $T2_KVER installed from the T2 repository"
+    # The APFS driver must exist for the live T2 kernel: it is how the Wi-Fi
+    # firmware is read from macOS. Build it explicitly (apt ran under the
+    # build host's kernel, so DKMS may have skipped the image's).
+    in_root dkms autoinstall -k "$T2_KVER" >>"$alog" 2>&1 || true
+    compgen -G "$ROOTFS/lib/modules/$T2_KVER/updates/dkms/apfs.ko*" >/dev/null \
+        || die "the APFS driver was not built for $T2_KVER (see $alog)"
 
     PKG_VERSION=$(in_root dpkg-query -W -f='${Version}' liteaura 2>/dev/null || true)
     [ -n "$PKG_VERSION" ] || die "liteaura is not installed in the image"
@@ -408,38 +437,10 @@ stage_extra_packages() {
 }
 
 stage_t2() {
-    log "staging T2 kernel, packages and userspace setup"
-    [ -f "/boot/vmlinuz-$T2_KVER" ] || die "T2 kernel /boot/vmlinuz-$T2_KVER not found"
-    [ -d "/lib/modules/$T2_KVER" ] || die "T2 modules /lib/modules/$T2_KVER not found"
-    install -d "$ROOTFS/lib/modules"
-    cp -a "/lib/modules/$T2_KVER" "$ROOTFS/lib/modules/"
-
-    # T2 Macs use Apple-specific Broadcom firmware (BCM4364/4377/4387).
-    # The Debian live firmware package does not carry all of these, so copy the
-    # host's linux-firmware set; otherwise brcmfmac loads but never creates wlan0.
-    if [ -d /lib/firmware/brcm ]; then
-        install -d "$ROOTFS/lib/firmware/brcm"
-        cp -a /lib/firmware/brcm/. "$ROOTFS/lib/firmware/brcm/"
-    else
-        log "warning: /lib/firmware/brcm not found; T2 Wi-Fi firmware missing"
-    fi
-
-    local pkg p
-    for pkg in tiny-dfr t2fanrd t2-touchid t2-ncm apple-t2-audio-config; do
-        dpkg -s "$pkg" >/dev/null 2>&1 || { log "T2 package not installed: $pkg (skipped)"; continue; }
-        while IFS= read -r p; do
-            [ -e "$p" ] || continue
-            if [ -d "$p" ]; then
-                mkdir -p "$ROOTFS$p"
-            else
-                mkdir -p "$ROOTFS$(dirname "$p")"
-                cp -a "$p" "$ROOTFS$p"
-            fi
-        done < <(dpkg -L "$pkg")
-        case "$pkg" in
-            tiny-dfr|t2fanrd|t2-touchid|t2-ncm) ;;
-        esac
-    done
+    log "staging T2 userspace setup"
+    # Kernel, modules and T2 packages are installed with apt in stage_package.
+    # No Wi-Fi/Bluetooth firmware is copied: it is Apple's, and each Mac
+    # provides its own (t2-firmware.sh).
 
     install -d "$ROOTFS/usr/local/lib/shiny/t2/scripts"
     cp -a "$REPO"/scripts/install-t2-*.sh "$ROOTFS/usr/local/lib/shiny/t2/scripts/"
@@ -472,12 +473,15 @@ stage_overlay() {
     chmod 0755 "$ROOTFS/usr/local/bin/liteaura-live-session" \
         "$ROOTFS/usr/local/bin/liteaura-collect-logs" \
         "$ROOTFS/usr/local/lib/shiny/t2-live-setup.sh" \
+        "$ROOTFS/usr/local/lib/shiny/t2-firmware.sh" \
         "$ROOTFS/usr/local/lib/shiny/seed-live-account.sh"
     install -d "$ROOTFS/etc/systemd/system/multi-user.target.wants"
     ln -sf /etc/systemd/system/shiny-installer-helper.service \
         "$ROOTFS/etc/systemd/system/multi-user.target.wants/shiny-installer-helper.service"
     ln -sf /etc/systemd/system/shiny-t2-live-setup.service \
         "$ROOTFS/etc/systemd/system/multi-user.target.wants/shiny-t2-live-setup.service"
+    ln -sf /etc/systemd/system/liteaura-t2-firmware.service \
+        "$ROOTFS/etc/systemd/system/multi-user.target.wants/liteaura-t2-firmware.service"
     ln -sf /etc/systemd/system/liteaura-collect-logs.service \
         "$ROOTFS/etc/systemd/system/multi-user.target.wants/liteaura-collect-logs.service"
     ln -sf /etc/systemd/system/shiny-live-seed.service \
@@ -596,7 +600,7 @@ assemble_boot() {
     install -m 0644 "$base_initrd" "$ISO_STAGE/live/initrd.img"
     [ -s "$BUILD/initrd-t2.img" ] || die "missing generated T2 initrd"
     install -m 0644 "$BUILD/initrd-t2.img" "$ISO_STAGE/live/initrd-t2.img"
-    install -m 0644 "/boot/vmlinuz-$T2_KVER" "$ISO_STAGE/live/vmlinuz-t2"
+    install -m 0644 "$ROOTFS/boot/vmlinuz-$T2_KVER" "$ISO_STAGE/live/vmlinuz-t2"
     install -m 0644 "$REPO/scripts/live/grub.cfg" "$ISO_STAGE/boot/grub/grub.cfg"
     [ -f "$ISO_BASE/.disk/info" ] && install -m 0644 "$ISO_BASE/.disk/info" "$ISO_STAGE/.disk/info" || true
 
@@ -626,7 +630,8 @@ build_iso() {
   "package": "liteaura $PKG_VERSION amd64",
   "apt_repo": "$APT_URL",
   "built_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-  "note": "rootless UEFI remaster; liteaura installed with apt from the repository; real install engine enabled"
+  "t2_repo": "$T2_REPO_TRIXIE",
+  "note": "rootless UEFI remaster; liteaura and the T2 kernel installed with apt from their repositories; no Apple firmware included; real install engine enabled"
 }
 EOF
     log "done"
