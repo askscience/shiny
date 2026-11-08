@@ -43,7 +43,7 @@ lto = "thin"
 codegen-units = 1
 
 [workspace.package]
-version = "0.2.2"
+version = "0.2.3"
 edition = "2021"
 
 [package]

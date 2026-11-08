@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-11-08
+
 ### Changed
 
 - T2 Macs: the live image and installed systems get the T2 kernel and the
