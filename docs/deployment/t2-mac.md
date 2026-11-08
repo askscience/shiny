@@ -21,10 +21,14 @@ own, from its own macOS.
   on T2 hardware when the firmware is missing. It mounts the internal macOS
   partition read-only with the APFS driver (`apfs-dkms`, built for the T2
   kernel), or reads a copy saved on the EFI partition (`firmware-raw.tar.gz`,
-  from `get-apple-firmware copy_to_efi` in macOS). `get-apple-firmware
-  rename_only` (apple-firmware-script, from the T2 repository) renames the files
-  for Linux into `/lib/firmware/brcm`, then the Wi-Fi and Bluetooth drivers
-  reload. It takes a few seconds and nothing is downloaded.
+  from `get-apple-firmware copy_to_efi` in macOS). The renamer inside
+  `get-apple-firmware` (apple-firmware-script, from the T2 repository; its
+  Python block, MIT, from Asahi Linux) renames the files for Linux into
+  `/lib/firmware/brcm`, then the Wi-Fi and Bluetooth drivers reload. The
+  script's own `rename_only` command exists only on macOS, so the service
+  takes the Python block out of the script and runs it directly. The macOS
+  system volume is sealed but reads fine read-only; on a MacBookPro16,1 it
+  yields 148 files (BCM4364, "bali"). It takes a few seconds and nothing is downloaded.
 - **In the live session** the files land in the RAM overlay. The installer
   (`copy_wireless_firmware` in the helper's engine) copies them to the installed
   system, so erasing macOS during the install keeps Wi-Fi working. The System

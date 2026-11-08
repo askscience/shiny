@@ -10,8 +10,11 @@
 #   2. a copy saved on the EFI partition (firmware-raw.tar.gz, written by
 #      `get-apple-firmware copy_to_efi` from macOS).
 #
-# The files are renamed for Linux by get-apple-firmware (apple-firmware-script,
-# from the T2 repository) and placed in /lib/firmware/brcm. In the live
+# The files are renamed for Linux by the renamer inside get-apple-firmware
+# (apple-firmware-script, from the T2 repository; the Python part, MIT, from
+# Asahi Linux) and placed in /lib/firmware/brcm. Its `rename_only` command is
+# only offered on macOS, so the Python block is taken from the script and run
+# directly. In the live
 # session that is the RAM overlay; the installer then copies them to the
 # installed system, so erasing macOS afterwards is fine. The same service runs
 # on the installed system and stops at once when the firmware is there.
@@ -42,7 +45,7 @@ if have_firmware; then
     log "Apple Wi-Fi firmware already present"
     exit 0
 fi
-[ -x "$RENAME" ] || { log "get-apple-firmware is missing; cannot rename the firmware"; exit 0; }
+[ -r "$RENAME" ] || { log "get-apple-firmware is missing; cannot rename the firmware"; exit 0; }
 
 WORK=$(mktemp -d)
 MNT="$WORK/mnt"
@@ -53,10 +56,17 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# The renamer: the Python heredoc of get-apple-firmware (`python3 - "$@" <<'EOF'`).
+sed -n "/^python3 - \"\$@\" <<'EOF'\$/,/^EOF\$/p" "$RENAME" | sed '1d;$d' > "$WORK/rename.py"
+if ! [ -s "$WORK/rename.py" ] || ! command -v python3 >/dev/null; then
+    log "could not take the firmware renamer from $RENAME (or python3 is missing)"
+    exit 0
+fi
+
 install_from() {
     # $1: a directory holding wifi/ and bluetooth/ as macOS lays them out.
     local tree=$1
-    if "$RENAME" rename_only "$tree" "$WORK/firmware.tar" && [ -s "$WORK/firmware.tar" ]; then
+    if python3 "$WORK/rename.py" "$tree" "$WORK/firmware.tar" && [ -s "$WORK/firmware.tar" ]; then
         mkdir -p "$FW_DIR"
         tar -xC "$FW_DIR" -f "$WORK/firmware.tar" && return 0
     fi
