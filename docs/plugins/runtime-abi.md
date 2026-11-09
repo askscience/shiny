@@ -126,6 +126,23 @@ across the boundary aborts the process. Use `rt::spawn(fut)` there instead.
 
 ---
 
+### Streaming response bodies
+
+A route handler runs on the plugin's runtime (`bridged_route`), but the
+**body** it returns is polled by the host after the handler has finished, on
+the host's runtime. A body stream that touches the plugin's own Tokio (a
+`tokio::time::sleep`, `spawn_blocking`, a Tokio channel) panics there with
+"there is no reactor running", and a panic crossing that boundary **aborts
+the whole server**.
+
+Produce streamed bodies on a plain thread and hand them over through a
+runtime-free channel (`futures::channel::mpsc`, sent with
+`futures::executor::block_on`); the thread ends when the receiver is dropped
+(the client went away). Capture's `thread_body` in
+[`plugins/capture/src/routes.rs`](../../plugins/capture/src/routes.rs) does
+this for media files with HTTP ranges and for an MJPEG camera stream.
+A body built from bytes already in memory has no such problem.
+
 ## The SQLite caveat
 
 A plugin `cdylib` statically links its own `libsqlite3` (via `libsqlite3-sys`,
