@@ -939,10 +939,30 @@ pub fn load(home: &Path, id: &str) -> Option<Project> {
 
 /// Save, keeping the previous copy in the version history (last 50).
 pub fn save(home: &Path, p: &mut Project) -> Result<(), String> {
+    write(home, p, true)
+}
+
+/// Save a project restored from version `ts` as one step of Undo: the
+/// current state is not pushed on the history and `ts` is taken off it, so
+/// the next Undo goes one step further back instead of redoing this one.
+pub fn save_undone(home: &Path, p: &mut Project, ts: u64) -> Result<(), String> {
+    write(home, p, false)?;
+    if valid_id(&p.id) {
+        let _ = std::fs::remove_file(
+            projects_dir(home)
+                .join(".versions")
+                .join(&p.id)
+                .join(format!("{ts}.json")),
+        );
+    }
+    Ok(())
+}
+
+fn write(home: &Path, p: &mut Project, snapshot: bool) -> Result<(), String> {
     let path = path_of(home, &p.id).ok_or("bad project id")?;
     let dir = projects_dir(home);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    if path.exists() {
+    if snapshot && path.exists() {
         let vdir = dir.join(".versions").join(&p.id);
         let _ = std::fs::create_dir_all(&vdir);
         let _ = std::fs::copy(&path, vdir.join(format!("{}.json", now_ms())));
@@ -1063,6 +1083,38 @@ mod tests {
             ..Media::default()
         });
         p
+    }
+
+    #[test]
+    fn undo_steps_back_one_change_at_a_time() {
+        let home = std::env::temp_dir().join(format!("capture-undo-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        let mut p = Project {
+            id: "undo-test".into(),
+            ..Project::default()
+        };
+        let pause = || std::thread::sleep(std::time::Duration::from_millis(3));
+        for title in ["a", "b", "c"] {
+            p.title = title.into();
+            save(&home, &mut p).unwrap();
+            pause();
+        }
+        let undo = |home: &Path| {
+            let cur = load(home, "undo-test").unwrap();
+            let ts = versions(home, "undo-test")[0];
+            let mut old = load_version(home, "undo-test", ts).unwrap();
+            old.revision = cur.revision;
+            save_undone(home, &mut old, ts).unwrap();
+            pause();
+            load(home, "undo-test").unwrap().title
+        };
+        assert_eq!(undo(&home), "b");
+        assert_eq!(
+            undo(&home),
+            "a",
+            "a second undo goes further back, not forward"
+        );
+        let _ = std::fs::remove_dir_all(&home);
     }
 
     #[test]

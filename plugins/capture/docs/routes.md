@@ -50,10 +50,10 @@ their own threads, because the host polls a body after the handler returns.
 |---|---|---|
 | `GET` `POST` | `/api/capture/projects` | List, or create `{ title?, media?: [recording ids or paths] }`. |
 | `GET` | `/api/capture/projects/:id` | The project, its `versions` and `duration`. |
-| `PUT` | `/api/capture/projects/:id` | `{ revision?, project?, ops?, import?, place?, restore?, accept?, reject? }` — a stale `revision` answers `conflict`. |
+| `PUT` | `/api/capture/projects/:id` | `{ revision?, project?, ops?, import?, place?, restore?, accept?, reject? }` — a stale `revision` answers `conflict`. Answers the saved project with `versions`, `created` and `duration`. `restore` is one step of Undo (the restored version leaves the history). |
 | `DELETE` | `/api/capture/projects/:id` | Delete the project and its history. |
 | `GET` | `/api/capture/projects/:id/summary` | What the AI sees (transcript on the timeline, events, scenes). |
 | `POST` | `/api/capture/projects/:id/transcribe` | Transcribe every media's voice through the Whisper sidecar (`POST /stt/transcribe`). |
-| `POST` | `/api/capture/projects/:id/export` | `{ preset: source\|1080p\|720p\|4k\|vertical\|square\|gif }` or `{ options }` → `{ job }`. |
+| `POST` | `/api/capture/projects/:id/export` | `{ preset: source\|1080p\|720p\|4k\|vertical\|square\|gif }` or `{ options }` → `{ job }`. 1080p, 720p and 4K keep the whole picture with bars; vertical and square crop to fill. |
 | `GET` | `/api/capture/jobs/:id` | Export progress: `{ state, progress, output, error }`. |
 | `GET` | `/api/capture/overlay/:project/:id` | A graphic as a sandboxed page for the preview (CSP `sandbox allow-scripts`, no network). |

@@ -50,6 +50,19 @@
   the screen, the chosen window or the region live, twice a second, so you
   see what will be recorded before pressing Record. The placeholder icon no
   longer covers the picture, and on a phone the preview keeps a 16:10 shape.
+- Capture 0.1.2, tested end to end on a recorded window:
+  - The editor's Export menu and clip menu, and the recording chip's menu in
+    the top bar (Pause, Add marker, Stop), opened invisibly and could not be
+    used. They now appear.
+  - Undo in the editor did nothing after the first change, and pressing it
+    again redid the change. It now goes back one change at a time.
+  - Exports at 1080p, 720p and 4K cropped a recording whose shape is not
+    16:9 (most windows), cutting its edges and the captions at the bottom.
+    They now show the whole picture with bars; Vertical and Square still
+    fill the frame.
+  - The assistant's Capture guide now names every Capture tool (status,
+    recordings, projects, import, transcription, proposals, export), so the
+    skills check passes again.
 
 ## [0.2.4] - 2026-11-08
 

@@ -406,11 +406,15 @@ tool!(CaptureUndo, "capture_undo", "Going back…",
         let h = home(&req);
         let p = match load(&req) { Ok(p) => p, Err(e) => return err("capture_undo", e) };
         let versions = project::versions(&h, &p.id);
-        let Some(ts) = req.params.param_f64("version").map(|v| v as u64).or_else(|| versions.first().copied()) else { return err("capture_undo", "no earlier version") };
+        let given = req.params.param_f64("version").map(|v| v as u64);
+        let Some(ts) = given.or_else(|| versions.first().copied()) else { return err("capture_undo", "no earlier version") };
         let Some(mut old) = project::load_version(&h, &p.id, ts) else { return err("capture_undo", "version not found") };
         old.id = p.id.clone();
         old.revision = p.revision;
-        if let Err(e) = project::save(&h, &mut old) { return err("capture_undo", e) }
+        // A plain undo steps back through the history; restoring a chosen
+        // version keeps the current state as a version, so nothing is lost.
+        let saved = if given.is_some() { project::save(&h, &mut old) } else { project::save_undone(&h, &mut old, ts) };
+        if let Err(e) = saved { return err("capture_undo", e) }
         Ok(ActionOutcome::ok("capture_undo", json!({ "project": old.id, "restored": ts })))
     });
 

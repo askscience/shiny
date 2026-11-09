@@ -82,6 +82,7 @@ function openMenu() {
   add(t('plugin.capture.action.marker', null, 'Add marker'), () => apiFetch('/api/capture/marker', { method: 'POST', body: '{}' }));
   add(t('plugin.capture.action.stop', null, 'Stop'), () => apiFetch('/api/capture/stop', { method: 'POST', body: '{}' }).then(refreshNow));
   add(t('plugin.capture.hud.open', null, 'Open Capture'), () => void openPluginWindow(PLUGIN, { focus: true }));
+  menu.classList.remove('hidden');
   document.body.appendChild(menu);
   const r = btn.getBoundingClientRect();
   menu.style.position = 'fixed';

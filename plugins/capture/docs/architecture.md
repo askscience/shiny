@@ -156,14 +156,19 @@ plain threads into a runtime-free channel (`thread_body` in
   speed, volume, fades, rect, radius), HTML overlays, captions, markers,
   style, proposals. `sanitize` clamps every document from outside; `apply`
   validates one operation, `apply_all` is atomic. Saves keep the previous
-  copy (last 50) for undo.
+  copy (last 50) for undo. An undo (`restore` without other changes, or
+  `capture_undo` without a version) saves without pushing the current state
+  and takes the restored copy off the history (`save_undone`), so repeated
+  undos walk back one change at a time instead of toggling.
 - **Export** (`export.rs`): one ffmpeg run. Each clip is its own input
   opened at its in-point (`-ss`/`-t` before `-i`, keyframe seek, decode only
   what plays); pictures go over a solid canvas with `overlay` after a
   `setpts` shift; rounded corners reuse the bubble's SDF mask as a grey image
   for `alphamerge`; captions are an ASS file for libass; audio clips are
   trimmed, re-timed with chained `atempo`, faded, delayed and mixed without
-  normalisation. The graph is written to a script file.
+  normalisation. The graph is written to a script file. Landscape presets
+  (1080p, 720p, 4K) fit the whole canvas with bars; vertical and square
+  crop to fill.
 - **Graphics** (`render.rs`, `crates/capture-render`): a separate Qt
   WebEngine program renders each graphic offscreen, no network, a throw-away
   profile, a virtual clock seeked per frame (`capture.seek(t)` moves CSS and

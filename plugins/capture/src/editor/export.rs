@@ -55,17 +55,27 @@ impl Default for Preset {
 
 impl Preset {
     pub fn named(name: &str) -> Self {
-        let p = |w, h| Preset {
+        // Landscape sizes keep the whole picture (bars where the shapes
+        // differ: a recorded window is rarely 16:9, and cropping it would
+        // cut its edges and the captions at the bottom). Vertical and square
+        // fill the frame, as Shorts, Reels and posts expect.
+        let fit = |w, h| Preset {
+            width: w,
+            height: h,
+            fit: "contain".into(),
+            ..Preset::default()
+        };
+        let fill = |w, h| Preset {
             width: w,
             height: h,
             ..Preset::default()
         };
         match name {
-            "1080p" => p(1920, 1080),
-            "720p" => p(1280, 720),
-            "4k" => p(3840, 2160),
-            "vertical" => p(1080, 1920),
-            "square" => p(1080, 1080),
+            "1080p" => fit(1920, 1080),
+            "720p" => fit(1280, 720),
+            "4k" => fit(3840, 2160),
+            "vertical" => fill(1080, 1920),
+            "square" => fill(1080, 1080),
             "gif" => Preset {
                 format: "gif".into(),
                 width: 480,

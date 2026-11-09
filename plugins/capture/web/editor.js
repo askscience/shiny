@@ -268,6 +268,7 @@ function clipMenu(id, e) {
     add(t('plugin.capture.editor.speed1', null, 'Normal speed'), () => ops([{ op: 'set_clip', clip: id, speed: 1 }]));
   }
   add(t('plugin.capture.editor.delete', null, 'Delete'), () => deleteItem(id));
+  surface.classList.remove('hidden');
   document.body.appendChild(surface);
   surface.style.left = `${e.clientX}px`;
   surface.style.top = `${e.clientY}px`;
@@ -754,6 +755,7 @@ function exportMenu(anchor) {
   for (const [id, label] of presets) {
     surface.appendChild(menuItem({ label, onClick: () => { surface.remove(); runExport(id); } }));
   }
+  surface.classList.remove('hidden');
   document.body.appendChild(surface);
   const r = anchor.getBoundingClientRect();
   surface.style.left = `${r.left}px`;

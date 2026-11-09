@@ -28,7 +28,7 @@ model reads [`skills/capture.md`](../skills/capture.md).
 | `capture_edit` | `{ project, ops }` | Apply now (an exact request, or "edit everything"). All or nothing. |
 | `capture_graphic` | `{ project, html, at, dur, rect?, name?, id?, propose? }` | A free HTML graphic over the video. |
 | `capture_style` | `{ project, guide?, css? }` | The visual language every later graphic follows. |
-| `capture_undo` | `{ project, version? }` | Back to the previous saved version. |
+| `capture_undo` | `{ project, version? }` | Back one change; repeated calls keep going back. With `version`, restores that version and keeps the current state in the history. |
 | `capture_export` | `{ project, preset? }` | Render to Videos/LiteAura/Exports. |
 
 ## Operations

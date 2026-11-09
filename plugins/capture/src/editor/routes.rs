@@ -200,8 +200,14 @@ pub fn put() -> RouteHandler {
             if let Some(pid) = b.reject {
                 reject(&mut p, &pid);
             }
-            project::save(&h, &mut p).map_err(AppError::Internal)?;
+            match b.restore {
+                Some(ts) => project::save_undone(&h, &mut p, ts),
+                None => project::save(&h, &mut p),
+            }
+            .map_err(AppError::Internal)?;
             let mut v = json!(p);
+            // The editor's Undo reads this list: send it with every save.
+            v["versions"] = json!(project::versions(&h, &id));
             v["created"] = json!(created);
             v["duration"] = json!(p.duration());
             Ok(v)
