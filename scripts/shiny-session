@@ -130,6 +130,10 @@ if [ "$ai_on" = 1 ] && [ -x /usr/local/bin/liteaura-ollama-start ]; then
     /usr/local/bin/liteaura-ollama-start >/dev/null 2>&1 &
 fi
 
+# The server is a systemd user service and does not inherit this X session's
+# environment: hand it the display first, or Capture cannot see the screen.
+systemctl --user import-environment DISPLAY XAUTHORITY 2>/dev/null || true
+
 # Bring up this user's Shiny server (idempotent; a no-op if already running).
 systemctl --user start shiny.service 2>/dev/null || true
 

@@ -70,7 +70,13 @@ impl Screen {
     /// Connect to `$DISPLAY` and prepare a segment big enough for `max` pixels
     /// (the whole screen when `None`).
     pub fn open(max: Option<Rect>, track_damage: bool) -> Result<Self> {
-        let (conn, n) = x11rb::connect(None)?;
+        let display = display_name();
+        let (conn, n) = x11rb::connect(display.as_deref()).map_err(|e| {
+            format!(
+                "cannot reach the X display {}: {e}",
+                display.as_deref().unwrap_or("(none found)")
+            )
+        })?;
         let screen = &conn.setup().roots[n];
         let (root, width, height, depth) = (
             screen.root,
@@ -218,6 +224,29 @@ impl Screen {
     }
 }
 
+/// The X display to record. `$DISPLAY` when set; otherwise the lowest
+/// local display that has a socket. The server runs as a systemd user
+/// service, which does not inherit the graphical session's environment, so
+/// `$DISPLAY` is often missing there even though `:0` is right next to it.
+pub fn display_name() -> Option<String> {
+    if let Some(d) = std::env::var_os("DISPLAY").filter(|d| !d.is_empty()) {
+        return Some(d.to_string_lossy().into_owned());
+    }
+    let names = std::fs::read_dir("/tmp/.X11-unix")
+        .ok()?
+        .filter_map(|e| e.ok())
+        .map(|e| e.file_name().to_string_lossy().into_owned());
+    lowest_display(names)
+}
+
+/// `:N` for the lowest `XN` socket name.
+fn lowest_display(names: impl Iterator<Item = String>) -> Option<String> {
+    names
+        .filter_map(|n| n.strip_prefix('X')?.parse::<u32>().ok())
+        .min()
+        .map(|n| format!(":{n}"))
+}
+
 /// Merge damage rectangles: keep them separate only when there are few and
 /// they cover well under half of their bounding box (two distant spots).
 pub fn merge(rects: Vec<Rect>) -> Vec<Rect> {
@@ -233,6 +262,13 @@ pub fn merge(rects: Vec<Rect>) -> Vec<Rect> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_lowest_display_socket_wins() {
+        let names = ["X1", "X0", "lock", "X10"].map(String::from);
+        assert_eq!(lowest_display(names.into_iter()), Some(":0".into()));
+        assert_eq!(lowest_display(std::iter::empty()), None);
+    }
 
     #[test]
     fn merge_keeps_distant_spots_apart() {

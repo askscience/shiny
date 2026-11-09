@@ -23,7 +23,7 @@ XFixes cursor ──────────────────────
 
 | Step | Module | Trick |
 |---|---|---|
-| Grab | `src/x11.rs` | `ShmGetImage` into a System V segment shared with the X server: no pixels on the socket |
+| Grab | `src/x11.rs` | `ShmGetImage` into a System V segment shared with the X server: no pixels on the socket. The display is `$DISPLAY`, or the lowest `/tmp/.X11-unix/XN` when the server (a systemd user service) was started without it |
 | Change tracking | `src/x11.rs` | XDamage `Subtract` into an XFixes region, then `FetchRegion`: atomic, so no change is lost between read and reset. Distant rectangles are grabbed separately, close ones as one bounding box |
 | Colour conversion | `src/nv12.rs` | Hand-written AVX2 (libyuv scheme): `vpmaddubsw` with 7-bit BT.709 coefficients, `vphaddw`, `vpavgb` for 2×2 chroma, one `vpermd` to restore pixel order. Scalar fallback is bit-identical. Partial updates convert only the damaged rectangle into the kept frame |
 | HiDPI | `src/nv12.rs` | 2× box filter fused before conversion (`vpavgb` vertical, then horizontal) |

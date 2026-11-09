@@ -71,6 +71,11 @@
   - Cuts no longer leave an empty 40 ms clip that flashes a frame.
   - The assistant keeps its graphics clear of the captions and moves or
     fixes a graphic in place instead of adding a second copy.
+- Capture 0.1.4: the preview stayed empty and nothing could be recorded on
+  the installed system. The server runs as a systemd user service without
+  `DISPLAY`, so Capture found no screen; it now finds the local X display
+  itself (`/tmp/.X11-unix`), and the session script hands `DISPLAY` and
+  `XAUTHORITY` to the user services before starting the server.
 - Calc 0.1.2: typing on a selected cell kept only the second key onwards
   ("Voce" became "oce", "=SUM(...)" lost its "="). The first key now stays.
 - The assistant no longer crashes its turn ("That one slipped") when a
