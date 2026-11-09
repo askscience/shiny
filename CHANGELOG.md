@@ -2,6 +2,35 @@
 
 ## [Unreleased]
 
+### Added
+
+- Capture 0.1.5: the assistant can give a video a voice. It writes the lines
+  and the local voices read them: one narrator, or a podcast or dialogue
+  with two or three characters, each with their own voice (Supertonic, or
+  Qwen3-TTS when installed). The lines land on the voice track and the
+  assistant gets each line's time, so captions and graphics follow the
+  voice. A video can now be made of voice and graphics alone.
+- Capture graphics can use three.js for 3D (a solar system, a product
+  turntable, a molecule): the library ships with the plugin, and WebGL
+  renders in software when exporting, with no GPU needed.
+
+### Changed
+
+- The assistant's guide for Capture graphics no longer steers towards
+  slide-like presentations: any form a browser can draw is open, from
+  kinetic type and charts to canvas, shaders and full-screen 3D scenes.
+
+### Fixed
+
+- Capture exports with a long or heavy graphic failed with "render timed
+  out": the time limit now grows with the number of frames.
+- The export progress stayed at 0 % while graphics rendered, which is most
+  of the time for a 3D scene; it now moves with every frame.
+- Exported graphics sometimes repeated a frame (a stutter), and single
+  frames (thumbnails) could show the graphic at the wrong time.
+- The assistant's voice and export requests worked only with the exact
+  parameter names; the usual variations are accepted now.
+
 ## [0.2.5] - 2026-11-09
 
 ### Added

@@ -79,9 +79,15 @@ private:
         if (frame >= total) { QApplication::exit(0); return; }
         const double t = timeOf(frame);
         polls = 0;
+        // Three animation frames after the seek, then a short settle: with two
+        // and 8 ms, Qt sometimes grabbed the frame before (a duplicated frame
+        // in videos, a stale picture for --png), most with software WebGL.
+        // CAPTURE_RENDER_RAFS / CAPTURE_RENDER_SETTLE_MS override for tests.
+        const int rafs = qEnvironmentVariableIsSet("CAPTURE_RENDER_RAFS") ? qMax(1, qEnvironmentVariableIntValue("CAPTURE_RENDER_RAFS")) : 3;
+        QString js = QStringLiteral("()=>{window.__capDone=true}");
+        for (int i = 0; i < rafs; ++i) js = QStringLiteral("()=>requestAnimationFrame(%1)").arg(js);
         view->page()->runJavaScript(QStringLiteral(
-            "window.__capDone=false;try{capture.seek(%1)}catch(e){};"
-            "requestAnimationFrame(()=>requestAnimationFrame(()=>{window.__capDone=true}));").arg(t, 0, 'f', 4));
+            "window.__capDone=false;try{capture.seek(%1)}catch(e){};(%2)();").arg(t, 0, 'f', 4).arg(js));
         QTimer::singleShot(4, this, [this] { poll(); });
     }
 
@@ -89,7 +95,8 @@ private:
         view->page()->runJavaScript(QStringLiteral("window.__capDone===true"), [this](const QVariant &v) {
             if (v.toBool() || ++polls > 200) {
                 // One more turn of the event loop so the compositor delivers.
-                QTimer::singleShot(8, this, [this] { grab(); });
+                const int settle = qEnvironmentVariableIsSet("CAPTURE_RENDER_SETTLE_MS") ? qEnvironmentVariableIntValue("CAPTURE_RENDER_SETTLE_MS") : 16;
+                QTimer::singleShot(settle, this, [this] { grab(); });
             } else {
                 QTimer::singleShot(2, this, [this] { poll(); });
             }
@@ -128,7 +135,10 @@ extern "C" int capture_render_main(int argc, char **argv) {
     }
     if (qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM")) qputenv("QT_QPA_PLATFORM", "offscreen");
     qputenv("QTWEBENGINE_CHROMIUM_FLAGS",
-            "--disable-gpu --disable-gpu-compositing --force-device-scale-factor=1 --disable-features=Translate --mute-audio");
+            // WebGL (three.js scenes) through SwiftShader, Chromium's
+            // software GL: no GPU, no display, the same pixels everywhere.
+            "--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader --ignore-gpu-blocklist "
+            "--disable-gpu-compositing --force-device-scale-factor=1 --disable-features=Translate --mute-audio");
     qputenv("QT_SCALE_FACTOR", "1");
     QFile f(a.html);
     if (!f.open(QIODevice::ReadOnly)) { fprintf(stderr, "cannot read %s\n", qPrintable(a.html)); return 2; }
@@ -173,7 +183,10 @@ extern "C" int capture_render_main(int argc, char **argv) {
     // A page that never finishes loading still renders what it has.
     QTimer::singleShot(8000, &app, [&] { if (!started) { started = true; r.start(); } });
     // Hard cap: a hostile page cannot keep the export waiting forever.
-    QTimer::singleShot(int(qMax(30.0, a.duration * 4 + 30) * 1000), &app, [] {
+    // Generous per frame: a 3D scene in software GL takes about 0.3 s a frame
+    // at 1080p, so a time cap tied to the clip length killed real exports.
+    const double frames = a.at >= 0 ? 1.0 : a.duration * a.fps;
+    QTimer::singleShot(int(qMin(4.0 * 3600, qMax(60.0, frames * 3.0 + 60)) * 1000), &app, [] {
         fprintf(stderr, "render timed out\n");
         QApplication::exit(4);
     });

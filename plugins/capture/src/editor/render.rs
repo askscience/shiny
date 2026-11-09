@@ -49,6 +49,79 @@ fn style_block(p: &Project) -> String {
     )
 }
 
+/// Libraries a graphic can ask for by name: the tag is replaced by the code,
+/// because graphics render with no network.
+const THREE_JS: &str = include_str!("../../vendor/three.min.js");
+
+fn library(src: &str) -> Option<&'static str> {
+    let s = src.trim().trim_start_matches("./").to_ascii_lowercase();
+    match s.as_str() {
+        "lib/three.js" | "lib/three.min.js" | "three.js" | "three.min.js" | "lib:three" => {
+            Some(THREE_JS)
+        }
+        _ => None,
+    }
+}
+
+/// Replace `<script src="lib/…"></script>` with the library inline.
+pub fn inline_libraries(html: &str) -> String {
+    let lower = html.to_ascii_lowercase();
+    let mut out = String::with_capacity(html.len());
+    let mut from = 0;
+    while let Some(i) = lower[from..].find("<script") {
+        let start = from + i;
+        let Some(gt) = lower[start..].find('>').map(|j| start + j) else {
+            break;
+        };
+        let Some(close) = lower[gt..].find("</script>").map(|j| gt + j) else {
+            break;
+        };
+        let tag = &html[start..=gt];
+        let src = super::render::attr(tag, "src");
+        match src.as_deref().and_then(library) {
+            Some(code) if html[gt + 1..close].trim().is_empty() => {
+                out.push_str(&html[from..start]);
+                out.push_str("<script>");
+                out.push_str(&code.replace("</script", "<\\/script"));
+                out.push_str("</script>");
+            }
+            _ => out.push_str(&html[from..close + "</script>".len()]),
+        }
+        from = close + "</script>".len();
+    }
+    out.push_str(&html[from..]);
+    out
+}
+
+/// The value of `name="…"` (or `'…'`, or bare) in one tag.
+pub fn attr(tag: &str, name: &str) -> Option<String> {
+    let lower = tag.to_ascii_lowercase();
+    let mut from = 0;
+    while let Some(i) = lower[from..].find(name) {
+        let at = from + i;
+        from = at + name.len();
+        let before = lower[..at].chars().next_back();
+        if !before.is_some_and(|c| c.is_whitespace()) {
+            continue;
+        }
+        let rest = tag[from..].trim_start();
+        let Some(rest) = rest.strip_prefix('=') else {
+            continue;
+        };
+        let rest = rest.trim_start();
+        let q = rest.chars().next()?;
+        if q == '"' || q == '\'' {
+            let body = &rest[1..];
+            return Some(body[..body.find(q).unwrap_or(body.len())].to_string());
+        }
+        let end = rest
+            .find(|c: char| c.is_whitespace() || c == '>')
+            .unwrap_or(rest.len());
+        return Some(rest[..end].to_string());
+    }
+    None
+}
+
 /// The overlay as a complete document: runtime, shared style, then the
 /// AI's HTML.
 pub fn document(p: &Project, o: &Overlay, w: u32, h: u32) -> String {
@@ -57,7 +130,8 @@ pub fn document(p: &Project, o: &Overlay, w: u32, h: u32) -> String {
         .replace("__W__", &w.to_string())
         .replace("__H__", &h.to_string());
     let head = format!("<meta charset=\"utf-8\">{rt}{}", style_block(p));
-    let html = o.html.trim();
+    let html = inline_libraries(o.html.trim());
+    let html = html.as_str();
     // Put our head first, whatever the document looks like.
     let lower = html.to_ascii_lowercase();
     if let Some(i) = lower.find("<head>") {
@@ -96,7 +170,14 @@ pub fn renderer() -> Option<PathBuf> {
 }
 
 /// Render `o` to `<work>/<id>.mkv` (FFV1, yuva420p) at its on-canvas size.
-pub fn render_overlay(p: &Project, o: &Overlay, work: &Path) -> Result<PathBuf> {
+/// `progress` hears the share of frames done (0..1) as they arrive.
+pub fn render_overlay(
+    p: &Project,
+    o: &Overlay,
+    work: &Path,
+    progress: &mut dyn FnMut(f32),
+) -> Result<PathBuf> {
+    use std::io::{Read, Write};
     let r = renderer().ok_or("the graphics renderer (liteaura-capture-render) is not installed")?;
     let w = (((o.rect.w * p.width as f64).round() as u32).max(16)) & !1;
     let h = (((o.rect.h * p.height as f64).round() as u32).max(16)) & !1;
@@ -104,6 +185,7 @@ pub fn render_overlay(p: &Project, o: &Overlay, work: &Path) -> Result<PathBuf> 
     std::fs::write(&html, document(p, o, w, h))?;
     let out = work.join(format!("{}.mkv", o.id));
     let fps = p.fps;
+    let total = ((o.dur * fps as f64).round() as usize).max(1);
     let mut rend = Command::new(r)
         .args(["--html".into(), html.display().to_string()])
         .args([
@@ -122,8 +204,15 @@ pub fn render_overlay(p: &Project, o: &Overlay, work: &Path) -> Result<PathBuf> 
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()?;
-    let pipe = rend.stdout.take().ok_or("no renderer output")?;
-    let enc = Command::new("ffmpeg")
+    let mut from = rend.stdout.take().ok_or("no renderer output")?;
+    // Drain stderr as it comes: a chatty page must not block the renderer.
+    let mut rerr = rend.stderr.take().ok_or("no renderer errors")?;
+    let rerr = std::thread::spawn(move || {
+        let mut v = Vec::new();
+        let _ = rerr.read_to_end(&mut v);
+        v
+    });
+    let mut enc = Command::new("ffmpeg")
         .args([
             "-hide_banner",
             "-loglevel",
@@ -142,16 +231,35 @@ pub fn render_overlay(p: &Project, o: &Overlay, work: &Path) -> Result<PathBuf> 
         ])
         .args(["-i", "pipe:0", "-c:v", "ffv1", "-pix_fmt", "yuva420p"])
         .arg(&out)
-        .stdin(Stdio::from(pipe))
+        .stdin(Stdio::piped())
         .stdout(Stdio::null())
         .stderr(Stdio::piped())
-        .output()?;
-    let rst = rend.wait_with_output()?;
-    if !rst.status.success() {
+        .spawn()?;
+    let mut to = enc.stdin.take().ok_or("no encoder input")?;
+    let frame = w as usize * h as usize * 4;
+    let mut buf = vec![0u8; frame];
+    let mut done = 0usize;
+    loop {
+        match from.read_exact(&mut buf) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => break,
+            Err(e) => return Err(e.into()),
+        }
+        if to.write_all(&buf).is_err() {
+            break;
+        }
+        done += 1;
+        progress((done as f32 / total as f32).min(1.0));
+    }
+    drop(to);
+    let rst = rend.wait()?;
+    let rerr = rerr.join().unwrap_or_default();
+    let enc = enc.wait_with_output()?;
+    if !rst.success() {
         return Err(format!(
             "the graphic \"{}\" did not render: {}",
             o.name,
-            String::from_utf8_lossy(&rst.stderr).trim()
+            String::from_utf8_lossy(&rerr).trim()
         )
         .into());
     }
@@ -200,6 +308,20 @@ pub fn snapshot(p: &Project, o: &Overlay, t: f64) -> Result<Vec<u8>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn libraries_are_inlined_by_name() {
+        let html = r#"<head><script src="lib/three.js"></script><script src='x.js'></script><script>let a=1</script></head>"#;
+        let out = inline_libraries(html);
+        assert!(out.contains("THREE"), "three.js is in the page");
+        assert!(!out.contains(r#"src="lib/three.js""#));
+        assert!(
+            out.contains("<script src='x.js'></script>"),
+            "other scripts are left alone"
+        );
+        assert!(out.contains("<script>let a=1</script>"));
+        assert_eq!(inline_libraries("<p>no scripts</p>"), "<p>no scripts</p>");
+    }
 
     #[test]
     fn style_tokens_work_as_properties_or_as_a_rule() {

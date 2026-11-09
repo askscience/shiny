@@ -13,7 +13,7 @@ use shiny_plugin_sdk::outcome::ActionOutcome;
 use shiny_plugin_sdk::services::PluginCtx;
 use shiny_plugin_sdk::tools::{ParamHelpers, Tool, ToolRequest};
 
-use crate::editor::{export, project, routes as er, summary, transcribe};
+use crate::editor::{export, project, routes as er, summary, transcribe, voice};
 use crate::{library, routes, session, store};
 
 fn home(req: &ToolRequest<'_>) -> PathBuf {
@@ -423,9 +423,101 @@ tool!(CaptureExport, "capture_export", "Exporting the video…",
     |self, ctx, req| {
         let p = match load(&req) { Ok(p) => p, Err(e) => return err("capture_export", e) };
         if p.duration() <= 0.0 { return err("capture_export", "the timeline is empty"); }
-        let preset = export::Preset::named(&req.params.param_str("preset").unwrap_or_else(|| "source".into()));
+        // `resolution` and `format` are the names models reach for first.
+        let name = ["preset", "resolution", "format"].iter().find_map(|k| req.params.param_str(k)).unwrap_or_else(|| "source".into());
+        let preset = export::Preset::named(&name.to_ascii_lowercase());
         let job = export::start(home(&req), p, preset);
         Ok(ActionOutcome::ok("capture_export", json!({ "job": job })))
+    });
+
+tool!(CaptureVoices, "capture_voices", "Checking the voices…",
+    "- `capture_voices` — The text-to-speech engines on this computer (supertonic, qwen), whether each answers, and their voices. params: `{}`",
+    |self, ctx, req| {
+        let url = ctx.config.supertonic_url.clone();
+        let v = tokio::task::spawn_blocking(move || voice::engines(&url))
+            .await
+            .map_err(|e| AppError::Internal(e.to_string()))?;
+        Ok(ActionOutcome::ok("capture_voices", v))
+    });
+
+tool!(CaptureVoice, "capture_voice", "Recording the voice…",
+    "- `capture_voice` — Speak lines with a local voice and put them on the timeline: one narrator, or a dialogue / podcast with several speakers (one voice each). Returns every line's timeline time. params: `{ project: string, lines: [{ speaker?: string, text: string, pause?: seconds after (default 0.35) }] (or plain strings for one narrator), voices?: { speaker: voice }, voice?: one voice for every speaker without one, engine?: \"supertonic\"|\"qwen\", lang?: \"it\"|\"en\"|…, speed?: 0.7–2, at?: timeline seconds (default: end of the track), track?: \"a1\"|\"a2\", captions?: bool }`",
+    |self, ctx, req| {
+        let mut p = match load(&req) { Ok(p) => p, Err(e) => return err("capture_voice", e) };
+        let prm = req.params;
+        let Some(engine) = voice::Engine::parse(&prm.param_str("engine").unwrap_or_default()) else {
+            return err("capture_voice", "engine must be \"supertonic\" or \"qwen\"");
+        };
+        // Models write the lines a few ways: objects, plain strings, or one
+        // `text`; a top-level `voice` / `pause` applies to every line.
+        let default_pause = prm.param_f64("pause").unwrap_or(0.35);
+        let raw: Vec<Value> = match prm.get("lines") {
+            Some(Value::Array(a)) => a.clone(),
+            Some(Value::String(t)) => vec![Value::String(t.clone())],
+            _ => prm.get("text").cloned().into_iter().collect(),
+        };
+        let lines: Vec<voice::Line> = raw.iter().filter_map(|l| {
+            let (speaker, text, pause) = match l {
+                Value::String(t) => (None, t.clone(), None),
+                Value::Object(_) => (
+                    l.get("speaker").and_then(|v| v.as_str()).map(str::to_string),
+                    l.get("text").and_then(|v| v.as_str())?.to_string(),
+                    l.get("pause").and_then(|v| v.as_f64()),
+                ),
+                _ => return None,
+            };
+            let text = text.trim().to_string();
+            if text.is_empty() { return None; }
+            Some(voice::Line {
+                speaker: speaker.map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).unwrap_or_else(|| "narrator".into()),
+                text,
+                pause: pause.unwrap_or(default_pause),
+            })
+        }).collect();
+        if lines.is_empty() { return err("capture_voice", "missing \"lines\": [{ speaker?, text, pause? }] or [\"text\", …]"); }
+        let mut voices: std::collections::HashMap<String, String> = prm.get("voices").and_then(|v| v.as_object()).map(|o| o.iter().filter_map(|(k, v)| Some((k.clone(), v.as_str()?.to_string()))).collect()).unwrap_or_default();
+        if let Some(v) = prm.param_str("voice") {
+            for l in &lines { voices.entry(l.speaker.clone()).or_insert_with(|| v.clone()); }
+        }
+        let track = prm.param_str("track").unwrap_or_else(|| "a1".into());
+        if p.track(&track).is_none() { return err("capture_voice", format!("no track {track}")); }
+        let at = prm.param_f64("at").unwrap_or_else(|| p.clips.iter().filter(|c| c.track == track).map(|c| c.end()).fold(0.0, f64::max)).max(0.0);
+        let rq = voice::Request {
+            engine,
+            base_url: match engine { voice::Engine::Supertonic => voice::supertonic_url(&ctx.config.supertonic_url), voice::Engine::Qwen => voice::qwen_url() },
+            lang: prm.param_str("lang").unwrap_or_else(|| "en".into()),
+            speed: prm.param_f64("speed").unwrap_or(1.0) as f32,
+            lines,
+            voices,
+        };
+        let h = home(&req);
+        let dir = library::capture_dir(&h).join("Voices");
+        let stem = format!("{}-{}", engine.name(), project::now_ms());
+        let rendered = tokio::task::spawn_blocking(move || voice::render(&rq, &dir, &stem).map_err(|e| e.to_string()))
+            .await
+            .map_err(|e| AppError::Internal(e.to_string()))?;
+        let (path, timed) = match rendered { Ok(r) => r, Err(e) => return err("capture_voice", e) };
+        let media = match er::import(&h, &mut p, &[path.display().to_string()], false) {
+            Ok(ids) if !ids.is_empty() => ids[0].clone(),
+            Ok(_) => return err("capture_voice", "the voice file could not be added"),
+            Err(e) => return err("capture_voice", e),
+        };
+        let mut ops = vec![json!({ "op": "add_clip", "media": media, "track": track, "at": at })];
+        let several = timed.iter().map(|t| &t.speaker).collect::<std::collections::HashSet<_>>().len() > 1;
+        if prm.param_bool("captions").unwrap_or(false) {
+            for t in &timed {
+                let text = if several { format!("{}: {}", t.speaker, t.text) } else { t.text.clone() };
+                ops.push(json!({ "op": "add_caption", "at": at + t.at, "dur": t.dur.max(0.6), "text": text }));
+            }
+        }
+        let created = match project::apply_all(&mut p, &ops) { Ok(i) => i, Err(e) => return err("capture_voice", e) };
+        if let Err(e) = save(&req, &mut p) { return err("capture_voice", e); }
+        let lines: Vec<Value> = timed.iter().map(|t| json!({ "speaker": t.speaker, "voice": t.voice, "text": t.text, "at": ((at + t.at) * 100.0).round() / 100.0, "dur": (t.dur * 100.0).round() / 100.0 })).collect();
+        let end = timed.last().map(|t| at + t.at + t.dur).unwrap_or(at);
+        Ok(ActionOutcome::ok("capture_voice", json!({
+            "project": p.id, "engine": engine.name(), "media": media, "clip": created.first(), "track": track,
+            "at": at, "end": (end * 100.0).round() / 100.0, "lines": lines, "revision": p.revision,
+        })))
     });
 
 pub fn all() -> Vec<std::sync::Arc<dyn Tool>> {
@@ -448,6 +540,8 @@ pub fn all() -> Vec<std::sync::Arc<dyn Tool>> {
         std::sync::Arc::new(CaptureStyle),
         std::sync::Arc::new(CaptureUndo),
         std::sync::Arc::new(CaptureExport),
+        std::sync::Arc::new(CaptureVoices),
+        std::sync::Arc::new(CaptureVoice),
     ]
 }
 

@@ -173,7 +173,21 @@ plain threads into a runtime-free channel (`thread_body` in
   WebEngine program renders each graphic offscreen, no network, a throw-away
   profile, a virtual clock seeked per frame (`capture.seek(t)` moves CSS and
   Web Animations, `requestAnimationFrame` and `performance.now` read virtual
-  time); RGBA frames go to ffmpeg as FFV1 with alpha.
+  time); RGBA frames go to ffmpeg as FFV1 with alpha. WebGL runs through
+  SwiftShader (Chromium's software GL), so three.js scenes render with no
+  GPU and no display. Each frame waits three animation frames and 16 ms
+  after the seek before the grab (two and 8 ms sometimes grabbed the
+  previous frame), and the time cap is per frame (3 s a frame + 60 s), not
+  per clip second. Libraries a graphic asks for by name
+  (`<script src="lib/three.js">`) are inlined from `vendor/` when the
+  document is assembled, for the preview and the export alike.
+- **Voices** (`voice.rs`, `http.rs`): `capture_voice` sends each line to
+  Supertonic (`/v1/tts`) or Qwen3-TTS (`/v1/audio/speech`, raw 24 kHz PCM),
+  decodes it to 48 kHz mono with ffmpeg, trims the engine's padding, lays
+  the lines end to end with their pauses into one WAV and reports each
+  line's time. Speakers without a chosen voice get distinct ones in order
+  of appearance. `http.rs` is the byte-level loopback HTTP shared with the
+  Whisper client.
 - **What the AI knows** (`summary.rs`, `transcribe.rs`, `media.rs`):
   word-timed transcripts from the Whisper sidecar (30 s blocks with overlap,
   de-duplicated by time and, at the start of a block, by text: a word cut by

@@ -594,12 +594,19 @@ fn run(home: &Path, p: &Project, preset: &Preset, job: &Arc<Mutex<Job>>) -> Resu
             ));
             shown.clear();
         }
-        for (i, o) in shown.iter().enumerate() {
-            let file = super::render::render_overlay(p, o, &work)?;
+        // Graphics usually take most of an export (a 3D scene renders in
+        // software): their frames move the first 60 %, weighted by length.
+        let weight: f64 = shown.iter().map(|o| o.dur.max(0.04)).sum();
+        let mut before = 0.0;
+        for o in &shown {
+            let share = o.dur.max(0.04) / weight;
+            let file = super::render::render_overlay(p, o, &work, &mut |f| {
+                job.lock().unwrap().progress = (0.6 * (before + share * f as f64)) as f32;
+            })?;
+            before += share;
             overlays.insert(o.id.clone(), file);
-            job.lock().unwrap().progress = 0.3 * (i + 1) as f32 / shown.len() as f32;
         }
-        let base = if overlays.is_empty() { 0.0 } else { 0.3 };
+        let base = if overlays.is_empty() { 0.0 } else { 0.6 };
         job.lock().unwrap().state = "encoding".into();
         let dir = crate::library::capture_dir(home).join("Exports");
         std::fs::create_dir_all(&dir)?;

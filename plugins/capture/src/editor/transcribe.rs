@@ -111,8 +111,13 @@ fn post(block: &[u8], lang: Option<&str>) -> Result<Vec<(String, f64, f64)>> {
         url.push_str(&format!("?lang={l}"));
     }
     // A blocking request on this worker thread: no runtime needed.
-    let resp = ureq_post(&url, block)?;
-    let v: serde_json::Value = serde_json::from_str(&resp)?;
+    let resp = super::http::post(
+        &url,
+        "application/octet-stream",
+        block,
+        std::time::Duration::from_secs(600),
+    )?;
+    let v: serde_json::Value = serde_json::from_slice(&resp)?;
     Ok(v["words"]
         .as_array()
         .map(|a| {
@@ -127,54 +132,6 @@ fn post(block: &[u8], lang: Option<&str>) -> Result<Vec<(String, f64, f64)>> {
                 .collect()
         })
         .unwrap_or_default())
-}
-
-/// Minimal HTTP/1.1 POST over a loopback TCP socket (the sidecar is local),
-/// so this module needs no HTTP client crate.
-fn ureq_post(url: &str, body: &[u8]) -> Result<String> {
-    use std::io::Write;
-    let rest = url
-        .strip_prefix("http://")
-        .ok_or("the Whisper URL must be http://")?;
-    let (hostport, path) = rest
-        .split_once('/')
-        .map(|(h, p)| (h, format!("/{p}")))
-        .unwrap_or((rest, "/".into()));
-    let mut s = std::net::TcpStream::connect(hostport)?;
-    s.set_read_timeout(Some(std::time::Duration::from_secs(600)))?;
-    write!(
-        s,
-        "POST {path} HTTP/1.1\r\nHost: {hostport}\r\nContent-Type: application/octet-stream\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-        body.len()
-    )?;
-    s.write_all(body)?;
-    let mut resp = Vec::new();
-    s.read_to_end(&mut resp)?;
-    let text = String::from_utf8_lossy(&resp).to_string();
-    let (head, body) = text
-        .split_once("\r\n\r\n")
-        .ok_or("bad reply from Whisper")?;
-    if !head.starts_with("HTTP/1.1 200") && !head.starts_with("HTTP/1.0 200") {
-        return Err(format!("Whisper answered: {}", head.lines().next().unwrap_or("")).into());
-    }
-    // The sidecar may answer chunked.
-    if head
-        .to_ascii_lowercase()
-        .contains("transfer-encoding: chunked")
-    {
-        let mut out = String::new();
-        let mut rest = body;
-        while let Some((len, tail)) = rest.split_once("\r\n") {
-            let n = usize::from_str_radix(len.trim(), 16).unwrap_or(0);
-            if n == 0 || tail.len() < n {
-                break;
-            }
-            out.push_str(&tail[..n]);
-            rest = tail[n..].trim_start_matches("\r\n");
-        }
-        return Ok(out);
-    }
-    Ok(body.to_string())
 }
 
 fn run(p: &Path, track: u32, lang: Option<&str>, st: &Mutex<State>) -> Result<()> {

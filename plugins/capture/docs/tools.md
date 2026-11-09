@@ -29,7 +29,9 @@ model reads [`skills/capture.md`](../skills/capture.md).
 | `capture_graphic` | `{ project, html, at, dur, rect?, name?, id?, propose? }` | A free HTML graphic over the video. |
 | `capture_style` | `{ project, guide?, css? }` | The visual language every later graphic follows. |
 | `capture_undo` | `{ project, version? }` | Back one change; repeated calls keep going back. With `version`, restores that version and keeps the current state in the history. |
-| `capture_export` | `{ project, preset? }` | Render to Videos/LiteAura/Exports. |
+| `capture_export` | `{ project, preset? }` | Render to Videos/LiteAura/Exports (`resolution` and `format` are accepted for `preset`). |
+| `capture_voices` | `{}` | The local text-to-speech engines (`supertonic`, `qwen`), whether each answers, and their voices. |
+| `capture_voice` | `{ project, lines, voices?, voice?, engine?, lang?, speed?, at?, track?, captions? }` | Speaks `lines` (objects `{ speaker?, text, pause? }` or plain strings) with one voice per speaker, lays them end to end into `Videos/LiteAura/Voices/<engine>-<ms>.wav`, places it on the voice track and returns each line's timeline `at` and `dur`. `captions: true` adds one caption per line. |
 
 ## Operations
 
