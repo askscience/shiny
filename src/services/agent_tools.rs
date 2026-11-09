@@ -1040,7 +1040,9 @@ fn canonical_markup(text: &str) -> String {
             after = r;
         }
         let trimmed = after.trim_start_matches(is_sep);
-        let is_dsml = trimmed.len() >= 4 && trimmed[..4].eq_ignore_ascii_case("dsml");
+        // `get` and not `[..4]`: the text after `<` can start with a
+        // multi-byte character (a price like `<b>€` in generated HTML).
+        let is_dsml = trimmed.get(..4).is_some_and(|s| s.eq_ignore_ascii_case("dsml"));
         rest = if is_dsml { trimmed[4..].trim_start_matches(is_sep) } else { after };
     }
     out.push_str(rest);
@@ -1352,6 +1354,17 @@ mod tests {
 mod markup_tests {
     use super::{parse_actions, strip_action_blocks};
     use serde_json::json;
+
+    #[test]
+    fn markup_with_multibyte_text_after_a_tag_does_not_panic() {
+        // A tool call whose HTML has "€" right after a `<`-led tag.
+        for text in ["<€ 650", "</€>", "<b>1 140 €</b>", "<｜€", "x <àèìò", "<😀>"] {
+            let _ = parse_actions(text);
+            let _ = strip_action_blocks(text);
+        }
+        let text = r#"{"action":"capture_graphic","params":{"html":"<div class=\"t\"><€1 140</div>"}}"#;
+        assert_eq!(parse_actions(text)[0].0, "capture_graphic");
+    }
 
     #[test]
     fn dsml_with_a_params_object_is_a_tool_call() {

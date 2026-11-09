@@ -34,9 +34,18 @@ document.addEventListener('DOMContentLoaded',()=>capture.seek(T));
 /// The style every graphic shares: the project's tokens plus a transparent
 /// page.
 fn style_block(p: &Project) -> String {
+    let css = p.style.css.replace("</", "<\\/");
+    // The style is custom properties (`--accent: #…;`), but a model may send
+    // whole rules (`:root{--accent:…}`): wrapping those in `:root{}` again
+    // nests them, the browser drops them and every `var()` without a
+    // fallback leaves its element invisible.
+    let tokens = if css.contains('{') {
+        css
+    } else {
+        format!(":root{{{css}}}")
+    };
     format!(
-        "<style>html,body{{background:transparent!important;margin:0;width:100%;height:100%;overflow:hidden}}:root{{{}}}</style>",
-        p.style.css.replace("</", "<\\/")
+        "<style>html,body{{background:transparent!important;margin:0;width:100%;height:100%;overflow:hidden}}{tokens}</style>"
     )
 }
 
@@ -191,6 +200,20 @@ pub fn snapshot(p: &Project, o: &Overlay, t: f64) -> Result<Vec<u8>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn style_tokens_work_as_properties_or_as_a_rule() {
+        let mut p = Project::default();
+        p.style.css = "--accent:#2f6bff;".into();
+        assert!(style_block(&p).contains(":root{--accent:#2f6bff;}"));
+        p.style.css = ":root{--ease-out:cubic-bezier(.16,1,.3,1)}".into();
+        let b = style_block(&p);
+        assert!(b.contains(":root{--ease-out"));
+        assert!(
+            !b.contains(":root{:root"),
+            "a whole rule is not wrapped again"
+        );
+    }
 
     #[test]
     fn runtime_goes_first() {

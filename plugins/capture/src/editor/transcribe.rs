@@ -208,14 +208,8 @@ fn run(p: &Path, track: u32, lang: Option<&str>, st: &Mutex<State>) -> Result<()
     while start < total {
         let end = (start + step + OVERLAP_S * SR).min(total);
         let off = start as f64 / SR as f64;
-        for (w, a, b) in post(&pcm[start * 2..end * 2], lang)? {
-            let (a, b) = (a + off, b + off);
-            // The overlap: keep a word only once.
-            if words.last().is_some_and(|l| a < l.2 - 0.05) {
-                continue;
-            }
-            words.push((w, a, b));
-        }
+        let block = post(&pcm[start * 2..end * 2], lang)?;
+        merge_block(&mut words, block, off);
         start += step;
         st.lock().unwrap().progress = (start.min(total) as f64 / total.max(1) as f64) as f32;
         let _ = info.duration;
@@ -231,10 +225,94 @@ fn run(p: &Path, track: u32, lang: Option<&str>, st: &Mutex<State>) -> Result<()
     Ok(())
 }
 
+/// Letters and digits only, lower case: how two hearings of a word compare.
+fn norm(w: &str) -> String {
+    w.chars()
+        .filter(|c| c.is_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect()
+}
+
+/// Append one block's words (block time) to `words` (media time). The
+/// blocks overlap, so the start of a block repeats the end of the previous
+/// one: a word is dropped when it starts before the last kept word ends, or
+/// when, near the block's start, it repeats one of the last kept words or
+/// the end of one (a word cut by the edge, heard as "sporti" after
+/// "trasporti"). Whisper's times are least reliable at the start of a
+/// block, so the text decides there, not only the clock.
+fn merge_block(words: &mut Vec<(String, f64, f64)>, block: Vec<(String, f64, f64)>, off: f64) {
+    let first_block = words.is_empty();
+    let mut leading = true;
+    for (w, a, b) in block {
+        let (a, b) = (a + off, b + off);
+        if words.last().is_some_and(|l| a < l.2 - 0.05) {
+            continue;
+        }
+        if !first_block && leading && a < off + OVERLAP_S as f64 + 2.0 {
+            let n = norm(&w);
+            let repeats = !n.is_empty()
+                && words
+                    .iter()
+                    .rev()
+                    .take(3)
+                    .any(|(lw, _, _)| norm(lw).ends_with(&n));
+            if repeats {
+                continue;
+            }
+        }
+        leading = false;
+        words.push((w, a, b));
+    }
+}
+
 /// Store a transcript given by the caller (tests, or one made elsewhere).
 pub fn store(p: &Path, w: &Words) -> Result<()> {
     let f = cache_file(p).ok_or("no such file")?;
     std::fs::create_dir_all(f.parent().unwrap())?;
     std::fs::write(f, serde_json::to_vec(w)?)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn w(t: &str, a: f64, b: f64) -> (String, f64, f64) {
+        (t.into(), a, b)
+    }
+
+    #[test]
+    fn a_word_cut_by_the_block_edge_is_kept_once() {
+        // Block 1 heard "trasporti" whole at 30.0 s; block 2 (starting at
+        // 30 s) heard its tail as "Sporti." with a late time.
+        let mut words = vec![w(" e", 29.75, 30.01), w(" trasporti.", 30.01, 30.69)];
+        merge_block(
+            &mut words,
+            vec![
+                w(" Sporti.", 1.38, 2.14),
+                w(" Nella", 2.6, 2.72),
+                w(" seconda", 2.72, 3.22),
+            ],
+            30.0,
+        );
+        let text: Vec<&str> = words.iter().map(|x| x.0.trim()).collect();
+        assert_eq!(text, ["e", "trasporti.", "Nella", "seconda"]);
+    }
+
+    #[test]
+    fn the_first_block_and_new_words_are_kept() {
+        let mut words = Vec::new();
+        merge_block(
+            &mut words,
+            vec![w(" ciao", 0.1, 0.4), w(" ciao", 0.5, 0.8)],
+            0.0,
+        );
+        assert_eq!(
+            words.len(),
+            2,
+            "a repeated word in the first block is speech"
+        );
+        merge_block(&mut words, vec![w(" mondo", 0.3, 0.6)], 30.0);
+        assert_eq!(words.last().unwrap().0, " mondo");
+    }
 }

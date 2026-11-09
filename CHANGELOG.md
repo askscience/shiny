@@ -63,6 +63,19 @@
   - The assistant's Capture guide now names every Capture tool (status,
     recordings, projects, import, transcription, proposals, export), so the
     skills check passes again.
+- Capture 0.1.3, tested as a YouTuber would: a recorded tutorial with a
+  Supertonic voice-over, transcribed by Whisper and edited by the assistant
+  (DeepSeek):
+  - Transcripts no longer repeat a word that falls on the edge between two
+    30-second blocks ("trasporti" followed by "Sporti").
+  - Cuts no longer leave an empty 40 ms clip that flashes a frame.
+  - The assistant keeps its graphics clear of the captions and moves or
+    fixes a graphic in place instead of adding a second copy.
+- Calc 0.1.2: typing on a selected cell kept only the second key onwards
+  ("Voce" became "oce", "=SUM(...)" lost its "="). The first key now stays.
+- The assistant no longer crashes its turn ("That one slipped") when a
+  model's reply has a character like "€", an accented letter or an emoji
+  right after a "<", as generated HTML often does.
 
 ## [0.2.4] - 2026-11-08
 

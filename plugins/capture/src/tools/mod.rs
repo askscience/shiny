@@ -389,7 +389,7 @@ tool!(CaptureGraphic, "capture_graphic", "Designing the graphic…",
     });
 
 tool!(CaptureStyle, "capture_style", "Writing the style…",
-    "- `capture_style` — Set the project's visual language, kept by every later graphic: `guide` (palette, type, weights, radii, easing and durations, entrances and exits, density) and `css` (custom properties like `--accent: #…;`). Do it after the first graphic the user approves, or when they ask for a new look. params: `{ project: string, guide?: string, css?: string }`",
+    "- `capture_style` — Set the project's visual language, kept by every later graphic: `guide` (palette, type, weights, radii, easing and durations, entrances and exits, density) and `css` (custom property declarations only, like `--accent: #…; --ease-out: cubic-bezier(…);`, without a selector). Do it after the first graphic the user approves, or when they ask for a new look. params: `{ project: string, guide?: string, css?: string }`",
     |self, ctx, req| {
         let mut p = match load(&req) { Ok(p) => p, Err(e) => return err("capture_style", e) };
         let mut op = json!({ "op": "set_style" });

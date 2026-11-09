@@ -357,6 +357,11 @@ impl Project {
         self.clips.truncate(MAX_CLIPS);
         self.clips
             .retain(|c| media_ids.contains(&c.media) && track_ids.contains(&c.track));
+        // A clip with (almost) nothing to play is a leftover of an edit, not
+        // something to stretch to the minimum length.
+        self.clips.retain(|c| {
+            !(c.src_in.is_finite() && c.out.is_finite() && c.out - c.src_in < MIN_PIECE / 2.0)
+        });
         let durations: std::collections::HashMap<String, (f64, String)> = self
             .media
             .iter()
@@ -546,6 +551,9 @@ fn rect(op: &Value) -> Option<Rect01> {
 /// Remove `[a, b)` of timeline time from every clip (and overlay and
 /// caption) on the given tracks, closing the gap: what "cut the part where I
 /// look for the file" means.
+/// The shortest piece of a clip worth keeping (about one frame at 25 fps).
+const MIN_PIECE: f64 = 0.04;
+
 pub fn cut_range(p: &mut Project, a: f64, b: f64, tracks: Option<&[String]>) {
     if b <= a {
         return;
@@ -566,14 +574,15 @@ pub fn cut_range(p: &mut Project, a: f64, b: f64, tracks: Option<&[String]>) {
             c.at -= gap;
             out.push(c);
         } else {
-            // Keep what lies before a and after b.
-            if s < a {
+            // Keep what lies before a and after b, unless it is shorter
+            // than a frame (a sliver would flash on screen).
+            if a - s > MIN_PIECE {
                 let mut l = c.clone();
                 l.out = l.src_in + (a - s) * l.speed;
                 l.fade_out = l.fade_out.min(l.len());
                 out.push(l);
             }
-            if e > b {
+            if e - b > MIN_PIECE {
                 let mut r = c.clone();
                 r.id = new_id("c");
                 r.src_in += (b - s) * r.speed;
@@ -1130,6 +1139,22 @@ mod tests {
             .collect();
         assert_eq!(audio, vec![1, 2]);
         assert_eq!(p.clips[0].volume, 0.0, "the picture clip is silent");
+    }
+
+    #[test]
+    fn edits_leave_no_empty_slivers() {
+        let mut p = proj();
+        p.place_media("m1", 0.0);
+        // A cut ending a hair after a clip's start would leave 1 ms of it.
+        cut_range(&mut p, 0.0, 59.999, None);
+        assert!(p.clips.iter().all(|c| c.len() >= MIN_PIECE / 2.0));
+        // A clip trimmed to nothing is dropped, not stretched to 40 ms.
+        let mut p = proj();
+        p.place_media("m1", 0.0);
+        let id = p.clips[0].id.clone();
+        p.clips[0].out = p.clips[0].src_in;
+        p.sanitize();
+        assert!(p.clips.iter().all(|c| c.id != id));
     }
 
     #[test]

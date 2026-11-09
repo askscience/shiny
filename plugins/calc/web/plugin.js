@@ -864,7 +864,14 @@ function showEditor(prefill = null) {
   editorInputEl.style.display = 'block';
   placeEditor(cell);
   editorInputEl.focus();
-  editorInputEl.select();
+  // Typing on a cell starts the edit with that key: keep it and put the caret
+  // after it, or the next key would replace it. Enter/F2 select the old value.
+  if (prefill != null) {
+    const end = editorInputEl.value.length;
+    editorInputEl.setSelectionRange(end, end);
+  } else {
+    editorInputEl.select();
+  }
 }
 
 /** Lay the overlay over a cell. The grid is zoomed, and the overlay lives

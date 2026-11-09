@@ -175,7 +175,9 @@ plain threads into a runtime-free channel (`thread_body` in
   Web Animations, `requestAnimationFrame` and `performance.now` read virtual
   time); RGBA frames go to ffmpeg as FFV1 with alpha.
 - **What the AI knows** (`summary.rs`, `transcribe.rs`, `media.rs`):
-  word-timed transcripts from the Whisper sidecar (30 s blocks with overlap),
+  word-timed transcripts from the Whisper sidecar (30 s blocks with overlap,
+  de-duplicated by time and, at the start of a block, by text: a word cut by
+  the edge is heard again as its tail),
   segments with ids, fillers and pauses, the recording's events and markers,
   scene changes (`scdet`) for imported video, peaks and thumbnails, all
   cached per file (path, size, mtime).
