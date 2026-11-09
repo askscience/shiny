@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-11-09
+
 ### Added
 
 - Capture, a new plugin for screen recording, live streaming and video
