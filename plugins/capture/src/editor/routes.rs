@@ -41,8 +41,15 @@ struct CreateBody {
 
 /// A file the caller named: a recording id or a media path in their home.
 pub fn resolve_media(home: &Path, s: &str) -> Option<PathBuf> {
+    let p = Path::new(s);
+    // The file picker hands out home-relative paths.
+    let full = if p.is_absolute() {
+        p.to_path_buf()
+    } else {
+        home.join(p)
+    };
     crate::library::resolve(&crate::library::capture_dir(home), s)
-        .or_else(|| super::media::allowed(home, Path::new(s)))
+        .or_else(|| super::media::allowed(home, &full))
 }
 
 /// Probe and add files, placing each after the previous one.
@@ -332,10 +339,57 @@ pub fn overlay_html() -> RouteHandler {
             .header(header::CACHE_CONTROL, "no-store")
             .header(
                 "content-security-policy",
-                "sandbox allow-scripts; default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:",
+                "sandbox allow-scripts; default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:; frame-ancestors 'self'",
             )
             .header("x-content-type-options", "nosniff")
             .body(Body::from(doc))
             .map_err(|e| AppError::Internal(e.to_string()))
+    })
+}
+
+/// What the AI sees, for the editor's text view (transcript on the timeline).
+pub fn summary() -> RouteHandler {
+    bridged_route(move |req: Request| async move {
+        user_id(&req)?;
+        let h = home(&req);
+        let id = param(&req, "id")?;
+        let p = project::load(&h, &id).ok_or_else(not_found)?;
+        let v = tokio::task::spawn_blocking(move || {
+            let mut v = super::summary::summary(&p, false);
+            v["transcribing"] = json!(p
+                .media
+                .iter()
+                .filter_map(|m| super::transcribe::state(&m.path)
+                    .map(|s| json!({ "media": m.id, "state": s })))
+                .collect::<Vec<_>>());
+            v
+        })
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+        Ok(ok(v))
+    })
+}
+
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct TranscribeBody {
+    lang: Option<String>,
+}
+
+/// Start transcribing every media of the project (the voice track).
+pub fn transcribe() -> RouteHandler {
+    bridged_route(move |req: Request| async move {
+        user_id(&req)?;
+        let h = home(&req);
+        let id = param(&req, "id")?;
+        let b: TranscribeBody = take_json(req).await?;
+        let p = project::load(&h, &id).ok_or_else(not_found)?;
+        let mut out = Vec::new();
+        for m in p.media.iter().filter(|m| m.info.audio_tracks > 0) {
+            let track = m.tracks.iter().position(|t| t == "mic").unwrap_or(0) as u32;
+            super::transcribe::start(m.path.clone(), track, b.lang.clone());
+            out.push(json!({ "media": m.id, "state": super::transcribe::state(&m.path) }));
+        }
+        Ok(ok(json!(out)))
     })
 }

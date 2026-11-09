@@ -809,6 +809,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "capture-render"
+version = "0.1.0"
+dependencies = [
+ "cc",
+ "pkg-config",
+]
+
+[[package]]
 name = "cbc"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6831,7 +6839,7 @@ dependencies = [
 
 [[package]]
 name = "shiny-browser-plugin"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "aes-gcm",
  "argon2",
@@ -7193,7 +7201,7 @@ dependencies = [
 
 [[package]]
 name = "shiny-studio-plugin"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "axum",

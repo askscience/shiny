@@ -87,6 +87,8 @@ pub struct Job {
     pub progress: f32,
     pub output: Option<PathBuf>,
     pub error: Option<String>,
+    /// What was left out (graphics without the renderer).
+    pub warnings: Vec<String>,
     pub started: u64,
 }
 
@@ -574,7 +576,14 @@ fn run(home: &Path, p: &Project, preset: &Preset, job: &Arc<Mutex<Job>>) -> Resu
     let r = (|| {
         // HTML graphics first.
         let mut overlays = HashMap::new();
-        let shown: Vec<_> = p.overlays.iter().filter(|o| !o.ghost).collect();
+        let mut shown: Vec<_> = p.overlays.iter().filter(|o| !o.ghost).collect();
+        if !shown.is_empty() && super::render::renderer().is_none() {
+            job.lock().unwrap().warnings.push(format!(
+                "{} graphics left out: the renderer (liteaura-capture-render) is not installed",
+                shown.len()
+            ));
+            shown.clear();
+        }
         for (i, o) in shown.iter().enumerate() {
             let file = super::render::render_overlay(p, o, &work)?;
             overlays.insert(o.id.clone(), file);

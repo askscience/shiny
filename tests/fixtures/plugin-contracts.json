@@ -55,6 +55,11 @@
       {
         "auth": "auth",
         "method": "Get",
+        "path": "/api/browser/suggest"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
         "path": "/api/browser/vault"
       },
       {
@@ -335,6 +340,211 @@
       "reschedule",
       "schedule",
       "update_event"
+    ]
+  },
+  "capture": {
+    "api_level": 1,
+    "routes": [
+      {
+        "auth": "auth",
+        "method": "Delete",
+        "path": "/api/capture/destinations/:id"
+      },
+      {
+        "auth": "auth",
+        "method": "Delete",
+        "path": "/api/capture/projects/:id"
+      },
+      {
+        "auth": "auth",
+        "method": "Delete",
+        "path": "/api/capture/recordings/:id"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/capture/camera.jpg"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/capture/camera.mjpeg"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/capture/destinations"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/capture/devices"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/capture/jobs/:id"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/capture/media"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/capture/media/info"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/capture/media/peaks"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/capture/media/thumbs"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/capture/meter"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/capture/overlay/:project/:id"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/capture/platforms"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/capture/preview.jpg"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/capture/projects"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/capture/projects/:id"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/capture/projects/:id/summary"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/capture/recordings"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/capture/settings"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/capture/status"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/capture/camera/release"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/capture/destinations"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/capture/event"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/capture/marker"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/capture/pause"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/capture/projects"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/capture/projects/:id/export"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/capture/projects/:id/transcribe"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/capture/start"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/capture/stop"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/capture/update"
+      },
+      {
+        "auth": "auth",
+        "method": "Put",
+        "path": "/api/capture/destinations/:id"
+      },
+      {
+        "auth": "auth",
+        "method": "Put",
+        "path": "/api/capture/projects/:id"
+      },
+      {
+        "auth": "auth",
+        "method": "Put",
+        "path": "/api/capture/settings"
+      }
+    ],
+    "tools": [
+      "capture_edit",
+      "capture_export",
+      "capture_graphic",
+      "capture_import",
+      "capture_live_start",
+      "capture_marker",
+      "capture_project_create",
+      "capture_project_get",
+      "capture_projects",
+      "capture_proposal",
+      "capture_propose",
+      "capture_record_start",
+      "capture_recordings",
+      "capture_status",
+      "capture_stop",
+      "capture_style",
+      "capture_transcribe",
+      "capture_undo"
     ]
   },
   "files": {

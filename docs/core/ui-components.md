@@ -40,6 +40,9 @@ not always identical.
 | Data and feedback | `list`, `listItem`, `stat`, `badge`, `avatar`, `keyValue`, `toast`, `notify`, `spinner`, `skeleton`, `progress`, `emptyState` | Reuse these instead of introducing independent status, loading or empty-state systems. |
 | Popover geometry | `placePopover(popup, anchor)` | Measures the visible viewport, clamps width, chooses above/below placement and limits scrolling height, including a soft keyboard. Call after showing the popup; placement follows scrolling/rotation and releases its observers on close. |
 | Motion | `transition`, `disposeMotion`, `revealRegion`, `enterSurface` | Finite, cancellable transitions that respect reduced motion. |
+| Timelines | `timeline`, `secondsScale`, `beatsScale`, `formatTimecode`, `wireZoomGestures` | Tracks, clips, ruler and playhead for any editor (Capture's editor). Drag moves a clip (across tracks of the same kind), its edges trim it, the ruler and empty lanes seek; Ctrl+wheel and every kind of pinch zoom around the pointer (`wireZoomGestures`, also used by Studio's arranger). Only clips in view are laid out. A scale is seconds/timecode or bars/beats; ticks never crowd at any zoom. See [Timelines](#timelines). |
+| Audio | `waveform`, `drawWaveform`, `levelMeter`, `meterFrac` | A min/max waveform in a canvas (Studio's `[[min,max]]` or Capture's `{rate,min,max}` peaks; one column per pixel, transients kept; the ink is the canvas colour). The mixer meter Studio introduced: instant attack, ~20 dB/s release, 1.5 s hold, latching clip light; `--meter-bg` tints the well. |
+| Quiet mode | `setQuiet(on, owner)`, `isQuiet()` | Do not disturb while something records the screen: notification banners are held and shown when the last owner releases it, so they never end up in a video. |
 
 `toolButton(icon, label, onClick, options)` is the compact icon action. Options
 include `danger`, `className`, `variant`, `disabled` and `iconSize`.
@@ -283,3 +286,29 @@ the baseline root (`SYSTEM_PLUGINS_DIR`, the repo's `data/plugins`) is scanned
 first, but a same-named plugin in `PLUGINS_DIR` (`~/.local/share/shiny/plugins`
 in a kiosk install) **overrides** it, and the override is what gets served. Do
 not restart the user's kiosk to refresh source.
+
+## Timelines
+
+```js
+import { timeline, secondsScale } from '../../ui/index.js';
+const tl = timeline({
+  makeScale: (zoom) => secondsScale({ pps: zoom }), zoom: 40,
+  tracks: [{ id: 'v1', label: 'Video', kind: 'video', height: 56 }],
+  items: [{ id: 'c1', track: 'v1', start: 0, end: 4, label: 'Intro' }],
+  renderItem: (body, item, { width }) => { /* thumbnails, waveform */ },
+  onMove: (id, { start, track }) => save(...),
+  onTrim: (id, { start, end, edge }) => save(...),
+  onSeek: (t) => player.seek(t),
+});
+host.appendChild(tl.el);
+tl.setPlayhead(t, { follow: true });
+```
+
+The owner keeps the data: the timeline moves an item while it is dragged and
+reports the result in `onMove`/`onTrim`; the owner saves and calls
+`setItems` with what the server returned. `minStart`/`maxEnd` bound trims (a
+clip cannot reach before its media's start), `canDrop` says which tracks
+accept an item, `markers()` draws marks and ranges (`className: 'is-cut'`
+hatches a range proposed for removal), and an item with `ghost: true` draws
+dashed (a proposal not yet accepted).
+

@@ -4,17 +4,33 @@
 
 ### Added
 
-- Capture (in progress): the engine, routes and agent tools of the new
-  Capture plugin. It records the whole screen, a region or one window, with a
-  webcam bubble from square to circle, the microphone and the desktop sound
-  on separate tracks, pauses, and goes live on YouTube, Twitch, Kick,
-  Facebook or any RTMP server (several at once from one encode, a dropped
-  platform reconnects without stopping the others). It grabs only the parts
-  of the screen that changed, converts them with AVX2, skips unchanged
-  frames entirely and encodes on the GPU, so an idle 1080p recording costs
-  about 1% of one core. Stream keys are sealed on disk. A video editor
-  backend (projects, proposals, export with one ffmpeg run) is in place; the
-  window comes next.
+- Capture, a new plugin for screen recording, live streaming and video
+  editing with the assistant:
+  - Record the whole screen, a region (free, 16:9, 9:16 or 1:1) or one
+    window, which is followed when it moves or is resized. A webcam bubble
+    floats above every window; drag it anywhere, resize it, and shape it
+    from square to circle, mirrored, with an accent border. The microphone
+    and the desktop sound are kept on separate tracks, with level meters.
+    Pause, markers, and a recording chip in the top bar that stays visible
+    with the window closed. Notifications wait until the recording ends, so
+    they never end up in a video.
+  - Go live on YouTube, Twitch, Kick, Facebook or any RTMP server, several
+    at once from one encode; a platform that drops reconnects on its own
+    without stopping the others or the recording. Only the stream key is
+    needed, and it is stored sealed.
+  - Light on the machine: only the parts of the screen that changed are
+    grabbed and converted (AVX2), unchanged frames are not encoded at all,
+    and the GPU encodes. An idle 1080p recording costs about 1% of one core.
+  - An editor for any video, sound or picture: a timeline with thumbnails
+    and waveforms, split, trim, speed, fades, placement and rounded corners,
+    captions, cutting by selecting lines of the transcript, export to
+    1080p, 720p, 4K, vertical 9:16, square or GIF.
+  - The assistant edits with the model chosen in Settings: proposals you
+    accept, reject or refine, or "Edit everything" with a goal and
+    guidelines. Its graphics are free HTML (titles, animated explainers,
+    presentations) that keep one style from graphic to graphic until you ask
+    for something different. Recording or going live is never started by
+    the assistant without your confirmation.
 - Shared UI: a timeline, time scales, a waveform and a level meter in
   `web/ui`, extracted from Studio; Studio's meters, waveforms and pinch zoom
   now use them.
@@ -22,6 +38,11 @@
   `shiny-dsp` (loudness and waveform peaks, used by Studio and Capture).
 - Whisper sidecar: `POST /stt/transcribe` returns word timings for a block of
   audio (Capture's editor transcribes recordings with it).
+- Notifications have a quiet mode (`setQuiet` in `web/ui`): banners are
+  held while something records the screen and shown afterwards.
+- A plugin page served with a `sandbox` Content-Security-Policy keeps its own
+  policy and can be framed by the app (an opaque origin with no access to the
+  app); every other response still gets the app's policy.
 
 ## [0.2.4] - 2026-11-08
 

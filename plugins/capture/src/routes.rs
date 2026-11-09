@@ -62,6 +62,8 @@ pub fn specs() -> Vec<RouteSpec> {
         RouteSpec::put("/api/capture/projects/:id", "proj_put"),
         RouteSpec::delete("/api/capture/projects/:id", "proj_delete"),
         RouteSpec::post("/api/capture/projects/:id/export", "proj_export"),
+        RouteSpec::get("/api/capture/projects/:id/summary", "proj_summary"),
+        RouteSpec::post("/api/capture/projects/:id/transcribe", "proj_transcribe"),
         RouteSpec::get("/api/capture/jobs/:id", "job_get"),
         RouteSpec::get("/api/capture/overlay/:project/:id", "overlay_html"),
     ]
@@ -108,6 +110,8 @@ pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
         "proj_delete" => editor::routes::delete(),
         "proj_export" => editor::routes::export(),
         "job_get" => editor::routes::job(),
+        "proj_summary" => editor::routes::summary(),
+        "proj_transcribe" => editor::routes::transcribe(),
         "overlay_html" => editor::routes::overlay_html(),
         _ => return None,
     })
@@ -165,6 +169,32 @@ fn simple(f: fn(&Request) -> Result<Value, AppError>) -> RouteHandler {
     })
 }
 
+/// A streamed body produced on its own thread.
+///
+/// A response body is polled by the *host's* runtime, after this plugin's
+/// handler returned: nothing inside it may touch this plugin's Tokio (a
+/// timer or `spawn_blocking` there panics with "no reactor" and aborts the
+/// whole server). So the bytes come from a plain thread through a
+/// runtime-free channel; the thread ends when the client goes away.
+fn thread_body<F>(produce: F) -> Body
+where
+    F: FnOnce(&mut dyn FnMut(Vec<u8>) -> bool) + Send + 'static,
+{
+    use futures::SinkExt;
+    let (tx, rx) = futures::channel::mpsc::channel::<Result<axum::body::Bytes, std::io::Error>>(2);
+    std::thread::Builder::new()
+        .name("capture-stream".into())
+        .spawn(move || {
+            let mut tx = tx;
+            let mut send = |chunk: Vec<u8>| {
+                futures::executor::block_on(tx.send(Ok(axum::body::Bytes::from(chunk)))).is_ok()
+            };
+            produce(&mut send);
+        })
+        .ok();
+    Body::from_stream(rx)
+}
+
 fn bytes_response(ct: &'static str, body: Vec<u8>) -> Response {
     Response::builder()
         .status(StatusCode::OK)
@@ -204,7 +234,7 @@ fn devices_route() -> RouteHandler {
 }
 
 fn encoder_label(p: crate::encoder::Purpose) -> String {
-    crate::encoder::choose(session::va_nodes(), p).label()
+    crate::encoder::choose(session::va_nodes(), p).friendly()
 }
 
 fn settings_get(ctx: Arc<PluginCtx>) -> RouteHandler {
@@ -519,15 +549,19 @@ fn camera_mjpeg() -> RouteHandler {
         local_only(&req)?;
         let q: CamQuery = query(&req)?;
         let l = open_camera(&q)?;
-        let stream = futures::stream::unfold((l, 0u64, 0u32), |(l, seen, idle)| async move {
+        let body = thread_body(move |send| {
+            let mut seen = 0u64;
+            let mut quiet = 0u32;
             loop {
-                if idle > 100 || l.error.lock().unwrap().is_some() {
-                    return None;
+                if l.error.lock().unwrap().is_some() || !camera::is_open() || quiet > 300 {
+                    return;
                 }
                 camera::want_jpeg();
                 let (seq, j) = l.jpeg.lock().unwrap().clone();
                 if seq != seen {
                     if let Some(j) = j {
+                        seen = seq;
+                        quiet = 0;
                         let mut part = format!(
                             "--frame\r\nContent-Type: image/jpeg\r\nContent-Length: {}\r\n\r\n",
                             j.len()
@@ -535,17 +569,14 @@ fn camera_mjpeg() -> RouteHandler {
                         .into_bytes();
                         part.extend_from_slice(&j);
                         part.extend_from_slice(b"\r\n");
-                        return Some((
-                            Ok::<_, std::io::Error>(axum::body::Bytes::from(part)),
-                            (l, seq, 0),
-                        ));
+                        if !send(part) {
+                            return;
+                        }
+                        continue;
                     }
                 }
-                tokio::time::sleep(std::time::Duration::from_millis(30)).await;
-                if !camera::is_open() {
-                    return None;
-                }
-                let _ = idle;
+                quiet += 1;
+                std::thread::sleep(std::time::Duration::from_millis(30));
             }
         });
         Response::builder()
@@ -555,7 +586,7 @@ fn camera_mjpeg() -> RouteHandler {
                 "multipart/x-mixed-replace; boundary=frame",
             )
             .header(header::CACHE_CONTROL, "no-store")
-            .body(Body::from_stream(stream))
+            .body(body)
             .map_err(|e| AppError::Internal(e.to_string()))
     })
 }
@@ -677,7 +708,13 @@ pub fn media_path(req: &Request, q: &MediaQuery) -> Result<PathBuf, AppError> {
         .path
         .as_deref()
         .ok_or_else(|| AppError::BadRequest("missing path".into()))?;
-    editor::media::allowed(&h, Path::new(p))
+    let p = Path::new(p);
+    let full = if p.is_absolute() {
+        p.to_path_buf()
+    } else {
+        h.join(p)
+    };
+    editor::media::allowed(&h, &full)
         .ok_or_else(|| AppError::BadRequest("not a media file in your home".into()))
 }
 
@@ -744,27 +781,22 @@ fn media() -> RouteHandler {
         let (start, end) = range.unwrap_or((0, len.saturating_sub(1)));
         let count = if len == 0 { 0 } else { end - start + 1 };
         let ct = mime(&p);
-        let stream = futures::stream::unfold((p, start, count), |(p, pos, left)| async move {
-            if left == 0 {
-                return None;
+        let body = thread_body(move |send| {
+            use std::io::{Read, Seek, SeekFrom};
+            let Ok(mut f) = std::fs::File::open(&p) else {
+                return;
+            };
+            if f.seek(SeekFrom::Start(start)).is_err() {
+                return;
             }
-            let n = left.min(512 * 1024) as usize;
-            let r = tokio::task::spawn_blocking(move || {
-                use std::io::{Read, Seek, SeekFrom};
-                let mut f = std::fs::File::open(&p)?;
-                f.seek(SeekFrom::Start(pos))?;
+            let mut left = count;
+            while left > 0 {
+                let n = left.min(256 * 1024) as usize;
                 let mut buf = vec![0u8; n];
-                f.read_exact(&mut buf)?;
-                Ok::<_, std::io::Error>((p, buf))
-            })
-            .await
-            .unwrap_or_else(|e| Err(std::io::Error::other(e.to_string())));
-            match r {
-                Ok((p, buf)) => Some((
-                    Ok::<_, std::io::Error>(axum::body::Bytes::from(buf)),
-                    (p, pos + n as u64, left - n as u64),
-                )),
-                Err(e) => Some((Err(e), (PathBuf::new(), 0, 0))),
+                if f.read_exact(&mut buf).is_err() || !send(buf) {
+                    return;
+                }
+                left -= n as u64;
             }
         });
         let mut b = Response::builder()
@@ -778,8 +810,7 @@ fn media() -> RouteHandler {
         } else {
             b.status(StatusCode::OK)
         };
-        b.body(Body::from_stream(stream))
-            .map_err(|e| AppError::Internal(e.to_string()))
+        b.body(body).map_err(|e| AppError::Internal(e.to_string()))
     })
 }
 

@@ -567,6 +567,29 @@ fn is_shell_asset_path(path: &str) -> bool {
         || std::path::Path::new(path).extension().is_some()
 }
 
+/// The shell's Content-Security-Policy and framing rule on every response,
+/// with one exception: a document that already declares a CSP starting with
+/// `sandbox` (a plugin's untrusted page, e.g. Capture's HTML graphics) keeps
+/// its own, stricter policy. `sandbox` gives it an opaque origin, so it can
+/// neither read the app's storage nor call its API with the user's cookie;
+/// it may then be framed by the shell (`SAMEORIGIN`) and nothing else.
+async fn shell_frame_policy(req: axum::extract::Request, next: axum::middleware::Next) -> axum::response::Response {
+    let mut res = next.run(req).await;
+    let sandboxed = res
+        .headers()
+        .get(header::CONTENT_SECURITY_POLICY)
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|v| v.trim_start().to_ascii_lowercase().starts_with("sandbox"));
+    let headers = res.headers_mut();
+    if sandboxed {
+        headers.insert(header::X_FRAME_OPTIONS, HeaderValue::from_static("SAMEORIGIN"));
+    } else {
+        headers.insert(header::CONTENT_SECURITY_POLICY, HeaderValue::from_static(CONTENT_SECURITY_POLICY));
+        headers.insert(header::X_FRAME_OPTIONS, HeaderValue::from_static("DENY"));
+    }
+    res
+}
+
 /// Cache policy for the shell router. `no-cache` lets the browser store and
 /// revalidate assets (`ServeDir` already answers `If-Modified-Since` with a
 /// 304), while API responses and SSE stay out of every cache. Web-app routes
@@ -844,17 +867,10 @@ pub fn build_router(state: AppState) -> Router {
                         .and(NotForContentType::const_new("video/")),
                 ),
         )
-        .layer(SetResponseHeaderLayer::overriding(
-            axum::http::HeaderName::from_static("content-security-policy"),
-            axum::http::HeaderValue::from_static(CONTENT_SECURITY_POLICY),
-        ))
+        .layer(axum::middleware::from_fn(shell_frame_policy))
         .layer(SetResponseHeaderLayer::overriding(
             axum::http::HeaderName::from_static("x-content-type-options"),
             axum::http::HeaderValue::from_static("nosniff"),
-        ))
-        .layer(SetResponseHeaderLayer::overriding(
-            axum::http::HeaderName::from_static("x-frame-options"),
-            axum::http::HeaderValue::from_static("DENY"),
         ))
         .layer(SetResponseHeaderLayer::overriding(
             axum::http::HeaderName::from_static("referrer-policy"),
@@ -919,5 +935,40 @@ mod shell_path_tests {
         for path in ["/", "/settings", "/plugins", "/chat/123", "/themes"] {
             assert!(!is_shell_asset_path(path), "{path} should be navigation");
         }
+    }
+
+    #[tokio::test]
+    async fn sandboxed_documents_keep_their_policy() {
+        use super::{get, header, shell_frame_policy, Router};
+        use axum::body::Body;
+        use axum::http::Request;
+        use tower::ServiceExt;
+        let app = Router::new()
+            .route("/plain", get(|| async { "x" }))
+            .route(
+                "/sandboxed",
+                get(|| async {
+                    ([(header::CONTENT_SECURITY_POLICY, "sandbox allow-scripts; default-src 'none'")], "x")
+                }),
+            )
+            .route(
+                "/other-csp",
+                get(|| async { ([(header::CONTENT_SECURITY_POLICY, "default-src *")], "x") }),
+            )
+            .layer(axum::middleware::from_fn(shell_frame_policy));
+        let get_ = |p: &'static str| {
+            let app = app.clone();
+            async move { app.oneshot(Request::get(p).body(Body::empty()).unwrap()).await.unwrap() }
+        };
+        let plain = get_("/plain").await;
+        assert_eq!(plain.headers()["x-frame-options"], "DENY");
+        assert!(plain.headers()["content-security-policy"].to_str().unwrap().contains("frame-ancestors 'none'"));
+        let sb = get_("/sandboxed").await;
+        assert_eq!(sb.headers()["x-frame-options"], "SAMEORIGIN");
+        assert!(sb.headers()["content-security-policy"].to_str().unwrap().starts_with("sandbox"));
+        // A looser policy that is not a sandbox is replaced by the shell's.
+        let other = get_("/other-csp").await;
+        assert!(other.headers()["content-security-policy"].to_str().unwrap().contains("frame-ancestors 'none'"));
+        assert_eq!(other.headers()["x-frame-options"], "DENY");
     }
 }

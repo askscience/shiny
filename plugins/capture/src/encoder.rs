@@ -24,6 +24,26 @@ pub enum Backend {
 }
 
 impl Backend {
+    /// What the window shows: "Intel GPU", "AMD GPU", "CPU (x264)".
+    pub fn friendly(&self) -> String {
+        match self {
+            Backend::X264 { .. } => "CPU (x264)".into(),
+            Backend::Vaapi { device } => {
+                let vendor = device
+                    .file_name()
+                    .map(|n| Path::new("/sys/class/drm").join(n).join("device/vendor"))
+                    .and_then(|p| std::fs::read_to_string(p).ok())
+                    .unwrap_or_default();
+                match vendor.trim() {
+                    "0x8086" => "Intel GPU".into(),
+                    "0x1002" => "AMD GPU".into(),
+                    "0x10de" => "NVIDIA GPU".into(),
+                    _ => "GPU".into(),
+                }
+            }
+        }
+    }
+
     pub fn label(&self) -> String {
         match self {
             Backend::X264 { preset } => format!("x264/{preset}"),

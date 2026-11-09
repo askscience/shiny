@@ -1684,3 +1684,15 @@ body.orb-speaking #artifact-dock {
 }
 .ui-select-option:hover { background: var(--glass-hover); }
 .ui-select-option.is-active { background: var(--accent-soft); }
+
+/* Capture's recording chip (plugins/capture/web/hud.js): a red dot and the
+   time while recording, the accent and LIVE while streaming. */
+.hud-capture { display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--error, #e5484d) 50%, transparent); background: color-mix(in srgb, var(--error, #e5484d) 12%, transparent); color: var(--text); font: 600 12px/1 var(--font-mono); cursor: pointer; }
+.hud-capture[hidden] { display: none; }
+.hud-capture-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--error, #e5484d); animation: hud-capture-pulse 1.6s ease-in-out infinite; }
+.hud-capture.is-live { border-color: color-mix(in srgb, var(--accent) 60%, transparent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.hud-capture.is-live .hud-capture-dot { background: var(--accent); }
+.hud-capture.is-paused .hud-capture-dot { animation: none; opacity: .4; }
+@keyframes hud-capture-pulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .hud-capture-dot { animation: none; } }
+.capture-hud-menu { z-index: 9000; }

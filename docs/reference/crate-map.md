@@ -13,6 +13,9 @@ and the remote-access crates.
 | `shiny-filter` | [`crates/shiny-filter`](../../crates/shiny-filter) | lib | The Browser's in-process filtering engine: compiles EasyList/EasyPrivacy, classifies and rewrites requests, exposes metrics. |
 | `shiny-filter-core` | [`crates/shiny-filter-core`](../../crates/shiny-filter-core) | lib | Shared filter-list parsing/classification logic used by `shiny-filter`. |
 | `shiny-osm` | [`crates/shiny-osm`](../../crates/shiny-osm) | lib | Nominatim/OSRM/Overpass client shared by core and the traveler plugin. |
+| `shiny-vault` | [`crates/shiny-vault`](../../crates/shiny-vault) | lib | Sealing shared by plugins: AES-256-GCM `seal`/`open` bound to a slot, Argon2id `derive`, a 0600 `machine_key` file. Browser's password vault and Capture's stream keys. An rlib: never crosses the plugin ABI. |
+| `shiny-dsp` | [`crates/shiny-dsp`](../../crates/shiny-dsp) | lib | Audio analysis shared by plugins: BS.1770 loudness, waveform peaks (whole buffers and streaming). Studio and Capture. |
+| `capture-render` | [`crates/capture-render`](../../crates/capture-render) | bin | `liteaura-capture-render`: Capture's HTML graphics in Qt WebEngine offscreen, seeked frame by frame, RGBA to stdout (no network, throw-away profile). |
 | `liteaura-core` | [`crates/liteaura-core`](../../crates/liteaura-core) | lib | Display-scale choice/auto-snapping shared by the Linux and macOS shells. |
 | `liteaura` | [`crates/liteaura`](../../crates/liteaura) | bin | Linux kiosk shell (Qt 6 + QtWebEngine): window, display scaling, child browser web views, downloads, trackpad gestures, request interceptor, host shims. |
 | `liteaura-mac` | [`crates/liteaura-mac`](../../crates/liteaura-mac) | bin | macOS shell (WKWebView + `NSTouchBar`). Packaged as `LiteAura.app` by [`scripts/bundle-app.sh`](../../scripts/bundle-app.sh). |
@@ -31,6 +34,7 @@ ecosystem. See the plugin's `docs/` folder and
 | Crate (dir) | Library artifact | Category |
 |---|---|---|
 | `plugins/browser` | `libshiny_browser_plugin` | Web |
+| `plugins/capture` | `libshiny_capture_plugin` | Media |
 | `plugins/files` | `libshiny_files_plugin` | System |
 | `plugins/hello` | `libshiny_hello_plugin` | System |
 | `plugins/keyboard` | `libshiny_keyboard_plugin` | System |

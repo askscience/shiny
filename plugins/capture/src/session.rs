@@ -437,7 +437,7 @@ fn run(plan: &Plan, sh: &Shared) -> Result<Option<PathBuf>> {
         st.width = fw as u32;
         st.height = fh as u32;
         st.fps = fps;
-        st.encoder = backend.label();
+        st.encoder = backend.friendly();
     }
 
     let mut frame = Nv12::new(fw, fh);

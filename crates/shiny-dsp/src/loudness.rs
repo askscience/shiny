@@ -108,7 +108,7 @@ pub fn measure<C: AsRef<[f32]>>(channels: &[C], sample_rate: f64) -> LoudnessRep
         .map(|_| {
             (
                 Biquad::high_shelf(
-                    1681.974_450_955_533,
+                    1_681.974_450_955_533,
                     3.999_843_853_973_347,
                     0.707_175_236_955_419_6,
                     sample_rate,

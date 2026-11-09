@@ -1,0 +1,14 @@
+[package]
+name = "capture-render"
+version = "0.1.0"
+edition = "2021"
+description = "Capture's HTML graphics renderer: a page in Qt WebEngine offscreen, seeked frame by frame, RGBA to stdout"
+publish = false
+
+[[bin]]
+name = "liteaura-capture-render"
+path = "src/main.rs"
+
+[build-dependencies]
+cc = "1"
+pkg-config = "0.3"

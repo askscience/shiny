@@ -96,6 +96,83 @@ What the numbers decided:
   behind saturated moving objects; QP 20 removes most of them for ≈15% more
   bitrate, hence the default.
 
+## Sessions (`src/session.rs`)
+
+One thread owns the X connection, the frame and the encoder. Per tick:
+wait until ffmpeg has read the previous frame (it went by `vmsplice`), take
+the cursor and the bubble off it (saved patches), convert only what XDamage
+reports, draw the bubble and the cursor again, send the frame if anything
+changed.
+
+- **One clock for every track.** Video timestamps are wall-clock
+  microseconds minus an origin taken just before ffmpeg starts. PulseAudio
+  stamps audio with the wall clock too (`-wallclock 1`), so each audio input
+  gets `-itsoffset -origin` under `-copyts`: microphone, desktop sound and
+  picture share one time base without any measuring.
+- **Separate tracks.** A recording keeps the microphone and the desktop
+  sound on their own AAC tracks. At stop the MP4 gets a mixed track first
+  (what players play) and each source after it, untouched, for the editor.
+- **Pause** closes the current file segment and resume opens the next; stop
+  joins them (`concat`, stream copy). A paused session costs nothing.
+- **Clean stop.** Audio inputs never end, so ffmpeg is stopped with SIGINT,
+  but only once its own frame counter (`-progress`) shows every frame sent
+  was encoded: SIGINT drops frames still in the encoder. The last frame goes
+  twice (the encoder keeps its newest frame until teardown), so the video
+  lasts as long as its sound even after a long still stretch.
+- **A moving window.** The window sends the tile's rectangle as it moves;
+  a move regrabs it, a resize converts at the new size and fits it into the
+  first size with bars (the encoder cannot change size mid-stream).
+- **Live.** One encode, every destination through `tee`, each behind its
+  own `fifo` with recovery (`attempt_recovery`, `drop_pkts_on_overflow`), so
+  a platform that drops reconnects alone and never blocks the others or the
+  recording. Constant frame rate and constant bitrate at the strictest
+  platform's limit; a silent track when there is no audio (platforms refuse
+  a stream without one).
+- **Webcam** (`src/camera.rs`, `src/v4l2.rs`, `src/bubble.rs`): one owner for
+  the camera, a hand-written V4L2 mmap client, the smallest mode that covers
+  twice the bubble, NV12 straight from the driver. Per camera frame one
+  bilinear scale of the centred crop (mirror and zoom are just the order and
+  offset of the scaler's taps), the border ring as exact compositing
+  (`mix(camera, border, (outer − inner)/outer)`), then the masked blend.
+  Measured at 800 MHz: 1.9 ms per 640×480 frame for a 320 px bubble.
+- **Previews** are JPEGs encoded from NV12 through a lookup table (limited to
+  full range), only while someone looks: the bubble's MJPEG (≤ 15 fps) and
+  the window's preview (2 fps).
+
+## Streaming bodies
+
+A plugin route's response body is polled by the host after the handler
+returns, on the host's runtime. A plugin's own Tokio (timers,
+`spawn_blocking`) used there panics with "no reactor running" and aborts the
+whole server. Media files and the camera's MJPEG are therefore produced on
+plain threads into a runtime-free channel (`thread_body` in
+`src/routes.rs`); the thread ends when the client goes away.
+
+## Editor (`src/editor/`)
+
+- **Project** (`project.rs`): media, tracks, clips (media, in, out, at,
+  speed, volume, fades, rect, radius), HTML overlays, captions, markers,
+  style, proposals. `sanitize` clamps every document from outside; `apply`
+  validates one operation, `apply_all` is atomic. Saves keep the previous
+  copy (last 50) for undo.
+- **Export** (`export.rs`): one ffmpeg run. Each clip is its own input
+  opened at its in-point (`-ss`/`-t` before `-i`, keyframe seek, decode only
+  what plays); pictures go over a solid canvas with `overlay` after a
+  `setpts` shift; rounded corners reuse the bubble's SDF mask as a grey image
+  for `alphamerge`; captions are an ASS file for libass; audio clips are
+  trimmed, re-timed with chained `atempo`, faded, delayed and mixed without
+  normalisation. The graph is written to a script file.
+- **Graphics** (`render.rs`, `crates/capture-render`): a separate Qt
+  WebEngine program renders each graphic offscreen, no network, a throw-away
+  profile, a virtual clock seeked per frame (`capture.seek(t)` moves CSS and
+  Web Animations, `requestAnimationFrame` and `performance.now` read virtual
+  time); RGBA frames go to ffmpeg as FFV1 with alpha.
+- **What the AI knows** (`summary.rs`, `transcribe.rs`, `media.rs`):
+  word-timed transcripts from the Whisper sidecar (30 s blocks with overlap),
+  segments with ids, fillers and pauses, the recording's events and markers,
+  scene changes (`scdet`) for imported video, peaks and thumbnails, all
+  cached per file (path, size, mtime).
+
 ## Running the spike
 
 ```sh

@@ -44,7 +44,7 @@ export { field, input, textarea, select, selectControl, useSelectMenu, toggle, t
 export { card, panel, section, divider, stack, row } from './components/card.js';
 export { modal, floating, sheet, tooltip } from './components/overlay.js';
 export { toast, wireToastEvents, spinner, skeleton, progress, emptyState, badge } from './components/feedback.js';
-export { notify, wireNotificationEvents } from './components/notifications.js';
+export { notify, wireNotificationEvents, setQuiet, isQuiet } from './components/notifications.js';
 export { list, listItem, stat, chip, avatar, keyValue } from './components/data.js';
 export {
   dockButton, insightCard, artifactPanel,

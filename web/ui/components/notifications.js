@@ -22,6 +22,28 @@ const URGENCY_TIMEOUT = { low: 4000, normal: 7000, critical: 0 };
 let container = null;
 let seq = 0;
 
+/* Quiet mode (Do not disturb): while something records the screen, banners
+   are held instead of shown, so they never end up in the video, and come
+   back when it stops. Owners are counted, so two recorders can overlap. */
+const quietOwners = new Set();
+let held = [];
+
+/** Hold banners while `on` for `owner`; releasing the last owner shows them. */
+export function setQuiet(on, owner = 'default') {
+  if (on) quietOwners.add(owner);
+  else quietOwners.delete(owner);
+  document.documentElement.toggleAttribute('data-quiet', quietOwners.size > 0);
+  if (!quietOwners.size && held.length) {
+    const flush = held.slice(-5);
+    held = [];
+    for (const o of flush) notify(o);
+  }
+}
+
+export function isQuiet() {
+  return quietOwners.size > 0;
+}
+
 function ensureContainer() {
   if (container?.parentElement) return container;
   container = document.createElement('div');
@@ -63,6 +85,11 @@ function buildIcon(iconArg) {
  * @param {number|null} opts.timeout   ms before auto-dismiss (0 = sticky)
  */
 export function notify(opts = {}) {
+  if (quietOwners.size) {
+    held.push(opts);
+    if (held.length > 20) held.shift();
+    return null;
+  }
   const {
     title = null,
     body = '',
