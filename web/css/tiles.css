@@ -9484,6 +9484,17 @@ html[data-phone='1'] .updates-install[data-count]::after {
 .capture-pick-hint { position: fixed; left: 50%; bottom: 32px; transform: translateX(-50%); padding: 8px 14px; border-radius: 999px; background: var(--surface-strong, var(--surface)); color: var(--text); font-size: 13px; box-shadow: var(--shadow-float, 0 8px 24px rgba(0,0,0,.3)); pointer-events: none; }
 .capture-pick-bar { position: fixed; left: 50%; top: calc(var(--hud-header-total, 48px) + 12px); transform: translateX(-50%); display: flex; gap: 8px; align-items: center; padding: 6px; border-radius: 999px; background: var(--surface-strong, var(--surface)); box-shadow: var(--shadow-float, 0 8px 24px rgba(0,0,0,.3)); cursor: default; }
 
+.capture-stage-foot { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.capture-stage-foot .capture-stats { flex: 1 1 auto; }
+.capture-open-side { display: none; }
+.capture-record.is-stacked .capture-open-side { display: inline-flex; }
+.capture-side-bar { display: none; align-items: center; gap: 8px; min-height: 36px; }
+.capture-record.is-stacked .capture-side-bar { display: flex; }
+.capture-record.is-stacked .capture-side { border-left: 0; }
+@container plugin-window (max-width: 700px) {
+  /* The view switch keeps its icons (their labels stay the accessible names). */
+  .capture-views .has-icon > span:not(.ui-icon) { display: none; }
+}
 @container plugin-window (max-width: 720px) {
   .capture-record { grid-template-columns: 1fr; }
   .capture-ed-main { grid-template-columns: 1fr; }

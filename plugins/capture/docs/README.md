@@ -44,3 +44,20 @@ with free HTML graphics that keep one visual style.
 - HTML graphics run sandboxed: in the editor an `<iframe sandbox>` served
   with a `sandbox` CSP (opaque origin, no network), in exports a separate
   renderer process with no network and a throw-away profile.
+
+## Tests
+
+- `cargo test -p shiny-capture-plugin`: colour conversion (bit-identical
+  AVX2 and scalar), masks and the bubble's border, the scaler (crop, mirror),
+  the cursor and bubble patches, the Matroska writer, ffmpeg command lines
+  (audio clock, live `tee` escaping), V4L2 conversions, platforms and keys,
+  the project model and its operations, export graphs, transcript analysis.
+- `web/js/tests/timeline.test.mjs`: the shared time scales and meter maths.
+- `scripts/test-responsive-ui.mjs capture`: the window at phone, tablet and
+  desktop sizes.
+- `plugins/capture/tests/e2e/run.sh` (Playwright, under `xvfb-run`, never
+  on the live display): a private server on port 18731, the window in
+  Chromium, a real recording, the library, a project with a graphic and a
+  caption, an export with the HTML renderer.
+- `examples/spike.rs`, `examples/session.rs`, `examples/camera.rs`: the
+  engine's benchmarks and manual checks (see [architecture](./architecture.md)).

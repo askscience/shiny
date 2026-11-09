@@ -188,6 +188,7 @@ window. In the multi-user install plugins are also **installed per user**
 | `calculator` | Office | Basic/scientific math sharing one evaluator with the window. |
 | `image` | Media | Layered raster editor (blend modes, filters, painting, selection). |
 | `studio` | Media | DAW-grade sequencer + synth; renders to WAV on a self-contained DSP engine. |
+| `capture` | Media | Screen, window or region recording with a webcam bubble, live streaming to YouTube, Twitch, Kick, Facebook and RTMP, and a video editor the assistant drives. |
 | `radio` | Media | Internet radio via Radio Browser. |
 | `youtube` | Media | Search and watch videos, with a built-in recommender. |
 

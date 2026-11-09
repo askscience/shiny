@@ -103,6 +103,15 @@ pub fn acquire(device: Option<&Path>, need: (u32, u32)) -> Result<Arc<Latest>> {
     Ok(latest)
 }
 
+/// The camera that is open now, if any. Consumers read this every time
+/// instead of keeping the handle `acquire` returned: when one of them needs a
+/// bigger mode the camera reopens, and everyone follows.
+pub fn current() -> Option<Arc<Latest>> {
+    let svc = SERVICE.lock().ok()?;
+    let r = svc.as_ref()?;
+    (!r.stop.load(Ordering::Relaxed)).then(|| r.latest.clone())
+}
+
 /// Keep the camera open (call at least every few seconds while in use).
 pub fn touch() {
     if let Ok(svc) = SERVICE.lock() {

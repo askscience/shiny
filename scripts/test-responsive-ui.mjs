@@ -102,7 +102,7 @@ const server=http.createServer(async(req,res)=>{
 await new Promise(r=>server.listen(0,'127.0.0.1',r));
 const browser=await chromium.launch({headless:true,args:['--no-sandbox']});
 try{
- const names=process.argv.slice(2);const plugins=names.length?names:['browser','calc','calculator','calendar','files','image','impress','installer','mail','pdf','radio','studio','terminal','updates','word','youtube','settings','plugins','traveler','keyboard'];
+ const names=process.argv.slice(2);const plugins=names.length?names:['browser','calc','calculator','calendar','capture','files','image','impress','installer','mail','pdf','radio','studio','terminal','updates','word','youtube','settings','plugins','traveler','keyboard'];
  for(const size of [{width:360,height:740},{width:740,height:360},{width:320,height:568},{width:1280,height:800,touch:false},{width:1280,height:800,touch:false,tileWidth:360}]){
  const context=await browser.newContext({viewport:{width:size.width,height:size.height},isMobile:size.touch!==false,hasTouch:size.touch!==false});
  for(const name of plugins){

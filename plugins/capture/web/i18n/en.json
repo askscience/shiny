@@ -153,6 +153,7 @@
   "plugin.capture.quality.label": "Quality",
   "plugin.capture.quality.small": "Small files",
   "plugin.capture.save": "Save",
+  "plugin.capture.settings": "Settings",
   "plugin.capture.source.cursor": "Show the pointer",
   "plugin.capture.source.label": "Source",
   "plugin.capture.source.region": "Region",

@@ -503,9 +503,13 @@ fn run(plan: &Plan, sh: &Shared) -> Result<Option<PathBuf>> {
         let (style, at) = place_camera(p, src, scale, fw, fh, plan.source == SourceKind::Window);
         let need = (style.w * 2, style.h * 2);
         let latest = camera::acquire(p.device.as_deref(), need).ok();
+        let mut bubble = Bubble::new(style);
+        // The camera takes a moment to wake up: show the shape at once (dark,
+        // with its border) instead of having it pop in mid-video.
+        bubble.ready = latest.is_some();
         Cam {
             plan: p.clone(),
-            bubble: Bubble::new(style),
+            bubble,
             latest,
             seen: 0,
             patch: Patch::default(),
@@ -611,6 +615,7 @@ fn run(plan: &Plan, sh: &Shared) -> Result<Option<PathBuf>> {
                     c.at = at;
                     if style != c.bubble.style {
                         c.bubble = Bubble::new(style);
+                        c.bubble.ready = c.latest.is_some();
                         c.seen = 0;
                     }
                 }
@@ -633,6 +638,7 @@ fn run(plan: &Plan, sh: &Shared) -> Result<Option<PathBuf>> {
                             c.plan = p;
                             if style != c.bubble.style {
                                 c.bubble = Bubble::new(style);
+                                c.bubble.ready = c.latest.is_some();
                                 c.seen = 0;
                             }
                         }
@@ -710,6 +716,15 @@ fn run(plan: &Plan, sh: &Shared) -> Result<Option<PathBuf>> {
 
         // Webcam.
         if let Some(c) = &mut cam {
+            // Follow the camera if it was reopened at another mode.
+            if c.latest.is_some() {
+                if let Some(now) = camera::current() {
+                    if !c.latest.as_ref().is_some_and(|l| Arc::ptr_eq(l, &now)) {
+                        c.latest = Some(now);
+                        c.seen = 0;
+                    }
+                }
+            }
             if let Some(l) = &c.latest {
                 camera::touch();
                 let seq = l.seq.load(Ordering::Acquire);

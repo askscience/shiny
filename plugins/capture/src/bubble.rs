@@ -121,7 +121,7 @@ impl Bubble {
         } else {
             (Vec::new(), Vec::new())
         };
-        Self {
+        let mut b = Self {
             border: hex_to_yuv(&style.border_color),
             style,
             mask,
@@ -130,7 +130,10 @@ impl Bubble {
             scaler: None,
             img: Nv12::new(w, h),
             ready: false,
-        }
+        };
+        // Dark with its border until the first camera frame.
+        b.apply_ring();
+        b
     }
 
     pub fn size(&self) -> (usize, usize) {
@@ -151,6 +154,12 @@ impl Bubble {
         if let Some((_, _, s)) = &mut self.scaler {
             s.run(cam, &mut self.img);
         }
+        self.apply_ring();
+        self.ready = true;
+    }
+
+    /// Paint the border ring over the current picture.
+    fn apply_ring(&mut self) {
         let [by, bu, bv] = self.border;
         let (yp, uvp) = self.img.planes_mut();
         for &(i, a) in &self.ring_y {
@@ -162,7 +171,6 @@ impl Bubble {
             uvp[i] = mix(uvp[i], bu, a);
             uvp[i + 1] = mix(uvp[i + 1], bv, a);
         }
-        self.ready = true;
     }
 
     /// Composite at frame pixel `(x, y)` (top-left), saving what it covers.

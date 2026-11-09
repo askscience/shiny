@@ -377,10 +377,17 @@ function buildRecordView() {
   idle.appendChild(icon('ui/monitor', { size: 44 }));
   frame.append(previewImg, idle);
   statsEl = h('p', 'capture-stats');
-  stage.append(frame, statsEl);
+  const openSide = button({ icon: 'ui/settings', label: t('plugin.capture.settings', null, 'Settings'), variant: 'ghost', size: 'sm', onClick: () => nav?.show('side') });
+  openSide.classList.add('capture-open-side');
+  const foot = h('div', 'capture-stage-foot');
+  foot.append(statsEl, openSide);
+  stage.append(frame, foot);
 
   const side = h('aside', 'capture-side');
-  side.append(sourcePanel(), cameraPanel(), audioPanel(), livePanel(), qualityPanel());
+  const sideBar = h('div', 'capture-side-bar');
+  sideBar.dataset.paneBar = '';
+  sideBar.appendChild(h('strong', null, t('plugin.capture.settings', null, 'Settings')));
+  side.append(sideBar, sourcePanel(), cameraPanel(), audioPanel(), livePanel(), qualityPanel());
   root.append(stage, side);
   const nav = paneStack(root, { panes: [{ id: 'stage', el: stage }, { id: 'side', el: side }] });
   disposers.push(() => nav?.destroy?.());

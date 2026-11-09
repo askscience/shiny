@@ -550,9 +550,17 @@ fn camera_mjpeg() -> RouteHandler {
         let q: CamQuery = query(&req)?;
         let l = open_camera(&q)?;
         let body = thread_body(move |send| {
+            let mut l = l;
             let mut seen = 0u64;
             let mut quiet = 0u32;
             loop {
+                // Follow the camera if a recording reopened it at another mode.
+                if let Some(now) = camera::current() {
+                    if !Arc::ptr_eq(&l, &now) {
+                        l = now;
+                        seen = 0;
+                    }
+                }
                 if l.error.lock().unwrap().is_some() || !camera::is_open() || quiet > 300 {
                     return;
                 }

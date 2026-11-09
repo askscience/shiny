@@ -21,11 +21,28 @@ fn main() {
         }),
     )
     .expect("start");
+    // CAPTURE_MOVES="2:400,300,800,600;3.5:400,300,1000,500" moves the source.
+    let mut moves: Vec<(f64, shiny_capture_plugin::Rect)> = std::env::var("CAPTURE_MOVES")
+        .unwrap_or_default()
+        .split(';')
+        .filter_map(|m| {
+            let (t, r) = m.split_once(':')?;
+            let v: Vec<i64> = r.split(',').filter_map(|x| x.parse().ok()).collect();
+            Some((
+                t.parse().ok()?,
+                shiny_capture_plugin::Rect::new(v[0] as i32, v[1] as i32, v[2] as u32, v[3] as u32),
+            ))
+        })
+        .collect();
     let t0 = std::time::Instant::now();
     let mut paused = false;
     while t0.elapsed().as_secs_f64() < secs {
         std::thread::sleep(Duration::from_millis(250));
         let el = t0.elapsed().as_secs_f64();
+        while moves.first().is_some_and(|(t, _)| *t <= el) {
+            let (_, r) = moves.remove(0);
+            sh.ctl.lock().unwrap().rect = Some(r);
+        }
         if let Some((p, r)) = pause {
             if !paused && el >= p && el < r {
                 sh.ctl.lock().unwrap().paused = true;

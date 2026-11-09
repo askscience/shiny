@@ -76,7 +76,8 @@ function paint() {
 
 function startStream() {
   const dpr = window.devicePixelRatio || 1;
-  const px = Math.round(state.size * dpr * 2);
+  // Enough for a sharp bubble on screen, never the camera's biggest mode for nothing.
+  const px = Math.min(720, Math.round(state.size * dpr * 1.5));
   const q = new URLSearchParams({ w: String(px), h: String(px) });
   if (state.device) q.set('device', state.device);
   const url = `/api/capture/camera.mjpeg?${q}`;
