@@ -41,6 +41,7 @@ pub fn specs() -> Vec<RouteSpec> {
         RouteSpec::post("/api/capture/marker", "marker"),
         RouteSpec::post("/api/capture/event", "event"),
         RouteSpec::get("/api/capture/preview.jpg", "preview"),
+        RouteSpec::get("/api/capture/look.jpg", "look"),
         RouteSpec::get("/api/capture/camera.mjpeg", "camera_mjpeg"),
         RouteSpec::get("/api/capture/camera.jpg", "camera_jpg"),
         RouteSpec::post("/api/capture/camera/release", "camera_release"),
@@ -83,6 +84,7 @@ pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
         "marker" => marker(),
         "event" => event(),
         "preview" => preview(),
+        "look" => look(),
         "camera_mjpeg" => camera_mjpeg(),
         "camera_jpg" => camera_jpg(),
         "camera_release" => simple(|_| {
@@ -499,6 +501,35 @@ fn preview() -> RouteHandler {
             Some(j) => Ok(bytes_response("image/jpeg", j.to_vec())),
             None => Ok(StatusCode::NO_CONTENT.into_response()),
         }
+    })
+}
+
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct LookQuery {
+    x: Option<i32>,
+    y: Option<i32>,
+    w: Option<u32>,
+    h: Option<u32>,
+}
+
+/// The source before recording (the whole screen, or a window's or region's
+/// rectangle in screen pixels), so the window's preview is never empty.
+fn look() -> RouteHandler {
+    bridged_route(move |req: Request| async move {
+        user_id(&req)?;
+        let q: LookQuery = query(&req)?;
+        let want = match (q.x, q.y, q.w, q.h) {
+            (Some(x), Some(y), Some(w), Some(h)) if w > 0 && h > 0 => Some(Rect::new(x, y, w, h)),
+            _ => None,
+        };
+        let j = tokio::task::spawn_blocking(move || {
+            crate::look::jpeg(want, 960, 960, 75).map_err(|e| e.to_string())
+        })
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?
+        .map_err(AppError::NotFound)?;
+        Ok(bytes_response("image/jpeg", j))
     })
 }
 

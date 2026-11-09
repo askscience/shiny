@@ -9379,6 +9379,8 @@ html[data-phone='1'] .updates-install[data-count]::after {
 .capture-preview { position: relative; flex: 1 1 auto; min-height: 160px; border-radius: var(--radius-md, 12px); background: color-mix(in srgb, var(--text) 6%, transparent); overflow: hidden; display: grid; place-items: center; }
 .capture-preview-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; }
 .capture-preview-idle { color: var(--muted, var(--text)); opacity: .5; }
+.capture-preview-img:not([hidden]) + .capture-preview-idle { display: none; }
+.capture-record.is-stacked .capture-preview { flex: 0 0 auto; aspect-ratio: 16 / 10; }
 .capture-tile.is-recording .capture-preview, .capture-tile.is-live .capture-preview { box-shadow: 0 0 0 2px var(--capture-rec); }
 .capture-tile.is-live .capture-preview { box-shadow: 0 0 0 2px var(--accent); }
 .capture-stats { margin: 0; font: 500 12px/1.3 var(--font-mono); color: var(--muted, var(--text)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

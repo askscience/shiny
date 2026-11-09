@@ -11,8 +11,10 @@ One bar merged with the window controls: **Record | Library | Edit**, then,
 while recording, the timer, *Add marker*, *Pause*, *Stop*; otherwise *Go
 live* and *Record*.
 
-- **Record**: the preview (the engine's composed frame twice a second while
-  recording) and a column of groups: Source (screen, one window, a region),
+- **Record**: the preview, twice a second: before recording the source as it
+  looks now (the screen, the chosen window or the region, from
+  `look.jpg`), while recording the engine's composed frame. On a phone the
+  preview keeps a 16:10 shape. Then a column of groups: Source (screen, one window, a region),
   Webcam, Sound (microphone and desktop, each with a shared `levelMeter`),
   Live destinations, Quality. On a phone or a narrow window the groups stack
   (`paneStack`).

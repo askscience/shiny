@@ -66,6 +66,8 @@ let pollTimer = 0;
 let meterTimer = 0;
 let saveTimer = 0;
 let previewImg = null;
+let lookTimer = 0;
+let lookBusy = false;
 let statsEl = null;
 let timerEl = null;
 let recBtn = null;
@@ -314,10 +316,11 @@ function renderStatus() {
   pauseBtn.title = paused ? t('plugin.capture.action.resume', null, 'Resume') : t('plugin.capture.action.pause', null, 'Pause');
   if (previewImg) {
     if (active) {
+      stopLook();
       previewImg.src = `/api/capture/preview.jpg?t=${Date.now()}`;
       previewImg.hidden = false;
     } else {
-      previewImg.hidden = true;
+      startLook();
     }
   }
   if (statsEl) {
@@ -338,6 +341,46 @@ function renderStatus() {
       statsEl.textContent = describeSource();
     }
   }
+}
+
+/* ── preview before recording: the source as it looks now ──── */
+
+/** The URL of the source's current picture, or null when there is nothing to show yet. */
+function lookUrl() {
+  if (settings.source === 'screen') return `/api/capture/look.jpg?t=${Date.now()}`;
+  const r = sourceRect();
+  if (!r) return null;
+  return `/api/capture/look.jpg?x=${r.x}&y=${r.y}&w=${r.w}&h=${r.h}&t=${Date.now()}`;
+}
+
+function lookTick() {
+  lookTimer = 0;
+  if (!previewImg || isActive()) return;
+  lookTimer = setTimeout(lookTick, 500);
+  if (lookBusy || document.hidden || currentView !== 'record') return;
+  const url = lookUrl();
+  if (!url) { previewImg.hidden = true; return; }
+  lookBusy = true;
+  // Load off-screen and swap, so the picture never flashes empty between frames.
+  const next = new Image();
+  next.onload = () => {
+    lookBusy = false;
+    if (!previewImg || isActive()) return;
+    previewImg.src = next.src;
+    previewImg.hidden = false;
+  };
+  next.onerror = () => { lookBusy = false; if (previewImg && !isActive()) previewImg.hidden = true; };
+  next.src = url;
+}
+
+function startLook() {
+  if (!lookTimer) lookTick();
+}
+
+function stopLook() {
+  clearTimeout(lookTimer);
+  lookTimer = 0;
+  lookBusy = false;
 }
 
 function describeSource() {
@@ -853,6 +896,7 @@ export function mountCaptureTile() {
 
 export function unmountCaptureTile() {
   clearTimeout(pollTimer);
+  stopLook();
   stopMeters();
   stopTracking();
   for (const d of disposers.splice(0)) { try { d(); } catch (_) { /* noop */ } }

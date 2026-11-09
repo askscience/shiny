@@ -137,7 +137,9 @@ changed.
   Measured at 800 MHz: 1.9 ms per 640×480 frame for a 320 px bubble.
 - **Previews** are JPEGs encoded from NV12 through a lookup table (limited to
   full range), only while someone looks: the bubble's MJPEG (≤ 15 fps) and
-  the window's preview (2 fps).
+  the window's preview (2 fps). Before recording there is no engine, so
+  `src/look.rs` grabs the source once per request (MIT-SHM), box-scales the
+  BGRX to RGB and encodes that instead.
 
 ## Streaming bodies
 

@@ -44,6 +44,13 @@
   policy and can be framed by the app (an opaque origin with no access to the
   app); every other response still gets the app's policy.
 
+### Fixed
+
+- Capture 0.1.1: the preview is no longer empty before recording. It shows
+  the screen, the chosen window or the region live, twice a second, so you
+  see what will be recorded before pressing Record. The placeholder icon no
+  longer covers the picture, and on a phone the preview keeps a 16:10 shape.
+
 ## [0.2.4] - 2026-11-08
 
 ### Changed

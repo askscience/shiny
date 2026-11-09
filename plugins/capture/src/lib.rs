@@ -14,6 +14,7 @@ pub mod editor;
 pub mod encoder;
 pub mod jpeg;
 pub mod library;
+pub mod look;
 pub mod mask;
 pub mod meter;
 pub mod mkv;

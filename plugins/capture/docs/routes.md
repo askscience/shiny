@@ -19,6 +19,7 @@ their own threads, because the host polls a body after the handler returns.
 | `POST` | `/api/capture/marker` | `{ label? }` — a chapter mark at the current time. |
 | `POST` | `/api/capture/event` | `{ kind, detail }` — an entry in the recording's event log. |
 | `GET` | `/api/capture/preview.jpg` | The composed frame (twice a second while polled); 204 before the first. |
+| `GET` | `/api/capture/look.jpg` | Before recording: the source as it looks now (`?x&y&w&h` in screen pixels, the whole screen without them), at most 960 px. 404 when the area is off the screen. |
 | `GET` | `/api/capture/camera.mjpeg` | The camera as `multipart/x-mixed-replace` (`?device&w&h`). |
 | `GET` | `/api/capture/camera.jpg` | One camera frame. |
 | `POST` | `/api/capture/camera/release` | Close the camera when nothing records. |
