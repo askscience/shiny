@@ -801,6 +801,35 @@ def stt_chunk(
     return JSONResponse({"text": text, "partial": True, "final": False})
 
 
+@app.post("/stt/transcribe")
+def stt_transcribe(
+    lang: str | None = Query(None),
+    model: str | None = Query(None),
+    prompt: str | None = Query(None, max_length=200),
+    audio: bytes = Body(default=b"", media_type="application/octet-stream"),
+) -> JSONResponse:
+    """Transcribe one block of 16 kHz mono s16le audio with word timings.
+
+    For recordings (Capture's editor): the caller cuts long audio into
+    blocks and offsets the times itself. Uses the accurate pass (beam search
+    and VAD) and the same hallucination filters as the live transcript.
+    """
+    key = resolve_model_key(model)
+    language = (lang or "").strip().lower() or None
+    samples = np.frombuffer(audio, dtype="<i2").astype(np.float32) / 32768.0
+    if samples.size < SAMPLE_RATE // 10:
+        return JSONResponse({"text": "", "words": []})
+    m = get_model(key)
+    with _decode_lock:
+        words, text = _decode(m, samples, language, accurate=True, prompt=(prompt or "").strip() or None)
+    return JSONResponse(
+        {
+            "text": text,
+            "words": [[w, round(s0, 3), round(s1, 3)] for w, s0, s1 in words],
+        }
+    )
+
+
 @app.post("/stt/close")
 def stt_close(session: str = Query(..., min_length=1)) -> JSONResponse:
     with _sessions_lock:

@@ -1,5 +1,5 @@
 name = "browser"
-version = "0.2.3"
+version = "0.2.4"
 api_level = 1
 entry_symbol = "shiny_plugin_entry"
 description = "Browse the web inside Shiny — an adblocked window with a bookmark start page, downloads, incognito and news"

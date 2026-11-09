@@ -1182,23 +1182,7 @@ pub fn waveform_peaks(cfg: &TrackConfig, buckets: usize) -> Result<Vec<(f32, f32
 }
 
 pub fn peaks_of(channels: &[Vec<f32>], buckets: usize) -> Vec<(f32, f32)> {
-    let n = buckets.clamp(16, 4096);
-    let frames = channels.first().map(|c| c.len()).unwrap_or(0);
-    let mut peaks = Vec::with_capacity(n);
-    for b in 0..n {
-        let s = b * frames / n;
-        let e = ((b + 1) * frames / n).max(s + 1).min(frames);
-        let mut mn = 0.0f32;
-        let mut mx = 0.0f32;
-        for ch in channels {
-            for x in &ch[s.min(ch.len())..e.min(ch.len())] {
-                mn = mn.min(*x);
-                mx = mx.max(*x);
-            }
-        }
-        peaks.push((mn, mx));
-    }
-    peaks
+    shiny_dsp::peaks::peaks(channels, buckets)
 }
 
 /// A standalone pattern as a one-track arrangement: its `fx` become the

@@ -224,23 +224,7 @@ pub fn resample(input: &[f32], from: f64, to: f64) -> Vec<f32> {
 
 /// Min/max peaks over `buckets` equal slices (all channels folded together).
 pub fn peaks(d: &Decoded, buckets: usize) -> Vec<(f32, f32)> {
-    let n = buckets.clamp(16, 4096);
-    let frames = d.frames();
-    let mut out = Vec::with_capacity(n);
-    for b in 0..n {
-        let s = b * frames / n;
-        let e = ((b + 1) * frames / n).max(s + 1).min(frames);
-        let mut mn = 0.0f32;
-        let mut mx = 0.0f32;
-        for ch in &d.channels {
-            for x in &ch[s.min(ch.len())..e.min(ch.len())] {
-                mn = mn.min(*x);
-                mx = mx.max(*x);
-            }
-        }
-        out.push((mn, mx));
-    }
-    out
+    shiny_dsp::peaks::peaks(&d.channels, buckets)
 }
 
 /// Estimate the tempo of a piece of music (BPM), or `None` when there is no

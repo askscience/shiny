@@ -42,27 +42,20 @@ Core UI and the Files plugin: windows, folders, file types, navigation. Folder a
 
 | Icon | Name | Source |
 |---|---|---|
+| ![](ui/align-center.svg) | `ui/align-center` | `— in-house` |
+| ![](ui/align-justify.svg) | `ui/align-justify` | `— in-house` |
+| ![](ui/align-left.svg) | `ui/align-left` | `— in-house` |
+| ![](ui/align-right.svg) | `ui/align-right` | `— in-house` |
 | ![](ui/archive.svg) | `ui/archive` | `mimetypes/symbolic/package-x-generic-symbolic.svg` |
 | ![](ui/arranger.svg) | `ui/arranger` | `— in-house` |
 | ![](ui/arrow-left.svg) | `ui/arrow-left` | `— in-house` |
 | ![](ui/arrow-up.svg) | `ui/arrow-up` | `— in-house` |
 | ![](ui/blur.svg) | `ui/blur` | `— in-house` |
 | ![](ui/bold.svg) | `ui/bold` | `— in-house` |
-| ![](ui/align-center.svg) | `ui/align-center` | `— in-house` |
-| ![](ui/align-justify.svg) | `ui/align-justify` | `— in-house` |
-| ![](ui/align-left.svg) | `ui/align-left` | `— in-house` |
-| ![](ui/align-right.svg) | `ui/align-right` | `— in-house` |
-| ![](ui/clear-format.svg) | `ui/clear-format` | `— in-house` |
-| ![](ui/highlight.svg) | `ui/highlight` | `— in-house` |
-| ![](ui/indent.svg) | `ui/indent` | `— in-house` |
-| ![](ui/list-ordered.svg) | `ui/list-ordered` | `— in-house` |
-| ![](ui/outdent.svg) | `ui/outdent` | `— in-house` |
-| ![](ui/page-break.svg) | `ui/page-break` | `— in-house` |
-| ![](ui/strikethrough.svg) | `ui/strikethrough` | `— in-house` |
-| ![](ui/text-color.svg) | `ui/text-color` | `— in-house` |
 | ![](ui/brain.svg) | `ui/brain` | `— in-house` |
 | ![](ui/brain-off.svg) | `ui/brain-off` | `— in-house` |
 | ![](ui/brightness.svg) | `ui/brightness` | `— in-house` |
+| ![](ui/broadcast.svg) | `ui/broadcast` | `— in-house` |
 | ![](ui/brush.svg) | `ui/brush` | `— in-house` |
 | ![](ui/burn.svg) | `ui/burn` | `— in-house` |
 | ![](ui/calc.svg) | `ui/calc` | `— in-house` |
@@ -74,6 +67,7 @@ Core UI and the Files plugin: windows, folders, file types, navigation. Folder a
 | ![](ui/chevron-left.svg) | `ui/chevron-left` | `actions/symbolic/go-previous-symbolic.svg` |
 | ![](ui/chevron-right.svg) | `ui/chevron-right` | `actions/symbolic/go-next-symbolic.svg` |
 | ![](ui/chevron-up.svg) | `ui/chevron-up` | `actions/symbolic/go-up-symbolic.svg` |
+| ![](ui/clear-format.svg) | `ui/clear-format` | `— in-house` |
 | ![](ui/clipboard.svg) | `ui/clipboard` | `— in-house` |
 | ![](ui/clone-stamp.svg) | `ui/clone-stamp` | `— in-house` |
 | ![](ui/close.svg) | `ui/close` | `actions/symbolic/window-close-symbolic.svg` |
@@ -101,7 +95,7 @@ Core UI and the Files plugin: windows, folders, file types, navigation. Folder a
 | ![](ui/folder.svg) | `ui/folder` | `places/scalable/folder.svg` *(coloured)* |
 | ![](ui/folder-open.svg) | `ui/folder-open` | `status/symbolic/folder-open-symbolic.svg` |
 | ![](ui/folder-plus.svg) | `ui/folder-plus` | `actions/symbolic/folder-new-symbolic.svg` |
-| ![](ui/forward.svg) | `ui/forward` | `— in-house` |
+| ![](ui/forward.svg) | `ui/forward` | `emblems/scalable/emblem-symbolic-link.svg` |
 | ![](ui/fx.svg) | `ui/fx` | `— in-house` |
 | ![](ui/gradient.svg) | `ui/gradient` | `— in-house` |
 | ![](ui/grayscale.svg) | `ui/grayscale` | `— in-house` |
@@ -109,10 +103,12 @@ Core UI and the Files plugin: windows, folders, file types, navigation. Folder a
 | ![](ui/grip.svg) | `ui/grip` | `— in-house` |
 | ![](ui/hand.svg) | `ui/hand` | `— in-house` |
 | ![](ui/heading.svg) | `ui/heading` | `— in-house` |
+| ![](ui/highlight.svg) | `ui/highlight` | `— in-house` |
 | ![](ui/history.svg) | `ui/history` | `— in-house` |
 | ![](ui/home.svg) | `ui/home` | `places/symbolic/user-home-symbolic.svg` |
 | ![](ui/image.svg) | `ui/image` | `mimetypes/symbolic/image-x-generic-symbolic.svg` |
 | ![](ui/incognito.svg) | `ui/incognito` | `— in-house` |
+| ![](ui/indent.svg) | `ui/indent` | `— in-house` |
 | ![](ui/info.svg) | `ui/info` | `— in-house` |
 | ![](ui/inverse.svg) | `ui/inverse` | `— in-house` |
 | ![](ui/invert.svg) | `ui/invert` | `— in-house` |
@@ -123,6 +119,7 @@ Core UI and the Files plugin: windows, folders, file types, navigation. Folder a
 | ![](ui/layers.svg) | `ui/layers` | `— in-house` |
 | ![](ui/link.svg) | `ui/link` | `— in-house` |
 | ![](ui/list.svg) | `ui/list` | `actions/symbolic/view-list-symbolic.svg` |
+| ![](ui/list-ordered.svg) | `ui/list-ordered` | `— in-house` |
 | ![](ui/lock.svg) | `ui/lock` | `— in-house` |
 | ![](ui/loop.svg) | `ui/loop` | `— in-house` |
 | ![](ui/magic-wand.svg) | `ui/magic-wand` | `— in-house` |
@@ -142,6 +139,8 @@ Core UI and the Files plugin: windows, folders, file types, navigation. Folder a
 | ![](ui/navigator.svg) | `ui/navigator` | `— in-house` |
 | ![](ui/network.svg) | `ui/network` | `— in-house` |
 | ![](ui/noise.svg) | `ui/noise` | `— in-house` |
+| ![](ui/outdent.svg) | `ui/outdent` | `— in-house` |
+| ![](ui/page-break.svg) | `ui/page-break` | `— in-house` |
 | ![](ui/paint-bucket.svg) | `ui/paint-bucket` | `— in-house` |
 | ![](ui/palette.svg) | `ui/palette` | `— in-house` |
 | ![](ui/paths.svg) | `ui/paths` | `— in-house` |
@@ -154,6 +153,7 @@ Core UI and the Files plugin: windows, folders, file types, navigation. Folder a
 | ![](ui/present.svg) | `ui/present` | `— in-house` |
 | ![](ui/properties.svg) | `ui/properties` | `— in-house` |
 | ![](ui/puzzle.svg) | `ui/puzzle` | `actions/symbolic/extension-symbolic.svg` |
+| ![](ui/record.svg) | `ui/record` | `— in-house` |
 | ![](ui/redo.svg) | `ui/redo` | `— in-house` |
 | ![](ui/refresh.svg) | `ui/refresh` | `— in-house` |
 | ![](ui/reply.svg) | `ui/reply` | `— in-house` |
@@ -161,6 +161,7 @@ Core UI and the Files plugin: windows, folders, file types, navigation. Folder a
 | ![](ui/rotate-right.svg) | `ui/rotate-right` | `— in-house` |
 | ![](ui/save.svg) | `ui/save` | `— in-house` |
 | ![](ui/scientific.svg) | `ui/scientific` | `— in-house` |
+| ![](ui/scissors.svg) | `ui/scissors` | `— in-house` |
 | ![](ui/search.svg) | `ui/search` | `actions/symbolic/search-symbolic.svg` |
 | ![](ui/select-all.svg) | `ui/select-all` | `— in-house` |
 | ![](ui/send.svg) | `ui/send` | `— in-house` |
@@ -173,10 +174,12 @@ Core UI and the Files plugin: windows, folders, file types, navigation. Folder a
 | ![](ui/sponge.svg) | `ui/sponge` | `— in-house` |
 | ![](ui/star.svg) | `ui/star` | `— in-house` |
 | ![](ui/stop.svg) | `ui/stop` | `— in-house` |
+| ![](ui/strikethrough.svg) | `ui/strikethrough` | `— in-house` |
 | ![](ui/stroke.svg) | `ui/stroke` | `— in-house` |
 | ![](ui/suspend.svg) | `ui/suspend` | `— in-house` |
 | ![](ui/swatches.svg) | `ui/swatches` | `— in-house` |
 | ![](ui/synthme.svg) | `ui/synthme` | `— in-house` |
+| ![](ui/text-color.svg) | `ui/text-color` | `— in-house` |
 | ![](ui/threshold.svg) | `ui/threshold` | `— in-house` |
 | ![](ui/trash.svg) | `ui/trash` | `places/symbolic/user-trash-symbolic.svg` |
 | ![](ui/type.svg) | `ui/type` | `— in-house` |
@@ -187,6 +190,8 @@ Core UI and the Files plugin: windows, folders, file types, navigation. Folder a
 | ![](ui/video.svg) | `ui/video` | `mimetypes/symbolic/video-x-generic-symbolic.svg` |
 | ![](ui/volume.svg) | `ui/volume` | `— in-house` |
 | ![](ui/warning.svg) | `ui/warning` | `— in-house` |
+| ![](ui/webcam.svg) | `ui/webcam` | `— in-house` |
+| ![](ui/window.svg) | `ui/window` | `— in-house` |
 | ![](ui/youtube.svg) | `ui/youtube` | `— in-house` |
 | ![](ui/zoom-in.svg) | `ui/zoom-in` | `— in-house` |
 | ![](ui/zoom-out.svg) | `ui/zoom-out` | `— in-house` |
@@ -201,6 +206,7 @@ Default icon for each bundled plugin (`pluginIconEl`), shown in the top-bar tray
 | ![](apps/calc.svg) | `apps/calc` | `apps/symbolic/libreoffice-calc-symbolic.svg` |
 | ![](apps/calculator.svg) | `apps/calculator` | `apps/symbolic/accessories-calculator-symbolic.svg` |
 | ![](apps/calendar.svg) | `apps/calendar` | `apps/symbolic/office-calendar-symbolic.svg` |
+| ![](apps/capture.svg) | `apps/capture` | `— in-house` |
 | ![](apps/files.svg) | `apps/files` | `apps/symbolic/system-file-manager-symbolic.svg` |
 | ![](apps/hello.svg) | `apps/hello` | `actions/symbolic/lucide-smile-plus-symbolic.svg` |
 | ![](apps/image.svg) | `apps/image` | `apps/symbolic/shotwell-symbolic.svg` |

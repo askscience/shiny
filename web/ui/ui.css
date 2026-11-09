@@ -1012,3 +1012,53 @@ html[data-phone='1'] .ui-actionbar > .ui-btn { width: 44px; height: 44px; min-wi
 .ui-pull-indicator.is-ready .ui-spinner,
 .ui-pull-indicator.is-busy .ui-spinner { animation-play-state: running; }
 .ui-pull-indicator.is-ready { border-color: var(--accent); }
+
+/* ── Level meter (levelMeter) ─────────────────────────────────
+   The mixer meter Studio introduced: instant attack, peak hold, latching
+   clip light. A window may tint the well with --meter-bg. */
+.ui-meter { position: relative; width: 6px; align-self: stretch; min-height: 40px; border-radius: 2px; overflow: hidden; background: var(--meter-bg, color-mix(in srgb, var(--text) 10%, transparent)); }
+.ui-meter--h { width: auto; min-height: 0; height: 3px; align-self: auto; }
+.ui-meter-fill { position: absolute; inset: 0; transform-origin: bottom; transform: scaleY(0); background: linear-gradient(to top, var(--accent) 0%, var(--accent) 78%, var(--warning, #e8b04a) 90%, var(--error) 100%); }
+.ui-meter--h .ui-meter-fill { transform-origin: left; transform: scaleX(0); background: linear-gradient(to right, var(--accent) 0%, var(--accent) 78%, var(--warning, #e8b04a) 90%, var(--error) 100%); }
+.ui-meter-hold { position: absolute; left: 0; right: 0; height: 1px; background: var(--text); opacity: 0; }
+.ui-meter--h .ui-meter-hold { top: 0; bottom: 0; width: 1px; height: auto; right: auto; }
+.ui-meter-clip { position: absolute; top: 0; left: 0; right: 0; height: 3px; background: transparent; cursor: pointer; }
+.ui-meter-clip.is-on { background: var(--error); }
+.ui-meter--h .ui-meter-clip { display: none; }
+
+/* ── Waveform (waveform) ── the ink is the canvas colour. */
+.ui-waveform { display: block; width: 100%; height: 100%; color: var(--text); }
+
+/* ── Timeline (timeline) ──────────────────────────────────────
+   Ruler on top, one lane per track with its header pinned left, clips
+   positioned with transforms (no layout per frame), a playhead line. */
+.ui-timeline { position: relative; display: flex; flex-direction: column; min-height: 0; outline: none; --tl-ruler: 26px; --tl-clip-bg: color-mix(in srgb, var(--accent) 18%, var(--surface)); --tl-clip-border: color-mix(in srgb, var(--accent) 55%, transparent); }
+.ui-tl-scroll { position: relative; flex: 1 1 auto; overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.ui-tl-content { position: relative; min-width: 100%; }
+.ui-tl-ruler { position: sticky; top: 0; z-index: 3; display: flex; height: var(--tl-ruler); background: var(--surface-strong, var(--surface)); border-bottom: 1px solid var(--glass-border, rgba(127,127,127,.2)); cursor: col-resize; }
+.ui-tl-corner { position: sticky; left: 0; z-index: 2; flex: 0 0 var(--tl-head); background: inherit; }
+.ui-tl-ruler-ticks { position: relative; flex: 1 1 auto; }
+.ui-tl-tick { position: absolute; left: 0; bottom: 0; width: 1px; height: 6px; background: color-mix(in srgb, var(--text) 30%, transparent); }
+.ui-tl-tick.is-major { height: 11px; background: color-mix(in srgb, var(--text) 60%, transparent); }
+.ui-tl-tick span { position: absolute; left: 4px; bottom: 9px; font: 500 10px/1 var(--font-mono); color: var(--muted, var(--text)); white-space: nowrap; }
+.ui-tl-lanes { position: relative; }
+.ui-tl-lane { position: relative; display: flex; border-bottom: 1px solid color-mix(in srgb, var(--text) 8%, transparent); }
+.ui-tl-lane.is-hidden .ui-tl-lane-body, .ui-tl-lane.is-muted .ui-tl-lane-body { opacity: .45; }
+.ui-tl-head { position: sticky; left: 0; z-index: 2; flex: 0 0 var(--tl-head); display: flex; align-items: center; gap: 4px; padding: 0 8px; background: var(--surface-strong, var(--surface)); border-right: 1px solid color-mix(in srgb, var(--text) 10%, transparent); font: 500 12px/1.2 var(--font-body); color: var(--text); overflow: hidden; }
+.ui-tl-lane-body { position: relative; flex: 1 1 auto; }
+.ui-tl-clip { position: absolute; top: 3px; bottom: 3px; left: 0; border-radius: var(--radius-xs, 4px); background: var(--tl-clip-bg); border: 1px solid var(--tl-clip-border); overflow: hidden; cursor: grab; touch-action: none; contain: strict; }
+.ui-tl-clip:active { cursor: grabbing; }
+.ui-tl-clip.is-selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.ui-tl-clip.is-ghost { background: color-mix(in srgb, var(--accent) 8%, transparent); border-style: dashed; opacity: .8; }
+.ui-tl-clip.is-locked { cursor: default; }
+.ui-tl-clip-body { position: absolute; inset: 0; color: var(--text); }
+.ui-tl-clip-label { position: absolute; left: 6px; top: 3px; right: 6px; font: 500 11px/1.2 var(--font-body); color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; text-shadow: 0 0 3px var(--surface); }
+.ui-tl-edge { position: absolute; top: 0; bottom: 0; width: 7px; cursor: ew-resize; }
+.ui-tl-edge--l { left: 0; }
+.ui-tl-edge--r { right: 0; }
+.ui-tl-clip.is-selected .ui-tl-edge { background: color-mix(in srgb, var(--accent) 35%, transparent); }
+.ui-tl-playhead { position: absolute; top: 0; bottom: 0; left: 0; width: 2px; margin-left: -1px; background: var(--accent); z-index: 4; pointer-events: none; }
+.ui-tl-marks { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
+.ui-tl-mark { position: absolute; top: 0; bottom: 0; left: 0; width: 1px; background: color-mix(in srgb, var(--accent) 70%, transparent); }
+.ui-tl-mark.is-cut { background: repeating-linear-gradient(45deg, color-mix(in srgb, var(--error) 30%, transparent) 0 6px, transparent 6px 12px); }
+@media (pointer: coarse) { .ui-tl-edge { width: 14px; } }

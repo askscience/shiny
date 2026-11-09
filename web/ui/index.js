@@ -60,3 +60,7 @@ export { mediaCard } from './components/media.js';
 export { confirmDialog, promptDialog } from './components/dialog.js';
 export { menuSurface, menuItem } from './components/menu.js';
 export { tabStrip, tab } from './components/tabs.js';
+export { timeline, wireZoomGestures } from './components/timeline.js';
+export { secondsScale, beatsScale, niceStep, formatTimecode } from './components/timeScale.js';
+export { waveform, drawWaveform } from './components/waveform.js';
+export { levelMeter, meterFrac, gainToDb, METER_FLOOR_DB } from './components/levelMeter.js';

@@ -31,9 +31,6 @@ use std::collections::HashMap;
 use std::sync::LazyLock;
 use std::time::{Duration, Instant};
 
-use aes_gcm::aead::{Aead, KeyInit, Payload};
-use aes_gcm::{Aes256Gcm, Nonce};
-use argon2::{Algorithm, Argon2, Params, Version};
 use base64::engine::general_purpose::STANDARD as B64;
 use base64::Engine;
 use parking_lot::Mutex;
@@ -58,8 +55,7 @@ const KDF_M_COST: u32 = 19_456;
 const KDF_T_COST: u32 = 2;
 const KDF_P_COST: u32 = 1;
 
-const KEY_LEN: usize = 32;
-const NONCE_LEN: usize = 12;
+use shiny_vault::KEY_LEN;
 const SALT_LEN: usize = 16;
 
 type Key = Zeroizing<[u8; KEY_LEN]>;
@@ -91,51 +87,29 @@ pub fn ensure_schema(ctx: &PluginCtx) {
 
 /* ── Crypto ──────────────────────────────────────────────────────── */
 
+fn vault_err(e: shiny_vault::Error) -> AppError {
+    AppError::Internal(e.0)
+}
+
 fn random<const N: usize>() -> Result<[u8; N], AppError> {
-    let mut buf = [0u8; N];
-    getrandom::getrandom(&mut buf)
-        .map_err(|e| AppError::Internal(format!("no system randomness: {e}")))?;
-    Ok(buf)
+    shiny_vault::random::<N>().map_err(vault_err)
 }
 
 /// Stretch `password` into a key-encryption key.
 fn derive(password: &str, salt: &[u8], cost: KdfCost) -> Result<Key, AppError> {
-    let params = Params::new(cost.m, cost.t, cost.p, Some(KEY_LEN))
-        .map_err(|e| AppError::Internal(format!("vault cost: {e}")))?;
-    let mut key = Zeroizing::new([0u8; KEY_LEN]);
-    Argon2::new(Algorithm::Argon2id, Version::V0x13, params)
-        .hash_password_into(password.as_bytes(), salt, key.as_mut())
-        .map_err(|e| AppError::Internal(format!("vault key: {e}")))?;
-    Ok(key)
+    shiny_vault::derive(password, salt, shiny_vault::KdfCost { m: cost.m, t: cost.t, p: cost.p })
+        .map_err(vault_err)
 }
 
 /// AES-256-GCM, returned as base64 `nonce || ciphertext`.
 fn seal(key: &[u8; KEY_LEN], plaintext: &[u8], aad: &str) -> Result<String, AppError> {
-    let cipher = Aes256Gcm::new_from_slice(key)
-        .map_err(|_| AppError::Internal("vault key length".into()))?;
-    let nonce = random::<NONCE_LEN>()?;
-    let ct = cipher
-        .encrypt(Nonce::from_slice(&nonce), Payload { msg: plaintext, aad: aad.as_bytes() })
-        .map_err(|_| AppError::Internal("could not seal".into()))?;
-    let mut out = Vec::with_capacity(NONCE_LEN + ct.len());
-    out.extend_from_slice(&nonce);
-    out.extend_from_slice(&ct);
-    Ok(B64.encode(out))
+    shiny_vault::seal(key, plaintext, aad).map_err(vault_err)
 }
 
 /// The inverse of [`seal`]; `None` for a wrong key, a tampered value or a
 /// value sealed for another slot.
 fn open(key: &[u8; KEY_LEN], sealed: &str, aad: &str) -> Option<Zeroizing<Vec<u8>>> {
-    let raw = B64.decode(sealed).ok()?;
-    if raw.len() <= NONCE_LEN {
-        return None;
-    }
-    let (nonce, ct) = raw.split_at(NONCE_LEN);
-    let cipher = Aes256Gcm::new_from_slice(key).ok()?;
-    cipher
-        .decrypt(Nonce::from_slice(nonce), Payload { msg: ct, aad: aad.as_bytes() })
-        .ok()
-        .map(Zeroizing::new)
+    shiny_vault::open(key, sealed, aad)
 }
 
 fn key_aad(user_id: &str) -> String {

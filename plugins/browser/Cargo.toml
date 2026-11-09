@@ -1,6 +1,6 @@
 [package]
 name = "shiny-browser-plugin"
-version = "0.2.3"
+version = "0.2.4"
 edition = "2021"
 description = "The Browser window — a filtered viewport powered by the same adblock-rust engine as the native shell"
 
@@ -10,6 +10,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 shiny-plugin-sdk = { path = "../../crates/shiny-plugin-sdk" }
+shiny-vault = { path = "../../crates/shiny-vault" }
 # The shared engine. This is the *point*: the same crate, the same filter
 # lists, the same proxy, the same rewriting pipeline as the native shell.
 shiny-filter = { path = "../../crates/shiny-filter" }

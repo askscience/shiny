@@ -2,6 +2,27 @@
 
 ## [Unreleased]
 
+### Added
+
+- Capture (in progress): the engine, routes and agent tools of the new
+  Capture plugin. It records the whole screen, a region or one window, with a
+  webcam bubble from square to circle, the microphone and the desktop sound
+  on separate tracks, pauses, and goes live on YouTube, Twitch, Kick,
+  Facebook or any RTMP server (several at once from one encode, a dropped
+  platform reconnects without stopping the others). It grabs only the parts
+  of the screen that changed, converts them with AVX2, skips unchanged
+  frames entirely and encodes on the GPU, so an idle 1080p recording costs
+  about 1% of one core. Stream keys are sealed on disk. A video editor
+  backend (projects, proposals, export with one ffmpeg run) is in place; the
+  window comes next.
+- Shared UI: a timeline, time scales, a waveform and a level meter in
+  `web/ui`, extracted from Studio; Studio's meters, waveforms and pinch zoom
+  now use them.
+- Shared crates `shiny-vault` (sealing, used by Browser and Capture) and
+  `shiny-dsp` (loudness and waveform peaks, used by Studio and Capture).
+- Whisper sidecar: `POST /stt/transcribe` returns word timings for a block of
+  audio (Capture's editor transcribes recordings with it).
+
 ## [0.2.4] - 2026-11-08
 
 ### Changed

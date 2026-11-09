@@ -28,6 +28,7 @@ export const PLUGIN_ICONS = {
   calc: 'apps/calc',
   calculator: 'apps/calculator',
   calendar: 'apps/calendar',
+  capture: 'apps/capture',
   files: 'apps/files',
   hello: 'apps/hello',
   image: 'apps/image',

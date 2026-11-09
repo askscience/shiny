@@ -1386,7 +1386,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c54e03a951783e8b327515db3f2a2fd0e3bed362a96b066f341ce66ed49b4ead"
 dependencies = [
  "data-encoding",
- "syn 1.0.109",
+ "syn 3.0.5",
 ]
 
 [[package]]
@@ -3665,6 +3665,12 @@ name = "jpeg-decoder"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "00810f1d8b74be64b13dbf3db89ac67740615d6c891f0e7b6179326533011a07"
+
+[[package]]
+name = "jpeg-encoder"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a0370574b86f7eca156b9f298392b5e69a23f8c86f3f865add60bbc2e79467a6"
 
 [[package]]
 name = "js-sys"
@@ -6842,6 +6848,7 @@ dependencies = [
  "serde_json",
  "shiny-filter",
  "shiny-plugin-sdk",
+ "shiny-vault",
  "tokio",
  "tracing",
  "url",
@@ -6891,6 +6898,30 @@ dependencies = [
  "sqlx",
  "uuid",
 ]
+
+[[package]]
+name = "shiny-capture-plugin"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "futures",
+ "jpeg-encoder",
+ "libc",
+ "semver",
+ "serde",
+ "serde_json",
+ "shiny-dsp",
+ "shiny-plugin-sdk",
+ "shiny-vault",
+ "tokio",
+ "uuid",
+ "x11rb",
+]
+
+[[package]]
+name = "shiny-dsp"
+version = "0.1.0"
 
 [[package]]
 name = "shiny-files-plugin"
@@ -7170,6 +7201,7 @@ dependencies = [
  "semver",
  "serde",
  "serde_json",
+ "shiny-dsp",
  "shiny-plugin-sdk",
  "sqlx",
  "tokio",
@@ -7225,6 +7257,17 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
+]
+
+[[package]]
+name = "shiny-vault"
+version = "0.1.0"
+dependencies = [
+ "aes-gcm",
+ "argon2",
+ "base64 0.22.1",
+ "getrandom 0.2.17",
+ "zeroize",
 ]
 
 [[package]]
@@ -9882,6 +9925,23 @@ dependencies = [
  "once_cell",
  "pkg-config",
 ]
+
+[[package]]
+name = "x11rb"
+version = "0.13.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9993aa5be5a26815fe2c3eacfc1fde061fc1a1f094bf1ad2a18bf9c495dd7414"
+dependencies = [
+ "gethostname",
+ "rustix",
+ "x11rb-protocol",
+]
+
+[[package]]
+name = "x11rb-protocol"
+version = "0.13.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ea6fc2961e4ef194dcbfe56bb845534d0dc8098940c7e5c012a258bfec6701bd"
 
 [[package]]
 name = "xattr"

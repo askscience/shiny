@@ -2,6 +2,7 @@ import {
   confirmDialog, slider as uiSlider, toolbar, dial, element as h, input as uiInput,
   selectControl, controlButton, toast, icon, setIcon, button, searchBar, setTileGlow,
   glowGradient, toolButton, segmented, listReveal, decodeText, eyebrow, paneStack,
+  levelMeter, drawWaveform, wireZoomGestures,
 } from '../../ui/index.js';
 
 /**
@@ -927,7 +928,7 @@ let channels = new Map();        // channel id → { input, fader, pan, meter, g
 let masterNodes = null;          // { input, glue, limiter, meter }
 let playSources = [];
 let meterRaf = 0;
-let meterViews = [];             // { node: () => AnalyserNode, fill, hold, clip, peak, holdT, clipT }
+let meterViews = [];             // { getNode: () => AnalyserNode, meter: levelMeter }
 let playLoopEnd = 0;             // seconds
 let playTotal = 0;               // seconds
 let playWraps = 0;
@@ -1451,26 +1452,14 @@ function crossfadeLoop(lp, src, decoded, cfg) {
 /* ── meters (run only while something plays) ── */
 
 function meterNode(getNode, { vertical = true, compact = false } = {}) {
-  const wrap = h('div', `studio-vu${vertical ? '' : ' studio-vu--h'}${compact ? ' studio-vu--compact' : ''}`);
-  const fill = h('span', 'studio-vu-fill');
-  const hold = h('span', 'studio-vu-hold');
-  const clip = h('span', 'studio-vu-clip');
-  clip.title = t('plugin.studio.mixer.clipLed', null, 'Clip — click to reset');
-  clip.addEventListener('click', (e) => { e.stopPropagation(); clip.classList.remove('is-on'); });
-  wrap.append(fill, hold, clip);
-  meterViews.push({ getNode, fill, hold, clip, peak: 0, holdV: 0, holdT: 0, vertical });
-  return wrap;
-}
-const METER_FLOOR_DB = -60;
-function meterFrac(peak) {
-  const db = gainToDb(peak);
-  if (!Number.isFinite(db) || db <= METER_FLOOR_DB) return 0;
-  return clamp((db - METER_FLOOR_DB) / (6 - METER_FLOOR_DB), 0, 1);
+  const meter = levelMeter({ vertical, compact, clipLabel: t('plugin.studio.mixer.clipLed', null, 'Clip — click to reset') });
+  meterViews.push({ getNode, meter });
+  return meter;
 }
 let meterBuf = null;
 function paintMeters() {
   const now = performance.now();
-  meterViews = meterViews.filter((m) => m.fill.isConnected);
+  meterViews = meterViews.filter((m) => m.meter.isConnected);
   for (const m of meterViews) {
     const node = m.getNode();
     let peak = 0;
@@ -1479,16 +1468,8 @@ function paintMeters() {
       node.getFloatTimeDomainData(meterBuf);
       for (let i = 0; i < meterBuf.length; i++) { const a = Math.abs(meterBuf[i]); if (a > peak) peak = a; }
     }
-    // Fast attack, ~20 dB/s release; 1.5 s peak hold; latching clip LED.
-    m.peak = peak > m.peak ? peak : m.peak * 0.89;
-    if (m.peak >= m.holdV || now - m.holdT > 1500) { m.holdV = m.peak; m.holdT = now; }
-    const f = meterFrac(m.peak);
-    m.fill.style.transform = m.vertical ? `scaleY(${f.toFixed(4)})` : `scaleX(${f.toFixed(4)})`;
-    const hf = meterFrac(m.holdV);
-    if (m.vertical) m.hold.style.bottom = `${(hf * 100).toFixed(2)}%`;
-    else m.hold.style.left = `${(hf * 100).toFixed(2)}%`;
-    m.hold.style.opacity = hf > 0.01 ? '1' : '0';
-    if (peak >= 0.999) m.clip.classList.add('is-on');
+    // Ballistics, hold and the clip light live in the shared levelMeter.
+    m.meter.update(peak, now);
   }
 }
 function startMeters() {
@@ -1502,7 +1483,7 @@ function startMeters() {
 }
 function stopMeters() {
   if (meterRaf) { cancelAnimationFrame(meterRaf); meterRaf = 0; }
-  for (const m of meterViews) { m.peak = 0; m.holdV = 0; }
+  for (const m of meterViews) m.meter.reset();
   paintMeters();
 }
 
@@ -2482,80 +2463,23 @@ function zoomToFit() {
   arrScrollEl.scrollLeft = 0;
 }
 function onArrWheel(e) {
-  if (e.ctrlKey || e.metaKey) {
-    // Ctrl+wheel and trackpad pinch (Chromium sends pinch as ctrl+wheel).
-    e.preventDefault();
-    const factor = Math.exp(-e.deltaY * (e.deltaMode === 1 ? 0.05 : 0.004));
-    zoomArranger(PPB * factor, e.clientX);
-  } else if (e.shiftKey && Math.abs(e.deltaX) < Math.abs(e.deltaY)) {
+  // Ctrl+wheel zoom is handled by the shared gestures (wireArrPinch).
+  if (!(e.ctrlKey || e.metaKey) && e.shiftKey && Math.abs(e.deltaX) < Math.abs(e.deltaY)) {
     e.preventDefault();
     arrScrollEl.scrollLeft += e.deltaY;
   }
 }
-/* ── pinch zoom: every path a pinch can arrive by ──
-   1. ctrl+wheel (mouse, and Chromium's trackpad pinch where the platform
-      delivers it) — onArrWheel;
-   2. WebKit `gesturestart/gesturechange` (scale);
-   3. two touch pointers (touchscreens) via Pointer Events;
-   4. a shell-sent `trackpad:pinch` event { phase, scale } (the LiteAura kiosk
-      runs Qt on X11, where touchpad pinches never reach the page);
-   5. last resort: visualViewport scale changes. */
-let arrPointer = { x: null, inside: false };
-const arrTouches = new Map();     // pointerId → { x, y }
-let pinchBase = null;             // { ppb, dist|scale, x }
-function arrPointerX() {
-  if (arrPointer.x != null) return arrPointer.x;
-  const r = arrScrollEl?.getBoundingClientRect();
-  return r ? r.left + HEAD_W + (r.width - HEAD_W) / 2 : 0;
-}
-function pinchBegin(x) { pinchBase = { ppb: PPB, x }; }
-function pinchScale(scale) {
-  if (!pinchBase || !Number.isFinite(scale) || scale <= 0) return;
-  zoomArranger(pinchBase.ppb * scale, pinchBase.x);
-}
+/* Pinch and Ctrl+wheel zoom: the shared timeline gestures (ctrl+wheel,
+   WebKit gestures, two-finger touch, the shell's `trackpad:pinch`, the
+   visual viewport), zooming around the pointer. */
+let unwireArrZoom = null;
 function wireArrPinch(el) {
-  el.addEventListener('pointermove', (e) => { arrPointer = { x: e.clientX, inside: true }; }, { passive: true });
-  el.addEventListener('pointerleave', () => { arrPointer.inside = false; }, { passive: true });
-  // WebKit gesture events.
-  el.addEventListener('gesturestart', (e) => { e.preventDefault(); pinchBegin(e.clientX ?? arrPointerX()); }, { passive: false });
-  el.addEventListener('gesturechange', (e) => { e.preventDefault(); pinchScale(e.scale); }, { passive: false });
-  el.addEventListener('gestureend', (e) => { e.preventDefault(); pinchBase = null; }, { passive: false });
-  // Two-finger touch pinch.
-  const dist = () => { const [a, b] = [...arrTouches.values()]; return Math.hypot(a.x - b.x, a.y - b.y); };
-  el.addEventListener('pointerdown', (e) => {
-    if (e.pointerType !== 'touch') return;
-    arrTouches.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    if (arrTouches.size === 2) {
-      const [a, b] = [...arrTouches.values()];
-      pinchBegin((a.x + b.x) / 2);
-      pinchBase.dist = Math.max(1, dist());
-    }
-  }, true);
-  el.addEventListener('pointermove', (e) => {
-    if (e.pointerType !== 'touch' || !arrTouches.has(e.pointerId)) return;
-    arrTouches.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    if (arrTouches.size === 2 && pinchBase?.dist) { e.preventDefault(); pinchScale(dist() / pinchBase.dist); }
-  }, true);
-  const lift = (e) => { if (arrTouches.delete(e.pointerId) && arrTouches.size < 2) pinchBase = null; };
-  el.addEventListener('pointerup', lift, true);
-  el.addEventListener('pointercancel', lift, true);
-}
-/* Shell bridge: window `trackpad:pinch` { phase: begin|update|end, scale }. */
-function onShellPinch(e) {
-  if (!arrScrollEl?.isConnected || !arrPointer.inside) return;
-  const d = e.detail || {};
-  if (d.phase === 'begin') pinchBegin(arrPointerX());
-  else if (d.phase === 'update') { if (!pinchBase) pinchBegin(arrPointerX()); pinchScale(Number(d.scale)); }
-  else pinchBase = null;
-}
-/* Last resort: the page itself got pinch-zoomed — follow it on the timeline. */
-let lastViewportScale = window.visualViewport?.scale || 1;
-function onViewportResize() {
-  const sc = window.visualViewport?.scale || 1;
-  if (sc === lastViewportScale) return;
-  const ratio = sc / lastViewportScale;
-  lastViewportScale = sc;
-  if (arrPointer.inside && arrScrollEl?.isConnected) zoomArranger(PPB * ratio, arrPointerX());
+  unwireArrZoom?.();
+  unwireArrZoom = wireZoomGestures(el, {
+    getZoom: () => PPB,
+    setZoom: (z, x) => zoomArranger(z, x),
+    centerX: () => { const r = el.getBoundingClientRect(); return r.left + HEAD_W + (r.width - HEAD_W) / 2; },
+  });
 }
 
 let arrExtendTimer = 0;
@@ -3220,33 +3144,18 @@ function drawAudioClip(i) {
   if (!info?.peaks?.length) return;
   const cv = arrGridEl?.querySelector(`.studio-arr-clip[data-clip-index="${i}"] .studio-arr-clip-audio`);
   if (!cv) return;
-  const dpr = window.devicePixelRatio || 1;
-  const w = cv.clientWidth || 100;
-  const hgt = cv.clientHeight || 24;
-  cv.width = Math.max(1, Math.round(w * dpr));
-  cv.height = Math.max(1, Math.round(hgt * dpr));
-  const ctx = cv.getContext('2d');
-  ctx.scale(dpr, dpr);
-  ctx.clearRect(0, 0, w, hgt);
-  const peaks = info.peaks;
-  const secs = info.duration || 1;
   const spb = 60 / arrangement.bpm;
   const t0 = clip.audio.offset || 0;
-  const t1 = t0 + (w / PPB) * spb;   // true time scale: one beat = PPB px
-  const gain = dbToGain(clip.gain_db || 0);
-  ctx.fillStyle = canvasInk.ink;
-  ctx.globalAlpha = 0.42;
-  const mid = hgt / 2;
-  for (let x = 0; x < w; x++) {
-    const a = t0 + ((t1 - t0) * x) / w;
-    const b = t0 + ((t1 - t0) * (x + 1)) / w;
-    const k0 = Math.floor((a / secs) * peaks.length);
-    const k1 = Math.max(k0 + 1, Math.ceil((b / secs) * peaks.length));
-    let mn = 0, mx = 0;
-    for (let k = k0; k < k1 && k < peaks.length; k++) { if (k < 0) continue; mn = Math.min(mn, peaks[k][0]); mx = Math.max(mx, peaks[k][1]); }
-    mn = Math.max(-1, mn * gain); mx = Math.min(1, mx * gain);
-    ctx.fillRect(x, mid - mx * mid, 1, Math.max(1, (mx - mn) * mid));
-  }
+  const w = cv.clientWidth || 100;
+  drawWaveform(cv, {
+    peaks: info.peaks,
+    duration: info.duration || 1,
+    from: t0,
+    to: t0 + (w / PPB) * spb,   // true time scale: one beat = PPB px
+    gain: dbToGain(clip.gain_db || 0),
+    color: canvasInk.ink,
+    alpha: 0.42,
+  });
 }
 
 /* Redraw the selected arranger clip's preview after an edit (cheap; MIDI is
@@ -6542,8 +6451,6 @@ export function mountStudioTile() {
   requestAnimationFrame(() => { if (tileEl?.isConnected) { readCanvasColors(); redrawClipPreviews(); } });
   void consumePendingAiTrack().catch(() => {});
   window.addEventListener('keydown', onStudioKeydown);
-  window.addEventListener('trackpad:pinch', onShellPinch);
-  window.visualViewport?.addEventListener('resize', onViewportResize);
   window.addEventListener('theme:change', onStudioThemeChange);
   window.addEventListener('appearance:change', onStudioThemeChange);
 
@@ -6554,10 +6461,8 @@ export function mountStudioTile() {
 export function unmountStudioTile() {
   tileEl?.querySelectorAll('.ui-dial').forEach(control => control.destroy());
   window.removeEventListener('keydown', onStudioKeydown);
-  window.removeEventListener('trackpad:pinch', onShellPinch);
-  window.visualViewport?.removeEventListener('resize', onViewportResize);
-  arrTouches.clear();
-  pinchBase = null;
+  unwireArrZoom?.();
+  unwireArrZoom = null;
   window.removeEventListener('theme:change', onStudioThemeChange);
   window.removeEventListener('appearance:change', onStudioThemeChange);
   canvasInkRead = false;

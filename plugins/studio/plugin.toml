@@ -1,5 +1,5 @@
 name = "studio"
-version = "0.1.0"
+version = "0.1.1"
 api_level = 1
 entry_symbol = "shiny_plugin_entry"
 description = "Music studio — a DAW-grade step sequencer, polysynth, drum machine and modular Grid that renders arrangements to audio in the Studio window"

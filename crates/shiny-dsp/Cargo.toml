@@ -1,0 +1,7 @@
+[package]
+name = "shiny-dsp"
+version = "0.1.0"
+edition = "2021"
+description = "Audio analysis shared by plugins (loudness, waveform peaks). An rlib: it never crosses the plugin ABI."
+
+[dependencies]

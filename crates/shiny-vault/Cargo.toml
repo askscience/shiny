@@ -1,0 +1,12 @@
+[package]
+name = "shiny-vault"
+version = "0.1.0"
+edition = "2021"
+description = "Sealing primitives shared by plugins (AES-256-GCM, Argon2id, machine keys). An rlib: it never crosses the plugin ABI."
+
+[dependencies]
+aes-gcm = "0.10"
+argon2 = "0.5"
+base64 = "0.22"
+getrandom = "0.2"
+zeroize = "1"

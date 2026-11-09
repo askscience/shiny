@@ -9138,18 +9138,11 @@ html[data-phone='1'] .updates-install[data-count]::after {
 .studio-arr-clip-resize { position: absolute; top: 0; right: 0; bottom: 0; width: 7px; cursor: ew-resize; z-index: 2; }
 .studio-arr-clip-resize::after { content: ''; position: absolute; top: 30%; bottom: 30%; right: 2px; width: 2px; border-radius: 1px; background: color-mix(in srgb, var(--text) 35%, transparent); opacity: 0; transition: opacity var(--motion-feedback, 120ms) linear; }
 .studio-arr-clip:hover .studio-arr-clip-resize::after { opacity: 1; }
-.studio-arr-head .studio-vu { position: absolute; left: 8px; right: 8px; bottom: 3px; }
+.studio-arr-head .ui-meter { position: absolute; left: 8px; right: 8px; bottom: 3px; }
 
 /* peak meters: -60…+6 dBFS, hold line, latching clip LED */
-.studio-vu { position: relative; width: 6px; align-self: stretch; min-height: 40px; border-radius: 2px; overflow: hidden; background: var(--studio-scope-bg); }
-.studio-vu--h { width: auto; min-height: 0; height: 3px; align-self: auto; }
-.studio-vu-fill { position: absolute; inset: 0; transform-origin: bottom; transform: scaleY(0); background: linear-gradient(to top, var(--accent) 0%, var(--accent) 78%, var(--warning, #e8b04a) 90%, var(--error) 100%); }
-.studio-vu--h .studio-vu-fill { transform-origin: left; transform: scaleX(0); background: linear-gradient(to right, var(--accent) 0%, var(--accent) 78%, var(--warning, #e8b04a) 90%, var(--error) 100%); }
-.studio-vu-hold { position: absolute; left: 0; right: 0; height: 1px; background: var(--text); opacity: 0; }
-.studio-vu--h .studio-vu-hold { top: 0; bottom: 0; width: 1px; height: auto; right: auto; }
-.studio-vu-clip { position: absolute; top: 0; left: 0; right: 0; height: 3px; background: transparent; cursor: pointer; }
-.studio-vu-clip.is-on { background: var(--error); }
-.studio-vu--h .studio-vu-clip { display: none; }
+/* Meters are the shared levelMeter (ui/ui.css); Studio tints the well. */
+.studio-tile { --meter-bg: var(--studio-scope-bg); }
 
 /* console */
 .studio-mixer-page { overflow: auto; }
@@ -9193,7 +9186,7 @@ html[data-phone='1'] .updates-install[data-count]::after {
 .studio-dbfader-thumb::after { content: ''; position: absolute; left: 2px; right: 2px; top: 10px; height: 2px; background: var(--studio-ink-text); opacity: 0.8; }
 .studio-dbfader-thumb:focus-visible { box-shadow: 0 0 0 2px var(--accent); }
 .studio-dbfader-val { font-family: var(--font-mono); font-size: 10px; color: var(--text-secondary); font-variant-numeric: tabular-nums; cursor: default; }
-.studio-dbfader .studio-vu { height: 100%; }
+.studio-dbfader .ui-meter { height: 100%; }
 
 /* audio clip inspector */
 .studio-audio-src { font-family: var(--font-mono); font-size: 10px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
