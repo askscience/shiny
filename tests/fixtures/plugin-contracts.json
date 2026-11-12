@@ -388,6 +388,11 @@
       {
         "auth": "auth",
         "method": "Get",
+        "path": "/api/capture/look.jpg"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
         "path": "/api/capture/media"
       },
       {
@@ -544,7 +549,9 @@
       "capture_stop",
       "capture_style",
       "capture_transcribe",
-      "capture_undo"
+      "capture_undo",
+      "capture_voice",
+      "capture_voices"
     ]
   },
   "files": {
