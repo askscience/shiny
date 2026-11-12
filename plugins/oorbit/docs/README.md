@@ -6,10 +6,11 @@ document covers the plugin as built; the game itself is described in
 [design.md](design.md), and its rules live in
 [`crates/oorbit-sim`](../../../crates/oorbit-sim/README.md).
 
-Status: **0.4.0, playable alone.** The user founds a planet (one per account),
+Status: **0.5.0, ten eras and three neighbours.** The user founds a planet (one per account),
 and the window shows it as it is now: research, buildings on its 72 tiles,
-work priorities, events, notable people and the Chronicle. Friends, Laura's
-Chronicle and the assistant's tools come next.
+work priorities, events, notable people, the Chronicle, and a dock that
+trades ships with three simulated neighbours. Friends over the network,
+Laura's Chronicle and the assistant's tools come next.
 
 Category: **Games**. See the [plugin docs index](../../../docs/plugins/README.md).
 
@@ -34,8 +35,9 @@ Low-poly 3D drawn as pixel art, with soft colours:
   (`PIXEL_HEIGHT` in `game/main.gd`), upscaled by a whole factor with nearest
   filtering, so pixels stay square and sharp.
 - `game/pixel.gdshader` reduces the frame to one palette (`game/palette.gd`,
-  the Stone Age's) with a light 4×4 ordered dither. Later eras get their own
-  palettes.
+  the Stone Age's) with a light 4×4 ordered dither. Each later era adds its
+  accent colours (`ERA_ACCENTS`): marble, iron and rust, lamplight, the Neon
+  Age's magenta and cyan, the Orbital Age's white.
 - Flat-shaded tiles and props with toon diffuse, and a dark outline (the same
   mesh, slightly larger, drawn from the inside).
 - `game/sky.gdshader` draws the background at the low resolution: an indigo
@@ -80,6 +82,9 @@ scale), and scaffolding stands while it is being built.
 | A tile (click) | Its biome, its building or construction time left, and what can be built there, with cost, time and effects. |
 | Event dialog | Appears when an event waits; each choice lists its consequences. |
 | Planet | Drag to turn it; it turns by itself again after a few idle seconds. Zoom with the wheel, a trackpad pinch or two fingers (up to 1.7×): the low-resolution view grows with the zoom, so a close look is sharper. |
+| Dock (ship) | The three neighbours (climate, era, personality, friendship), what can be sent to each (gifts of the six most plentiful resources, an idea, a visitor, a prank, a message), ships under way with their countdowns, and trade offers to accept or decline. |
+| Test tools (fast-forward) | **Temporary.** +1h, +6h, +1d, +3d: moves this planet's clock forward (`POST /api/oorbit/dev/skip`, kept in the planet as `clock_offset_ms`). To be removed before release. |
+| A built tile | Demolish (two presses) clears it for something new; monuments stay. |
 | Start over | At the bottom of Society, two presses within five seconds give up the planet (`POST /api/oorbit/reset`). |
 
 Between refreshes the resources keep counting at their rates, and the
@@ -101,7 +106,8 @@ English).
 | `src/store.rs` | Loading and saving the user's planet, the catalog, new seeds. |
 | `migrations/001_init.sql` | The `oorbit_planets` table. |
 | `game/ui.gd`, `game/i18n.gd`, `game/i18n/` | The interface and its strings. |
-| `game/planet_view.gd` | The planet drawn from the state, picking and dragging. |
+| `game/planet_view.gd` | The planet drawn from the state (later eras' buildings by style, `STYLES`), picking, dragging, walkers. |
+| `game/sky_traffic.gd` | The neighbours in the sky and the ships under way, by era. |
 | `skills/oorbit.md` | What the assistant reads about Oorbit. |
 | `game/` | The Godot 4.7 project (GDScript, GL Compatibility renderer). |
 | `game/host.gd` | The game's side of the page bridge; the only GDScript that touches JavaScript. |
@@ -120,10 +126,15 @@ English).
 | `GET` | `/api/oorbit/catalog` | user | The game data (`oorbit_sim::Catalog`): eras, discoveries, buildings, events, climates. |
 | `GET` | `/api/oorbit/state` | user | The planet advanced to now (`oorbit_sim::view::planet_view`), or `{ planet: null }` before founding. |
 | `POST` | `/api/oorbit/found` | user | `{ climate }`: founds the user's planet; `400` when one exists. |
+| `POST` | `/api/oorbit/dev/skip` | user | **Temporary, for testing.** `{ hours }` (0 to 720): moves this planet's clock forward and returns the view. |
 | `POST` | `/api/oorbit/reset` | user | Deletes the user's planet; the window shows the founding screen again. |
 | `POST` | `/api/oorbit/action` | user | One `oorbit_sim::Action` (`{"type":"research","tech":"fire"}`, `build`, `set_priorities`, `resolve_event`); `400` with the reason when refused. |
 
-The view carries the planet, its rates, and for each discovery and building
+Actions also include `{"type":"send","to":"n1","kind":"gift","resource":"wood","amount":5}` (kinds: gift, idea, visit, prank, message), `accept_offer` / `decline_offer` `{ id }` and `demolish` `{ tile }`.
+
+The view carries the planet, its rates, the dock (capacity and travel time
+of the current era, ship kinds and when they unlock, sendable resources,
+the neighbours with their era), each resource's era, and for each discovery and building
 of the eras reached a `status` (`available`, `researching`, `known`,
 `locked`, `not_affordable`, `monument_done`) plus the free tiles a building
 fits, so the window never re-implements the rules.

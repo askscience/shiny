@@ -5,7 +5,7 @@
 // upscaled window.
 shader_type canvas_item;
 
-const int MAX_COLORS = 40;
+const int MAX_COLORS = 72;
 uniform sampler2D screen_texture : hint_screen_texture, filter_nearest;
 uniform vec3 palette[MAX_COLORS];
 uniform int palette_size = 1;

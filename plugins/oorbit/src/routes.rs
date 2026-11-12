@@ -25,6 +25,7 @@ pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
         "found" => found(ctx),
         "action" => action(ctx),
         "reset" => reset(ctx),
+        "dev_skip" => dev_skip(ctx),
         _ => return None,
     })
 }
@@ -81,6 +82,7 @@ fn state(ctx: Arc<PluginCtx>) -> RouteHandler {
             match store::load(&ctx, &uid)? {
                 None => Ok(ok(json!({ "now_ms": now, "planet": null }))),
                 Some(mut planet) => {
+                    let now = now + planet.clock_offset_ms;
                     advance(&mut planet, catalog(), now);
                     store::save(&ctx, &uid, &planet)?;
                     Ok(ok(planet_view(&planet, catalog(), now)))
@@ -127,10 +129,39 @@ fn action(ctx: Arc<PluginCtx>) -> RouteHandler {
             let _guard = store::lock();
             let mut planet = store::load(&ctx, &uid)?
                 .ok_or_else(|| AppError::BadRequest("found a planet first".into()))?;
+            let now = now + planet.clock_offset_ms;
             let result = apply(&mut planet, catalog(), now, &action);
             // Save even when the action is refused: the planet advanced.
             store::save(&ctx, &uid, &planet)?;
             result.map_err(|e| AppError::BadRequest(e.to_string()))?;
+            Ok(ok(planet_view(&planet, catalog(), now)))
+        }
+    })
+}
+
+/// Testing only (temporary): move this planet's clock forward by `hours`,
+/// as if that much time had passed. The planet keeps the offset, so its
+/// clock stays ahead from then on.
+fn dev_skip(ctx: Arc<PluginCtx>) -> RouteHandler {
+    #[derive(Deserialize)]
+    struct Body {
+        hours: f64,
+    }
+    bridged_route(move |req: axum::extract::Request| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            let body: Body = json_body(req).await?;
+            if !(0.0..=24.0 * 30.0).contains(&body.hours) {
+                return Err(AppError::BadRequest("hours must be 0 to 720".into()));
+            }
+            let _guard = store::lock();
+            let mut planet = store::load(&ctx, &uid)?
+                .ok_or_else(|| AppError::BadRequest("found a planet first".into()))?;
+            planet.clock_offset_ms += (body.hours * 3_600_000.0) as i64;
+            let now = now_ms() + planet.clock_offset_ms;
+            advance(&mut planet, catalog(), now);
+            store::save(&ctx, &uid, &planet)?;
             Ok(ok(planet_view(&planet, catalog(), now)))
         }
     })

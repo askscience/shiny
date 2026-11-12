@@ -50,18 +50,18 @@ the era.
 Each era adds resources, buildings, things to do and **things to send**. An
 era ends when its discoveries are known and its monument stands.
 
-| # | Era | Travel (planned) | Sending (planned) | Status |
+| # | Era | Travel | Sending (design; the dock sends gifts, ideas, visits, pranks, messages) | Status |
 |---|---|---|---|---|
 | 1 | Stone | seeds on the wind | seeds, a smoke signal | built |
 | 2 | Agricultural | messenger birds | food, pottery, a message | built |
 | 3 | Bronze | sky rafts | tools, tablets (an **idea**) | built |
-| 4 | Classical | sky sailing ships | goods, visiting people, art | planned |
-| 5 | Medieval | caravans | envoys, relics, spies | planned |
-| 6 | Renaissance | balloons | books, maps | planned |
-| 7 | Industrial | airships | big cargo, machines | planned |
-| 8 | Modern | sky planes | radio messages, films | planned |
-| 9 | Information | a cable of light | data | planned |
-| 10 | Space | rockets | colonists, station modules | planned |
+| 4 | Classical | sky sailing ships | goods, visiting people, art | built |
+| 5 | Medieval | sailing ships | envoys, relics, spies | built |
+| 6 | Renaissance | balloons | books, maps | built |
+| 7 | Industrial | airships | big cargo, machines | built |
+| 8 | Electric | planes | radio messages, films | built |
+| 9 | Neon | drones | data | built |
+| 10 | Orbital | rockets | colonists, station modules | built |
 
 - The first visit must already move: a discovery within minutes, the first
   buildings within the hour (settlers' zeal; `tests/first_session.rs`).
@@ -87,7 +87,15 @@ population and traits. The text comes from the catalog, so it always reads
 without the AI; Laura retells it. Unanswered for a day, the people take the
 first, prudent choice themselves.
 
-## Friends (planned)
+## Neighbours (built) and friends (planned)
+
+Built: three simulated neighbours with a personality (generous, trader,
+prankster) send gifts, ideas, visitors, harmless pranks, trade offers and
+messages, and answer the player's ships; kinds unlock by era (gifts and
+messages from the start, pranks and trades in era 2, ideas in era 3,
+visitors in era 4).
+
+Planned for friends:
 
 The dock sends gifts, trades, visits, pranks (never destructive: stolen light,
 a rained-out harvest, sky graffiti, goats eating a field), defences that send

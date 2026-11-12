@@ -23,6 +23,27 @@ const STONE_AGE: Array[Color] = [
 	Color("7a4f4f"), Color("a35d5d"), Color("e08f6c"), Color("f2c078"),
 ]
 
+## Colours each era adds to the palette (cumulative: a later era keeps the
+## earlier ones, so old buildings keep their look).
+const ERA_ACCENTS := {
+	4: [Color("eae2d6"), Color("8e9a5b"), Color("c07a54"), Color("cfc4b0")],
+	5: [Color("6b5a4e"), Color("8c8c8c"), Color("4f5d75"), Color("b03a2e")],
+	6: [Color("d4a24c"), Color("3f6e9e"), Color("c8b49a"), Color("7d9cc0")],
+	7: [Color("a5532f"), Color("4a4a4f"), Color("707780"), Color("d9822b")],
+	8: [Color("f5d76e"), Color("596b7d"), Color("9fb3c8"), Color("2e3440")],
+	9: [Color("ff4fd8"), Color("4fe3ff"), Color("9b5cff"), Color("1b1530")],
+	10: [Color("e8edf2"), Color("8fa3b8"), Color("ff9d3b"), Color("6fd3ff")],
+}
+
+
+## The palette the frame is reduced to in `era`.
+static func for_era(era: int) -> Array[Color]:
+	var colors: Array[Color] = STONE_AGE.duplicate()
+	for e in range(4, era + 1):
+		for c in ERA_ACCENTS.get(e, []):
+			colors.append(c)
+	return colors
+
 const BIOMES := {
 	"plains": Color("94b37e"),
 	"forest": Color("46695a"),

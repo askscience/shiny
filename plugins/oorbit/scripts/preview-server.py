@@ -82,6 +82,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self._game("action", body)
         elif self.path.startswith("/api/oorbit/reset"):
             self._game("reset")
+        elif self.path.startswith("/api/oorbit/dev/skip"):
+            self._game("skip", str(json.loads(body or "{}").get("hours", 1)))
         else:
             self.send_error(404)
 

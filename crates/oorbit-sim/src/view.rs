@@ -62,7 +62,37 @@ pub fn planet_view(planet: &Planet, catalog: &Catalog, now_ms: i64) -> Json {
         .collect();
 
     let era = catalog.era(planet.era);
+    let dock = json!({
+        "capacity": crate::neighbors::capacity(catalog, planet.era),
+        "travel_hours": crate::neighbors::travel_hours(catalog, planet.era),
+        "kinds": crate::neighbors::ShipKind::ALL
+            .iter()
+            .filter(|k| **k != crate::neighbors::ShipKind::Trade)
+            .map(|k| json!({
+                "kind": k.as_str(),
+                "first_era": k.first_era(),
+                "unlocked": crate::actions::can_send(planet, *k),
+            }))
+            .collect::<Vec<_>>(),
+        "resources": crate::neighbors::usable_resources(planet, catalog),
+        "idea_cost": 10.0 * planet.era as f64,
+        "neighbors": planet.neighbors.iter().map(|n| json!({
+            "id": n.id,
+            "name": n.name,
+            "climate": n.climate,
+            "persona": n.persona,
+            "friendship": n.friendship,
+            "era": n.era(planet, catalog),
+        })).collect::<Vec<_>>(),
+    });
+    let resource_eras: serde_json::Map<String, Json> = catalog
+        .resources
+        .iter()
+        .map(|r| (r.id.clone(), json!(catalog.resource_era(&r.id))))
+        .collect();
     json!({
+        "resource_eras": resource_eras,
+        "dock": dock,
         "now_ms": now_ms,
         "step_ms": STEP_MS,
         "planet": planet,

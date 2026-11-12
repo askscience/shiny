@@ -178,18 +178,40 @@ fn rates_at(planet: &Planet, catalog: &Catalog, step: i64) -> Rates {
     }
     *per_hour.entry("food".into()).or_insert(0.0) -= planet.population * t.food_per_person_hour;
 
-    // Conversions run at full speed while there is input for a whole step.
+    // Conversions run while there is input for a whole step. A workshop's
+    // throughput grows with the people who can staff it and with what
+    // helps materials, so a big city's foundry is not a village's.
+    let staffing = (1.0 + bonus.get(&Category::Materials).copied().unwrap_or(0.0))
+        * efficiency.min(3.0)
+        * (1.0 + planet.population / 200.0);
     for effect in &effects {
         if let Effect::Convert {
             inputs,
             output,
-            per_hour: rate,
+            per_hour: base_rate,
         } = effect
         {
+            let rate = &(base_rate * staffing);
+            // Workshops leave a reserve (a tenth of the storage) of every
+            // input that is still needed to build something (wood, stone,
+            // coal...), and stop when their output is full. An input only
+            // workshops use (copper, tin) flows freely.
+            let reserve = |id: &str| {
+                let builds_with = catalog
+                    .buildings
+                    .iter()
+                    .any(|b| b.era >= planet.era && b.cost.contains_key(id));
+                if builds_with {
+                    storage * 0.1
+                } else {
+                    0.0
+                }
+            };
             let enough = inputs
                 .iter()
-                .all(|(id, need)| planet.amount(id) >= need * rate * STEP_HOURS);
-            if enough {
+                .all(|(id, need)| planet.amount(id) >= need * rate * STEP_HOURS + reserve(id));
+            let room = planet.amount(output) < storage;
+            if enough && room {
                 for (id, need) in inputs {
                     *per_hour.entry(id.clone()).or_insert(0.0) -= need * rate;
                 }
@@ -298,6 +320,7 @@ fn run_step(planet: &mut Planet, catalog: &Catalog, step: i64) {
     check_era(planet, catalog, step);
     run_events(planet, catalog, step, &mut rng);
     run_notables(planet, catalog, step, &mut rng);
+    crate::neighbors::run_neighbors(planet, catalog, step, &mut rng);
 }
 
 /// Move to the next era when the current one is complete.

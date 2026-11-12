@@ -996,6 +996,11 @@
       {
         "auth": "auth",
         "method": "Post",
+        "path": "/api/oorbit/dev/skip"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
         "path": "/api/oorbit/found"
       },
       {

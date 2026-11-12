@@ -23,6 +23,8 @@ fn route_specs() -> Vec<RouteSpec> {
         RouteSpec::post("/api/oorbit/found", "found"),
         RouteSpec::post("/api/oorbit/action", "action"),
         RouteSpec::post("/api/oorbit/reset", "reset"),
+        // Testing only (temporary): the window's time-skip buttons.
+        RouteSpec::post("/api/oorbit/dev/skip", "dev_skip"),
     ]
 }
 

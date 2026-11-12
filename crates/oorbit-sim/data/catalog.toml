@@ -34,6 +34,10 @@ notable_days = 21.0
 notable_bonus = 0.15
 max_notables = 2
 chronicle_len = 300
+# Ships, by the sender's era (1 to 10): hours under way, and cargo.
+travel_hours = [12.0, 10.0, 8.0, 6.0, 5.0, 4.0, 3.0, 2.0, 1.5, 1.0]
+ship_capacity = [8.0, 20.0, 40.0, 80.0, 150.0, 300.0, 600.0, 1200.0, 2500.0, 5000.0]
+neighbor_act_per_hour = 0.07   # each neighbour sends something about every 14 hours
 
 # ---------------------------------------------------------------- climates
 
@@ -118,6 +122,72 @@ name = "Culture"
 category = "culture"
 uncapped = true
 
+[[resources]]
+id = "marble"
+name = "Marble"
+category = "materials"
+biome = "mountain"
+unlocked_by = "masonry"
+
+[[resources]]
+id = "coins"
+name = "Coins"
+category = "materials"
+
+[[resources]]
+id = "iron"
+name = "Iron"
+category = "materials"
+unlocked_by = "iron_working"
+from_building = "iron_mine"
+
+[[resources]]
+id = "paper"
+name = "Paper"
+category = "materials"
+
+[[resources]]
+id = "glass"
+name = "Glass"
+category = "materials"
+
+[[resources]]
+id = "coal"
+name = "Coal"
+category = "materials"
+unlocked_by = "steam"
+from_building = "coal_mine"
+
+[[resources]]
+id = "steel"
+name = "Steel"
+category = "materials"
+
+[[resources]]
+id = "electricity"
+name = "Electricity"
+category = "materials"
+
+[[resources]]
+id = "silicon"
+name = "Silicon"
+category = "materials"
+
+[[resources]]
+id = "data"
+name = "Data"
+category = "materials"
+
+[[resources]]
+id = "fuel"
+name = "Fuel"
+category = "materials"
+
+[[resources]]
+id = "alloys"
+name = "Alloys"
+category = "materials"
+
 # ---------------------------------------------------------------- eras
 
 [[eras]]
@@ -137,6 +207,48 @@ id = "bronze"
 name = "Bronze Age"
 requires = ["mining", "metallurgy", "writing", "temples"]
 monument = "ziggurat"
+
+[[eras]]
+id = "classical"
+name = "Classical Age"
+requires = ["masonry", "philosophy", "coinage", "law"]
+monument = "amphitheatre"
+
+[[eras]]
+id = "medieval"
+name = "Middle Ages"
+requires = ["iron_working", "feudalism", "guilds", "monasticism"]
+monument = "cathedral"
+
+[[eras]]
+id = "renaissance"
+name = "Renaissance"
+requires = ["printing", "astronomy", "banking", "navigation"]
+monument = "great_dome"
+
+[[eras]]
+id = "industrial"
+name = "Industrial Age"
+requires = ["steam", "railways", "steel_making", "factories"]
+monument = "iron_tower"
+
+[[eras]]
+id = "electric"
+name = "Electric Age"
+requires = ["electricity", "radio", "cinema", "medicine"]
+monument = "skyscraper"
+
+[[eras]]
+id = "neon"
+name = "Neon Age"
+requires = ["microchips", "networks", "robotics", "augmentation"]
+monument = "neon_spire"
+
+[[eras]]
+id = "orbital"
+name = "Orbital Age"
+requires = ["rocketry", "orbital_mechanics", "life_support", "fusion"]
+monument = "orbital_station"
 
 # ---------------------------------------------------------------- discoveries
 
@@ -254,6 +366,277 @@ era = 3
 cost = 85.0
 requires = ["metallurgy"]
 effects = [{ type = "bonus", category = "materials", amount = 0.3 }]
+
+# Era 4: Classical Age
+[[techs]]
+id = "masonry"
+name = "Masonry"
+era = 4
+cost = 160.0
+requires = ["writing"]
+effects = [{ type = "storage", amount = 300.0 }]
+
+[[techs]]
+id = "philosophy"
+name = "Philosophy"
+era = 4
+cost = 200.0
+requires = ["writing"]
+effects = [{ type = "bonus", category = "knowledge", amount = 0.25 }]
+
+[[techs]]
+id = "coinage"
+name = "Coinage"
+era = 4
+cost = 180.0
+requires = ["metallurgy"]
+
+[[techs]]
+id = "law"
+name = "Law"
+era = 4
+cost = 220.0
+requires = ["philosophy"]
+effects = [{ type = "mood", amount = 0.04 }]
+
+[[techs]]
+id = "theatre"
+name = "Theatre"
+era = 4
+cost = 170.0
+requires = ["temples"]
+effects = [{ type = "bonus", category = "culture", amount = 0.3 }]
+
+# Era 5: Middle Ages
+[[techs]]
+id = "iron_working"
+name = "Iron Working"
+era = 5
+cost = 210.0
+requires = ["metallurgy"]
+
+[[techs]]
+id = "feudalism"
+name = "Feudalism"
+era = 5
+cost = 220.0
+requires = ["law"]
+effects = [{ type = "storage", amount = 500.0 }]
+
+[[techs]]
+id = "guilds"
+name = "Guilds"
+era = 5
+cost = 245.0
+requires = ["coinage"]
+effects = [{ type = "bonus", category = "materials", amount = 0.3 }]
+
+[[techs]]
+id = "monasticism"
+name = "Monasticism"
+era = 5
+cost = 235.0
+requires = ["philosophy"]
+effects = [{ type = "bonus", category = "knowledge", amount = 0.25 }]
+
+[[techs]]
+id = "windmills"
+name = "Windmills"
+era = 5
+cost = 215.0
+requires = ["iron_working"]
+effects = [{ type = "bonus", category = "food", amount = 0.25 }]
+
+# Era 6: Renaissance
+[[techs]]
+id = "printing"
+name = "Printing"
+era = 6
+cost = 365.0
+requires = ["monasticism"]
+effects = [{ type = "bonus", category = "knowledge", amount = 0.35 }]
+
+[[techs]]
+id = "astronomy"
+name = "Astronomy"
+era = 6
+cost = 390.0
+requires = ["philosophy"]
+
+[[techs]]
+id = "banking"
+name = "Banking"
+era = 6
+cost = 405.0
+requires = ["guilds"]
+effects = [{ type = "storage", amount = 800.0 }]
+
+[[techs]]
+id = "navigation"
+name = "Navigation"
+era = 6
+cost = 375.0
+requires = ["astronomy"]
+effects = [{ type = "bonus", category = "food", amount = 0.2 }]
+
+[[techs]]
+id = "glassmaking"
+name = "Glassmaking"
+era = 6
+cost = 350.0
+requires = ["masonry"]
+
+# Era 7: Industrial Age
+[[techs]]
+id = "steam"
+name = "Steam Power"
+era = 7
+cost = 620.0
+requires = ["iron_working"]
+effects = [{ type = "bonus", category = "materials", amount = 0.3 }]
+
+[[techs]]
+id = "railways"
+name = "Railways"
+era = 7
+cost = 680.0
+requires = ["steam"]
+effects = [{ type = "storage", amount = 1500.0 }]
+
+[[techs]]
+id = "steel_making"
+name = "Steel Making"
+era = 7
+cost = 650.0
+requires = ["steam"]
+
+[[techs]]
+id = "factories"
+name = "Factories"
+era = 7
+cost = 715.0
+requires = ["steel_making"]
+effects = [{ type = "bonus", category = "materials", amount = 0.4 }, { type = "mood", amount = -0.03 }]
+
+[[techs]]
+id = "sanitation"
+name = "Sanitation"
+era = 7
+cost = 635.0
+requires = ["printing"]
+effects = [{ type = "mood", amount = 0.05 }]
+
+# Era 8: Electric Age
+[[techs]]
+id = "electricity"
+name = "Electricity"
+era = 8
+cost = 1040.0
+requires = ["steam"]
+
+[[techs]]
+id = "radio"
+name = "Radio"
+era = 8
+cost = 1140.0
+requires = ["electricity"]
+effects = [{ type = "bonus", category = "culture", amount = 0.4 }]
+
+[[techs]]
+id = "cinema"
+name = "Cinema"
+era = 8
+cost = 1105.0
+requires = ["electricity"]
+effects = [{ type = "mood", amount = 0.04 }]
+
+[[techs]]
+id = "medicine"
+name = "Medicine"
+era = 8
+cost = 1170.0
+requires = ["sanitation"]
+effects = [{ type = "storage", amount = 2500.0 }]
+
+[[techs]]
+id = "automobiles"
+name = "Automobiles"
+era = 8
+cost = 1070.0
+requires = ["factories"]
+effects = [{ type = "bonus", category = "materials", amount = 0.3 }]
+
+# Era 9: Neon Age
+[[techs]]
+id = "microchips"
+name = "Microchips"
+era = 9
+cost = 1755.0
+requires = ["electricity"]
+
+[[techs]]
+id = "networks"
+name = "Networks"
+era = 9
+cost = 1885.0
+requires = ["microchips", "radio"]
+effects = [{ type = "bonus", category = "knowledge", amount = 0.5 }, { type = "storage", amount = 4000.0 }]
+
+[[techs]]
+id = "robotics"
+name = "Robotics"
+era = 9
+cost = 1950.0
+requires = ["microchips"]
+effects = [{ type = "bonus", category = "materials", amount = 0.5 }]
+
+[[techs]]
+id = "augmentation"
+name = "Augmentation"
+era = 9
+cost = 2015.0
+requires = ["medicine", "microchips"]
+effects = [{ type = "mood", amount = 0.04 }]
+
+[[techs]]
+id = "neon_signs"
+name = "Neon Signs"
+era = 9
+cost = 1690.0
+requires = ["electricity"]
+effects = [{ type = "bonus", category = "culture", amount = 0.5 }]
+
+# Era 10: Orbital Age
+[[techs]]
+id = "rocketry"
+name = "Rocketry"
+era = 10
+cost = 2925.0
+requires = ["robotics"]
+
+[[techs]]
+id = "orbital_mechanics"
+name = "Orbital Mechanics"
+era = 10
+cost = 3120.0
+requires = ["rocketry", "astronomy"]
+effects = [{ type = "storage", amount = 6000.0 }]
+
+[[techs]]
+id = "life_support"
+name = "Life Support"
+era = 10
+cost = 3055.0
+requires = ["augmentation"]
+effects = [{ type = "bonus", category = "food", amount = 0.4 }]
+
+[[techs]]
+id = "fusion"
+name = "Fusion"
+era = 10
+cost = 3380.0
+requires = ["networks"]
+effects = [{ type = "bonus", category = "materials", amount = 0.5 }]
 
 # ---------------------------------------------------------------- buildings
 
@@ -392,6 +775,426 @@ build_hours = 30.0
 biomes = ["plains", "desert", "mountain"]
 effects = [{ type = "bonus", category = "culture", amount = 0.5 }, { type = "mood", amount = 0.08 }]
 
+# Era 4
+[[buildings]]
+id = "villa"
+name = "Villa"
+era = 4
+requires = "masonry"
+cost = { stone = 40.0, marble = 20.0 }
+build_hours = 6.0
+effects = [{ type = "housing", amount = 14.0 }]
+
+[[buildings]]
+id = "forum"
+name = "Forum"
+era = 4
+requires = "law"
+cost = { marble = 40.0, stone = 30.0 }
+build_hours = 8.0
+effects = [{ type = "bonus", category = "culture", amount = 0.3 }, { type = "mood", amount = 0.03 }]
+
+[[buildings]]
+id = "mint"
+name = "Mint"
+era = 4
+requires = "coinage"
+cost = { stone = 40.0, bronze = 15.0 }
+build_hours = 8.0
+effects = [{ type = "convert", inputs = { bronze = 0.4 }, output = "coins", per_hour = 1.0 }]
+
+[[buildings]]
+id = "academy"
+name = "Academy"
+era = 4
+requires = "philosophy"
+cost = { marble = 50.0, wood = 40.0 }
+build_hours = 10.0
+effects = [{ type = "bonus", category = "knowledge", amount = 0.35 }]
+
+[[buildings]]
+id = "aqueduct"
+name = "Aqueduct"
+era = 4
+requires = "masonry"
+cost = { stone = 80.0, marble = 30.0 }
+build_hours = 10.0
+biomes = ["plains", "mountain"]
+effects = [{ type = "bonus", category = "food", amount = 0.3 }, { type = "mood", amount = 0.03 }]
+
+[[buildings]]
+id = "amphitheatre"
+name = "Great Amphitheatre"
+era = 4
+cost = { marble = 160.0, stone = 140.0, coins = 30.0 }
+build_hours = 30.0
+biomes = ["plains", "coast", "desert"]
+effects = [{ type = "bonus", category = "culture", amount = 0.5 }, { type = "mood", amount = 0.06 }]
+monument = true
+
+# Era 5
+[[buildings]]
+id = "iron_mine"
+name = "Iron Mine"
+era = 5
+requires = "iron_working"
+cost = { wood = 80.0, stone = 60.0 }
+build_hours = 10.0
+biomes = ["mountain"]
+
+[[buildings]]
+id = "manor"
+name = "Manor"
+era = 5
+requires = "feudalism"
+cost = { stone = 80.0, wood = 60.0, iron = 10.0 }
+build_hours = 8.0
+effects = [{ type = "housing", amount = 20.0 }]
+
+[[buildings]]
+id = "watermill"
+name = "Watermill"
+era = 5
+requires = "windmills"
+cost = { wood = 90.0, iron = 20.0 }
+build_hours = 10.0
+biomes = ["coast", "plains"]
+effects = [{ type = "bonus", category = "food", amount = 0.35 }]
+
+[[buildings]]
+id = "monastery"
+name = "Monastery"
+era = 5
+requires = "monasticism"
+cost = { stone = 120.0, wood = 60.0 }
+build_hours = 14.0
+biomes = ["mountain", "forest", "plains"]
+effects = [{ type = "bonus", category = "knowledge", amount = 0.35 }]
+
+[[buildings]]
+id = "guild_hall"
+name = "Guild Hall"
+era = 5
+requires = "guilds"
+cost = { stone = 100.0, iron = 40.0, coins = 20.0 }
+build_hours = 12.0
+effects = [{ type = "bonus", category = "materials", amount = 0.35 }]
+
+[[buildings]]
+id = "cathedral"
+name = "Cathedral"
+era = 5
+cost = { stone = 400.0, marble = 150.0, iron = 60.0, coins = 40.0 }
+build_hours = 40.0
+biomes = ["plains", "coast", "desert"]
+effects = [{ type = "bonus", category = "culture", amount = 0.6 }, { type = "mood", amount = 0.06 }]
+monument = true
+
+# Era 6
+[[buildings]]
+id = "townhouse"
+name = "Townhouse"
+era = 6
+requires = "banking"
+cost = { stone = 85.0, glass = 15.0, wood = 55.0 }
+build_hours = 8.0
+effects = [{ type = "housing", amount = 28.0 }]
+
+[[buildings]]
+id = "glassworks"
+name = "Glassworks"
+era = 6
+requires = "glassmaking"
+cost = { stone = 85.0, iron = 30.0 }
+build_hours = 10.0
+effects = [{ type = "convert", inputs = { stone = 2.0 }, output = "glass", per_hour = 1.0 }]
+
+[[buildings]]
+id = "paper_mill"
+name = "Paper Mill"
+era = 6
+requires = "printing"
+cost = { wood = 100.0, iron = 30.0 }
+build_hours = 10.0
+biomes = ["forest", "plains", "coast"]
+effects = [{ type = "convert", inputs = { wood = 2.0 }, output = "paper", per_hour = 1.0 }]
+
+[[buildings]]
+id = "printing_house"
+name = "Printing House"
+era = 6
+requires = "printing"
+cost = { paper = 30.0, iron = 20.0, stone = 55.0 }
+build_hours = 10.0
+effects = [{ type = "bonus", category = "knowledge", amount = 0.4 }]
+
+[[buildings]]
+id = "observatory"
+name = "Observatory"
+era = 6
+requires = "astronomy"
+cost = { glass = 30.0, marble = 55.0 }
+build_hours = 12.0
+biomes = ["mountain"]
+effects = [{ type = "bonus", category = "knowledge", amount = 0.35 }]
+
+[[buildings]]
+id = "harbor"
+name = "Harbour"
+era = 6
+requires = "navigation"
+cost = { wood = 140.0, iron = 35.0 }
+build_hours = 12.0
+biomes = ["coast"]
+effects = [{ type = "bonus", category = "food", amount = 0.4 }, { type = "storage", amount = 400.0 }]
+
+[[buildings]]
+id = "great_dome"
+name = "Great Dome"
+era = 6
+cost = { marble = 350.0, glass = 105.0, paper = 70.0, coins = 55.0 }
+build_hours = 48.0
+biomes = ["plains", "coast", "desert"]
+effects = [{ type = "bonus", category = "culture", amount = 0.6 }, { type = "bonus", category = "knowledge", amount = 0.2 }]
+monument = true
+
+# Era 7
+[[buildings]]
+id = "coal_mine"
+name = "Coal Mine"
+era = 7
+requires = "steam"
+cost = { iron = 85.0, wood = 105.0 }
+build_hours = 10.0
+biomes = ["mountain"]
+
+[[buildings]]
+id = "steel_mill"
+name = "Steel Mill"
+era = 7
+requires = "steel_making"
+cost = { iron = 105.0, stone = 140.0, coal = 30.0 }
+build_hours = 14.0
+effects = [{ type = "convert", inputs = { iron = 1.0, coal = 1.0 }, output = "steel", per_hour = 1.5 }]
+
+[[buildings]]
+id = "factory"
+name = "Factory"
+era = 7
+requires = "factories"
+cost = { steel = 40.0, glass = 30.0, coal = 40.0 }
+build_hours = 14.0
+effects = [{ type = "bonus", category = "materials", amount = 0.5 }, { type = "mood", amount = -0.02 }]
+
+[[buildings]]
+id = "tenement"
+name = "Tenement"
+era = 7
+requires = "railways"
+cost = { stone = 140.0, iron = 40.0, glass = 20.0 }
+build_hours = 8.0
+effects = [{ type = "housing", amount = 45.0 }, { type = "mood", amount = -0.01 }]
+
+[[buildings]]
+id = "railway_station"
+name = "Railway Station"
+era = 7
+requires = "railways"
+cost = { steel = 55.0, coal = 55.0, stone = 140.0 }
+build_hours = 14.0
+biomes = ["plains", "desert"]
+effects = [{ type = "bonus", category = "food", amount = 0.3 }, { type = "bonus", category = "materials", amount = 0.3 }]
+
+[[buildings]]
+id = "iron_tower"
+name = "Iron Tower"
+era = 7
+cost = { steel = 280.0, iron = 210.0, glass = 70.0, coal = 140.0 }
+build_hours = 60.0
+biomes = ["plains", "coast", "desert"]
+effects = [{ type = "bonus", category = "culture", amount = 0.6 }, { type = "mood", amount = 0.06 }]
+monument = true
+
+# Era 8
+[[buildings]]
+id = "power_plant"
+name = "Power Plant"
+era = 8
+requires = "electricity"
+cost = { steel = 105.0, coal = 105.0, stone = 210.0 }
+build_hours = 16.0
+effects = [{ type = "convert", inputs = { coal = 0.5 }, output = "electricity", per_hour = 3.0 }]
+
+[[buildings]]
+id = "apartment"
+name = "Apartment Block"
+era = 8
+requires = "electricity"
+cost = { steel = 70.0, glass = 55.0, electricity = 30.0 }
+build_hours = 10.0
+effects = [{ type = "housing", amount = 70.0 }]
+
+[[buildings]]
+id = "cinema_hall"
+name = "Cinema"
+era = 8
+requires = "cinema"
+cost = { steel = 40.0, glass = 40.0, electricity = 40.0 }
+build_hours = 12.0
+effects = [{ type = "bonus", category = "culture", amount = 0.5 }, { type = "mood", amount = 0.05 }]
+
+[[buildings]]
+id = "hospital"
+name = "Hospital"
+era = 8
+requires = "medicine"
+cost = { steel = 85.0, glass = 70.0, electricity = 55.0 }
+build_hours = 16.0
+effects = [{ type = "mood", amount = 0.06 }, { type = "bonus", category = "food", amount = 0.2 }]
+
+[[buildings]]
+id = "radio_tower"
+name = "Radio Tower"
+era = 8
+requires = "radio"
+cost = { steel = 105.0, electricity = 70.0 }
+build_hours = 14.0
+biomes = ["mountain", "plains"]
+effects = [{ type = "bonus", category = "knowledge", amount = 0.4 }, { type = "bonus", category = "culture", amount = 0.3 }]
+
+[[buildings]]
+id = "skyscraper"
+name = "Skyscraper"
+era = 8
+cost = { steel = 560.0, glass = 280.0, electricity = 210.0, coins = 140.0 }
+build_hours = 72.0
+biomes = ["plains", "coast", "desert"]
+effects = [{ type = "bonus", category = "culture", amount = 0.6 }, { type = "housing", amount = 150.0 }]
+monument = true
+
+# Era 9
+[[buildings]]
+id = "silicon_foundry"
+name = "Silicon Foundry"
+era = 9
+requires = "microchips"
+cost = { steel = 210.0, glass = 140.0, electricity = 105.0 }
+build_hours = 16.0
+effects = [{ type = "convert", inputs = { glass = 1.0, electricity = 1.0 }, output = "silicon", per_hour = 1.0 }]
+
+[[buildings]]
+id = "data_center"
+name = "Data Centre"
+era = 9
+requires = "networks"
+cost = { steel = 210.0, silicon = 40.0, electricity = 140.0 }
+build_hours = 18.0
+effects = [{ type = "convert", inputs = { silicon = 0.5, electricity = 1.0 }, output = "data", per_hour = 2.0 }]
+
+[[buildings]]
+id = "arcology"
+name = "Arcology"
+era = 9
+requires = "robotics"
+cost = { steel = 280.0, glass = 210.0, silicon = 55.0 }
+build_hours = 14.0
+effects = [{ type = "housing", amount = 140.0 }]
+
+[[buildings]]
+id = "neon_strip"
+name = "Neon Strip"
+era = 9
+requires = "neon_signs"
+cost = { glass = 140.0, electricity = 140.0, silicon = 30.0 }
+build_hours = 12.0
+effects = [{ type = "bonus", category = "culture", amount = 0.6 }, { type = "mood", amount = 0.06 }]
+
+[[buildings]]
+id = "robot_factory"
+name = "Robot Factory"
+era = 9
+requires = "robotics"
+cost = { steel = 350.0, silicon = 85.0, data = 40.0 }
+build_hours = 20.0
+effects = [{ type = "bonus", category = "materials", amount = 0.6 }, { type = "bonus", category = "food", amount = 0.3 }]
+
+[[buildings]]
+id = "neon_spire"
+name = "Neon Spire"
+era = 9
+cost = { steel = 1050.0, glass = 560.0, silicon = 280.0, data = 210.0 }
+build_hours = 84.0
+biomes = ["plains", "coast", "desert"]
+effects = [{ type = "bonus", category = "culture", amount = 0.7 }, { type = "bonus", category = "knowledge", amount = 0.3 }, { type = "mood", amount = 0.06 }]
+monument = true
+
+# Era 10
+[[buildings]]
+id = "refinery"
+name = "Fuel Refinery"
+era = 10
+requires = "rocketry"
+cost = { steel = 420.0, electricity = 210.0 }
+build_hours = 18.0
+biomes = ["desert", "coast", "plains"]
+effects = [{ type = "convert", inputs = { coal = 1.0, electricity = 1.0 }, output = "fuel", per_hour = 1.0 }]
+
+[[buildings]]
+id = "alloy_works"
+name = "Alloy Works"
+era = 10
+requires = "orbital_mechanics"
+cost = { steel = 420.0, data = 140.0, electricity = 210.0 }
+build_hours = 18.0
+effects = [{ type = "convert", inputs = { steel = 1.0, data = 0.5 }, output = "alloys", per_hour = 1.0 }]
+
+[[buildings]]
+id = "hydroponics"
+name = "Hydroponic Farm"
+era = 10
+requires = "life_support"
+cost = { glass = 280.0, electricity = 210.0, data = 70.0 }
+build_hours = 14.0
+effects = [{ type = "bonus", category = "food", amount = 0.6 }]
+
+[[buildings]]
+id = "mission_control"
+name = "Mission Control"
+era = 10
+requires = "orbital_mechanics"
+cost = { steel = 350.0, silicon = 140.0, data = 210.0 }
+build_hours = 20.0
+effects = [{ type = "bonus", category = "knowledge", amount = 0.6 }]
+
+[[buildings]]
+id = "habitat"
+name = "Habitat Dome"
+era = 10
+requires = "life_support"
+cost = { glass = 350.0, alloys = 40.0, electricity = 140.0 }
+build_hours = 14.0
+effects = [{ type = "housing", amount = 220.0 }]
+
+[[buildings]]
+id = "launch_pad"
+name = "Launch Pad"
+era = 10
+requires = "rocketry"
+cost = { steel = 560.0, fuel = 70.0, electricity = 280.0 }
+build_hours = 24.0
+biomes = ["desert", "plains", "coast"]
+effects = [{ type = "bonus", category = "knowledge", amount = 0.3 }]
+
+[[buildings]]
+id = "orbital_station"
+name = "Orbital Station"
+era = 10
+cost = { alloys = 420.0, fuel = 420.0, data = 420.0, steel = 1050.0 }
+build_hours = 120.0
+biomes = ["plains", "coast", "desert"]
+effects = [{ type = "bonus", category = "culture", amount = 1.0 }, { type = "mood", amount = 0.1 }]
+monument = true
+
 # ---------------------------------------------------------------- events
 # The first choice is the prudent one: the people take it themselves when
 # nobody answers within a day.
@@ -414,6 +1217,7 @@ outcomes = [{ type = "mood", amount = 0.05 }, { type = "trait", id = "traditiona
 [[events]]
 id = "storm"
 era_min = 1
+era_max = 6
 weight = 5
 
 [[events.choices]]
@@ -427,6 +1231,7 @@ outcomes = [{ type = "mood", amount = -0.1 }, { type = "resource", id = "wood", 
 [[events]]
 id = "wanderers"
 era_min = 1
+era_max = 6
 weight = 4
 
 [[events.choices]]
@@ -455,6 +1260,7 @@ outcomes = [{ type = "resource", id = "food", amount = 5.0 }, { type = "resource
 [[events]]
 id = "feud"
 era_min = 1
+era_max = 6
 weight = 3
 
 [[events.choices]]
@@ -472,6 +1278,7 @@ outcomes = [{ type = "resource", id = "food", amount = -6.0 }, { type = "trait",
 [[events]]
 id = "comet"
 era_min = 1
+era_max = 6
 weight = 2
 
 [[events.choices]]
@@ -485,6 +1292,7 @@ outcomes = [{ type = "resource", id = "knowledge", amount = 10.0 }, { type = "tr
 [[events]]
 id = "drought"
 era_min = 2
+era_max = 6
 weight = 3
 
 [[events.choices]]
@@ -498,6 +1306,7 @@ outcomes = [{ type = "resource", id = "stone", amount = -15.0 }, { type = "resou
 [[events]]
 id = "harvest_festival"
 era_min = 2
+era_max = 6
 weight = 4
 if_known = "farming"
 
@@ -512,6 +1321,7 @@ outcomes = [{ type = "resource", id = "food", amount = -30.0 }, { type = "resour
 [[events]]
 id = "traders"
 era_min = 3
+era_max = 6
 weight = 4
 
 [[events.choices]]
@@ -525,6 +1335,7 @@ outcomes = [{ type = "trait", id = "open", amount = -1 }]
 [[events]]
 id = "plague"
 era_min = 3
+era_max = 6
 weight = 2
 
 [[events.choices]]
@@ -534,3 +1345,171 @@ outcomes = [{ type = "population", amount = -1.0 }, { type = "mood", amount = -0
 [[events.choices]]
 id = "pray_for_healing"
 outcomes = [{ type = "population", amount = -3.0 }, { type = "resource", id = "culture", amount = 10.0 }, { type = "trait", id = "traditional", amount = 1 }]
+
+[[events]]
+id = "philosopher"
+era_min = 4
+era_max = 6
+weight = 3
+
+[[events.choices]]
+id = "listen"
+outcomes = [{ type = "resource", id = "knowledge", amount = 60.0 }, { type = "trait", id = "curious", amount = 1 }]
+
+[[events.choices]]
+id = "laugh"
+outcomes = [{ type = "mood", amount = 0.05 }, { type = "trait", id = "traditional", amount = 1 }]
+
+[[events]]
+id = "games"
+era_min = 4
+era_max = 7
+weight = 3
+
+[[events.choices]]
+id = "modest_games"
+outcomes = [{ type = "resource", id = "coins", amount = -10.0 }, { type = "mood", amount = 0.06 }]
+
+[[events.choices]]
+id = "grand_games"
+outcomes = [{ type = "resource", id = "coins", amount = -40.0 }, { type = "resource", id = "culture", amount = 80.0 }, { type = "mood", amount = 0.12 }]
+
+[[events]]
+id = "knight"
+era_min = 5
+era_max = 6
+weight = 3
+
+[[events.choices]]
+id = "welcome"
+outcomes = [{ type = "population", amount = 4.0 }, { type = "resource", id = "food", amount = -40.0 }, { type = "trait", id = "open", amount = 1 }]
+
+[[events.choices]]
+id = "refuse"
+outcomes = [{ type = "trait", id = "peaceful", amount = 1 }]
+
+[[events]]
+id = "black_cat"
+era_min = 5
+era_max = 7
+weight = 2
+
+[[events.choices]]
+id = "adopt"
+outcomes = [{ type = "mood", amount = 0.04 }]
+
+[[events.choices]]
+id = "chase"
+outcomes = [{ type = "mood", amount = -0.03 }, { type = "trait", id = "traditional", amount = 1 }]
+
+[[events]]
+id = "explorers"
+era_min = 6
+era_max = 7
+weight = 3
+
+[[events.choices]]
+id = "fund"
+outcomes = [{ type = "resource", id = "coins", amount = -60.0 }, { type = "resource", id = "knowledge", amount = 200.0 }, { type = "trait", id = "curious", amount = 1 }]
+
+[[events.choices]]
+id = "stay_home"
+outcomes = [{ type = "trait", id = "traditional", amount = 1 }]
+
+[[events]]
+id = "strike"
+era_min = 7
+era_max = 8
+weight = 3
+
+[[events.choices]]
+id = "raise_wages"
+outcomes = [{ type = "resource", id = "coins", amount = -80.0 }, { type = "mood", amount = 0.08 }]
+
+[[events.choices]]
+id = "wait_it_out"
+outcomes = [{ type = "mood", amount = -0.1 }, { type = "resource", id = "steel", amount = 40.0 }]
+
+[[events]]
+id = "smog"
+era_min = 7
+era_max = 9
+weight = 3
+
+[[events.choices]]
+id = "filters"
+outcomes = [{ type = "resource", id = "steel", amount = -60.0 }, { type = "mood", amount = 0.06 }]
+
+[[events.choices]]
+id = "ignore"
+outcomes = [{ type = "mood", amount = -0.08 }, { type = "population", amount = -3.0 }]
+
+[[events]]
+id = "radio_show"
+era_min = 8
+era_max = 9
+weight = 3
+
+[[events.choices]]
+id = "broadcast_news"
+outcomes = [{ type = "resource", id = "knowledge", amount = 300.0 }]
+
+[[events.choices]]
+id = "broadcast_music"
+outcomes = [{ type = "resource", id = "culture", amount = 300.0 }, { type = "mood", amount = 0.06 }]
+
+[[events]]
+id = "blackout"
+era_min = 8
+era_max = 10
+weight = 3
+
+[[events.choices]]
+id = "candles"
+outcomes = [{ type = "resource", id = "electricity", amount = -100.0 }, { type = "mood", amount = -0.03 }]
+
+[[events.choices]]
+id = "party_in_the_dark"
+outcomes = [{ type = "resource", id = "culture", amount = 200.0 }, { type = "mood", amount = 0.05 }]
+
+[[events]]
+id = "rogue_ai"
+era_min = 9
+era_max = 10
+weight = 3
+
+[[events.choices]]
+id = "unplug"
+outcomes = [{ type = "resource", id = "data", amount = -150.0 }, { type = "trait", id = "traditional", amount = 1 }]
+
+[[events.choices]]
+id = "befriend"
+outcomes = [{ type = "resource", id = "knowledge", amount = 600.0 }, { type = "trait", id = "curious", amount = 1 }, { type = "mood", amount = -0.03 }]
+
+[[events]]
+id = "neon_rain"
+era_min = 9
+era_max = 10
+weight = 3
+
+[[events.choices]]
+id = "stay_in"
+outcomes = [{ type = "resource", id = "food", amount = -100.0 }]
+
+[[events.choices]]
+id = "street_festival"
+outcomes = [{ type = "resource", id = "culture", amount = 400.0 }, { type = "mood", amount = 0.08 }]
+
+[[events]]
+id = "meteor"
+era_min = 10
+weight = 2
+
+[[events.choices]]
+id = "deflect"
+outcomes = [{ type = "resource", id = "fuel", amount = -100.0 }, { type = "resource", id = "knowledge", amount = 400.0 }]
+
+[[events.choices]]
+id = "watch"
+outcomes = [{ type = "resource", id = "culture", amount = 300.0 }, { type = "trait", id = "curious", amount = 1 }]
+

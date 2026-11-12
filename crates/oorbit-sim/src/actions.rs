@@ -4,6 +4,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::catalog::Catalog;
+use crate::neighbors::{capacity, launch, Ship, ShipKind};
 use crate::planet::{Construction, Planet, Priorities};
 use crate::step::{advance, check_era, free_tiles, resolve};
 use crate::{hours_to_steps, step_of};
@@ -11,10 +12,39 @@ use crate::{hours_to_steps, step_of};
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Action {
-    SetPriorities { priorities: Priorities },
-    Research { tech: String },
-    Build { building: String, tile: usize },
-    ResolveEvent { choice: String },
+    SetPriorities {
+        priorities: Priorities,
+    },
+    Research {
+        tech: String,
+    },
+    Build {
+        building: String,
+        tile: usize,
+    },
+    ResolveEvent {
+        choice: String,
+    },
+    /// Send a ship to a neighbour: resources (`gift`, `prank` aims at one),
+    /// a discovery (`idea`), one of the people (`visit`) or a `message`.
+    Send {
+        to: String,
+        kind: ShipKind,
+        #[serde(default)]
+        resource: Option<String>,
+        #[serde(default)]
+        amount: f64,
+    },
+    /// Clear a tile for something new. Nothing is refunded; monuments stay.
+    Demolish {
+        tile: usize,
+    },
+    AcceptOffer {
+        id: u64,
+    },
+    DeclineOffer {
+        id: u64,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -30,6 +60,11 @@ pub enum ActionError {
     NotAffordable(String),
     NoPendingEvent,
     UnknownChoice(String),
+    UnknownNeighbor(String),
+    ShipLocked(String),
+    BadCargo,
+    NoOffer(u64),
+    CannotDemolish(usize),
 }
 
 impl std::fmt::Display for ActionError {
@@ -48,6 +83,13 @@ impl std::fmt::Display for ActionError {
             ActionError::NotAffordable(id) => write!(f, "not enough resources for `{id}`"),
             ActionError::NoPendingEvent => write!(f, "no event is waiting for an answer"),
             ActionError::UnknownChoice(id) => write!(f, "unknown choice `{id}`"),
+            ActionError::UnknownNeighbor(id) => write!(f, "no neighbour `{id}`"),
+            ActionError::ShipLocked(kind) => write!(f, "`{kind}` ships cannot be sent yet"),
+            ActionError::BadCargo => write!(f, "that cargo cannot be sent"),
+            ActionError::NoOffer(id) => write!(f, "no offer {id}"),
+            ActionError::CannotDemolish(i) => {
+                write!(f, "tile {i} has nothing that can be demolished")
+            }
         }
     }
 }
@@ -166,8 +208,164 @@ pub fn apply(
                 &[("event", &pending.id), ("choice", choice)],
             );
         }
+        Action::Send {
+            to,
+            kind,
+            resource,
+            amount,
+        } => {
+            send(
+                planet,
+                catalog,
+                step,
+                to,
+                *kind,
+                resource.as_deref(),
+                *amount,
+            )?;
+        }
+        Action::Demolish { tile } => {
+            let building = planet
+                .tiles
+                .get(*tile)
+                .and_then(|t| t.building.clone())
+                .ok_or(ActionError::CannotDemolish(*tile))?;
+            if catalog.building(&building).is_some_and(|b| b.monument) {
+                return Err(ActionError::CannotDemolish(*tile));
+            }
+            planet.tiles[*tile].building = None;
+            let t = tile.to_string();
+            planet.log(
+                catalog,
+                step,
+                "building_demolished",
+                &[("building", &building), ("tile", &t)],
+            );
+        }
+        Action::AcceptOffer { id } => {
+            let offer = planet
+                .offers
+                .iter()
+                .find(|o| o.id == *id)
+                .cloned()
+                .ok_or(ActionError::NoOffer(*id))?;
+            if planet.amount(&offer.want_resource) < offer.want_amount {
+                return Err(ActionError::NotAffordable(offer.want_resource.clone()));
+            }
+            planet.offers.retain(|o| o.id != *id);
+            planet.add(&offer.want_resource, -offer.want_amount);
+            let era = planet
+                .neighbors
+                .iter()
+                .find(|n| n.id == offer.from)
+                .map(|n| n.era(planet, catalog))
+                .unwrap_or(planet.era);
+            if let Some(n) = planet.neighbors.iter_mut().find(|n| n.id == offer.from) {
+                n.friendship += 1;
+            }
+            let delivery = Ship {
+                id: 0,
+                from: offer.from.clone(),
+                to: "home".into(),
+                kind: ShipKind::Trade,
+                resource: Some(offer.give_resource.clone()),
+                amount: offer.give_amount,
+                tech: None,
+                era,
+                depart_step: 0,
+                arrive_step: 0,
+                returning: true,
+            };
+            launch(planet, catalog, step, delivery);
+            planet.log(catalog, step, "offer_accepted", &[]);
+        }
+        Action::DeclineOffer { id } => {
+            if !planet.offers.iter().any(|o| o.id == *id) {
+                return Err(ActionError::NoOffer(*id));
+            }
+            planet.offers.retain(|o| o.id != *id);
+        }
     }
     planet.last_action_step = step;
     check_era(planet, catalog, step);
+    Ok(())
+}
+
+/// Can the planet send this kind of ship now?
+pub fn can_send(planet: &Planet, kind: ShipKind) -> bool {
+    planet.era >= kind.first_era() && kind != ShipKind::Trade
+}
+
+fn send(
+    planet: &mut Planet,
+    catalog: &Catalog,
+    step: i64,
+    to: &str,
+    kind: ShipKind,
+    resource: Option<&str>,
+    amount: f64,
+) -> Result<(), ActionError> {
+    if !planet.neighbors.iter().any(|n| n.id == to) {
+        return Err(ActionError::UnknownNeighbor(to.into()));
+    }
+    if !can_send(planet, kind) {
+        return Err(ActionError::ShipLocked(kind.as_str().into()));
+    }
+    let mut ship = Ship {
+        id: 0,
+        from: "home".into(),
+        to: to.into(),
+        kind,
+        resource: None,
+        amount: 0.0,
+        tech: None,
+        era: planet.era,
+        depart_step: 0,
+        arrive_step: 0,
+        returning: false,
+    };
+    match kind {
+        ShipKind::Gift => {
+            let resource = resource.ok_or(ActionError::BadCargo)?;
+            let amount = amount.floor();
+            let usable = crate::neighbors::usable_resources(planet, catalog);
+            if !usable.iter().any(|r| r == resource)
+                || amount < 1.0
+                || amount > capacity(catalog, planet.era)
+                || planet.amount(resource) < amount
+            {
+                return Err(ActionError::BadCargo);
+            }
+            planet.add(resource, -amount);
+            ship.resource = Some(resource.into());
+            ship.amount = amount;
+        }
+        ShipKind::Prank => {
+            ship.resource = resource.map(String::from);
+        }
+        ShipKind::Idea => {
+            // Ideas are shared knowledge: they cost a little of it.
+            let cost = 10.0 * planet.era as f64;
+            if planet.amount("knowledge") < cost {
+                return Err(ActionError::NotAffordable("knowledge".into()));
+            }
+            planet.add("knowledge", -cost);
+        }
+        ShipKind::Visit | ShipKind::Message => {}
+        ShipKind::Trade => return Err(ActionError::ShipLocked("trade".into())),
+    }
+    let name = planet
+        .neighbors
+        .iter()
+        .find(|n| n.id == to)
+        .map(|n| n.name.clone())
+        .unwrap_or_default();
+    launch(planet, catalog, step, ship);
+    planet.log(
+        catalog,
+        step,
+        "ship_sent",
+        &[("to", &name), ("kind", kind.as_str())],
+    );
     Ok(())
 }

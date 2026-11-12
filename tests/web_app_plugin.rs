@@ -366,6 +366,39 @@ async fn oorbit_founds_saves_and_plays_a_planet() {
         .unwrap();
     assert_eq!(refused.status(), StatusCode::BAD_REQUEST);
 
+    // The temporary time-skip tool moves this planet's clock forward.
+    let skipped = json_body(
+        router
+            .clone()
+            .oneshot(post_json(
+                "/api/oorbit/dev/skip",
+                "one",
+                serde_json::json!({ "hours": 24 }),
+            ))
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(skipped["data"]["planet"]["clock_offset_ms"], 86_400_000);
+    assert_eq!(
+        skipped["data"]["dock"]["neighbors"]
+            .as_array()
+            .unwrap()
+            .len(),
+        3
+    );
+    let to = skipped["data"]["dock"]["neighbors"][0]["id"].clone();
+    let sent = router
+        .clone()
+        .oneshot(post_json(
+            "/api/oorbit/action",
+            "one",
+            serde_json::json!({ "type": "send", "to": to, "kind": "message" }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(sent.status(), StatusCode::OK);
+
     let reset = router
         .clone()
         .oneshot(post_json("/api/oorbit/reset", "one", serde_json::json!({})))

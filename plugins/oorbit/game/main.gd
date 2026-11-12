@@ -30,6 +30,7 @@ var camera: Camera3D
 var sky_material: ShaderMaterial
 var pixel_material: ShaderMaterial
 var planet_view: PlanetView
+var traffic: SkyTraffic
 var ui: GameUI
 var _refresh_left := REFRESH_SECONDS
 var _press := Vector2.ZERO
@@ -53,6 +54,9 @@ func _ready() -> void:
 	ui.action_requested.connect(_send_action)
 	ui.found_requested.connect(_found)
 	ui.reset_requested.connect(_reset)
+	ui.skip_requested.connect(func(hours: float):
+		_busy = true
+		host.post_json("dev/skip", {"hours": hours}, _on_view))
 	ui.tile_closed.connect(func(): _select(-1))
 	resized.connect(_fit)
 	_fit()
@@ -72,6 +76,8 @@ func _process(delta: float) -> void:
 		if absf(_zoom - _zoom_target) < 0.002:
 			_zoom = _zoom_target
 		_fit()
+	if traffic.visible:
+		traffic.tick(ui.live_now_ms())
 	if not host.available or ui.catalog.is_empty():
 		return
 	if not _visible:
@@ -114,12 +120,32 @@ func _on_view(reply: Dictionary) -> void:
 	if planet != null:
 		planet_view.visible = true
 		planet_view.show_planet(planet)
+		var era = data.get("era")
+		_set_palette(int(era["number"]) if era != null else 1)
+		traffic.visible = true
+		traffic.show_view(data)
 	else:
 		planet_view.visible = false
+		traffic.visible = false
 	ui.show_view(data)
 	# Look again right after the next thing finishes, or in a minute.
 	var next := ui.next_change_ms()
 	_refresh_left = REFRESH_SECONDS if next < 0.0 else clampf(next / 1000.0 + 2.0, 5.0, REFRESH_SECONDS)
+
+
+var _palette_era := 0
+
+
+## Reduce the frame to this era's palette (each era adds its colours).
+func _set_palette(era: int) -> void:
+	if era == _palette_era:
+		return
+	_palette_era = era
+	var colors := PackedVector3Array()
+	for c in Palette.for_era(era):
+		colors.append(Vector3(c.r, c.g, c.b))
+	pixel_material.set_shader_parameter("palette", colors)
+	pixel_material.set_shader_parameter("palette_size", colors.size())
 
 
 func _send_action(action: Dictionary) -> void:
@@ -214,11 +240,7 @@ func _build_view() -> void:
 	container.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	pixel_material = ShaderMaterial.new()
 	pixel_material.shader = load("res://pixel.gdshader")
-	var colors := PackedVector3Array()
-	for c in Palette.STONE_AGE:
-		colors.append(Vector3(c.r, c.g, c.b))
-	pixel_material.set_shader_parameter("palette", colors)
-	pixel_material.set_shader_parameter("palette_size", colors.size())
+	_set_palette(1)
 	add_child(container)
 
 	viewport = SubViewport.new()
@@ -255,6 +277,9 @@ func _build_world() -> void:
 	planet_view = PlanetView.new()
 	planet_view.visible = false
 	world.add_child(planet_view)
+	traffic = SkyTraffic.new()
+	traffic.visible = false
+	world.add_child(traffic)
 
 	var sun := DirectionalLight3D.new()
 	sun.light_color = Palette.SUN

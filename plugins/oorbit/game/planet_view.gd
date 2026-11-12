@@ -442,4 +442,160 @@ func _building_parts(id: String, n: Vector3, b: Vector3) -> void:
 				_put(_box(s, 0.05, s), Color("d9b48f") if k % 2 == 0 else Color("b58e6b"), n, b, Vector3(0, 0.025 + k * 0.05, 0))
 			_put(_box(0.04, 0.04, 0.04), Color("f2c078"), n, b, Vector3(0, 0.22, 0))
 		_:
-			_put(_box(0.1, 0.08, 0.1), wall, n, b, Vector3(0, 0.04, 0))
+			_styled(id, n, b)
+
+
+## Later eras' buildings by style: [style, main colour, second colour, size].
+const STYLES := {
+	"villa": ["house", "eae2d6", "c07a54", 1.1],
+	"forum": ["temple", "eae2d6", "cfc4b0", 1.0],
+	"mint": ["hall", "cfc4b0", "d4a24c", 0.9],
+	"academy": ["temple", "cfc4b0", "8e9a5b", 1.0],
+	"aqueduct": ["arches", "cfc4b0", "eae2d6", 1.0],
+	"amphitheatre": ["bowl", "eae2d6", "c07a54", 1.4],
+	"iron_mine": ["mine", "4a4a4f", "8c8c8c", 1.0],
+	"manor": ["house", "8c8c8c", "4f5d75", 1.2],
+	"watermill": ["mill", "6b5a4e", "4f5d75", 1.0],
+	"monastery": ["tower", "8c8c8c", "4f5d75", 1.0],
+	"guild_hall": ["hall", "6b5a4e", "b03a2e", 1.0],
+	"cathedral": ["cathedral", "8c8c8c", "4f5d75", 1.4],
+	"townhouse": ["house", "c8b49a", "3f6e9e", 1.1],
+	"glassworks": ["factory", "c8b49a", "7d9cc0", 0.9],
+	"paper_mill": ["mill", "c8b49a", "d4a24c", 1.0],
+	"printing_house": ["hall", "c8b49a", "3f6e9e", 1.0],
+	"observatory": ["dome", "c8b49a", "3f6e9e", 1.0],
+	"harbor": ["pier", "6b5a4e", "d4a24c", 1.0],
+	"great_dome": ["dome", "d4a24c", "3f6e9e", 1.5],
+	"coal_mine": ["mine", "4a4a4f", "1e1b33", 1.0],
+	"steel_mill": ["factory", "a5532f", "d9822b", 1.1],
+	"factory": ["factory", "a5532f", "4a4a4f", 1.1],
+	"tenement": ["block", "a5532f", "4a4a4f", 1.0],
+	"railway_station": ["hall", "707780", "a5532f", 1.1],
+	"iron_tower": ["lattice", "4a4a4f", "707780", 1.5],
+	"power_plant": ["factory", "596b7d", "f5d76e", 1.2],
+	"apartment": ["block", "9fb3c8", "f5d76e", 1.3],
+	"cinema_hall": ["hall", "596b7d", "f5d76e", 1.0],
+	"hospital": ["block", "eef3f2", "b03a2e", 1.1],
+	"radio_tower": ["mast", "596b7d", "b03a2e", 1.2],
+	"skyscraper": ["skyscraper", "9fb3c8", "f5d76e", 1.6],
+	"silicon_foundry": ["factory", "1b1530", "4fe3ff", 1.1],
+	"data_center": ["hall", "1b1530", "4fe3ff", 1.1],
+	"arcology": ["skyscraper", "1b1530", "ff4fd8", 1.5],
+	"neon_strip": ["neon", "1b1530", "ff4fd8", 1.0],
+	"robot_factory": ["factory", "2e3440", "9b5cff", 1.1],
+	"neon_spire": ["spire", "1b1530", "4fe3ff", 1.8],
+	"refinery": ["factory", "8fa3b8", "ff9d3b", 1.1],
+	"alloy_works": ["factory", "e8edf2", "6fd3ff", 1.1],
+	"hydroponics": ["dome", "e8edf2", "94b37e", 1.0],
+	"mission_control": ["dome", "e8edf2", "6fd3ff", 1.1],
+	"habitat": ["dome", "e8edf2", "6fd3ff", 1.2],
+	"launch_pad": ["rocket", "8fa3b8", "e8edf2", 1.3],
+	"orbital_station": ["station", "e8edf2", "6fd3ff", 1.6],
+}
+
+
+static func _ball(radius: float) -> Array:
+	return _shape("ball %s" % radius, func():
+		var mesh := SphereMesh.new()
+		mesh.radius = radius
+		mesh.height = radius * 2.0
+		mesh.radial_segments = 8
+		mesh.rings = 4
+		mesh.is_hemisphere = true
+		return mesh)
+
+
+func _styled(id: String, n: Vector3, b: Vector3) -> void:
+	var style: Array = STYLES.get(id, ["house", "b58e6b", "a35d5d", 1.0])
+	var c1 := Color(style[1])
+	var c2 := Color(style[2])
+	var k: float = style[3]
+	match style[0]:
+		"house":
+			_put(_box(0.12 * k, 0.08 * k, 0.1 * k), c1, n, b, Vector3(0, 0.04 * k, 0))
+			_put(_cone(0.1 * k, 0.08 * k, 4), c2, n, b, Vector3(0, 0.12 * k, 0), 1.0, PI / 4.0)
+		"hall":
+			_put(_box(0.2 * k, 0.08 * k, 0.12 * k), c1, n, b, Vector3(0, 0.04 * k, 0))
+			_put(_box(0.22 * k, 0.02 * k, 0.14 * k), c2, n, b, Vector3(0, 0.09 * k, 0))
+		"temple":
+			_put(_box(0.2 * k, 0.03 * k, 0.15 * k), c2, n, b, Vector3(0, 0.015 * k, 0))
+			for i in 5:
+				_put(_box(0.014 * k, 0.09 * k, 0.014 * k), c1, n, b, Vector3((-0.08 + i * 0.04) * k, 0.075 * k, 0.05 * k))
+			_put(_cone(0.13 * k, 0.05 * k, 4), c1, n, b, Vector3(0, 0.145 * k, 0), 1.0, PI / 4.0)
+		"arches":
+			for i in 4:
+				_put(_box(0.025 * k, 0.1 * k, 0.03 * k), c1, n, b, Vector3((-0.09 + i * 0.06) * k, 0.05 * k, 0))
+			_put(_box(0.24 * k, 0.025 * k, 0.04 * k), c2, n, b, Vector3(0, 0.11 * k, 0))
+		"bowl":
+			_put(_cylinder(0.13 * k, 0.07 * k, 10), c1, n, b, Vector3(0, 0.035 * k, 0))
+			_put(_cylinder(0.09 * k, 0.072 * k, 10), c2, n, b, Vector3(0, 0.04 * k, 0))
+		"mine":
+			_put(_box(0.13 * k, 0.08 * k, 0.08 * k), c1, n, b, Vector3(0, 0.04 * k, 0))
+			_put(_box(0.06 * k, 0.05 * k, 0.02 * k), c2, n, b, Vector3(0, 0.025 * k, 0.045 * k))
+			_put(_box(0.02 * k, 0.16 * k, 0.02 * k), c2, n, b, Vector3(0.07 * k, 0.08 * k, -0.03 * k))
+		"mill":
+			_put(_box(0.11 * k, 0.1 * k, 0.1 * k), c1, n, b, Vector3(0, 0.05 * k, 0))
+			_put(_cone(0.09 * k, 0.07 * k, 4), c2, n, b, Vector3(0, 0.135 * k, 0), 1.0, PI / 4.0)
+			_put(_box(0.2 * k, 0.015 * k, 0.015 * k), c1, n, b, Vector3(0, 0.1 * k, 0.06 * k), 1.0, 0.6)
+			_put(_box(0.2 * k, 0.015 * k, 0.015 * k), c1, n, b, Vector3(0, 0.1 * k, 0.06 * k), 1.0, -0.6)
+		"tower":
+			_put(_box(0.14 * k, 0.07 * k, 0.12 * k), c1, n, b, Vector3(-0.03 * k, 0.035 * k, 0))
+			_put(_box(0.06 * k, 0.18 * k, 0.06 * k), c1, n, b, Vector3(0.06 * k, 0.09 * k, 0))
+			_put(_cone(0.05 * k, 0.07 * k, 4), c2, n, b, Vector3(0.06 * k, 0.215 * k, 0), 1.0, PI / 4.0)
+		"cathedral":
+			_put(_box(0.24 * k, 0.1 * k, 0.12 * k), c1, n, b, Vector3(0, 0.05 * k, 0))
+			_put(_cone(0.12 * k, 0.06 * k, 4), c2, n, b, Vector3(0, 0.13 * k, 0), 1.0, PI / 4.0)
+			for side in [-1, 1]:
+				_put(_box(0.05 * k, 0.24 * k, 0.05 * k), c1, n, b, Vector3(side * 0.1 * k, 0.12 * k, 0.04 * k))
+				_put(_cone(0.04 * k, 0.1 * k, 4), c2, n, b, Vector3(side * 0.1 * k, 0.29 * k, 0.04 * k), 1.0, PI / 4.0)
+		"dome":
+			_put(_cylinder(0.1 * k, 0.07 * k, 10), c1, n, b, Vector3(0, 0.035 * k, 0))
+			_put(_ball(0.1 * k), c2, n, b, Vector3(0, 0.07 * k, 0))
+		"pier":
+			_put(_box(0.26 * k, 0.02 * k, 0.06 * k), c1, n, b, Vector3(0, 0.01 * k, 0))
+			_put(_box(0.08 * k, 0.04 * k, 0.16 * k), c1, n, b, Vector3(0.06 * k, 0.03 * k, 0.04 * k))
+			_put(_cone(0.05 * k, 0.12 * k, 3), c2, n, b, Vector3(0.06 * k, 0.11 * k, 0.04 * k))
+		"factory":
+			_put(_box(0.18 * k, 0.08 * k, 0.12 * k), c1, n, b, Vector3(0, 0.04 * k, 0))
+			_put(_cone(0.07 * k, 0.04 * k, 4), c1, n, b, Vector3(-0.04 * k, 0.1 * k, 0), 1.0, PI / 4.0)
+			for i in 2:
+				_put(_cylinder(0.018 * k, 0.16 * k, 6), c2, n, b, Vector3((0.04 + i * 0.045) * k, 0.12 * k, -0.03 * k))
+		"block":
+			_put(_box(0.12 * k, 0.18 * k, 0.12 * k), c1, n, b, Vector3(0, 0.09 * k, 0))
+			for i in 3:
+				_put(_box(0.124 * k, 0.012 * k, 0.124 * k), c2, n, b, Vector3(0, (0.05 + i * 0.05) * k, 0))
+		"lattice":
+			for i in 4:
+				var s := (0.16 - i * 0.035) * k
+				_put(_box(s, 0.09 * k, s), c1 if i % 2 == 0 else c2, n, b, Vector3(0, (0.045 + i * 0.09) * k, 0))
+			_put(_cone(0.03 * k, 0.12 * k, 4), c2, n, b, Vector3(0, 0.42 * k, 0))
+		"mast":
+			_put(_box(0.03 * k, 0.32 * k, 0.03 * k), c1, n, b, Vector3(0, 0.16 * k, 0))
+			for i in 3:
+				_put(_box(0.12 * k * (1.0 - i * 0.25), 0.012 * k, 0.012 * k), c2, n, b, Vector3(0, (0.1 + i * 0.08) * k, 0))
+		"skyscraper":
+			_put(_box(0.12 * k, 0.3 * k, 0.12 * k), c1, n, b, Vector3(0, 0.15 * k, 0))
+			_put(_box(0.08 * k, 0.12 * k, 0.08 * k), c1, n, b, Vector3(0, 0.36 * k, 0))
+			for i in 5:
+				_put(_box(0.124 * k, 0.01 * k, 0.124 * k), c2, n, b, Vector3(0, (0.04 + i * 0.055) * k, 0))
+		"neon":
+			_put(_box(0.2 * k, 0.07 * k, 0.1 * k), c1, n, b, Vector3(0, 0.035 * k, 0))
+			_put(_box(0.21 * k, 0.015 * k, 0.105 * k), c2, n, b, Vector3(0, 0.06 * k, 0))
+			_put(_box(0.04 * k, 0.12 * k, 0.01 * k), Color("4fe3ff"), n, b, Vector3(0.06 * k, 0.13 * k, 0.04 * k))
+		"spire":
+			for i in 5:
+				var s := (0.18 - i * 0.032) * k
+				_put(_box(s, 0.08 * k, s), c1, n, b, Vector3(0, (0.04 + i * 0.08) * k, 0))
+				_put(_box(s + 0.005, 0.01 * k, s + 0.005), c2 if i % 2 == 0 else Color("ff4fd8"), n, b, Vector3(0, (0.08 + i * 0.08) * k, 0))
+			_put(_cone(0.02 * k, 0.14 * k, 4), c2, n, b, Vector3(0, 0.47 * k, 0))
+		"rocket":
+			_put(_box(0.22 * k, 0.02 * k, 0.22 * k), c1, n, b, Vector3(0, 0.01 * k, 0))
+			_put(_cylinder(0.035 * k, 0.2 * k, 8), c2, n, b, Vector3(0, 0.12 * k, 0))
+			_put(_cone(0.035 * k, 0.07 * k, 8), Color("ff9d3b"), n, b, Vector3(0, 0.255 * k, 0))
+			_put(_box(0.015 * k, 0.24 * k, 0.015 * k), c1, n, b, Vector3(0.07 * k, 0.12 * k, 0))
+		"station":
+			_put(_cylinder(0.04 * k, 0.24 * k, 8), c1, n, b, Vector3(0, 0.12 * k, 0))
+			_put(_cylinder(0.14 * k, 0.015 * k, 12), c2, n, b, Vector3(0, 0.2 * k, 0))
+			_put(_ball(0.05 * k), c1, n, b, Vector3(0, 0.24 * k, 0))
+		_:
+			_put(_box(0.1 * k, 0.08 * k, 0.1 * k), c1, n, b, Vector3(0, 0.04 * k, 0))

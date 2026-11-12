@@ -30,6 +30,21 @@
   fingers: up close the picture gets sharper, down to single pixels. The
   Society panel can start the planet over (two presses).
 
+- Oorbit 0.5.0: all ten eras. After the Bronze Age come the Classical
+  Age, the Middle Ages, the Renaissance, the Industrial and Electric Ages,
+  the Neon Age (megatowers, neon strips, rogue AIs) and the Orbital Age,
+  which ends with the orbital station. Each era brings its discoveries,
+  buildings with their own little models, events and colours, and a full
+  planet takes about two months. Old buildings can be demolished to make
+  room.
+- Oorbit's neighbours: three planets with their own personality (generous,
+  trader, prankster) send gifts, ideas, visitors, pranks, trade offers and
+  messages, and answer the ships you send from the dock. Ships cross the sky
+  as what their era sails with, from seeds on the wind to rockets, and get
+  faster and bigger with every era.
+- Oorbit test tools (temporary): a fast-forward panel moves your planet's
+  clock on by an hour, six hours, a day or three days.
+
 ### Changed
 
 - Oorbit draws far less: one mesh for all the planet's props instead of

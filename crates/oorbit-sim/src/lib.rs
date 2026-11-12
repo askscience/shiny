@@ -18,7 +18,9 @@
 //! (every boundary up to and including `t`), then the action applies.
 
 pub mod actions;
+pub mod autoplay;
 pub mod catalog;
+pub mod neighbors;
 pub mod planet;
 pub mod rng;
 pub mod step;

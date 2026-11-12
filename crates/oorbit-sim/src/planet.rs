@@ -10,7 +10,7 @@ use crate::rng::Rng;
 use crate::step_of;
 
 /// Version of the serialized state, for migrations of saved planets.
-pub const STATE_VERSION: u32 = 2;
+pub const STATE_VERSION: u32 = 3;
 
 /// Draw `count` tiles from a climate's biome weights. With `guarantee`,
 /// every planet stays playable whatever the dice say: at least one tile in
@@ -157,6 +157,23 @@ pub struct Planet {
     pub population_milestone: u32,
     /// True while food ran out on the last step.
     pub starving: bool,
+    /// The planets next door (see `neighbors`).
+    #[serde(default)]
+    pub neighbors: Vec<crate::neighbors::Neighbor>,
+    /// Ships under way, in both directions.
+    #[serde(default)]
+    pub ships: Vec<crate::neighbors::Ship>,
+    /// Trade offers waiting for an answer.
+    #[serde(default)]
+    pub offers: Vec<crate::neighbors::Offer>,
+    /// Source of ship and offer ids.
+    #[serde(default)]
+    pub next_id: u64,
+    /// Testing only: how far this planet's clock runs ahead of the wall
+    /// clock (the plugin's time-skip tool). The simulation itself never
+    /// reads it; the plugin adds it to "now".
+    #[serde(default)]
+    pub clock_offset_ms: i64,
 }
 
 impl Planet {
@@ -193,7 +210,13 @@ impl Planet {
             chronicle: Vec::new(),
             population_milestone: 0,
             starving: false,
+            neighbors: Vec::new(),
+            ships: Vec::new(),
+            offers: Vec::new(),
+            next_id: 0,
+            clock_offset_ms: 0,
         };
+        crate::neighbors::ensure_neighbors(&mut planet, catalog);
         for r in &catalog.resources {
             planet.resources.insert(r.id.clone(), 0.0);
         }
@@ -216,6 +239,7 @@ impl Planet {
                 self.tiles.extend(extra);
             }
         }
+        crate::neighbors::ensure_neighbors(self, catalog);
         self.version = STATE_VERSION;
     }
 

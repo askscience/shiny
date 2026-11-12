@@ -9,6 +9,7 @@ extends Control
 signal action_requested(action: Dictionary)
 signal found_requested(climate: String)
 signal reset_requested
+signal skip_requested(hours: float)
 signal tile_closed
 
 const PANEL_WIDTH := 320.0
@@ -65,7 +66,7 @@ func _ready() -> void:
 	_rail = VBoxContainer.new()
 	_rail.add_theme_constant_override("separation", 6)
 	add_child(_rail)
-	for id in ["research", "society", "chronicle"]:
+	for id in ["research", "society", "chronicle", "dock", "dev"]:
 		var button := _icon_button("res://icons/%s.svg" % id, I18n.t("ui." + id))
 		button.toggle_mode = true
 		button.pressed.connect(_toggle_panel.bind(id))
@@ -415,9 +416,18 @@ func _fill_top() -> void:
 	var rates: Dictionary = view.get("rates", {})
 	_top_row.add_child(_label("%s %s/%s" % [I18n.t("ui.population"), roundi(planet.get("population", 0)), roundi(rates.get("housing", 0))], 13, Color("eef3f2"), false))
 	_top_row.add_child(_label("%s %d%%" % [I18n.t("ui.mood"), roundi(float(planet.get("mood", 0)) * 100.0)], 13, Color("eef3f2"), false))
-	var resources: Dictionary = planet.get("resources", {})
+	# Food, knowledge and culture always; materials while they matter: the
+	# ones this era and the last build with.
+	var era_n := int(view.get("era", {}).get("number", 1)) if view.get("era") != null else 1
+	var relevant := {"food": true, "knowledge": true, "culture": true}
+	for b in catalog.get("buildings", []):
+		if int(b["era"]) >= era_n - 1 and int(b["era"]) <= era_n:
+			for r in b["cost"]:
+				relevant[r] = true
 	for r in catalog.get("resources", []):
 		var id: String = r["id"]
+		if not relevant.has(id):
+			continue
 		var amount := live_amount(id)
 		var rate := _rate(id)
 		if amount < 0.5 and absf(rate) < 0.01:
@@ -455,6 +465,10 @@ func _fill_side() -> void:
 			_fill_society()
 		"chronicle":
 			_fill_chronicle()
+		"dock":
+			_fill_dock()
+		"dev":
+			_fill_dev()
 
 
 func _fill_research() -> void:
@@ -542,23 +556,7 @@ func _fill_society() -> void:
 		for id in traits:
 			_side_body.add_child(_label("%s %+d" % [I18n.t("ui.trait." + id), int(traits[id])]))
 	# Starting over takes two presses, the second within a few seconds.
-	var reset := Button.new()
-	reset.text = I18n.t("ui.reset")
-	reset.flat = true
-	reset.add_theme_color_override("font_color", Color(0.93, 0.95, 0.95, 0.55))
-	reset.pressed.connect(func():
-		if reset.has_meta("armed"):
-			reset_requested.emit()
-			return
-		reset.set_meta("armed", true)
-		reset.text = I18n.t("ui.reset.confirm")
-		reset.add_theme_color_override("font_color", Color("e08f6c"))
-		get_tree().create_timer(5.0).timeout.connect(func():
-			if is_instance_valid(reset):
-				reset.remove_meta("armed")
-				reset.text = I18n.t("ui.reset")
-				reset.add_theme_color_override("font_color", Color(0.93, 0.95, 0.95, 0.55))))
-	_side_body.add_child(reset)
+	_side_body.add_child(_confirm_button(I18n.t("ui.reset"), I18n.t("ui.reset.confirm"), func(): reset_requested.emit()))
 
 
 func _send_priorities() -> void:
@@ -590,6 +588,143 @@ func _fill_chronicle() -> void:
 			break
 
 
+## A button that needs two presses within five seconds.
+func _confirm_button(text: String, confirm: String, action: Callable) -> Button:
+	var b := Button.new()
+	b.text = text
+	b.flat = true
+	var quiet := Color(0.93, 0.95, 0.95, 0.55)
+	b.add_theme_color_override("font_color", quiet)
+	b.pressed.connect(func():
+		if b.has_meta("armed"):
+			action.call()
+			return
+		b.set_meta("armed", true)
+		b.text = confirm
+		b.add_theme_color_override("font_color", Color("e08f6c"))
+		get_tree().create_timer(5.0).timeout.connect(func():
+			if is_instance_valid(b):
+				b.remove_meta("armed")
+				b.text = text
+				b.add_theme_color_override("font_color", quiet)))
+	return b
+
+
+func _neighbor(id: String) -> Dictionary:
+	for n in view.get("dock", {}).get("neighbors", []):
+		if n["id"] == id:
+			return n
+	return {}
+
+
+func _era_name(number: int) -> String:
+	var eras: Array = catalog.get("eras", [])
+	if number >= 1 and number <= eras.size():
+		return I18n.name_of("era", eras[number - 1]["id"])
+	return str(number)
+
+
+## The dock: neighbours, what can be sent to each, ships under way, offers.
+func _fill_dock() -> void:
+	var planet := _planet()
+	var dock: Dictionary = view.get("dock", {})
+	_side_body.add_child(_label(I18n.t("ui.dock"), 15, Color("f2c078")))
+	_side_body.add_child(_muted(I18n.t("ui.dock.travel", {"hours": _fmt(float(dock.get("travel_hours", 0))), "capacity": _fmt(float(dock.get("capacity", 0)))})))
+
+	var offers: Array = planet.get("offers", [])
+	if offers.size() > 0:
+		_side_body.add_child(_label(I18n.t("ui.dock.offers"), 14, Color("f2c078")))
+		for o in offers:
+			var give := "%s %s" % [_fmt(float(o["give_amount"])), I18n.name_of("resource", o["give_resource"]).to_lower()]
+			var want := "%s %s" % [_fmt(float(o["want_amount"])), I18n.name_of("resource", o["want_resource"]).to_lower()]
+			_side_body.add_child(_label(I18n.t("ui.dock.offer", {"name": _neighbor(o["from"]).get("name", "?"), "give": give, "want": want})))
+			var row := HBoxContainer.new()
+			var id := int(o["id"])
+			var yes := Button.new()
+			yes.text = I18n.t("ui.dock.accept")
+			yes.disabled = live_amount(str(o["want_resource"])) < float(o["want_amount"])
+			yes.pressed.connect(func(): action_requested.emit({"type": "accept_offer", "id": id}))
+			row.add_child(yes)
+			var no := Button.new()
+			no.text = I18n.t("ui.dock.decline")
+			no.flat = true
+			no.pressed.connect(func(): action_requested.emit({"type": "decline_offer", "id": id}))
+			row.add_child(no)
+			_side_body.add_child(row)
+
+	_side_body.add_child(_label(I18n.t("ui.dock.in_flight"), 14, Color("f2c078")))
+	var ships: Array = planet.get("ships", [])
+	if ships.is_empty():
+		_side_body.add_child(_muted(I18n.t("ui.dock.none")))
+	var step_ms := float(view.get("step_ms", 600000))
+	for s in ships:
+		var left := maxf(0.0, float(s["arrive_step"]) * step_ms - live_now_ms())
+		var incoming: bool = s["to"] == "home"
+		var other: String = s["from"] if incoming else s["to"]
+		var key := "ui.dock.incoming" if incoming else "ui.dock.outgoing"
+		_side_body.add_child(_muted(I18n.t(key, {"kind": I18n.t("kind." + str(s["kind"])), "name": _neighbor(other).get("name", "?"), "time": I18n.duration(left)})))
+
+	var cap := float(dock.get("capacity", 0))
+	for n in dock.get("neighbors", []):
+		_side_body.add_child(_label("%s · %s · %s" % [n["name"], I18n.name_of("climate", n["climate"]), _era_name(int(n["era"]))], 14, Color("f2c078")))
+		_side_body.add_child(_muted("%s · %s" % [I18n.t("persona." + str(n["persona"])), I18n.t("ui.dock.friendship", {"n": int(n["friendship"])})]))
+		var to: String = n["id"]
+		var flow := HFlowContainer.new()
+		for k in dock.get("kinds", []):
+			var kind: String = k["kind"]
+			if not k["unlocked"]:
+				continue
+			if kind == "gift":
+				continue
+			var b := Button.new()
+			b.text = I18n.t("kind." + kind)
+			if kind == "idea":
+				b.tooltip_text = I18n.t("ui.dock.idea_cost", {"n": _fmt(float(dock.get("idea_cost", 0)))})
+			var send := {"type": "send", "to": to, "kind": kind}
+			if kind == "prank":
+				send["resource"] = "food"
+			b.pressed.connect(func(): action_requested.emit(send))
+			flow.add_child(b)
+		_side_body.add_child(flow)
+		# Gifts: a fair share of each resource there is plenty of.
+		var gifts := HFlowContainer.new()
+		var by_amount: Array = dock.get("resources", []).duplicate()
+		by_amount.sort_custom(func(a, b): return live_amount(str(a)) > live_amount(str(b)))
+		for r in by_amount.slice(0, 6):
+			var have := live_amount(str(r))
+			var amount := floorf(minf(cap, have * 0.25))
+			if amount < 1.0:
+				continue
+			var g := Button.new()
+			g.text = "%s %s" % [_fmt(amount), I18n.name_of("resource", r).to_lower()]
+			var gift := {"type": "send", "to": to, "kind": "gift", "resource": r, "amount": amount}
+			g.pressed.connect(func(): action_requested.emit(gift))
+			gifts.add_child(g)
+		if gifts.get_child_count() > 0:
+			_side_body.add_child(_muted(I18n.t("kind.gift")))
+			_side_body.add_child(gifts)
+	var locked := PackedStringArray()
+	for k in dock.get("kinds", []):
+		if not k["unlocked"]:
+			locked.append(I18n.t("ui.dock.locked", {"kind": I18n.t("kind." + str(k["kind"])), "n": int(k["first_era"])}))
+	if locked.size() > 0:
+		_side_body.add_child(_muted(", ".join(locked)))
+
+
+## Testing only (temporary): move the planet's clock forward.
+func _fill_dev() -> void:
+	_side_body.add_child(_label(I18n.t("ui.dev"), 15, Color("f2c078")))
+	_side_body.add_child(_muted(I18n.t("ui.dev.note")))
+	var row := HFlowContainer.new()
+	for pair in [["1h", 1.0], ["6h", 6.0], ["1g" if I18n.language == "it" else "1d", 24.0], ["3g" if I18n.language == "it" else "3d", 72.0]]:
+		var b := Button.new()
+		b.text = I18n.t("ui.dev.skip", {"n": pair[0]})
+		var hours: float = pair[1]
+		b.pressed.connect(func(): skip_requested.emit(hours))
+		row.add_child(b)
+	_side_body.add_child(row)
+
+
 ## A Chronicle entry in words.
 func describe(entry: Dictionary) -> String:
 	var params := {}
@@ -609,6 +744,14 @@ func describe(entry: Dictionary) -> String:
 				params[k] = I18n.name_of("category", v).to_lower()
 			"climate":
 				params[k] = I18n.name_of("climate", v)
+			"resource":
+				params[k] = I18n.name_of("resource", v).to_lower()
+			"kind":
+				params[k] = I18n.t("kind." + v).to_lower()
+			"prank":
+				params[k] = I18n.t("prank." + v)
+			"persona":
+				params["message"] = I18n.t("message." + v)
 			_:
 				params[k] = v
 	if raw.has("choice") and raw.has("event"):
@@ -647,6 +790,10 @@ func _fill_tile() -> void:
 	if building != null:
 		_tile_body.add_child(_label(I18n.name_of("building", building), 14))
 		_tile_body.add_child(_muted(_effects_text(_building_def(building))))
+		if not _building_def(building).get("monument", false):
+			var tile_index := selected_tile
+			_tile_body.add_child(_confirm_button(I18n.t("ui.demolish"), I18n.t("ui.demolish.confirm"),
+				func(): action_requested.emit({"type": "demolish", "tile": tile_index})))
 		return
 	for c in planet.get("construction", []):
 		if int(c["tile"]) == selected_tile:

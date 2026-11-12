@@ -235,6 +235,15 @@ pub struct Tuning {
     pub notable_bonus: f64,
     pub max_notables: usize,
     pub chronicle_len: usize,
+    /// Hours a ship takes, by the sender's era (one entry per era).
+    #[serde(default)]
+    pub travel_hours: Vec<f64>,
+    /// How much a ship carries, by the sender's era.
+    #[serde(default)]
+    pub ship_capacity: Vec<f64>,
+    /// How often a neighbour sends something of its own.
+    #[serde(default)]
+    pub neighbor_act_per_hour: f64,
 }
 
 fn default_zeal_hours() -> f64 {
@@ -289,6 +298,35 @@ impl Catalog {
 
     pub fn event(&self, id: &str) -> Option<&EventDef> {
         self.events.iter().find(|e| e.id == id)
+    }
+
+    /// The era a resource first matters in: the earliest of the discovery
+    /// that unlocks it, the buildings that produce it and the buildings that
+    /// cost it. Basic resources (food, wood, stone) are era 1.
+    pub fn resource_era(&self, id: &str) -> u32 {
+        let mut era = u32::MAX;
+        if let Some(r) = self.resource(id) {
+            if let Some(t) = r.unlocked_by.as_ref().and_then(|t| self.tech(t)) {
+                era = era.min(t.era);
+            }
+            if let Some(b) = r.from_building.as_ref().and_then(|b| self.building(b)) {
+                era = era.min(b.era);
+            }
+        }
+        for b in &self.buildings {
+            let produces = b
+                .effects
+                .iter()
+                .any(|e| matches!(e, Effect::Convert { output, .. } if output == id));
+            if produces || b.cost.contains_key(id) {
+                era = era.min(b.era);
+            }
+        }
+        if era == u32::MAX {
+            1
+        } else {
+            era
+        }
     }
 
     pub fn climate(&self, id: &str) -> Option<&ClimateDef> {
