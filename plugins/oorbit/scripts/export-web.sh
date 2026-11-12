@@ -17,6 +17,12 @@ out="$(mktemp -d)"
 trap 'rm -rf "$out"' EXIT
 
 "$godot" --headless --path game --import >/dev/null 2>&1 || true
+# A script with a parse error still exports (and shows a grey window), so run
+# the game for a few frames first and refuse to export on any script error.
+if "$godot" --headless --path game --quit-after 10 2>&1 | grep -E "SCRIPT ERROR|Parse Error|Failed to load script"; then
+  echo "script errors: not exporting" >&2
+  exit 1
+fi
 "$godot" --headless --path game --export-release "Web" "$out/oorbit.html"
 
 hash="$(cat "$out/oorbit.wasm" "$out/oorbit.pck" "$out/oorbit.js" | sha256sum | cut -c1-12)"

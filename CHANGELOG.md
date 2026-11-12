@@ -8,9 +8,12 @@
   plugin with tools and routes whose window is its own framed web page, served
   like a Craft web app. This is what lets a game made with Godot run in a
   LiteAura window while its rules and the assistant's tools live in Rust.
-- Oorbit 0.1.0, first prototype of a slow planet game: a Godot window that
+- Oorbit 0.1.1, first prototype of a slow planet game: a Godot window that
   shows a turning planet and checks that it can reach its plugin and follow
   LiteAura's language and light or dark theme. There is nothing to play yet.
+  The planet already has its look: low-poly 3D drawn as soft pixel art, 32
+  tiles of land with forests, mountains, ice and huts, under a starry indigo
+  night (or a lavender dusk in the light theme).
 - Oorbit's simulation (`crates/oorbit-sim`): the rules of the first three
   eras (Stone, Agricultural, Bronze) with people, mood, seasons, discoveries,
   buildings, monuments, events and named notable people. A planet left alone

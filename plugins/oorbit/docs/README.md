@@ -6,7 +6,7 @@ document covers the plugin as built; the game itself is described in
 [design.md](design.md), and its rules live in
 [`crates/oorbit-sim`](../../../crates/oorbit-sim/README.md).
 
-Status: **0.1.0, M0 prototype.** The window shows a turning planet and a status
+Status: **0.1.1, M0 prototype.** The window shows a turning planet and a status
 line proving the three links the game needs: the plugin's routes, the host
 language and the host light/dark mode. There is no game state yet.
 
@@ -25,6 +25,27 @@ Category: **Games**. See the [plugin docs index](../../../docs/plugins/README.md
   as a `plugin.js` module inside the shell's own document, so it gets its own
   frame.
 
+## Look
+
+Low-poly 3D drawn as pixel art, with soft colours:
+
+- The 3D scene renders into a `SubViewport` about 300 pixels tall
+  (`PIXEL_HEIGHT` in `game/main.gd`), upscaled by a whole factor with nearest
+  filtering, so pixels stay square and sharp.
+- `game/pixel.gdshader` reduces the frame to one palette (`game/palette.gd`,
+  the Stone Age's) with a light 4×4 ordered dither. Later eras get their own
+  palettes.
+- Flat-shaded tiles and props with toon diffuse, and a dark outline (the same
+  mesh, slightly larger, drawn from the inside).
+- `game/sky.gdshader` draws the background at the low resolution: an indigo
+  night with single-pixel stars, or a lavender and peach dusk in the light
+  theme.
+- The planet turns continuously; text stays at full resolution.
+
+The planet is a truncated icosahedron: 12 pentagons, then 20 hexagons, the
+same 32 tiles in the same order as the simulation (`game/planet_mesh.gd`).
+Until the window reads the simulation, the biomes come from a fixed seed.
+
 ## Layout
 
 | Path | Role |
@@ -34,7 +55,8 @@ Category: **Games**. See the [plugin docs index](../../../docs/plugins/README.md
 | `skills/oorbit.md` | What the assistant reads about Oorbit. |
 | `game/` | The Godot 4.7 project (GDScript, GL Compatibility renderer). |
 | `game/host.gd` | The game's side of the page bridge; the only GDScript that touches JavaScript. |
-| `scripts/export-web.sh` | Exports `game/` to `web/game/<hash>/` and writes `web/game/build.json`. |
+| `scripts/export-web.sh` | Exports `game/` to `web/game/<hash>/` and writes `web/game/build.json`; refuses to export when a script has errors. |
+| `scripts/preview-server.py`, `scripts/preview-shot.mjs` | Serve the window outside LiteAura (with the core's web-app CSP and a stub route) and screenshot it headless, under `xvfb-run`. |
 | `web/index.html` | The window: boots the export and exposes `window.oorbitHost`. |
 | `web/game/` | Export output, **not committed** (`.gitignore`); rebuild it with the script. |
 
