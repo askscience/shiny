@@ -11,6 +11,12 @@
 - Oorbit 0.1.0, first prototype of a slow planet game: a Godot window that
   shows a turning planet and checks that it can reach its plugin and follow
   LiteAura's language and light or dark theme. There is nothing to play yet.
+- Oorbit's simulation (`crates/oorbit-sim`): the rules of the first three
+  eras (Stone, Agricultural, Bronze) with people, mood, seasons, discoveries,
+  buildings, monuments, events and named notable people. A planet left alone
+  overnight catches up exactly as if the computer had stayed on, slows down
+  when nobody plays, and never loses what it built. It is not in the window
+  yet.
 
 ## [0.2.7] - 2026-11-12
 

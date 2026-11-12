@@ -2,7 +2,9 @@
 
 Oorbit is a slow, real-time planet game: a tiny planet whose society grows
 from the stone age to space, beside the planets of the user's friends. This
-document covers the plugin as built.
+document covers the plugin as built; the game itself is described in
+[design.md](design.md), and its rules live in
+[`crates/oorbit-sim`](../../../crates/oorbit-sim/README.md).
 
 Status: **0.1.0, M0 prototype.** The window shows a turning planet and a status
 line proving the three links the game needs: the plugin's routes, the host
