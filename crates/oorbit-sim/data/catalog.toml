@@ -1,0 +1,536 @@
+# Oorbit's game data. Rates are per real hour. Names are English fallbacks:
+# the window translates by id. Balance with `cargo test -p oorbit-sim --test
+# balance -- --nocapture`, which prints when a steady player reaches each era.
+
+[tuning]
+tiles = 72                    # a Goldberg GP(2,1) planet: 12 pentagons, 60 hexagons
+start_population = 8.0
+start_resources = { food = 30.0, wood = 10.0, stone = 4.0, knowledge = 4.0 }
+min_population = 4.0
+base_housing = 10.0
+base_storage = 150.0
+worker_share = 0.8
+food_per_worker_hour = 0.12
+materials_per_worker_hour = 0.18
+knowledge_per_worker_hour = 0.24
+culture_per_worker_hour = 0.06
+food_per_person_hour = 0.03
+growth_per_hour = 0.005
+starvation_per_hour = 0.004
+emigration_per_hour = 0.02
+mood_approach_per_hour = 0.05
+culture_for_full_mood = 0.01
+idle_after_hours = 36.0
+idle_factor = 0.5
+zeal_bonus = 8.0              # a new planet starts nine times faster...
+zeal_hours = 8.0              # ...and settles down over its first day
+season_days = 1.75            # a year of the planet is one real week
+seasons = [1.1, 1.25, 1.0, 0.7] # spring, summer, autumn, winter (food)
+event_gap_hours = 4.0
+event_chance_per_hour = 0.12
+event_expires_hours = 24.0
+notable_chance_per_hour = 0.012
+notable_days = 21.0
+notable_bonus = 0.15
+max_notables = 2
+chronicle_len = 300
+
+# ---------------------------------------------------------------- climates
+
+[[climates]]
+id = "temperate"
+name = "Temperate"
+food = 1.0
+biomes = { coast = 6, plains = 9, forest = 9, mountain = 5, desert = 1, ice = 2 }
+
+[[climates]]
+id = "arid"
+name = "Arid"
+food = 0.95
+biomes = { coast = 4, plains = 7, forest = 3, mountain = 7, desert = 10, ice = 1 }
+
+[[climates]]
+id = "frozen"
+name = "Frozen"
+food = 0.8
+biomes = { coast = 5, plains = 5, forest = 6, mountain = 7, desert = 0, ice = 9 }
+
+[[climates]]
+id = "oceanic"
+name = "Oceanic"
+food = 1.1
+biomes = { coast = 14, plains = 7, forest = 6, mountain = 3, desert = 0, ice = 2 }
+
+# ---------------------------------------------------------------- resources
+
+[[resources]]
+id = "food"
+name = "Food"
+category = "food"
+
+[[resources]]
+id = "wood"
+name = "Wood"
+category = "materials"
+biome = "forest"
+
+[[resources]]
+id = "stone"
+name = "Stone"
+category = "materials"
+biome = "mountain"
+
+[[resources]]
+id = "clay"
+name = "Clay"
+category = "materials"
+biome = "plains"
+unlocked_by = "pottery"
+
+[[resources]]
+id = "copper"
+name = "Copper"
+category = "materials"
+unlocked_by = "mining"
+from_building = "mine"
+
+[[resources]]
+id = "tin"
+name = "Tin"
+category = "materials"
+unlocked_by = "mining"
+from_building = "mine"
+
+[[resources]]
+id = "bronze"
+name = "Bronze"
+category = "materials"
+
+[[resources]]
+id = "knowledge"
+name = "Knowledge"
+category = "knowledge"
+uncapped = true
+
+[[resources]]
+id = "culture"
+name = "Culture"
+category = "culture"
+uncapped = true
+
+# ---------------------------------------------------------------- eras
+
+[[eras]]
+id = "stone"
+name = "Stone Age"
+requires = ["fire", "tools", "shelter", "hunting"]
+monument = "stone_circle"
+
+[[eras]]
+id = "agricultural"
+name = "Agricultural Age"
+requires = ["farming", "pottery", "herding", "calendar"]
+monument = "great_granary"
+
+[[eras]]
+id = "bronze"
+name = "Bronze Age"
+requires = ["mining", "metallurgy", "writing", "temples"]
+monument = "ziggurat"
+
+# ---------------------------------------------------------------- discoveries
+
+# Era 1: Stone Age
+[[techs]]
+id = "fire"
+name = "Fire"
+era = 1
+cost = 3.0
+effects = [{ type = "bonus", category = "food", amount = 0.1 }]
+
+[[techs]]
+id = "hunting"
+name = "Hunting"
+era = 1
+cost = 5.0
+requires = ["fire"]
+effects = [{ type = "bonus", category = "food", amount = 0.2 }]
+
+[[techs]]
+id = "tools"
+name = "Stone Tools"
+era = 1
+cost = 8.0
+effects = [{ type = "bonus", category = "materials", amount = 0.25 }]
+
+[[techs]]
+id = "shelter"
+name = "Shelter"
+era = 1
+cost = 3.0
+
+[[techs]]
+id = "cave_painting"
+name = "Cave Painting"
+era = 1
+cost = 10.0
+requires = ["fire"]
+effects = [{ type = "bonus", category = "culture", amount = 0.3 }]
+
+# Era 2: Agricultural Age
+[[techs]]
+id = "farming"
+name = "Farming"
+era = 2
+cost = 35.0
+requires = ["tools"]
+
+[[techs]]
+id = "pottery"
+name = "Pottery"
+era = 2
+cost = 30.0
+requires = ["fire"]
+effects = [{ type = "storage", amount = 80.0 }]
+
+[[techs]]
+id = "herding"
+name = "Herding"
+era = 2
+cost = 40.0
+requires = ["hunting"]
+effects = [{ type = "bonus", category = "food", amount = 0.2 }]
+
+[[techs]]
+id = "calendar"
+name = "Calendar"
+era = 2
+cost = 45.0
+requires = ["farming"]
+effects = [{ type = "bonus", category = "food", amount = 0.1 }, { type = "bonus", category = "knowledge", amount = 0.15 }]
+
+[[techs]]
+id = "weaving"
+name = "Weaving"
+era = 2
+cost = 35.0
+requires = ["herding"]
+effects = [{ type = "mood", amount = 0.05 }]
+
+# Era 3: Bronze Age
+[[techs]]
+id = "mining"
+name = "Mining"
+era = 3
+cost = 70.0
+requires = ["tools"]
+
+[[techs]]
+id = "metallurgy"
+name = "Metallurgy"
+era = 3
+cost = 85.0
+requires = ["mining"]
+
+[[techs]]
+id = "writing"
+name = "Writing"
+era = 3
+cost = 90.0
+requires = ["calendar"]
+effects = [{ type = "bonus", category = "knowledge", amount = 0.3 }]
+
+[[techs]]
+id = "temples"
+name = "Temples"
+era = 3
+cost = 75.0
+requires = ["cave_painting"]
+
+[[techs]]
+id = "wheel"
+name = "The Wheel"
+era = 3
+cost = 85.0
+requires = ["metallurgy"]
+effects = [{ type = "bonus", category = "materials", amount = 0.3 }]
+
+# ---------------------------------------------------------------- buildings
+
+# Era 1
+[[buildings]]
+id = "hut"
+name = "Hut"
+era = 1
+requires = "shelter"
+cost = { wood = 5.0 }
+build_hours = 0.5
+effects = [{ type = "housing", amount = 4.0 }]
+
+[[buildings]]
+id = "hunting_camp"
+name = "Hunting Camp"
+era = 1
+requires = "hunting"
+cost = { wood = 8.0 }
+build_hours = 1.0
+biomes = ["forest", "plains"]
+effects = [{ type = "bonus", category = "food", amount = 0.25 }]
+
+[[buildings]]
+id = "fire_pit"
+name = "Fire Pit"
+era = 1
+requires = "fire"
+cost = { wood = 4.0, stone = 3.0 }
+build_hours = 0.5
+effects = [{ type = "bonus", category = "culture", amount = 0.25 }, { type = "mood", amount = 0.03 }]
+
+[[buildings]]
+id = "stone_circle"
+name = "Stone Circle"
+era = 1
+monument = true
+cost = { stone = 25.0, wood = 15.0 }
+build_hours = 6.0
+biomes = ["plains", "mountain"]
+effects = [{ type = "bonus", category = "culture", amount = 0.4 }, { type = "mood", amount = 0.05 }]
+
+# Era 2
+[[buildings]]
+id = "field"
+name = "Field"
+era = 2
+requires = "farming"
+cost = { wood = 10.0 }
+build_hours = 2.0
+biomes = ["plains", "coast"]
+effects = [{ type = "bonus", category = "food", amount = 0.35 }]
+
+[[buildings]]
+id = "house"
+name = "House"
+era = 2
+requires = "pottery"
+cost = { wood = 12.0, clay = 10.0 }
+build_hours = 3.0
+effects = [{ type = "housing", amount = 8.0 }]
+
+[[buildings]]
+id = "storehouse"
+name = "Storehouse"
+era = 2
+requires = "pottery"
+cost = { wood = 15.0, clay = 15.0 }
+build_hours = 4.0
+effects = [{ type = "storage", amount = 150.0 }]
+
+[[buildings]]
+id = "pasture"
+name = "Pasture"
+era = 2
+requires = "herding"
+cost = { wood = 14.0 }
+build_hours = 3.0
+biomes = ["plains"]
+effects = [{ type = "bonus", category = "food", amount = 0.25 }]
+
+[[buildings]]
+id = "great_granary"
+name = "Great Granary"
+era = 2
+monument = true
+cost = { wood = 40.0, clay = 40.0, stone = 30.0, food = 60.0 }
+build_hours = 16.0
+biomes = ["plains", "coast"]
+effects = [{ type = "storage", amount = 200.0 }, { type = "bonus", category = "food", amount = 0.2 }]
+
+# Era 3
+[[buildings]]
+id = "mine"
+name = "Mine"
+era = 3
+requires = "mining"
+cost = { wood = 25.0, stone = 20.0 }
+build_hours = 6.0
+biomes = ["mountain"]
+
+[[buildings]]
+id = "foundry"
+name = "Foundry"
+era = 3
+requires = "metallurgy"
+cost = { stone = 30.0, clay = 25.0 }
+build_hours = 8.0
+effects = [{ type = "convert", inputs = { copper = 2.0, tin = 1.0 }, output = "bronze", per_hour = 0.5 }]
+
+[[buildings]]
+id = "temple"
+name = "Temple"
+era = 3
+requires = "temples"
+cost = { stone = 40.0, clay = 20.0 }
+build_hours = 10.0
+effects = [{ type = "bonus", category = "culture", amount = 0.4 }, { type = "mood", amount = 0.05 }]
+
+[[buildings]]
+id = "scribe_house"
+name = "House of Scribes"
+era = 3
+requires = "writing"
+cost = { wood = 20.0, clay = 25.0 }
+build_hours = 6.0
+effects = [{ type = "bonus", category = "knowledge", amount = 0.3 }]
+
+[[buildings]]
+id = "ziggurat"
+name = "Ziggurat"
+era = 3
+monument = true
+cost = { stone = 120.0, clay = 80.0, bronze = 20.0 }
+build_hours = 30.0
+biomes = ["plains", "desert", "mountain"]
+effects = [{ type = "bonus", category = "culture", amount = 0.5 }, { type = "mood", amount = 0.08 }]
+
+# ---------------------------------------------------------------- events
+# The first choice is the prudent one: the people take it themselves when
+# nobody answers within a day.
+
+[[events]]
+id = "lightning"
+era_min = 1
+era_max = 1
+weight = 6
+unless_known = "fire"
+
+[[events.choices]]
+id = "keep_the_flame"
+outcomes = [{ type = "grant", tech = "fire" }]
+
+[[events.choices]]
+id = "run"
+outcomes = [{ type = "mood", amount = 0.05 }, { type = "trait", id = "traditional", amount = 1 }]
+
+[[events]]
+id = "storm"
+era_min = 1
+weight = 5
+
+[[events.choices]]
+id = "take_shelter"
+outcomes = [{ type = "resource", id = "food", amount = -8.0 }]
+
+[[events.choices]]
+id = "keep_working"
+outcomes = [{ type = "mood", amount = -0.1 }, { type = "resource", id = "wood", amount = 10.0 }]
+
+[[events]]
+id = "wanderers"
+era_min = 1
+weight = 4
+
+[[events.choices]]
+id = "welcome"
+outcomes = [{ type = "population", amount = 3.0 }, { type = "resource", id = "food", amount = -10.0 }, { type = "trait", id = "open", amount = 1 }]
+
+[[events.choices]]
+id = "send_away"
+outcomes = [{ type = "trait", id = "open", amount = -1 }]
+
+[[events]]
+id = "great_hunt"
+era_min = 1
+era_max = 2
+weight = 4
+if_known = "hunting"
+
+[[events.choices]]
+id = "share_the_meat"
+outcomes = [{ type = "resource", id = "food", amount = 20.0 }, { type = "mood", amount = 0.05 }]
+
+[[events.choices]]
+id = "feast"
+outcomes = [{ type = "resource", id = "food", amount = 5.0 }, { type = "resource", id = "culture", amount = 8.0 }, { type = "mood", amount = 0.12 }]
+
+[[events]]
+id = "feud"
+era_min = 1
+weight = 3
+
+[[events.choices]]
+id = "elders_decide"
+outcomes = [{ type = "trait", id = "traditional", amount = 1 }]
+
+[[events.choices]]
+id = "duel"
+outcomes = [{ type = "population", amount = -1.0 }, { type = "mood", amount = 0.05 }, { type = "trait", id = "peaceful", amount = -1 }]
+
+[[events.choices]]
+id = "make_peace"
+outcomes = [{ type = "resource", id = "food", amount = -6.0 }, { type = "trait", id = "peaceful", amount = 1 }]
+
+[[events]]
+id = "comet"
+era_min = 1
+weight = 2
+
+[[events.choices]]
+id = "pray"
+outcomes = [{ type = "resource", id = "culture", amount = 10.0 }, { type = "trait", id = "traditional", amount = 1 }]
+
+[[events.choices]]
+id = "watch_it"
+outcomes = [{ type = "resource", id = "knowledge", amount = 10.0 }, { type = "trait", id = "curious", amount = 1 }]
+
+[[events]]
+id = "drought"
+era_min = 2
+weight = 3
+
+[[events.choices]]
+id = "ration"
+outcomes = [{ type = "resource", id = "food", amount = -15.0 }, { type = "mood", amount = -0.05 }]
+
+[[events.choices]]
+id = "dig_wells"
+outcomes = [{ type = "resource", id = "stone", amount = -15.0 }, { type = "resource", id = "knowledge", amount = 8.0 }, { type = "trait", id = "curious", amount = 1 }]
+
+[[events]]
+id = "harvest_festival"
+era_min = 2
+weight = 4
+if_known = "farming"
+
+[[events.choices]]
+id = "modest_feast"
+outcomes = [{ type = "resource", id = "food", amount = -10.0 }, { type = "mood", amount = 0.08 }]
+
+[[events.choices]]
+id = "great_feast"
+outcomes = [{ type = "resource", id = "food", amount = -30.0 }, { type = "resource", id = "culture", amount = 15.0 }, { type = "mood", amount = 0.15 }]
+
+[[events]]
+id = "traders"
+era_min = 3
+weight = 4
+
+[[events.choices]]
+id = "trade_fairly"
+outcomes = [{ type = "resource", id = "clay", amount = -10.0 }, { type = "resource", id = "tin", amount = 8.0 }, { type = "trait", id = "open", amount = 1 }]
+
+[[events.choices]]
+id = "refuse"
+outcomes = [{ type = "trait", id = "open", amount = -1 }]
+
+[[events]]
+id = "plague"
+era_min = 3
+weight = 2
+
+[[events.choices]]
+id = "quarantine"
+outcomes = [{ type = "population", amount = -1.0 }, { type = "mood", amount = -0.05 }]
+
+[[events.choices]]
+id = "pray_for_healing"
+outcomes = [{ type = "population", amount = -3.0 }, { type = "resource", id = "culture", amount = 10.0 }, { type = "trait", id = "traditional", amount = 1 }]

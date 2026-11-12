@@ -17,6 +17,8 @@ python-licenses*.csv
 
 # Runtime data: SQLite databases, logs, downloaded models, diaries
 data/
+# ...except game data that is source, not runtime state.
+!crates/oorbit-sim/data/
 diaries/
 *.db
 *.db-journal
