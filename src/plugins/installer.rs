@@ -144,6 +144,9 @@ pub async fn install_web_app(
     std::fs::create_dir_all(&web_dir)?;
     move_children(&payload_root, &web_dir)?;
     let _ = std::fs::remove_dir_all(&payload);
+    for repaired in repair_missing_snippets(&web_dir) {
+        log_event(plugins_dir, &format!("webapp-repair copied-snippet={repaired}"));
+    }
     if let Some(icon) = icon {
         std::fs::write(web_dir.join("icon.png"), icon)?;
     }
@@ -291,6 +294,81 @@ fn single_subdirectory(dir: &Path) -> Option<PathBuf> {
         return Some(entries[0].path());
     }
     None
+}
+
+/// Fill in wasm-bindgen snippets a web build imports from where they are not.
+///
+/// wasm-bindgen glue imports its JS snippets relative to itself
+/// (`./snippets/<crate>/inline0.js`). A build that moves the glue into a
+/// subfolder but ships `snippets/` only at the site root (PhotoCraft 0.23.1:
+/// `app/photocraft-web.js`) 404s on that import, and the app never starts.
+/// For every such import that resolves to nothing, the same file at the root
+/// is copied next to the glue. Returns the copied paths, relative to `web_dir`.
+fn repair_missing_snippets(web_dir: &Path) -> Vec<String> {
+    const MAX_GLUE_BYTES: u64 = 8 * 1024 * 1024;
+    let mut repaired = Vec::new();
+    let mut pending = vec![web_dir.to_path_buf()];
+    while let Some(dir) = pending.pop() {
+        let Ok(entries) = std::fs::read_dir(&dir) else { continue };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let Ok(kind) = entry.file_type() else { continue };
+            if kind.is_dir() {
+                pending.push(path);
+                continue;
+            }
+            if !kind.is_file() || dir == web_dir || path.extension().is_none_or(|e| e != "js") {
+                continue;
+            }
+            if entry.metadata().map(|m| m.len() > MAX_GLUE_BYTES).unwrap_or(true) {
+                continue;
+            }
+            let Ok(text) = std::fs::read_to_string(&path) else { continue };
+            for specifier in snippet_specifiers(&text) {
+                let wanted = dir.join(&specifier);
+                let source = web_dir.join(&specifier);
+                if wanted.exists() || !source.is_file() {
+                    continue;
+                }
+                if let Some(parent) = wanted.parent() {
+                    if std::fs::create_dir_all(parent).is_err() {
+                        continue;
+                    }
+                }
+                if std::fs::copy(&source, &wanted).is_ok() {
+                    if let Ok(rel) = wanted.strip_prefix(web_dir) {
+                        repaired.push(rel.to_string_lossy().into_owned());
+                    }
+                }
+            }
+        }
+    }
+    repaired.sort();
+    repaired
+}
+
+/// The `./snippets/…` module specifiers in a JS file, as relative paths made
+/// only of plain components (nothing that could climb out of the site).
+fn snippet_specifiers(text: &str) -> Vec<PathBuf> {
+    let mut found: Vec<PathBuf> = Vec::new();
+    for quote in ['\'', '"'] {
+        let needle = format!("{quote}./snippets/");
+        let mut rest = text;
+        while let Some(at) = rest.find(&needle) {
+            let after = &rest[at + 1..];
+            let Some(end) = after.find(quote) else { break };
+            let spec = &after[2..end];
+            rest = &after[end..];
+            let path = Path::new(spec);
+            let plain = path
+                .components()
+                .all(|c| matches!(c, std::path::Component::Normal(_)));
+            if plain && spec.ends_with(".js") && !found.iter().any(|p| p == path) {
+                found.push(path.to_path_buf());
+            }
+        }
+    }
+    found
 }
 
 /// Move every child of `from` into `to` (same filesystem: both live under the
@@ -498,6 +576,38 @@ fn unique_staging_dir(plugins_dir: &Path) -> PathBuf {
     let pid = std::process::id();
     plugins_dir.join(format!("_staging-{}-{}", pid, ts))
 }
+#[cfg(test)]
+mod snippet_repair_tests {
+    use super::*;
+
+    #[test]
+    fn glue_in_a_subfolder_gets_the_root_snippets_it_imports() {
+        let root = tempfile::tempdir().unwrap();
+        let web = root.path();
+        std::fs::create_dir_all(web.join("snippets/eframe-1")).unwrap();
+        std::fs::write(web.join("snippets/eframe-1/inline0.js"), "export const a = 1;").unwrap();
+        std::fs::write(web.join("boot.js"), "import x from './snippets/eframe-1/inline0.js';").unwrap();
+        std::fs::create_dir_all(web.join("app")).unwrap();
+        std::fs::write(
+            web.join("app/glue.js"),
+            "import { a } from './snippets/eframe-1/inline0.js';\n\
+             const b = \"./snippets/eframe-1/inline0.js\";\n\
+             import y from './snippets/../../etc/passwd.js';\n\
+             import z from './snippets/missing/inline0.js';",
+        )
+        .unwrap();
+
+        let repaired = repair_missing_snippets(web);
+        assert_eq!(repaired, vec!["app/snippets/eframe-1/inline0.js".to_string()]);
+        assert_eq!(
+            std::fs::read_to_string(web.join("app/snippets/eframe-1/inline0.js")).unwrap(),
+            "export const a = 1;"
+        );
+        // A complete build is left alone.
+        assert!(repair_missing_snippets(web).is_empty());
+    }
+}
+
 #[cfg(test)]
 mod swap_tests {
     use super::*;

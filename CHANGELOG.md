@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- PhotoCraft 0.23.1 from the Craft store stayed on "Loading" and asked to
+  reload: its web build imports a file from a folder where the release
+  does not ship it. The store now fills such gaps when it installs an app,
+  so the app starts.
+
 ## [0.2.6] - 2026-11-12
 
 ### Added

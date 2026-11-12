@@ -18,6 +18,12 @@ describes the install audit trail and the (currently inactive) signature hook.
   restricted to GitHub hosts. Framing is allowed for exactly these routes
   (`X-Frame-Options: SAMEORIGIN`); everything else the core serves stays
   `DENY`.
+  The installer changes one thing in the verified files: when a wasm-bindgen
+  glue module in a subfolder imports a `./snippets/…` file that only exists
+  at the site root (PhotoCraft 0.23.1 ships `app/photocraft-web.js` that
+  way), it copies that same root file next to the glue, or the app would
+  never start. Only `.js` paths of plain components are copied, and the
+  install log records each one (`webapp-repair copied-snippet=…`).
 - Plugin management (install/uninstall/activate/deactivate) is gated only by a
   **logged-in user token** — there is currently **no admin role**. The
   `ADMIN_TOKEN` env var and the `travelers.is_admin` column are read but **not
