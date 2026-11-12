@@ -11,6 +11,11 @@ const PIXEL_HEIGHT := 300.0
 const REFRESH_SECONDS := 60.0
 ## A press that moves less than this (screen pixels) is a click, not a drag.
 const CLICK_SLOP := 6.0
+## Frames per second while the window is on screen: the planet turns slowly
+## and the art is low-resolution, so more would only spend battery.
+const FPS_VISIBLE := 30
+## While the window is hidden (another workspace, minimised, tab hidden).
+const FPS_HIDDEN := 1
 
 var host := Host.new()
 var container: SubViewportContainer
@@ -25,9 +30,11 @@ var _press := Vector2.ZERO
 var _pressing := false
 var _dragged := false
 var _busy := false
+var _visible := true
 
 
 func _ready() -> void:
+	Engine.max_fps = FPS_VISIBLE
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	_build_view()
 	_build_world()
@@ -39,6 +46,7 @@ func _ready() -> void:
 	resized.connect(_fit)
 	_fit()
 	host.context_changed.connect(_apply_context)
+	host.visibility_changed.connect(_on_visibility)
 	_apply_context(host.context())
 	if not host.available:
 		ui.show_offline()
@@ -50,8 +58,19 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if not host.available or ui.catalog.is_empty():
 		return
+	if not _visible:
+		return
 	_refresh_left -= delta
 	if _refresh_left <= 0.0 and not _busy:
+		_refresh()
+
+
+## The window went on or off screen: almost stop drawing while nobody can
+## see it, and catch up on the planet as soon as it is back.
+func _on_visibility(on_screen: bool) -> void:
+	_visible = on_screen
+	Engine.max_fps = FPS_VISIBLE if on_screen else FPS_HIDDEN
+	if on_screen and not ui.catalog.is_empty() and not _busy:
 		_refresh()
 
 
@@ -82,6 +101,9 @@ func _on_view(reply: Dictionary) -> void:
 	else:
 		planet_view.visible = false
 	ui.show_view(data)
+	# Look again right after the next thing finishes, or in a minute.
+	var next := ui.next_change_ms()
+	_refresh_left = REFRESH_SECONDS if next < 0.0 else clampf(next / 1000.0 + 2.0, 5.0, REFRESH_SECONDS)
 
 
 func _send_action(action: Dictionary) -> void:
@@ -135,7 +157,6 @@ func _build_view() -> void:
 		colors.append(Vector3(c.r, c.g, c.b))
 	pixel_material.set_shader_parameter("palette", colors)
 	pixel_material.set_shader_parameter("palette_size", colors.size())
-	container.material = pixel_material
 	add_child(container)
 
 	viewport = SubViewport.new()
@@ -154,6 +175,16 @@ func _build_view() -> void:
 	sky_material.shader = load("res://sky.gdshader")
 	sky.material = sky_material
 	back.add_child(sky)
+
+	# The palette pass, over everything drawn in the low-resolution view.
+	var front := CanvasLayer.new()
+	front.layer = 1
+	viewport.add_child(front)
+	var quantize := ColorRect.new()
+	quantize.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	quantize.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	quantize.material = pixel_material
+	front.add_child(quantize)
 
 
 func _build_world() -> void:
@@ -190,7 +221,6 @@ func _fit() -> void:
 	var shrink := maxi(1, roundi(size.y / PIXEL_HEIGHT))
 	container.stretch_shrink = shrink
 	var source := (size / shrink).floor()
-	pixel_material.set_shader_parameter("source_size", source)
 	sky_material.set_shader_parameter("size", source)
 	# The camera's field of view is vertical: on a tall window (a phone) move
 	# back so the planet still fits the width.

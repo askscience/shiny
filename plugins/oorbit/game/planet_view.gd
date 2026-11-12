@@ -14,13 +14,26 @@ var pivot: Node3D
 var builder := PlanetMesh.new()
 var _land: MeshInstance3D
 var _outline: MeshInstance3D
-var _props: Node3D
+## Every prop (trees, peaks, buildings) merged into one mesh with vertex
+## colours: one draw call instead of hundreds of small ones.
+var _props: MeshInstance3D
+var _verts := PackedVector3Array()
+var _normals := PackedVector3Array()
+var _colors := PackedColorArray()
+var _indices := PackedInt32Array()
+static var _shapes := {}
+
+## Little people walking around the inhabited tiles: one per two people, up
+## to MAX_WALKERS, all in one MultiMesh (one draw call).
+const MAX_WALKERS := 30
+const WALKER_COLORS := [Color("f2c078"), Color("e08f6c"), Color("eef3f2"), Color("e3c3c6"), Color("c2d69b")]
+var _walkers: MultiMeshInstance3D
+var _walk := []  # per walker: [tile, angle, radius, speed, phase]
 var _highlight: MeshInstance3D
 var _biomes: Array = []
 var _signature := ""
 var _idle := IDLE_BEFORE_SPIN
 var selected := -1
-var _materials := {}
 
 
 func _ready() -> void:
@@ -38,8 +51,19 @@ func _ready() -> void:
 	outline_material.albedo_color = Palette.OUTLINE
 	_outline.material_override = outline_material
 	pivot.add_child(_outline)
-	_props = Node3D.new()
+	_props = MeshInstance3D.new()
+	_props.material_override = _toon(Color.WHITE, true)
 	pivot.add_child(_props)
+	_walkers = MultiMeshInstance3D.new()
+	var walker_mesh := BoxMesh.new()
+	walker_mesh.size = Vector3(0.03, 0.055, 0.03)
+	var multimesh := MultiMesh.new()
+	multimesh.transform_format = MultiMesh.TRANSFORM_3D
+	multimesh.use_colors = true
+	multimesh.mesh = walker_mesh
+	_walkers.multimesh = multimesh
+	_walkers.material_override = _toon(Color.WHITE, true)
+	pivot.add_child(_walkers)
 	_highlight = MeshInstance3D.new()
 	var line_material := StandardMaterial3D.new()
 	line_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -53,6 +77,60 @@ func _process(delta: float) -> void:
 	_idle += delta
 	if _idle > IDLE_BEFORE_SPIN and selected < 0:
 		pivot.rotate(Vector3.UP, SPIN_SPEED * delta)
+	_move_walkers(delta)
+
+
+func _move_walkers(delta: float) -> void:
+	var multimesh := _walkers.multimesh
+	for k in _walk.size():
+		var w: Array = _walk[k]
+		w[1] = float(w[1]) + float(w[3]) * delta
+		var tile: int = w[0]
+		var normal: Vector3 = builder.centers[tile]
+		var h: float = PlanetMesh.HEIGHT.get(_biomes[tile], 1.0)
+		var base := normal * PlanetMesh.surface(tile, normal, h, _biomes[tile])
+		var t := _tangents(normal)
+		var u: Vector3 = t[0]
+		var v: Vector3 = t[1]
+		var angle: float = w[1]
+		var r: float = w[2]
+		# A slow loop around the tile, with a little bounce in the step.
+		var bob := absf(sin(angle * 9.0 + float(w[4]))) * 0.008
+		var at := base + (u * cos(angle) + v * sin(angle)) * r + normal * (0.02 + bob)
+		var forward := (-u * sin(angle) + v * cos(angle)) * signf(float(w[3]))
+		var basis := Basis(forward.cross(normal).normalized(), normal, -forward).scaled(Vector3.ONE * _tile_size())
+		multimesh.set_instance_transform(k, Transform3D(basis, at))
+
+
+## Props shrink on denser planets (more, smaller tiles).
+func _tile_size() -> float:
+	return sqrt(32.0 / maxf(1.0, float(builder.centers.size())))
+
+
+## Place the walkers for this many people on the inhabited tiles.
+func _place_walkers(population: float, buildings: Array) -> void:
+	var homes := []
+	for i in buildings.size():
+		if buildings[i] != "" and not str(buildings[i]).begins_with("construction:"):
+			homes.append(i)
+	if homes.is_empty():
+		for i in _biomes.size():
+			if _biomes[i] == "plains" or _biomes[i] == "forest":
+				homes.append(i)
+		homes = homes.slice(0, 2)
+	var count := mini(MAX_WALKERS, maxi(2, roundi(population / 2.0)))
+	if homes.is_empty():
+		count = 0
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 23
+	_walk.clear()
+	var multimesh := _walkers.multimesh
+	multimesh.instance_count = count
+	for k in count:
+		var speed := (0.25 + rng.randf() * 0.35) * (1.0 if rng.randf() < 0.5 else -1.0)
+		_walk.append([homes[k % homes.size()], rng.randf() * TAU, (0.08 + rng.randf() * 0.1) * _tile_size(), speed, rng.randf() * TAU])
+		multimesh.set_instance_color(k, WALKER_COLORS[k % WALKER_COLORS.size()])
+	_move_walkers(0.0)
 
 
 ## Rebuild what changed in the planet (`planet` is the simulation's JSON).
@@ -67,7 +145,7 @@ func show_planet(planet: Dictionary) -> void:
 		biomes.append(str(tiles[i]["biome"]))
 		var b = tiles[i].get("building")
 		buildings.append(str(b) if b != null else building_at.get(i, ""))
-	var signature := JSON.stringify([biomes, buildings])
+	var signature := JSON.stringify([biomes, buildings, roundi(float(planet.get("population", 0)) / 2.0)])
 	if signature == _signature:
 		return
 	_signature = signature
@@ -76,12 +154,25 @@ func show_planet(planet: Dictionary) -> void:
 		var mesh := builder.build(biomes, Palette.BIOMES)
 		_land.mesh = mesh
 		_outline.mesh = mesh
-	for child in _props.get_children():
-		child.queue_free()
+	_verts = PackedVector3Array()
+	_normals = PackedVector3Array()
+	_colors = PackedColorArray()
+	_indices = PackedInt32Array()
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 11
 	for i in biomes.size():
 		_place_tile(i, biomes[i], buildings[i], rng)
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = _verts
+	arrays[Mesh.ARRAY_NORMAL] = _normals
+	arrays[Mesh.ARRAY_COLOR] = _colors
+	arrays[Mesh.ARRAY_INDEX] = _indices
+	var mesh := ArrayMesh.new()
+	if _verts.size() > 0:
+		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	_props.mesh = mesh
+	_place_walkers(float(planet.get("population", 0)), buildings)
 	_update_highlight()
 
 
@@ -149,59 +240,73 @@ func _toon(color: Color, vertex_colors := false) -> StandardMaterial3D:
 	return m
 
 
-func _mat(color: Color) -> StandardMaterial3D:
-	var key := color.to_html()
-	if not _materials.has(key):
-		_materials[key] = _toon(color)
-	return _materials[key]
+## A primitive's vertex arrays, built once per shape and reused.
+static func _shape(key: String, make: Callable) -> Array:
+	if not _shapes.has(key):
+		var mesh: PrimitiveMesh = make.call()
+		_shapes[key] = mesh.get_mesh_arrays()
+	return _shapes[key]
 
 
-static func _cone(radius: float, height: float, sides: int) -> CylinderMesh:
-	var mesh := CylinderMesh.new()
-	mesh.top_radius = 0.0
-	mesh.bottom_radius = radius
-	mesh.height = height
-	mesh.radial_segments = sides
-	mesh.rings = 1
-	return mesh
+static func _cone(radius: float, height: float, sides: int) -> Array:
+	return _shape("cone %s %s %s" % [radius, height, sides], func():
+		var mesh := CylinderMesh.new()
+		mesh.top_radius = 0.0
+		mesh.bottom_radius = radius
+		mesh.height = height
+		mesh.radial_segments = sides
+		mesh.rings = 1
+		return mesh)
 
 
-static func _cylinder(radius: float, height: float, sides: int) -> CylinderMesh:
-	var mesh := CylinderMesh.new()
-	mesh.top_radius = radius
-	mesh.bottom_radius = radius
-	mesh.height = height
-	mesh.radial_segments = sides
-	mesh.rings = 1
-	return mesh
+static func _cylinder(radius: float, height: float, sides: int) -> Array:
+	return _shape("cylinder %s %s %s" % [radius, height, sides], func():
+		var mesh := CylinderMesh.new()
+		mesh.top_radius = radius
+		mesh.bottom_radius = radius
+		mesh.height = height
+		mesh.radial_segments = sides
+		mesh.rings = 1
+		return mesh)
 
 
-static func _box(x: float, y: float, z: float) -> BoxMesh:
-	var mesh := BoxMesh.new()
-	mesh.size = Vector3(x, y, z)
-	return mesh
+static func _box(x: float, y: float, z: float) -> Array:
+	return _shape("box %s %s %s" % [x, y, z], func():
+		var mesh := BoxMesh.new()
+		mesh.size = Vector3(x, y, z)
+		return mesh)
 
 
+## Two tangents (u, w) so that (u, normal, w) is a right-handed frame: baked
+## into the merged mesh, a mirrored frame would turn every face inside out.
 func _tangents(normal: Vector3) -> Array:
 	var up := Vector3.UP if abs(normal.y) < 0.9 else Vector3.RIGHT
-	var u := normal.cross(up).normalized()
-	return [u, normal.cross(u)]
+	var n := normal.normalized()
+	var u := n.cross(up).normalized()
+	return [u, u.cross(n)]
 
 
 ## Place `mesh` on the tile: `offset` is (along u, up, along w) in the tile's
 ## frame, `turn` rotates it around the tile's up.
-func _put(mesh: Mesh, color: Color, normal: Vector3, base: Vector3, offset: Vector3, size := 1.0, turn := 0.0) -> void:
+func _put(shape: Array, color: Color, normal: Vector3, base: Vector3, offset: Vector3, size := 1.0, turn := 0.0) -> void:
 	var t := _tangents(normal)
 	var u: Vector3 = t[0]
 	var w: Vector3 = t[1]
 	var y := normal.normalized()
 	var basis := Basis(u, y, w).rotated(y, turn).scaled(Vector3.ONE * size * _scale)
-	var node := MeshInstance3D.new()
-	node.mesh = mesh
-	node.material_override = _mat(color)
 	offset *= _scale
-	node.transform = Transform3D(basis, base + u * offset.x + y * offset.y + w * offset.z)
-	_props.add_child(node)
+	var xform := Transform3D(basis, base + u * offset.x + y * offset.y + w * offset.z)
+	var rotation := basis.orthonormalized()
+	var start := _verts.size()
+	var verts: PackedVector3Array = shape[Mesh.ARRAY_VERTEX]
+	var normals: PackedVector3Array = shape[Mesh.ARRAY_NORMAL]
+	for k in verts.size():
+		_verts.append(xform * verts[k])
+		_normals.append(rotation * normals[k])
+		_colors.append(color)
+	var indices: PackedInt32Array = shape[Mesh.ARRAY_INDEX]
+	for index in indices:
+		_indices.append(start + index)
 
 
 func _place_tile(i: int, biome: String, building: String, rng: RandomNumberGenerator) -> void:
@@ -220,7 +325,7 @@ func _place_tile(i: int, biome: String, building: String, rng: RandomNumberGener
 
 
 ## Buildings are drawn larger than life, so they read at the pixel scale.
-const BUILDING_SCALE := 1.6
+const BUILDING_SCALE := 1.15
 
 
 ## Trees, peaks or ice around the tile's edge (`amount` trees on a forest).

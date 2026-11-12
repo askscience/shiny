@@ -6,7 +6,7 @@ document covers the plugin as built; the game itself is described in
 [design.md](design.md), and its rules live in
 [`crates/oorbit-sim`](../../../crates/oorbit-sim/README.md).
 
-Status: **0.2.0, playable alone.** The user founds a planet (one per account),
+Status: **0.3.0, playable alone.** The user founds a planet (one per account),
 and the window shows it as it is now: research, buildings on its 32 tiles,
 work priorities, events, notable people and the Chronicle. Friends, Laura's
 Chronicle and the assistant's tools come next.
@@ -43,6 +43,21 @@ Low-poly 3D drawn as pixel art, with soft colours:
   theme.
 - The planet turns continuously; text stays at full resolution.
 
+## Cost
+
+- All props (trees, peaks, buildings) are merged into one vertex-coloured
+  mesh, the walkers are one MultiMesh: about 15 draw calls in all.
+- The palette pass runs inside the low-resolution view (`hint_screen_texture`
+  on a full-screen rectangle), never over the upscaled window.
+- At most 30 frames a second (`FPS_VISIBLE`); while the window is off screen
+  (another workspace, minimised, hidden tab: `IntersectionObserver` and
+  `visibilitychange` in `web/index.html`) 1 frame a second and no refreshes.
+- The export writes `.gz` copies of the engine files, which the core serves
+  to browsers that accept gzip: the 40 MB wasm downloads as about 10 MB.
+- The simulation costs nothing while nobody plays: the planet advances only
+  when the window asks. Catching up a month takes about 25 ms
+  (`cargo run --release -p oorbit-sim --example catchup`).
+
 The planet is a truncated icosahedron: 12 pentagons, then 20 hexagons, the
 same 32 tiles in the same order as the simulation (`game/planet_mesh.gd`).
 Each tile top is cut into small facets nudged up and down by biome, so the
@@ -63,7 +78,11 @@ scale), and scaffolding stands while it is being built.
 | Event dialog | Appears when an event waits; each choice lists its consequences. |
 | Planet | Drag to turn it; it turns by itself again after a few idle seconds. |
 
-The window refreshes the planet every minute and after every action. On a
+Between refreshes the resources keep counting at their rates, and the
+construction and research countdowns run. The window refreshes the planet
+after every action, right after the next thing finishes, and at least every
+minute. Little people walk around the inhabited tiles (one per two people,
+up to 30). On a
 narrow window (a phone) the panels become one sheet at the bottom and the
 camera moves back so the planet fits the width. Strings come from
 `game/i18n/<lang>.json` (English and Italian; other languages fall back to
@@ -83,7 +102,8 @@ English).
 | `game/` | The Godot 4.7 project (GDScript, GL Compatibility renderer). |
 | `game/host.gd` | The game's side of the page bridge; the only GDScript that touches JavaScript. |
 | `scripts/export-web.sh` | Exports `game/` to `web/game/<hash>/` and writes `web/game/build.json`; refuses to export when a script has errors. |
-| `scripts/preview-server.py`, `scripts/preview-shot.mjs` | Serve the window outside LiteAura (with the core's web-app CSP, and the real simulation through `crates/oorbit-sim/examples/preview.rs` on a local state file) and screenshot it headless, under `xvfb-run`. |
+| `scripts/preview-seed.py` | Makes a planet some days old, played by a simple bot, for previews. |
+| `scripts/preview-server.py`, `scripts/preview-shot.mjs` | Serve the window outside LiteAura (with the core's web-app CSP, and the real simulation through `crates/oorbit-sim/examples/preview.rs` on a local state file; `OORBIT_WEB` serves another build) and screenshot it headless, under `xvfb-run`, with scripted clicks (`STEPS`). |
 | `web/index.html` | The window: boots the export and exposes `window.oorbitHost`. |
 | `web/game/` | Export output, **not committed** (`.gitignore`); rebuild it with the script. |
 

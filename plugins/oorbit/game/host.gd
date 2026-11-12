@@ -6,6 +6,8 @@ class_name Host
 extends RefCounted
 
 signal context_changed(context: Dictionary)
+## The window went on screen (true) or off screen (false).
+signal visibility_changed(on_screen: bool)
 
 var available := false
 var _host: JavaScriptObject
@@ -21,6 +23,10 @@ func _init() -> void:
 		var on_context := JavaScriptBridge.create_callback(_on_context)
 		_callbacks.append(on_context)
 		_host.onContext(on_context)
+		var on_visibility := JavaScriptBridge.create_callback(func(args: Array) -> void:
+			visibility_changed.emit(bool(args[0])))
+		_callbacks.append(on_visibility)
+		_host.onVisibility(on_visibility)
 
 
 ## The host context LiteAura handed to the frame: `locale`, `theme`, `mode`.

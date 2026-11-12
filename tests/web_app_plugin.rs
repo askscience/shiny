@@ -281,44 +281,127 @@ async fn oorbit_founds_saves_and_plays_a_planet() {
     app.load_plugins().await;
     let router = shiny::api::build_router(app.state.clone());
 
-    let body = json_body(router.clone().oneshot(request("/api/oorbit/state", Some("one"))).await.unwrap()).await;
-    assert!(body["data"]["planet"].is_null(), "no planet before founding");
+    let body = json_body(
+        router
+            .clone()
+            .oneshot(request("/api/oorbit/state", Some("one")))
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert!(
+        body["data"]["planet"].is_null(),
+        "no planet before founding"
+    );
 
     let response = router
         .clone()
-        .oneshot(post_json("/api/oorbit/found", "one", serde_json::json!({ "climate": "temperate" })))
+        .oneshot(post_json(
+            "/api/oorbit/found",
+            "one",
+            serde_json::json!({ "climate": "temperate" }),
+        ))
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
     let body = json_body(response).await;
     assert_eq!(body["data"]["planet"]["era"], 1);
-    assert_eq!(body["data"]["planet"]["tiles"].as_array().unwrap().len(), 32);
-    assert!(body["data"]["techs"].as_array().unwrap().iter().any(|t| t["id"] == "fire" && t["status"] == "available"));
+    assert_eq!(
+        body["data"]["planet"]["tiles"].as_array().unwrap().len(),
+        32
+    );
+    assert!(body["data"]["techs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|t| t["id"] == "fire" && t["status"] == "available"));
 
     let again = router
         .clone()
-        .oneshot(post_json("/api/oorbit/found", "one", serde_json::json!({ "climate": "arid" })))
+        .oneshot(post_json(
+            "/api/oorbit/found",
+            "one",
+            serde_json::json!({ "climate": "arid" }),
+        ))
         .await
         .unwrap();
-    assert_eq!(again.status(), StatusCode::BAD_REQUEST, "a planet is founded once");
+    assert_eq!(
+        again.status(),
+        StatusCode::BAD_REQUEST,
+        "a planet is founded once"
+    );
 
     let response = router
         .clone()
-        .oneshot(post_json("/api/oorbit/action", "one", serde_json::json!({ "type": "research", "tech": "fire" })))
+        .oneshot(post_json(
+            "/api/oorbit/action",
+            "one",
+            serde_json::json!({ "type": "research", "tech": "fire" }),
+        ))
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    let body = json_body(router.clone().oneshot(request("/api/oorbit/state", Some("one"))).await.unwrap()).await;
-    assert_eq!(body["data"]["planet"]["research"], "fire", "the action was saved");
+    let body = json_body(
+        router
+            .clone()
+            .oneshot(request("/api/oorbit/state", Some("one")))
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(
+        body["data"]["planet"]["research"], "fire",
+        "the action was saved"
+    );
     assert_eq!(body["data"]["planet"]["climate"], "temperate");
 
     let refused = router
         .clone()
-        .oneshot(post_json("/api/oorbit/action", "one", serde_json::json!({ "type": "research", "tech": "writing" })))
+        .oneshot(post_json(
+            "/api/oorbit/action",
+            "one",
+            serde_json::json!({ "type": "research", "tech": "writing" }),
+        ))
         .await
         .unwrap();
     assert_eq!(refused.status(), StatusCode::BAD_REQUEST);
 
-    let catalog = json_body(router.oneshot(request("/api/oorbit/catalog", Some("one"))).await.unwrap()).await;
+    let catalog = json_body(
+        router
+            .oneshot(request("/api/oorbit/catalog", Some("one")))
+            .await
+            .unwrap(),
+    )
+    .await;
     assert!(catalog["data"]["eras"].as_array().unwrap().len() >= 3);
+}
+
+/// A web app may ship precompressed copies of big files; a browser that
+/// accepts gzip gets the `.gz` with the original type, others the plain file.
+#[tokio::test]
+async fn web_apps_serve_precompressed_files() {
+    let app = support::TestApp::new().await;
+    stage_web_app(&app, "photocraft");
+    let dir = Path::new(&app.state.config.plugins_dir).join("photocraft/web");
+    std::fs::write(dir.join("app_web_bg.wasm.gz"), b"\x1f\x8bgzipped").unwrap();
+    app.load_plugins().await;
+    let router = shiny::api::build_router(app.state.clone());
+
+    let mut gzip = request("/plugins/photocraft/app_web_bg.wasm", None);
+    gzip.headers_mut()
+        .insert("accept-encoding", "gzip".parse().unwrap());
+    let response = router.clone().oneshot(gzip).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers()["content-encoding"], "gzip");
+    assert_eq!(response.headers()["content-type"], "application/wasm");
+    let body = to_bytes(response.into_body(), 1024).await.unwrap();
+    assert_eq!(&body[..], b"\x1f\x8bgzipped");
+
+    let plain = router
+        .oneshot(request("/plugins/photocraft/app_web_bg.wasm", None))
+        .await
+        .unwrap();
+    assert!(plain.headers().get("content-encoding").is_none());
+    let body = to_bytes(plain.into_body(), 1024).await.unwrap();
+    assert_eq!(&body[..], b"\0asm\x01\0\0\0");
 }

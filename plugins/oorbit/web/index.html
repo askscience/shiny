@@ -70,7 +70,32 @@
     return body;
   }
 
+  // On screen = the page is visible and the canvas intersects the viewport
+  // (a window on another workspace or minimised has no box). The game
+  // nearly stops drawing while it is off screen.
+  const visibilityListeners = [];
+  let docVisible = document.visibilityState !== 'hidden';
+  let boxVisible = true;
+  let lastSent = null;
+  function sendVisibility() {
+    const now = docVisible && boxVisible;
+    if (now === lastSent) return;
+    lastSent = now;
+    for (const listener of visibilityListeners) listener(now);
+  }
+  document.addEventListener('visibilitychange', () => {
+    docVisible = document.visibilityState !== 'hidden';
+    sendVisibility();
+  });
+  if ('IntersectionObserver' in window) {
+    new IntersectionObserver((entries) => {
+      boxVisible = entries.some((entry) => entry.isIntersecting);
+      sendVisibility();
+    }).observe(document.getElementById('canvas'));
+  }
+
   window.oorbitHost = {
+    onVisibility: (callback) => { visibilityListeners.push(callback); lastSent = null; sendVisibility(); },
     contextJson: () => JSON.stringify(context),
     onContext: (callback) => { contextListeners.push(callback); },
     getJson: (path, callback) => {

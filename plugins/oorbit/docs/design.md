@@ -63,8 +63,10 @@ era ends when its discoveries are known and its monument stands.
 | 9 | Information | a cable of light | data | planned |
 | 10 | Space | rockets | colonists, station modules | planned |
 
+- The first visit must already move: a discovery within minutes, the first
+  buildings within the hour (settlers' zeal; `tests/first_session.rs`).
 - Early eras take days, later ones weeks. Pacing target for a steady player:
-  era 2 by day 2 to 8, era 3 by day 6 to 16, era 3 done by day 12 to 27
+  era 2 by day 1.5 to 5, era 3 by day 5 to 12, era 3 done by day 10 to 21
   (checked by `tests/balance.rs`).
 - Travel gets faster and carries more with every era.
 - Friends in different eras still help each other: the one ahead sends ideas,

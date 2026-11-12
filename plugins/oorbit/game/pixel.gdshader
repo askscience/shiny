@@ -1,12 +1,14 @@
 // Reduces the low-resolution frame to the palette, with a light ordered
-// dither so soft gradients survive as pixel art. Applied to the
-// SubViewportContainer that upscales the 3D view with nearest filtering.
+// dither so soft gradients survive as pixel art. Runs as a full-screen
+// rectangle inside the low-resolution SubViewport, reading what the 3D scene
+// and the sky drew there: one pass over ~480x300 pixels, never over the
+// upscaled window.
 shader_type canvas_item;
 
 const int MAX_COLORS = 40;
+uniform sampler2D screen_texture : hint_screen_texture, filter_nearest;
 uniform vec3 palette[MAX_COLORS];
 uniform int palette_size = 1;
-uniform vec2 source_size = vec2(480.0, 300.0);
 uniform float dither = 0.035;
 
 float bayer4(vec2 p) {
@@ -18,9 +20,8 @@ float bayer4(vec2 p) {
 }
 
 void fragment() {
-	vec4 source = texture(TEXTURE, UV);
-	vec2 pixel = floor(UV * source_size);
-	vec3 c = source.rgb + vec3(bayer4(pixel) * dither);
+	vec3 source = texture(screen_texture, SCREEN_UV).rgb;
+	vec3 c = source + vec3(bayer4(floor(FRAGCOORD.xy)) * dither);
 	vec3 best = palette[0];
 	float best_d = 1e9;
 	for (int i = 0; i < MAX_COLORS; i++) {

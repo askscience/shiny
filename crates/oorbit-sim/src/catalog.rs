@@ -218,6 +218,13 @@ pub struct Tuning {
     pub culture_for_full_mood: f64,
     pub idle_after_hours: f64,
     pub idle_factor: f64,
+    /// Settlers' zeal: a new planet works `1 + zeal_bonus` times faster at
+    /// first, fading with a half-life-like `zeal_hours` (e^-age/zeal_hours),
+    /// so the first session already sees discoveries and buildings.
+    #[serde(default)]
+    pub zeal_bonus: f64,
+    #[serde(default = "default_zeal_hours")]
+    pub zeal_hours: f64,
     pub season_days: f64,
     pub seasons: [f64; 4],
     pub event_gap_hours: f64,
@@ -228,6 +235,10 @@ pub struct Tuning {
     pub notable_bonus: f64,
     pub max_notables: usize,
     pub chronicle_len: usize,
+}
+
+fn default_zeal_hours() -> f64 {
+    8.0
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

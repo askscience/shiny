@@ -138,7 +138,9 @@ fn rates_at(planet: &Planet, catalog: &Catalog, step: i64) -> Rates {
         } else {
             1.0
         };
-    let efficiency = (0.6 + 0.8 * planet.mood) * idle;
+    let age_hours = (step - planet.created_step) as f64 / STEPS_PER_HOUR as f64;
+    let zeal = 1.0 + t.zeal_bonus * (-age_hours.max(0.0) / t.zeal_hours.max(0.01)).exp();
+    let efficiency = (0.6 + 0.8 * planet.mood) * idle * zeal;
     let food_factor = catalog
         .climate(&planet.climate)
         .map(|c| c.food)

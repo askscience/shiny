@@ -523,9 +523,12 @@ fn build_webapp_routes(state: &AppState) -> Router<AppState> {
             continue;
         }
         if let Some(web_path) = plugin_web_root(state, &manifest) {
+            // An app may ship `file.gz` / `file.br` next to a big file (a
+            // game engine's 40 MB wasm): those are sent to browsers that
+            // accept them, with no compression work per request.
             router = router.nest_service(
                 &format!("/plugins/{}", manifest.name),
-                ServeDir::new(web_path),
+                ServeDir::new(web_path).precompressed_br().precompressed_gzip(),
             );
         }
     }

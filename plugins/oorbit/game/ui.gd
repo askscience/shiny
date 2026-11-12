@@ -19,6 +19,15 @@ var selected_tile := -1
 var open_panel := ""
 var dismissed_event := ""
 var _was_founding := false
+## Engine ticks (ms) when the current view arrived.
+var _view_ticks := 0
+var _tick_left := 1.0
+var _countdown: Label
+var _countdown_done_ms := 0.0
+var _countdown_building := ""
+var _research_bar: ProgressBar
+var _research_label: Label
+var _research_cost := 0.0
 
 var _theme := Theme.new()
 var _top: PanelContainer
@@ -95,6 +104,16 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	# Between refreshes the numbers keep moving at their rates, and the
+	# countdowns run, so the planet never looks frozen.
+	_tick_left -= delta
+	if _tick_left <= 0.0 and not view.is_empty() and view.get("planet") != null:
+		_tick_left = 1.0
+		_fill_top()
+		if _countdown != null and is_instance_valid(_countdown):
+			_countdown.text = _countdown_text()
+		if _research_bar != null and is_instance_valid(_research_bar):
+			_update_research_bar()
 	if _toast.visible:
 		_toast_left -= delta
 		if _toast_left <= 0.0:
@@ -276,6 +295,7 @@ func _show_founding_message(text: String) -> void:
 ## Redraw everything from a view (the plugin's reply).
 func show_view(new_view: Dictionary) -> void:
 	view = new_view
+	_view_ticks = Time.get_ticks_msec()
 	var planet = view.get("planet")
 	if planet == null:
 		_show_founding()
@@ -325,6 +345,56 @@ func _planet() -> Dictionary:
 	return view.get("planet", {})
 
 
+## The current time on the server's clock, moving on since the view arrived.
+func live_now_ms() -> float:
+	return float(view.get("now_ms", 0)) + float(Time.get_ticks_msec() - _view_ticks)
+
+
+## Hours since the state's last simulation step.
+func _hours_since_state() -> float:
+	var step_ms := float(view.get("step_ms", 600000))
+	return maxf(0.0, (live_now_ms() - float(_planet().get("step", 0)) * step_ms) / 3600000.0)
+
+
+## A resource as it is right now: the saved amount moved on at its rate,
+## within the storage cap for capped resources.
+func live_amount(id: String) -> float:
+	var value := float(_planet().get("resources", {}).get(id, 0.0)) + _rate(id) * _hours_since_state()
+	value = maxf(0.0, value)
+	var capped := true
+	for r in catalog.get("resources", []):
+		if r["id"] == id:
+			capped = not r.get("uncapped", false)
+	if capped:
+		value = minf(value, maxf(float(view.get("rates", {}).get("storage", value)), float(_planet().get("resources", {}).get(id, 0.0))))
+	return value
+
+
+## Milliseconds until the next thing finishes (a building, the research), or
+## -1 when nothing is under way. The window refreshes right after it.
+func next_change_ms() -> float:
+	var planet := _planet()
+	var step_ms := float(view.get("step_ms", 600000))
+	var best := -1.0
+	for c in planet.get("construction", []):
+		var left := float(c["done_step"]) * step_ms - live_now_ms()
+		if best < 0.0 or left < best:
+			best = left
+	var research = planet.get("research")
+	if research != null:
+		for t in view.get("techs", []):
+			if t["id"] == research:
+				var rate := _rate("knowledge")
+				var missing := float(t["cost"]) - live_amount("knowledge")
+				if rate > 0.0:
+					# Discoveries complete on a step boundary.
+					var left := maxf(0.0, missing / rate * 3600000.0)
+					left = ceil((live_now_ms() + left) / step_ms) * step_ms - live_now_ms()
+					if best < 0.0 or left < best:
+						best = left
+	return best
+
+
 func _rate(id: String) -> float:
 	return float(view.get("rates", {}).get("per_hour", {}).get(id, 0.0))
 
@@ -347,7 +417,7 @@ func _fill_top() -> void:
 	var resources: Dictionary = planet.get("resources", {})
 	for r in catalog.get("resources", []):
 		var id: String = r["id"]
-		var amount := float(resources.get(id, 0.0))
+		var amount := live_amount(id)
 		var rate := _rate(id)
 		if amount < 0.5 and absf(rate) < 0.01:
 			continue
@@ -402,7 +472,6 @@ func _fill_research() -> void:
 			_side_body.add_child(_muted(I18n.t("ui.era.monument_only", {"monument": monument})))
 		else:
 			_side_body.add_child(_muted(I18n.t("ui.era.next", {"techs": ", ".join(names), "monument": monument})))
-	var knowledge := float(planet.get("resources", {}).get("knowledge", 0.0))
 	var order := {"researching": 0, "available": 1, "not_affordable": 2, "locked": 3, "known": 4}
 	var techs: Array = view.get("techs", []).duplicate()
 	techs.sort_custom(func(a, b): return order.get(a["status"], 5) < order.get(b["status"], 5))
@@ -422,13 +491,15 @@ func _fill_research() -> void:
 			b.pressed.connect(func(): action_requested.emit({"type": "research", "tech": id}))
 		row.add_child(b)
 		if status == "researching":
-			var bar := ProgressBar.new()
-			bar.max_value = float(tech["cost"])
-			bar.value = minf(knowledge, float(tech["cost"]))
-			bar.show_percentage = false
-			bar.custom_minimum_size = Vector2(0, 6)
-			row.add_child(bar)
-			row.add_child(_muted(I18n.t("ui.research.progress", {"have": _fmt(knowledge), "cost": _fmt(float(tech["cost"]))})))
+			_research_cost = float(tech["cost"])
+			_research_bar = ProgressBar.new()
+			_research_bar.max_value = _research_cost
+			_research_bar.show_percentage = false
+			_research_bar.custom_minimum_size = Vector2(0, 6)
+			row.add_child(_research_bar)
+			_research_label = _muted("")
+			row.add_child(_research_label)
+			_update_research_bar()
 		elif status != "available":
 			row.add_child(_muted(I18n.t("ui.status." + status)))
 		_side_body.add_child(row)
@@ -560,8 +631,10 @@ func _fill_tile() -> void:
 		return
 	for c in planet.get("construction", []):
 		if int(c["tile"]) == selected_tile:
-			var left := (int(c["done_step"]) - int(planet.get("step", 0))) * float(view.get("step_ms", 600000))
-			_tile_body.add_child(_label(I18n.t("ui.tile.building", {"building": I18n.name_of("building", c["building"]), "time": I18n.duration(left)})))
+			_countdown_done_ms = float(c["done_step"]) * float(view.get("step_ms", 600000))
+			_countdown_building = str(c["building"])
+			_countdown = _label(_countdown_text())
+			_tile_body.add_child(_countdown)
 			return
 	_tile_body.add_child(_muted(I18n.t("ui.tile.empty")))
 	var any := false
@@ -599,6 +672,17 @@ func _fill_tile() -> void:
 			_tile_body.add_child(_muted(effects))
 	if not any:
 		_tile_body.add_child(_muted(I18n.t("ui.tile.none")))
+
+
+func _countdown_text() -> String:
+	var left := maxf(0.0, _countdown_done_ms - live_now_ms())
+	return I18n.t("ui.tile.building", {"building": I18n.name_of("building", _countdown_building), "time": I18n.duration(left)})
+
+
+func _update_research_bar() -> void:
+	var have := minf(live_amount("knowledge"), _research_cost)
+	_research_bar.value = have
+	_research_label.text = I18n.t("ui.research.progress", {"have": _fmt(have), "cost": _fmt(_research_cost)})
 
 
 func _fits(b: Dictionary, biome: String) -> bool:

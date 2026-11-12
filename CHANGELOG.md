@@ -16,6 +16,23 @@
   you were away. The planet is drawn as low-poly 3D in soft pixel art, under
   a starry indigo night or a lavender dusk, and the window works on a phone.
   In English and Italian.
+- Oorbit 0.3.0: the first visit is lively. New settlers arrive with some
+  knowledge and work up to nine times faster in their first hours, so the
+  first discovery comes after ten minutes and the first buildings within the
+  hour; the first three eras now take about two weeks instead of three. In
+  the window, resources keep counting up, construction and research count
+  down, the planet refreshes the moment something finishes, and little
+  people walk around the inhabited tiles.
+
+### Changed
+
+- Oorbit draws far less: one mesh for all the planet's props instead of
+  hundreds of small ones, the palette pass at the low resolution only, at
+  most 30 frames a second, almost nothing (and no refreshes) while its window
+  is off screen.
+- Web apps can ship precompressed files: the core sends `file.gz` or
+  `file.br` to browsers that accept them. Oorbit's 40 MB game engine now
+  downloads as about 10 MB.
 - Oorbit's simulation (`crates/oorbit-sim`): the rules of the first three
   eras (Stone, Agricultural, Bronze) with people, mood, seasons, discoveries,
   buildings, monuments, events and named notable people. A planet left alone

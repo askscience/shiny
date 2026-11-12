@@ -21,7 +21,7 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
-WEB = os.path.join(REPO, "plugins", "oorbit", "web")
+WEB = os.environ.get("OORBIT_WEB") or os.path.join(REPO, "plugins", "oorbit", "web")
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8791
 STATE = sys.argv[2] if len(sys.argv) > 2 else os.path.join(
     os.environ.get("TMPDIR", "/tmp"), "oorbit-preview-%d.json" % os.getpid())

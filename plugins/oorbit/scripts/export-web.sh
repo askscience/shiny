@@ -32,6 +32,11 @@ for f in "$out"/oorbit.*; do
   case "$f" in *.html) continue ;; esac
   cp "$f" "web/game/$hash/"
 done
+# Precompressed copies of the big files: the core sends them to browsers
+# that accept gzip (the 40 MB engine wasm travels as about 10 MB).
+for f in "web/game/$hash"/oorbit.wasm "web/game/$hash"/oorbit.pck "web/game/$hash"/oorbit.js; do
+  gzip -9 -k -n "$f"
+done
 python3 -I - "$out/oorbit.html" "$hash" web/game/build.json <<'PY'
 import json, re, sys
 html, build, target = sys.argv[1:4]

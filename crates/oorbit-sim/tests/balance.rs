@@ -46,9 +46,9 @@ fn a_steady_player_paces_through_the_first_three_eras() {
             );
             let [e2, e3, done] = t.map(|d| d.unwrap_or(f64::INFINITY));
             for (what, day, range) in [
-                ("era 2", e2, 2.0..=8.0),
-                ("era 3", e3, 6.0..=16.0),
-                ("era 3 done", done, 12.0..=27.0),
+                ("era 2", e2, 1.5..=5.0),
+                ("era 3", e3, 5.0..=12.0),
+                ("era 3 done", done, 10.0..=21.0),
             ] {
                 if !range.contains(&day) {
                     failures.push(format!(
