@@ -29,6 +29,7 @@ pub struct Rates {
 /// Advance the planet to `now_ms`: every step boundary up to and including
 /// it, in order. Earlier times are ignored.
 pub fn advance(planet: &mut Planet, catalog: &Catalog, now_ms: i64) {
+    planet.fit_tiles(catalog);
     let target = step_of(now_ms);
     while planet.step < target {
         let step = planet.step + 1;

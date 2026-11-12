@@ -5,12 +5,49 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
-use crate::catalog::{Biome, Catalog, Category};
+use crate::catalog::{Biome, Catalog, Category, ClimateDef};
 use crate::rng::Rng;
 use crate::step_of;
 
 /// Version of the serialized state, for migrations of saved planets.
-pub const STATE_VERSION: u32 = 1;
+pub const STATE_VERSION: u32 = 2;
+
+/// Draw `count` tiles from a climate's biome weights. With `guarantee`,
+/// every planet stays playable whatever the dice say: at least one tile in
+/// eight each of plains, forest and mountain (the biomes the early eras build
+/// on).
+fn draw_tiles(rng: &mut Rng, climate: &ClimateDef, count: usize, guarantee: bool) -> Vec<Tile> {
+    let biomes: Vec<Biome> = climate.biomes.keys().copied().collect();
+    let weights: Vec<u32> = climate.biomes.values().copied().collect();
+    let mut tiles: Vec<Tile> = (0..count)
+        .map(|_| Tile {
+            biome: biomes[rng.weighted(&weights).unwrap_or(0)],
+            building: None,
+        })
+        .collect();
+    if !guarantee || count == 0 {
+        return tiles;
+    }
+    const GUARANTEED: [Biome; 3] = [Biome::Plains, Biome::Forest, Biome::Mountain];
+    let min_each = count.div_ceil(8);
+    let tally = |tiles: &[Tile], b: Biome| tiles.iter().filter(|t| t.biome == b).count();
+    let mut next = 0;
+    for biome in GUARANTEED {
+        while tally(&tiles, biome) < min_each {
+            // Take a tile no guarantee depends on.
+            let i = next % tiles.len();
+            next += 1;
+            let current = tiles[i].biome;
+            if current == biome
+                || (GUARANTEED.contains(&current) && tally(&tiles, current) <= min_each)
+            {
+                continue;
+            }
+            tiles[i].biome = biome;
+        }
+    }
+    tiles
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Tile {
@@ -129,35 +166,7 @@ impl Planet {
             .climate(climate)
             .ok_or_else(|| format!("unknown climate `{climate}`"))?;
         let mut rng = Rng::new(seed ^ 0x0A0B_C0DE);
-        let biomes: Vec<Biome> = climate_def.biomes.keys().copied().collect();
-        let weights: Vec<u32> = climate_def.biomes.values().copied().collect();
-        let mut tiles: Vec<Tile> = (0..catalog.tuning.tiles)
-            .map(|_| Tile {
-                biome: biomes[rng.weighted(&weights).unwrap_or(0)],
-                building: None,
-            })
-            .collect();
-        // Every planet must be playable whatever the dice say: a few tiles of
-        // each biome the early eras build on.
-        const GUARANTEED: [Biome; 3] = [Biome::Plains, Biome::Forest, Biome::Mountain];
-        const MIN_EACH: usize = 4;
-        let count = |tiles: &[Tile], b: Biome| tiles.iter().filter(|t| t.biome == b).count();
-        let mut next = 0;
-        for biome in GUARANTEED {
-            while count(&tiles, biome) < MIN_EACH {
-                // Take a tile no guarantee depends on.
-                let len = tiles.len();
-                let i = next % len;
-                next += 1;
-                let current = tiles[i].biome;
-                if current == biome
-                    || (GUARANTEED.contains(&current) && count(&tiles, current) <= MIN_EACH)
-                {
-                    continue;
-                }
-                tiles[i].biome = biome;
-            }
-        }
+        let tiles = draw_tiles(&mut rng, climate_def, catalog.tuning.tiles, true);
 
         let step = step_of(now_ms);
         let mut planet = Planet {
@@ -193,6 +202,21 @@ impl Planet {
         }
         planet.log(catalog, step, "founded", &[("climate", climate)]);
         Ok(planet)
+    }
+
+    /// Bring a saved planet up to the catalog's tile count: a planet saved
+    /// with fewer tiles (version 1 had 32) gains new land drawn from its
+    /// climate, and keeps every tile, building and construction it had.
+    pub fn fit_tiles(&mut self, catalog: &Catalog) {
+        let want = catalog.tuning.tiles;
+        if self.tiles.len() < want {
+            if let Some(climate) = catalog.climate(&self.climate) {
+                let mut rng = Rng::new(self.seed ^ 0x0071_11E5 ^ self.tiles.len() as u64);
+                let extra = draw_tiles(&mut rng, climate, want - self.tiles.len(), false);
+                self.tiles.extend(extra);
+            }
+        }
+        self.version = STATE_VERSION;
     }
 
     pub fn amount(&self, resource: &str) -> f64 {

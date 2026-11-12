@@ -27,6 +27,10 @@ fn run(args: &[String]) -> Result<serde_json::Value, String> {
     if command == "catalog" {
         return Ok(json!({ "success": true, "data": catalog }));
     }
+    if command == "reset" {
+        let _ = std::fs::remove_file(file);
+        return Ok(json!({ "success": true, "data": { "now_ms": now, "planet": null } }));
+    }
     let saved = std::fs::read_to_string(file)
         .ok()
         .and_then(|t| serde_json::from_str::<Planet>(&t).ok());

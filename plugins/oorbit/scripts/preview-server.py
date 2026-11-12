@@ -80,6 +80,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self._game("found", json.loads(body or "{}").get("climate", "temperate"))
         elif self.path.startswith("/api/oorbit/action"):
             self._game("action", body)
+        elif self.path.startswith("/api/oorbit/reset"):
+            self._game("reset")
         else:
             self.send_error(404)
 

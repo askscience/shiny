@@ -24,6 +24,12 @@
   down, the planet refreshes the moment something finishes, and little
   people walk around the inhabited tiles.
 
+- Oorbit 0.4.0: planets have 72 tiles (12 pentagons and 60 hexagons) and
+  look rounder; a planet saved with 32 tiles keeps everything it had and
+  gains new land. Zoom in with the mouse wheel, a trackpad pinch or two
+  fingers: up close the picture gets sharper, down to single pixels. The
+  Society panel can start the planet over (two presses).
+
 ### Changed
 
 - Oorbit draws far less: one mesh for all the planet's props instead of

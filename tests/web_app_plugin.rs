@@ -308,7 +308,7 @@ async fn oorbit_founds_saves_and_plays_a_planet() {
     assert_eq!(body["data"]["planet"]["era"], 1);
     assert_eq!(
         body["data"]["planet"]["tiles"].as_array().unwrap().len(),
-        32
+        72
     );
     assert!(body["data"]["techs"]
         .as_array()
@@ -365,6 +365,22 @@ async fn oorbit_founds_saves_and_plays_a_planet() {
         .await
         .unwrap();
     assert_eq!(refused.status(), StatusCode::BAD_REQUEST);
+
+    let reset = router
+        .clone()
+        .oneshot(post_json("/api/oorbit/reset", "one", serde_json::json!({})))
+        .await
+        .unwrap();
+    assert_eq!(reset.status(), StatusCode::OK);
+    let body = json_body(
+        router
+            .clone()
+            .oneshot(request("/api/oorbit/state", Some("one")))
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert!(body["data"]["planet"].is_null(), "the planet is gone");
 
     let catalog = json_body(
         router

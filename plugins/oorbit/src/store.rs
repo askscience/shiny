@@ -46,6 +46,14 @@ pub fn save(ctx: &PluginCtx, user: &str, planet: &Planet) -> Result<(), AppError
     Ok(())
 }
 
+pub fn delete(ctx: &PluginCtx, user: &str) -> Result<(), AppError> {
+    ctx.db().execute(
+        "DELETE FROM oorbit_planets WHERE user_id = ?1",
+        &[Value::text(user)],
+    )?;
+    Ok(())
+}
+
 /// A seed for a new planet: different per user and per founding time.
 pub fn new_seed(user: &str, now_ms: i64) -> u64 {
     // FNV-1a over the user id, mixed with the time.

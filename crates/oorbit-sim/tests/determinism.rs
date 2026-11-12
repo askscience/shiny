@@ -136,3 +136,27 @@ fn the_state_survives_a_json_round_trip() {
     let back: Planet = serde_json::from_str(&text).unwrap();
     assert_eq!(back, planet);
 }
+
+#[test]
+fn a_planet_saved_with_32_tiles_grows_to_the_catalog_count() {
+    let catalog = Catalog::builtin();
+    let mut planet = Planet::new(4, "temperate", T0, &catalog).unwrap();
+    for i in 0..8 {
+        play_session(&mut planet, &catalog, T0 + i * 6 * HOUR);
+    }
+    // What a version 1 planet looked like.
+    planet.tiles.truncate(32);
+    planet.construction.retain(|c| c.tile < 32);
+    planet.version = 1;
+    let old: Vec<_> = planet.tiles.clone();
+    advance(&mut planet, &catalog, T0 + 3 * DAY);
+    assert_eq!(planet.tiles.len(), catalog.tuning.tiles);
+    assert_eq!(planet.version, oorbit_sim::planet::STATE_VERSION);
+    for (now, before) in planet.tiles.iter().zip(&old) {
+        assert_eq!(now.biome, before.biome);
+        if before.building.is_some() {
+            assert_eq!(now.building, before.building);
+        }
+    }
+    assert!(planet.tiles[32..].iter().all(|t| t.building.is_none()));
+}

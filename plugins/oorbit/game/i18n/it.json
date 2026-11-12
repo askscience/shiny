@@ -161,5 +161,7 @@
  "ui.era.monument_only": "Costruisci: {monument}, per entrare nella nuova era.",
  "ui.ago": "{time} fa",
  "ui.time.d": "{d}g",
- "ui.known": "Già note: {list}"
+ "ui.known": "Già note: {list}",
+ "ui.reset": "Ricomincia da capo",
+ "ui.reset.confirm": "Premi di nuovo per abbandonare questo pianeta per sempre"
 }

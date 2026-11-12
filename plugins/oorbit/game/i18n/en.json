@@ -161,5 +161,7 @@
  "ui.era.monument_only": "Build the {monument} to enter the next era.",
  "ui.ago": "{time} ago",
  "ui.time.d": "{d}d",
- "ui.known": "Known: {list}"
+ "ui.known": "Known: {list}",
+ "ui.reset": "Start over",
+ "ui.reset.confirm": "Press again to give up this planet for good"
 }

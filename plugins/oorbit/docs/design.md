@@ -28,9 +28,9 @@ Status of each part: **built** in `crates/oorbit-sim` (M1), or **planned**.
 
 ## The planet (built)
 
-32 tiles of six biomes (coast, plains, forest, mountain, desert, ice), drawn
-from the climate (temperate, arid, frozen, oceanic), with at least four tiles
-each of plains, forest and mountain. A planet year lasts one real week; the
+72 tiles (12 pentagons, 60 hexagons) of six biomes (coast, plains, forest, mountain, desert, ice), drawn
+from the climate (temperate, arid, frozen, oceanic), with at least one tile in
+eight each of plains, forest and mountain. A planet year lasts one real week; the
 seasons change food output. Planned: a low-poly sphere whose look changes with
 the era.
 

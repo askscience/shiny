@@ -24,6 +24,7 @@ pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
         "state" => state(ctx),
         "found" => found(ctx),
         "action" => action(ctx),
+        "reset" => reset(ctx),
         _ => return None,
     })
 }
@@ -131,6 +132,19 @@ fn action(ctx: Arc<PluginCtx>) -> RouteHandler {
             store::save(&ctx, &uid, &planet)?;
             result.map_err(|e| AppError::BadRequest(e.to_string()))?;
             Ok(ok(planet_view(&planet, catalog(), now)))
+        }
+    })
+}
+
+/// Give up the user's planet, to found a new one.
+fn reset(ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req: axum::extract::Request| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            let _guard = store::lock();
+            store::delete(&ctx, &uid)?;
+            Ok(ok(json!({ "now_ms": now_ms(), "planet": null })))
         }
     })
 }

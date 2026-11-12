@@ -17,6 +17,8 @@ drive the same rules.
   with the result it would have had if it stayed on.
 - `apply(planet, catalog, now_ms, action)` advances to `now_ms`, then checks
   and applies the action.
+- A planet saved with fewer tiles than the catalog asks (version 1 had
+  32, now 72) gains new land from its climate on its next advance.
 - Saved planets round-trip through JSON exactly (`serde_json` with
   `float_roundtrip`): reloading a planet never changes its future.
 

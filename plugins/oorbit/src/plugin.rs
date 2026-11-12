@@ -22,6 +22,7 @@ fn route_specs() -> Vec<RouteSpec> {
         RouteSpec::get("/api/oorbit/state", "state"),
         RouteSpec::post("/api/oorbit/found", "found"),
         RouteSpec::post("/api/oorbit/action", "action"),
+        RouteSpec::post("/api/oorbit/reset", "reset"),
     ]
 }
 

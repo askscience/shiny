@@ -102,9 +102,13 @@ func _move_walkers(delta: float) -> void:
 		multimesh.set_instance_transform(k, Transform3D(basis, at))
 
 
-## Props shrink on denser planets (more, smaller tiles).
+## Props shrink on denser planets (more, smaller tiles); they were drawn for
+## a 32-tile planet.
 func _tile_size() -> float:
 	return sqrt(32.0 / maxf(1.0, float(builder.centers.size())))
+
+
+var _ts := 1.0
 
 
 ## Place the walkers for this many people on the inhabited tiles.
@@ -154,6 +158,7 @@ func show_planet(planet: Dictionary) -> void:
 		var mesh := builder.build(biomes, Palette.BIOMES)
 		_land.mesh = mesh
 		_outline.mesh = mesh
+		_ts = _tile_size()
 	_verts = PackedVector3Array()
 	_normals = PackedVector3Array()
 	_colors = PackedColorArray()
@@ -293,8 +298,8 @@ func _put(shape: Array, color: Color, normal: Vector3, base: Vector3, offset: Ve
 	var u: Vector3 = t[0]
 	var w: Vector3 = t[1]
 	var y := normal.normalized()
-	var basis := Basis(u, y, w).rotated(y, turn).scaled(Vector3.ONE * size * _scale)
-	offset *= _scale
+	var basis := Basis(u, y, w).rotated(y, turn).scaled(Vector3.ONE * size * _scale * _ts)
+	offset *= _scale * _ts
 	var xform := Transform3D(basis, base + u * offset.x + y * offset.y + w * offset.z)
 	var rotation := basis.orthonormalized()
 	var start := _verts.size()

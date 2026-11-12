@@ -5,8 +5,10 @@
 //     xvfb-run -a node plugins/oorbit/scripts/preview-shot.mjs OUT_DIR [WIDTHxHEIGHT] [QUERY]
 //
 // Writes OUT_DIR/1-start.png once the game has started, then one shot per
-// step of STEPS, a JSON list of [name, x, y, waitMs] clicks
-// (e.g. STEPS='[["research",28,76]]'), and prints the page's console.
+// step of STEPS, a JSON list of [name, x, y, waitMs, wheel] steps: a click at
+// (x, y), or with `wheel` (pixels, negative = zoom in) mouse-wheel turns there
+// (e.g. STEPS='[["research",28,76],["zoom",550,350,2000,-600]]'), and prints
+// the page's console.
 // QUERY is passed to the parent page (e.g. "?light=500&lang=en").
 import { createRequire } from 'module';
 
@@ -23,8 +25,16 @@ await page.goto(`http://127.0.0.1:${process.env.PORT || 8791}/${query}`);
 await page.waitForTimeout(Number(process.env.START_MS || 6000));
 await page.screenshot({ path: `${out}/1-start.png` });
 let i = 2;
-for (const [name, x, y, wait] of JSON.parse(process.env.STEPS || '[]')) {
-  await page.mouse.click(x, y);
+for (const [name, x, y, wait, wheel] of JSON.parse(process.env.STEPS || '[]')) {
+  if (wheel) {
+    await page.mouse.move(x, y);
+    for (let turned = 0; Math.abs(turned) < Math.abs(wheel); turned += Math.sign(wheel) * 100) {
+      await page.mouse.wheel(0, Math.sign(wheel) * 100);
+      await page.waitForTimeout(60);
+    }
+  } else {
+    await page.mouse.click(x, y);
+  }
   await page.waitForTimeout(wait || 1500);
   await page.screenshot({ path: `${out}/${i++}-${name}.png` });
 }

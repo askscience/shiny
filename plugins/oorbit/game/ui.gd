@@ -8,6 +8,7 @@ extends Control
 
 signal action_requested(action: Dictionary)
 signal found_requested(climate: String)
+signal reset_requested
 signal tile_closed
 
 const PANEL_WIDTH := 320.0
@@ -540,6 +541,24 @@ func _fill_society() -> void:
 		_side_body.add_child(_label(I18n.t("ui.traits"), 14, Color("f2c078")))
 		for id in traits:
 			_side_body.add_child(_label("%s %+d" % [I18n.t("ui.trait." + id), int(traits[id])]))
+	# Starting over takes two presses, the second within a few seconds.
+	var reset := Button.new()
+	reset.text = I18n.t("ui.reset")
+	reset.flat = true
+	reset.add_theme_color_override("font_color", Color(0.93, 0.95, 0.95, 0.55))
+	reset.pressed.connect(func():
+		if reset.has_meta("armed"):
+			reset_requested.emit()
+			return
+		reset.set_meta("armed", true)
+		reset.text = I18n.t("ui.reset.confirm")
+		reset.add_theme_color_override("font_color", Color("e08f6c"))
+		get_tree().create_timer(5.0).timeout.connect(func():
+			if is_instance_valid(reset):
+				reset.remove_meta("armed")
+				reset.text = I18n.t("ui.reset")
+				reset.add_theme_color_override("font_color", Color(0.93, 0.95, 0.95, 0.55))))
+	_side_body.add_child(reset)
 
 
 func _send_priorities() -> void:

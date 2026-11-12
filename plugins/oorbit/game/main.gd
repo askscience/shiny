@@ -11,6 +11,12 @@ const PIXEL_HEIGHT := 300.0
 const REFRESH_SECONDS := 60.0
 ## A press that moves less than this (screen pixels) is a click, not a drag.
 const CLICK_SLOP := 6.0
+## Zoom: 1 shows the whole planet; closer, the camera moves in and the
+## low-resolution view grows with it (`PIXEL_HEIGHT * zoom` pixels tall), so
+## a close look is sharper, down to single screen pixels.
+const ZOOM_MIN := 1.0
+const ZOOM_MAX := 1.7
+const ZOOM_STEP := 1.1
 ## Frames per second while the window is on screen: the planet turns slowly
 ## and the art is low-resolution, so more would only spend battery.
 const FPS_VISIBLE := 30
@@ -31,6 +37,10 @@ var _pressing := false
 var _dragged := false
 var _busy := false
 var _visible := true
+var _zoom := 1.0
+var _zoom_target := 1.0
+var _touches := {}
+var _pinch_distance := 0.0
 
 
 func _ready() -> void:
@@ -42,6 +52,7 @@ func _ready() -> void:
 	add_child(ui)
 	ui.action_requested.connect(_send_action)
 	ui.found_requested.connect(_found)
+	ui.reset_requested.connect(_reset)
 	ui.tile_closed.connect(func(): _select(-1))
 	resized.connect(_fit)
 	_fit()
@@ -56,6 +67,11 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	if absf(_zoom - _zoom_target) > 0.001:
+		_zoom = lerpf(_zoom, _zoom_target, minf(1.0, delta * 10.0))
+		if absf(_zoom - _zoom_target) < 0.002:
+			_zoom = _zoom_target
+		_fit()
 	if not host.available or ui.catalog.is_empty():
 		return
 	if not _visible:
@@ -116,6 +132,13 @@ func _found(climate: String) -> void:
 	host.post_json("found", {"climate": climate}, _on_view)
 
 
+func _reset() -> void:
+	_busy = true
+	_select(-1)
+	ui.open_panel = ""
+	host.post_json("reset", {}, _on_view)
+
+
 func _select(index: int) -> void:
 	planet_view.select(index)
 	ui.select_tile(index)
@@ -123,8 +146,38 @@ func _select(index: int) -> void:
 
 # ---------------------------------------------------------------- input
 
+func _zoom_by(factor: float) -> void:
+	_zoom_target = clampf(_zoom_target * factor, ZOOM_MIN, ZOOM_MAX)
+
+
 func _gui_input(event: InputEvent) -> void:
 	if not planet_view.visible:
+		return
+	# Zoom: the wheel, a trackpad pinch, or two fingers on a touch screen.
+	if event is InputEventMouseButton and event.pressed and event.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
+		_zoom_by(ZOOM_STEP if event.button_index == MOUSE_BUTTON_WHEEL_UP else 1.0 / ZOOM_STEP)
+		return
+	if event is InputEventMagnifyGesture:
+		_zoom_by(event.factor)
+		return
+	if event is InputEventScreenTouch:
+		if event.pressed:
+			_touches[event.index] = event.position
+		else:
+			_touches.erase(event.index)
+		_pinch_distance = _touch_spread()
+		if _touches.size() >= 2:
+			# A pinch is not a click or a drag of the first finger.
+			_pressing = false
+			_dragged = true
+		return
+	if event is InputEventScreenDrag:
+		_touches[event.index] = event.position
+		if _touches.size() >= 2:
+			var spread := _touch_spread()
+			if _pinch_distance > 0.0 and spread > 0.0:
+				_zoom_by(spread / _pinch_distance)
+			_pinch_distance = spread
 		return
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		if event.pressed:
@@ -139,7 +192,16 @@ func _gui_input(event: InputEvent) -> void:
 	elif event is InputEventMouseMotion and _pressing:
 		if _dragged or event.position.distance_to(_press) > CLICK_SLOP:
 			_dragged = true
-			planet_view.drag(event.relative / float(container.stretch_shrink))
+			if _touches.size() < 2:
+				# The same turn per screen pixel at any zoom: slower up close.
+				planet_view.drag(event.relative * (PIXEL_HEIGHT / maxf(size.y, 1.0)) / _zoom)
+
+
+func _touch_spread() -> float:
+	if _touches.size() < 2:
+		return 0.0
+	var points: Array = _touches.values()
+	return (points[0] as Vector2).distance_to(points[1])
 
 
 # ---------------------------------------------------------------- scene
@@ -218,14 +280,14 @@ func _build_world() -> void:
 
 ## Keep the pixels square and the view near PIXEL_HEIGHT pixels tall.
 func _fit() -> void:
-	var shrink := maxi(1, roundi(size.y / PIXEL_HEIGHT))
+	var shrink := maxi(1, roundi(size.y / (PIXEL_HEIGHT * _zoom)))
 	container.stretch_shrink = shrink
 	var source := (size / shrink).floor()
 	sky_material.set_shader_parameter("size", source)
 	# The camera's field of view is vertical: on a tall window (a phone) move
 	# back so the planet still fits the width.
 	var aspect := size.x / maxf(size.y, 1.0)
-	camera.position.z = 4.4 / minf(1.0, aspect / 1.1)
+	camera.position.z = 4.4 / minf(1.0, aspect / 1.1) / _zoom
 
 
 func _apply_context(context: Dictionary) -> void:
