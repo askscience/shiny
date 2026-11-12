@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.2.6] - 2026-11-12
+
 ### Added
 
 - Capture 0.1.5: the assistant can give a video a voice. It writes the lines
