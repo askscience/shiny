@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Added
+
+- Plugins can be **hybrid** (`kind = "hybrid"` in `plugin.toml`): a native
+  plugin with tools and routes whose window is its own framed web page, served
+  like a Craft web app. This is what lets a game made with Godot run in a
+  LiteAura window while its rules and the assistant's tools live in Rust.
+- Oorbit 0.1.0, first prototype of a slow planet game: a Godot window that
+  shows a turning planet and checks that it can reach its plugin and follow
+  LiteAura's language and light or dark theme. There is nothing to play yet.
+
 ## [0.2.7] - 2026-11-12
 
 ### Fixed

@@ -107,7 +107,12 @@ hidden dirs and leftover `_staging-*` dirs are skipped.
    `*mut dyn Plugin`. **Web-app** (`kind = "web"`): no cdylib is looked for and
    nothing is loaded — the plugin is a static site, and the loader builds a
    no-op `Plugin` handle so the rest of the pipeline is unchanged. A web app
-   must ship `<web_dir>/index.html`; without one the load fails.
+   must ship `<web_dir>/index.html`; without one the load fails. **Hybrid**
+   (`kind = "hybrid"`): loaded like a native plugin (tools, routes, skills),
+   and also framed like a web app: its `<web_dir>/index.html` is the window,
+   and is required. This is the shape for a window that cannot run as a
+   `plugin.js` module in the shell's document, such as a game engine's web
+   export ([Oorbit](../../plugins/oorbit/docs/README.md)).
 4. Run any `migrations/*.sql` not yet recorded in the core
    `plugin_schema_versions` table (host pool, load time).
 5. Build a `PluginCtx` and call `plugin.register(ctx, &mut builder)` (a web app
@@ -162,7 +167,7 @@ photocraft.zip                       # kind = "web" — no cdylib
 4. Parse `plugin.toml`; validate `api_level ≤ CORE_API_LEVEL`; validate
    `target_triple` against the host when present.
 5. Require what the kind needs: a cdylib for a native plugin, `web/index.html`
-   for a web app; reject otherwise.
+   for a web app, both for a hybrid plugin; reject otherwise.
 6. Acquire the install lock on `PLUGINS_DIR/.install.lock`.
 7. If `PLUGINS_DIR/<name>/` exists, back it up as `<name>.bak`.
 8. `rename` staging → `PLUGINS_DIR/<name>/`; clean staging.

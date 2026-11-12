@@ -41,17 +41,42 @@ unsafe impl Sync for LoadedPlugin {}
 /// What a plugin is made of. `Native` is a cdylib loaded with `dlopen` (the
 /// historical shape); `Web` is a static web app served at `/plugins/<name>/`
 /// and mounted by the shell in an iframe — it ships no code we execute in
-/// this process, so it needs no cdylib and no entry symbol.
+/// this process, so it needs no cdylib and no entry symbol. `Hybrid` is both:
+/// a cdylib that contributes tools and routes, plus a framed web app as its
+/// window (a game engine's web export, for instance, which cannot run as a
+/// `plugin.js` module inside the shell's own document).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PluginKind {
     #[default]
     Native,
     Web,
+    Hybrid,
 }
 
 impl PluginKind {
+    /// A pure web app: no cdylib, nothing registered.
     pub fn is_web(self) -> bool {
         matches!(self, PluginKind::Web)
+    }
+
+    /// The plugin ships a cdylib the loader opens.
+    pub fn loads_library(self) -> bool {
+        matches!(self, PluginKind::Native | PluginKind::Hybrid)
+    }
+
+    /// The plugin's window is its `web/index.html` in an iframe, served with
+    /// the web-app headers (framing allowed, the web-app CSP).
+    pub fn is_framed(self) -> bool {
+        matches!(self, PluginKind::Web | PluginKind::Hybrid)
+    }
+
+    /// The `kind` value as written in `plugin.toml`.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            PluginKind::Native => "native",
+            PluginKind::Web => "web",
+            PluginKind::Hybrid => "hybrid",
+        }
     }
 }
 
@@ -109,6 +134,7 @@ pub(crate) fn parse_extras(manifest_text: &str) -> HostExtras {
         .filter(|s| !s.is_empty());
     let kind = match extras.as_ref().and_then(|e| e.kind.as_deref()).map(str::trim) {
         Some("web") => PluginKind::Web,
+        Some("hybrid") => PluginKind::Hybrid,
         _ => PluginKind::Native,
     };
     let capabilities = extras
@@ -333,17 +359,18 @@ impl Loader {
         validate_relative_path("skills_dir", &manifest.skills_dir)?;
         validate_relative_path("web_dir", &manifest.web_dir)?;
 
-        let (plugin, library): (Arc<dyn Plugin>, Option<Library>) = if extras.kind.is_web() {
-            // A web-app plugin is a static site with no code to dlopen. Refuse
-            // it early when the entry document is missing, so a broken
-            // download fails the install instead of opening an empty window.
-            let web_root = install_dir.join(&manifest.web_dir);
-            if !web_root.join("index.html").is_file() {
-                return Err(AppError::BadRequest(format!(
-                    "Web-app plugin '{}' has no {}/index.html to serve",
-                    manifest.name, manifest.web_dir
-                )));
-            }
+        // A framed plugin (web app or hybrid) opens its `web/index.html` as the
+        // window. Refuse it early when that entry document is missing, so a
+        // broken download fails the install instead of opening an empty window.
+        if extras.kind.is_framed() && !install_dir.join(&manifest.web_dir).join("index.html").is_file() {
+            return Err(AppError::BadRequest(format!(
+                "Plugin '{}' (kind = \"{}\") has no {}/index.html to serve",
+                manifest.name, extras.kind.as_str(), manifest.web_dir
+            )));
+        }
+
+        let (plugin, library): (Arc<dyn Plugin>, Option<Library>) = if !extras.kind.loads_library() {
+            // A web-app plugin is a static site with no code to dlopen.
             (Arc::new(WebAppPlugin { manifest: manifest.clone() }), None)
         } else {
             // Never grow the retired-library graveyard without bound: each
@@ -809,6 +836,18 @@ mod tests {
         let extras = parse_extras("name = \"photocraft\"\nkind = \" web \"\n");
         assert_eq!(extras.kind, PluginKind::Web);
         assert!(extras.kind.is_web());
+        assert!(extras.kind.is_framed());
+        assert!(!extras.kind.loads_library());
+
+        // A hybrid plugin loads its cdylib and is framed, but is not a web app
+        // (the Craft store paths stay closed to it).
+        let extras = parse_extras("name = \"oorbit\"\nkind = \"hybrid\"\n");
+        assert_eq!(extras.kind, PluginKind::Hybrid);
+        assert!(!extras.kind.is_web());
+        assert!(extras.kind.is_framed());
+        assert!(extras.kind.loads_library());
+        assert_eq!(extras.kind.as_str(), "hybrid");
+        assert!(PluginKind::Native.loads_library() && !PluginKind::Native.is_framed());
     }
 
     /// Regression: `Path::join` with an absolute path *replaces* the base, so

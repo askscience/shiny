@@ -186,3 +186,73 @@ async fn a_web_app_needs_an_entry_document() {
         "the error names what is missing: {error}"
     );
 }
+
+/// A `kind = "hybrid"` plugin (Oorbit) is both: its cdylib registers routes
+/// like any native plugin, and its window is framed like a web app, with the
+/// same headers and the same `web_app` flag for the shell.
+#[tokio::test]
+async fn a_hybrid_plugin_registers_routes_and_is_framed() {
+    let app = support::TestApp::new().await;
+    user(&app, "one").await;
+    app.stage_plugin("oorbit");
+    assert_eq!(app.load_plugins().await, vec!["oorbit".to_string()]);
+
+    let router = shiny::api::build_router(app.state.clone());
+
+    let response = router
+        .clone()
+        .oneshot(request("/plugins/oorbit/", None))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers()["x-frame-options"], "SAMEORIGIN");
+    assert!(response.headers()["content-security-policy"]
+        .to_str()
+        .unwrap()
+        .contains("frame-ancestors 'self'"));
+
+    // The cdylib's route answers as the logged-in user.
+    let body = json_body(
+        router
+            .clone()
+            .oneshot(request("/api/oorbit/ping", Some("one")))
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(body["data"]["plugin"], "oorbit");
+    assert_eq!(body["data"]["user"], "one");
+
+    let body = json_body(
+        router
+            .oneshot(request("/api/plugins", Some("one")))
+            .await
+            .unwrap(),
+    )
+    .await;
+    let entry = body["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|entry| entry["name"] == "oorbit")
+        .expect("the hybrid plugin is listed")
+        .clone();
+    assert_eq!(entry["web_app"], true);
+    assert_eq!(entry["category"], "Games");
+}
+
+/// A hybrid plugin needs its entry document as much as a web app does.
+#[tokio::test]
+async fn a_hybrid_plugin_needs_an_entry_document() {
+    let app = support::TestApp::new().await;
+    app.stage_plugin("oorbit");
+    let dir = Path::new(&app.state.config.plugins_dir).join("oorbit");
+    std::fs::remove_file(dir.join("web/index.html")).unwrap();
+    let error = app
+        .state
+        .plugins
+        .register_dir_static(&dir, app.state.plugin_ctx())
+        .await
+        .expect_err("a hybrid plugin with no index.html cannot load");
+    assert!(error.to_string().contains("index.html"), "{error}");
+}

@@ -27,9 +27,10 @@ struct PluginListEntry {
     summary: Option<String>,
     /// True when the plugin ships a `web/plugin.js` window surface.
     surface: bool,
-    /// True when the plugin is a static web app (`kind = "web"` in
-    /// `plugin.toml`): the shell mounts `/plugins/<name>/` in an iframe
-    /// instead of importing a `plugin.js` module.
+    /// True when the plugin's window is framed (`kind = "web"` or
+    /// `kind = "hybrid"` in `plugin.toml`): the shell mounts
+    /// `/plugins/<name>/` in an iframe instead of importing a `plugin.js`
+    /// module.
     web_app: bool,
     /// True when the plugin ships a `web/hud.js` top-bar contribution, loaded
     /// for the plugin simply being installed (not only when active).
@@ -90,7 +91,7 @@ pub async fn list(
                     state.plugins.category_for(&m.name),
                 ),
             };
-            let web_app = state.plugins.kind_for(&m.name).is_web();
+            let web_app = state.plugins.kind_for(&m.name).is_framed();
             PluginListEntry {
                 category,
                 capabilities: state.plugins.capabilities_for(&m.name),

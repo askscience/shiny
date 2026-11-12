@@ -167,7 +167,7 @@ req.params.require_f64("lat")?
 | `version` | semver | yes | Shown in `/api/plugins`. |
 | `api_level` | u32 | yes | Rejected if `> CORE_API_LEVEL`. |
 | `entry_symbol` | string | native only | Usually `shiny_plugin_entry`; a `kind = "web"` plugin omits it. |
-| `kind` | string | no | `"native"` (default) or `"web"` — a static web app: `web/index.html` is served at `/plugins/<name>/` and the shell mounts it in a window as an iframe. Host-side key, like `category`; a web app ships no cdylib and contributes no tools/routes. |
+| `kind` | string | no | `"native"` (default), `"web"` — a static web app: `web/index.html` is served at `/plugins/<name>/` and the shell mounts it in a window as an iframe; a web app ships no cdylib and contributes no tools/routes — or `"hybrid"`: a native cdylib (tools, routes, skills) whose window is its framed `web/index.html`, served like a web app's. Host-side key, like `category`. |
 | `target_triple` | string | no | Installer refuses mismatches. |
 | `description` | string | no | Short human title. |
 | `author` | string | no | Attribution. |

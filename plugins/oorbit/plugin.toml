@@ -1,0 +1,11 @@
+name = "oorbit"
+version = "0.1.0"
+api_level = 1
+entry_symbol = "shiny_plugin_entry"
+kind = "hybrid"
+description = "Oorbit: a tiny planet whose society grows from the stone age to space, in real time, beside your friends' planets"
+summary = "Oorbit: a slow planet game"
+author = "shiny"
+skills_dir = "skills"
+web_dir = "web"
+category = "Games"

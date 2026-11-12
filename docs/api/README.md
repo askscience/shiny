@@ -100,7 +100,7 @@ The plugin endpoints (`/api/plugins/*`, remote, etc.) are documented in
 - `/` serves the SPA shell (`web/index.html`) with a fallback for any unknown
   path.
 - `/plugins/<name>/*` serves that plugin's `web/` assets from
-  `PLUGINS_DIR/<name>/<web_dir>/`. A `kind = "web"` plugin is served with
+  `PLUGINS_DIR/<name>/<web_dir>/`. A `kind = "web"` or `kind = "hybrid"` plugin is served with
   framing allowed (`X-Frame-Options: SAMEORIGIN`, `frame-ancestors 'self'`) so
   the shell can mount its document in a window's iframe; every other response
   keeps `X-Frame-Options: DENY`.

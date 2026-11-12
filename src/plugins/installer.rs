@@ -202,7 +202,7 @@ fn read_staged_manifest(
     log_event(plugins_dir, &format!(
         "manifest-ok name={} version={} api_level={} kind={}",
         manifest.name, manifest.version, manifest.api_level,
-        if extras.kind.is_web() { "web" } else { "native" }
+        extras.kind.as_str()
     ));
 
     if manifest.api_level > shiny_plugin_sdk::CORE_API_LEVEL {
@@ -225,14 +225,14 @@ fn require_installable(
     kind: PluginKind,
     plugins_dir: &Path,
 ) -> Result<(), AppError> {
-    if kind.is_web() {
-        if !install_dir.join(&manifest.web_dir).join("index.html").is_file() {
-            log_event(plugins_dir, &format!("webapp-entry-missing name={}", manifest.name));
-            return Err(AppError::BadRequest(format!(
-                "Web app archive for '{}' has no {}/index.html",
-                manifest.name, manifest.web_dir
-            )));
-        }
+    if kind.is_framed() && !install_dir.join(&manifest.web_dir).join("index.html").is_file() {
+        log_event(plugins_dir, &format!("webapp-entry-missing name={}", manifest.name));
+        return Err(AppError::BadRequest(format!(
+            "Archive for '{}' (kind = \"{}\") has no {}/index.html",
+            manifest.name, kind.as_str(), manifest.web_dir
+        )));
+    }
+    if !kind.loads_library() {
         return Ok(());
     }
     if find_cdylib(install_dir, &manifest.name).is_none() {

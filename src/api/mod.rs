@@ -124,8 +124,9 @@ base-uri 'none'; \
 form-action 'self'; \
 frame-ancestors 'none'";
 
-/// Content-Security-Policy for a **web-app plugin** (`kind = "web"`): a static
-/// site the shell mounts in an iframe at `/plugins/<name>/`.
+/// Content-Security-Policy for a **framed plugin** (`kind = "web"` or
+/// `"hybrid"`): a static site the shell mounts in an iframe at
+/// `/plugins/<name>/`.
 ///
 /// These sites are built by their upstream projects (trunk + wasm-bindgen) and
 /// installed from release archives we verify against their published SHA-256,
@@ -476,7 +477,7 @@ fn build_plugin_routes(state: &AppState) -> Router<AppState> {
     // served by `build_webapp_routes` instead: the shell frames them, so they
     // carry different headers.
     for manifest in state.plugins.list() {
-        if state.plugins.kind_for(&manifest.name).is_web() {
+        if state.plugins.kind_for(&manifest.name).is_framed() {
             continue;
         }
         if let Some(web_path) = plugin_web_root(state, &manifest) {
@@ -510,15 +511,15 @@ fn plugin_web_root(
     Some(install_dir.join(&manifest.web_dir))
 }
 
-/// Serve installed **web-app** plugins (`kind = "web"`): static sites mounted
-/// in a plugin window's iframe. `build_router` merges this router *after* the
+/// Serve installed **framed** plugins (`kind = "web"` or `"hybrid"`): static
+/// sites mounted in a plugin window's iframe. `build_router` merges this router *after* the
 /// shell's header layers, so the shell's `X-Frame-Options: DENY` and
 /// `frame-ancestors 'none'` — which are `overriding` — never reach these
 /// documents; the web-app stack below applies to them instead.
 fn build_webapp_routes(state: &AppState) -> Router<AppState> {
     let mut router: Router<AppState> = Router::new();
     for manifest in state.plugins.list() {
-        if !state.plugins.kind_for(&manifest.name).is_web() {
+        if !state.plugins.kind_for(&manifest.name).is_framed() {
             continue;
         }
         if let Some(web_path) = plugin_web_root(state, &manifest) {

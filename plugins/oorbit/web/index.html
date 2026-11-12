@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Oorbit</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #10131c; color: #e6e9f0; }
+  :root[data-mode="light"] body { background: #e9eef5; color: #1d2330; }
+  body { font: 14px/1.4 system-ui, sans-serif; }
+  #canvas { display: block; width: 100%; height: 100%; outline: none; }
+  #notice { position: absolute; inset: 0; display: grid; place-items: center; padding: 16px;
+            text-align: center; pointer-events: none; }
+  #notice[hidden] { display: none; }
+</style>
+</head>
+<body>
+<canvas id="canvas" tabindex="0"></canvas>
+<div id="notice">Loading Oorbit…</div>
+<script>
+// The page half of Oorbit: boots the Godot export named by game/build.json and
+// exposes `window.oorbitHost`, the only door between the game and LiteAura
+// (GDScript reaches it through JavaScriptBridge, see game/host.gd).
+(() => {
+  'use strict';
+
+  const notice = document.getElementById('notice');
+  const frame = window.frameElement; // same origin: the shell's <iframe>
+  let context = {
+    locale: frame?.dataset?.shinyLocale || document.documentElement.lang || 'en',
+    theme: frame?.dataset?.shinyTheme || '',
+    mode: frame?.dataset?.shinyMode || 'dark',
+  };
+  const contextListeners = [];
+
+  function applyMode() {
+    document.documentElement.dataset.mode = context.mode || 'dark';
+    document.documentElement.lang = context.locale || 'en';
+  }
+  applyMode();
+
+  window.addEventListener('message', (event) => {
+    if (event.origin !== window.location.origin) return;
+    const data = event.data;
+    if (!data || data.type !== 'shiny:context') return;
+    context = { locale: data.locale, theme: data.theme, mode: data.mode };
+    applyMode();
+    const json = JSON.stringify(context);
+    for (const listener of contextListeners) listener(json);
+  });
+
+  /** A plugin route URL, relative so it also works behind the kiosk proxy. */
+  function routeUrl(path) {
+    return new URL(`../../api/oorbit/${String(path).replace(/^\/+/, '')}`, window.location.href).href;
+  }
+
+  /** Same-origin fetch as the logged-in user: the session cookie, plus the
+   *  shell's bearer token when it keeps one. */
+  async function fetchJson(path, init = {}) {
+    const headers = new Headers(init.headers || {});
+    let token = null;
+    try { token = window.localStorage.getItem('token'); } catch (_) { /* storage blocked */ }
+    if (token && !headers.has('Authorization')) headers.set('Authorization', `Bearer ${token}`);
+    const response = await fetch(routeUrl(path), { ...init, headers, credentials: 'same-origin' });
+    let body;
+    try { body = await response.json(); } catch (_) { body = null; }
+    if (!response.ok || !body) {
+      return { success: false, error: body?.error || `HTTP ${response.status}` };
+    }
+    return body;
+  }
+
+  window.oorbitHost = {
+    contextJson: () => JSON.stringify(context),
+    onContext: (callback) => { contextListeners.push(callback); },
+    getJson: (path, callback) => {
+      fetchJson(path)
+        .catch((error) => ({ success: false, error: String(error) }))
+        .then((reply) => callback(JSON.stringify(reply)));
+    },
+  };
+
+  function showNotice(text) {
+    notice.textContent = text;
+    notice.hidden = false;
+  }
+
+  async function boot() {
+    let build;
+    try {
+      const response = await fetch(`game/build.json?t=${Date.now()}`, { cache: 'no-store' });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      build = await response.json();
+    } catch (_) {
+      showNotice('The game is not built yet. Run plugins/oorbit/scripts/export-web.sh.');
+      return;
+    }
+    const base = `game/${build.build}/`;
+    await new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = `${base}${build.config.executable}.js`;
+      script.onload = resolve;
+      script.onerror = () => reject(new Error('engine script failed to load'));
+      document.head.appendChild(script);
+    });
+    const config = { ...build.config };
+    config.executable = `${base}${build.config.executable}`;
+    config.fileSizes = Object.fromEntries(
+      Object.entries(build.config.fileSizes || {}).map(([name, size]) => [`${base}${name}`, size]),
+    );
+    // No service worker and no cross-origin isolation: the export is the
+    // single-threaded variant, which needs neither.
+    config.ensureCrossOriginIsolationHeaders = false;
+    config.serviceWorker = '';
+    config.canvas = document.getElementById('canvas');
+    const engine = new window.Engine(config);
+    await engine.startGame();
+    notice.hidden = true;
+  }
+
+  boot().catch((error) => {
+    console.error('Oorbit failed to start', error);
+    showNotice(`Oorbit failed to start: ${error.message || error}`);
+  });
+})();
+</script>
+</body>
+</html>

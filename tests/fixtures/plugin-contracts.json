@@ -970,6 +970,17 @@
       "sync_mail"
     ]
   },
+  "oorbit": {
+    "api_level": 1,
+    "routes": [
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/oorbit/ping"
+      }
+    ],
+    "tools": []
+  },
   "pdf": {
     "api_level": 1,
     "routes": [

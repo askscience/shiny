@@ -7119,6 +7119,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "shiny-oorbit-plugin"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "semver",
+ "serde_json",
+ "shiny-plugin-sdk",
+]
+
+[[package]]
 name = "shiny-osm"
 version = "0.1.0"
 dependencies = [
