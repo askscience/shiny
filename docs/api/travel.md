@@ -38,6 +38,7 @@ When GPSD is absent, points come from the mock GPS source (fixed point + drift).
 | `GET` | `/api/map/reverse` | `?lat=&lon=` | Reverse geocode. |
 | `GET` | `/api/map/route` | `?from_lat=&from_lon=&to_lat=&to_lon=&profile=` | Route (OSRM); profile `car`/`bike`/`foot`. |
 | `GET` | `/api/map/poi` | `?lat=&lon=&amenity=&radius=` | Nearby POIs (Overpass). |
+| `GET` | `/api/map/tiles/:z/:x/:y` | — | OpenStreetMap tile (PNG), fetched by the server and cached on disk. |
 
 ## Navigation
 

@@ -9,6 +9,7 @@ pub mod fonts;
 pub mod preferences;
 pub mod travelers;
 pub mod trips;
+pub mod map_tiles;
 pub mod locations;
 pub mod diary;
 pub mod chat;
@@ -602,9 +603,14 @@ async fn shell_cache_policy(
     let is_api = path.starts_with("/api/");
     // Model archives are static files, not per-user API data.
     let is_static_api = path.starts_with("/api/voice/models/");
+    // Map tiles set their own long-lived Cache-Control.
+    let keeps_own_cache = path.starts_with("/api/map/tiles/");
     let is_event = path.ends_with("/events");
 
     let mut response = next.run(req).await;
+    if keeps_own_cache && response.status().is_success() {
+        return response;
+    }
     let value = if response.status() == StatusCode::NOT_FOUND || (is_api && !is_static_api) {
         "no-store"
     } else {
@@ -710,6 +716,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/map/reverse", get(trips::map_reverse))
         .route("/api/map/route", get(trips::map_route))
         .route("/api/map/poi", get(trips::map_poi))
+        .route("/api/map/tiles/:z/:x/:y", get(map_tiles::tile))
         .route("/api/navigate/start", get(trips::navigate_start))
         .route("/api/diary", get(diary::list))
         .route("/api/diary/:date", get(diary::get_by_date))

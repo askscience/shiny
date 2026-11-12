@@ -428,7 +428,7 @@ async function sampleMapGlow(view) {
   if (!mapRimEl || !view) return;
   const z = Math.max(3, Math.min(10, Math.round(view.zoom || 8)));
   const { x, y } = lonLatToTile(view.lon, view.lat, z);
-  const url = `https://tile.openstreetmap.org/${z}/${x}/${y}.png`;
+  const url = `/api/map/tiles/${z}/${x}/${y}.png`;
   const img = new Image();
   img.crossOrigin = 'anonymous';
   await new Promise((resolve) => {

@@ -24,7 +24,10 @@
 
 - The traveler map showed "API KEY REQUIRED" on every tile: CARTO basemaps
   now need a key. The map draws OpenStreetMap's own tiles, which need none;
-  the dark theme is the same map with its lightness inverted.
+  the dark theme is the same map with its lightness inverted. The server
+  fetches the tiles (`/api/map/tiles/:z/:x/:y`) and keeps them in
+  `~/.cache/shiny/map-tiles` for two weeks, as OSM's tile usage policy
+  asks: loaded straight from the page, OSM blocked them ("Access blocked").
 - Capture exports with a long or heavy graphic failed with "render timed
   out": the time limit now grows with the number of frames.
 - The export progress stayed at 0 % while graphics rendered, which is most

@@ -20,7 +20,12 @@ integrated rather than owning a tile.
 ## Map tiles
 
 The map draws OpenStreetMap's own tiles (`tile.openstreetmap.org`), which need
-no API key. OSM has a single light style: the dark theme inverts its lightness
+no API key. The page loads them from the server, `GET /api/map/tiles/:z/:x/:y`
+(`src/api/map_tiles.rs`): pages send no `Referer`, and OSM's tile usage
+policy blocks anonymous browser requests. The server identifies itself with
+a `Shiny/<version>` User-Agent, uses at most two downloads at a time and
+caches tiles for 14 days in `$MAP_TILES_CACHE_DIR` (default
+`~/.cache/shiny/map-tiles`), serving an old tile when OSM can't be reached. OSM has a single light style: the dark theme inverts its lightness
 in CSS (`.map-tiles-dark` in `web/css/app.css`), and the window's ambient rim
 samples the centre tile and inverts it the same way (`sampleMapGlow` in
 `web/js/tiles.js`). CARTO basemaps were used before, but they now answer

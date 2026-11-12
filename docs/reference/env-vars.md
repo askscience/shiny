@@ -28,6 +28,7 @@ the kiosk shell and the auth helper.
 | `SHINY_MIN_PLUGIN_TS` | security floor | loader | Warn when a plugin cdylib predates this Unix timestamp; `0` disables the check. |
 | `SHINY_MAIL_KEY_FILE` | `data/mail.key` | mail | AES-256-GCM key file (32 bytes, mode 0600) for encrypted account passwords. |
 | `BACKGROUNDS_DIR` | `data/backgrounds` | ✓ | Per-user desktop backgrounds. |
+| `MAP_TILES_CACHE_DIR` | `~/.cache/shiny/map-tiles` |  | Disk cache for the map's OpenStreetMap tiles. |
 | `ADMIN_TOKEN` | — | ✓ | Exposed to plugins via `ConfigSnapshot`; **not enforced**. |
 | `SHINY_POWER_SUPPLY_DIR` | `/sys/class/power_supply` | ✓ | Override the battery sysfs root. |
 | `SHINY_PORT` | — | K (older) | Legacy port hint in the kiosk. |

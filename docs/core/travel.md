@@ -73,6 +73,7 @@ unreachable the endpoints error rather than silently returning junk.
 | `GET` | `/api/map/reverse` | Reverse-geocode coordinates. |
 | `GET` | `/api/map/route` | Route between two points. |
 | `GET` | `/api/map/poi` | Nearby points of interest. |
+| `GET` | `/api/map/tiles/:z/:x/:y` | Map tile (OSM, cached in `~/.cache/shiny/map-tiles`). |
 | `GET` | `/api/navigate/start` | Begin a navigation session (see below). |
 
 ## The map window

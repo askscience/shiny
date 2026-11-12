@@ -7,10 +7,12 @@ let mapInitializing = false;
 let baseTileLayer = null;
 let userMarker = null;
 
-/* OpenStreetMap's own tiles: no API key (CARTO basemaps now return an
-   "API KEY REQUIRED" image). There is one style; the dark theme inverts its
-   lightness in CSS (.map-tiles-dark in app.css). */
-export const MAP_TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+/* OpenStreetMap tiles through the server (src/api/map_tiles.rs), which
+   identifies the app and caches them on disk as OSM's tile policy asks; the
+   page itself sends no Referer, so OSM blocks direct loads. No API key.
+   There is one style; the dark theme inverts its lightness in CSS
+   (.map-tiles-dark in app.css). */
+export const MAP_TILE_URL = '/api/map/tiles/{z}/{x}/{y}.png';
 
 function createBaseTileLayer(mode) {
   return L.tileLayer(MAP_TILE_URL, {
