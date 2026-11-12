@@ -383,9 +383,9 @@ function mountMapTile() {
   mapTileEl.appendChild(tileDock);
 }
 
-/* Map → ambient rim: sample the centre Carto tile and mirror it, falling back
-   to the Tier 0 colour rim whenever the fetch/decode fails (offline, tainted
-   canvas, blocked host). */
+/* Map → ambient rim: sample the centre OpenStreetMap tile and mirror it,
+   falling back to the Tier 0 colour rim whenever the fetch/decode fails
+   (offline, tainted canvas, blocked host). */
 function lonLatToTile(lon, lat, z) {
   const n = 2 ** z;
   const latRad = (lat * Math.PI) / 180;
@@ -395,13 +395,40 @@ function lonLatToTile(lon, lat, z) {
   };
 }
 
+/** Invert a tile's lightness while keeping its hues, like the dark map's
+ *  CSS filter, so the dark rim matches the dark map. */
+function darkTileCanvas(img) {
+  const w = img.naturalWidth;
+  const h = img.naturalHeight;
+  if (!w || !h) return null;
+  const c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  const ctx = c.getContext('2d');
+  if (!ctx) return null;
+  try {
+    ctx.drawImage(img, 0, 0);
+    const data = ctx.getImageData(0, 0, w, h);
+    const px = data.data;
+    for (let i = 0; i < px.length; i += 4) {
+      const r = px[i], g = px[i + 1], b = px[i + 2];
+      const shift = 255 - Math.max(r, g, b) - Math.min(r, g, b);
+      px[i] = r + shift;
+      px[i + 1] = g + shift;
+      px[i + 2] = b + shift;
+    }
+    ctx.putImageData(data, 0, 0);
+    return c;
+  } catch (_) {
+    return null; // tainted canvas
+  }
+}
+
 async function sampleMapGlow(view) {
   if (!mapRimEl || !view) return;
   const z = Math.max(3, Math.min(10, Math.round(view.zoom || 8)));
   const { x, y } = lonLatToTile(view.lon, view.lat, z);
-  const sub = 'abc'[Math.abs(x + y) % 3];
-  const mode = view.mode === 'light' ? 'light' : 'dark';
-  const url = `https://${sub}.basemaps.cartocdn.com/${mode}_all/${z}/${x}/${y}.png`;
+  const url = `https://tile.openstreetmap.org/${z}/${x}/${y}.png`;
   const img = new Image();
   img.crossOrigin = 'anonymous';
   await new Promise((resolve) => {
@@ -409,7 +436,8 @@ async function sampleMapGlow(view) {
     img.onerror = resolve;
     img.src = url;
   });
-  const css = glowFromDrawable(img, 96);
+  const source = view.mode === 'light' ? img : darkTileCanvas(img);
+  const css = glowFromDrawable(source, 96);
   if (css) setGlow(mapRimEl, css);
 }
 

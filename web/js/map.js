@@ -7,10 +7,18 @@ let mapInitializing = false;
 let baseTileLayer = null;
 let userMarker = null;
 
-const MAP_TILES = {
-  dark: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-  light: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-};
+/* OpenStreetMap's own tiles: no API key (CARTO basemaps now return an
+   "API KEY REQUIRED" image). There is one style; the dark theme inverts its
+   lightness in CSS (.map-tiles-dark in app.css). */
+export const MAP_TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+
+function createBaseTileLayer(mode) {
+  return L.tileLayer(MAP_TILE_URL, {
+    maxZoom: 19,
+    crossOrigin: 'anonymous',
+    className: mode === 'light' ? 'map-tiles-light' : 'map-tiles-dark',
+  });
+}
 
 /**
  * Resolve a CSS colour expression (tokens, color-mix) to a concrete value.
@@ -95,11 +103,7 @@ export async function initMap() {
 
   bindMapZoomGuards();
 
-  baseTileLayer = L.tileLayer(MAP_TILES[tileMode()], {
-    maxZoom: 19,
-    crossOrigin: 'anonymous',
-    subdomains: 'abcd',
-  }).addTo(map);
+  baseTileLayer = createBaseTileLayer(tileMode()).addTo(map);
 
   // Keep the window's ambient rim in sync with the map view.
   map.on('moveend zoomend', emitMapView);
@@ -280,11 +284,7 @@ export function setMapTheme(theme) {
   if (!map) return;
   const key = theme === 'light' ? 'light' : 'dark';
   if (baseTileLayer) map.removeLayer(baseTileLayer);
-  baseTileLayer = L.tileLayer(MAP_TILES[key] || MAP_TILES.dark, {
-    maxZoom: 19,
-    crossOrigin: 'anonymous',
-    subdomains: 'abcd',
-  }).addTo(map);
+  baseTileLayer = createBaseTileLayer(key).addTo(map);
   emitMapView();
 }
 

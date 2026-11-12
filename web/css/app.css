@@ -61,6 +61,9 @@ html, body {
 #map-vignette { display: none; }
 #map-stage, #map, .leaflet-container { touch-action: none; }
 .leaflet-control-container { display: none; }
+/* OpenStreetMap has one light style: the dark theme inverts its lightness
+   and turns the hues back, so water stays blue and parks green. */
+.map-tiles-dark { filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.9); }
 
 /* ── HUD circular buttons ──────────────────────────────────── */
 .icon-btn {

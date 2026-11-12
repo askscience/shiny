@@ -22,6 +22,9 @@
 
 ### Fixed
 
+- The traveler map showed "API KEY REQUIRED" on every tile: CARTO basemaps
+  now need a key. The map draws OpenStreetMap's own tiles, which need none;
+  the dark theme is the same map with its lightness inverted.
 - Capture exports with a long or heavy graphic failed with "render timed
   out": the time limit now grows with the number of frames.
 - The export progress stayed at 0 % while graphics rendered, which is most

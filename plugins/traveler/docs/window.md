@@ -17,6 +17,15 @@ map window is the "core-hosted window" case described in
 [plugin UI conventions](../../../PLUGINS.md) — a plugin can be chrome/window-
 integrated rather than owning a tile.
 
+## Map tiles
+
+The map draws OpenStreetMap's own tiles (`tile.openstreetmap.org`), which need
+no API key. OSM has a single light style: the dark theme inverts its lightness
+in CSS (`.map-tiles-dark` in `web/css/app.css`), and the window's ambient rim
+samples the centre tile and inverts it the same way (`sampleMapGlow` in
+`web/js/tiles.js`). CARTO basemaps were used before, but they now answer
+every tile with an "API KEY REQUIRED" image.
+
 ## Artifact cards
 
 A card is an [`Artifact`](../../../crates/shiny-plugin-sdk/src/artifacts.rs)
