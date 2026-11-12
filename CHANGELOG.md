@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.2.7] - 2026-11-12
+
 ### Fixed
 
 - PhotoCraft 0.23.1 from the Craft store stayed on "Loading" and asked to

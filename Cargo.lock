@@ -6782,7 +6782,7 @@ checksum = "dc6fe69c597f9c37bfeeeeeb33da3530379845f10be461a66d16d03eca2ded77"
 
 [[package]]
 name = "shiny"
-version = "0.2.6"
+version = "0.2.7"
 dependencies = [
  "arc-swap",
  "argon2",
@@ -6830,7 +6830,7 @@ dependencies = [
 
 [[package]]
 name = "shiny-auth"
-version = "0.2.6"
+version = "0.2.7"
 dependencies = [
  "libc",
  "serde",
@@ -7028,7 +7028,7 @@ dependencies = [
 
 [[package]]
 name = "shiny-installer-helper"
-version = "0.2.6"
+version = "0.2.7"
 dependencies = [
  "libc",
  "serde",
@@ -7040,7 +7040,7 @@ dependencies = [
 
 [[package]]
 name = "shiny-installer-plugin"
-version = "0.2.6"
+version = "0.2.7"
 dependencies = [
  "async-trait",
  "axum",
@@ -7054,7 +7054,7 @@ dependencies = [
 
 [[package]]
 name = "shiny-installer-protocol"
-version = "0.2.6"
+version = "0.2.7"
 dependencies = [
  "serde",
  "serde_json",
@@ -7062,7 +7062,7 @@ dependencies = [
 
 [[package]]
 name = "shiny-iroh-client"
-version = "0.2.6"
+version = "0.2.7"
 dependencies = [
  "iroh",
  "shiny-iroh-proto",
@@ -7073,7 +7073,7 @@ dependencies = [
 
 [[package]]
 name = "shiny-iroh-proto"
-version = "0.2.6"
+version = "0.2.7"
 dependencies = [
  "base64 0.22.1",
  "hex",
@@ -7192,7 +7192,7 @@ dependencies = [
 
 [[package]]
 name = "shiny-server-mode"
-version = "0.2.6"
+version = "0.2.7"
 dependencies = [
  "gtk",
  "reqwest 0.12.28",
