@@ -211,10 +211,14 @@ export function createWorkspaceSlide({ grid, render, applyLayout, isPhone }) {
    */
   function play(outgoing, dir) {
     if (!available() || !dir || (!outgoing?.length && !visibleTiles().length)) return;
-    const shown = new Set(outgoing.map((it) => it.el));
-    const incoming = visibleTiles()
-      .filter((el) => !shown.has(el))
-      .map((el) => ({ el, saved: el.style.cssText }));
+    const visibleNow = visibleTiles();
+    const stillShown = new Set(visibleNow);
+    // A window visible on both sides came along with the switch (moved to
+    // the new workspace): it slides in with its new workspace. Sliding it
+    // out would end by hiding it, and it would stay hidden until the next
+    // unrelated re-render.
+    outgoing = (outgoing || []).filter((it) => !stillShown.has(it.el));
+    const incoming = visibleNow.map((el) => ({ el, saved: el.style.cssText }));
     open(Math.sign(dir), outgoing, incoming, { kind: 'discrete' });
     apply(0);
     const transition = createTransition({

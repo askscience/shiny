@@ -22,6 +22,9 @@
 
 ### Fixed
 
+- A window moved to another workspace was missing when the desktop switched
+  there: the switch animation slid it out with the old workspace and hid it,
+  until a click on its dock icon. It now slides in with its new workspace.
 - The traveler map showed "API KEY REQUIRED" on every tile: CARTO basemaps
   now need a key. The map draws OpenStreetMap's own tiles, which need none;
   the dark theme is the same map with its lightness inverted. The server
