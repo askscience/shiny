@@ -36,6 +36,13 @@ drive the same rules.
 | Notables | Named people who boost the category the people care most about, for three weeks. |
 | Chronicle | Every change is logged as a key plus parameters, for the window and the assistant to tell. |
 
+## View and preview
+
+`view::planet_view` is what the plugin's state route returns: the planet,
+its rates, and the status of every discovery and building of the eras
+reached. `examples/preview.rs` serves the same view from a local file, for
+the window's preview server (`plugins/oorbit/scripts/preview-server.py`).
+
 ## Data
 
 Everything tunable lives in `data/catalog.toml`: tuning constants, climates,

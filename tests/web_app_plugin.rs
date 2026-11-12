@@ -256,3 +256,69 @@ async fn a_hybrid_plugin_needs_an_entry_document() {
         .expect_err("a hybrid plugin with no index.html cannot load");
     assert!(error.to_string().contains("index.html"), "{error}");
 }
+
+fn post_json(path: &str, token: &str, body: Value) -> Request {
+    let mut request = Request::builder()
+        .method("POST")
+        .uri(path)
+        .header("authorization", format!("Bearer {token}"))
+        .header("content-type", "application/json")
+        .body(Body::from(body.to_string()))
+        .unwrap();
+    request.extensions_mut().insert(ConnectInfo(
+        "127.0.0.1:1234".parse::<std::net::SocketAddr>().unwrap(),
+    ));
+    request
+}
+
+/// Oorbit's game loop through its routes: found a planet, read it back,
+/// act on it, and get a refusal (not a crash) for an impossible action.
+#[tokio::test]
+async fn oorbit_founds_saves_and_plays_a_planet() {
+    let app = support::TestApp::new().await;
+    user(&app, "one").await;
+    app.stage_plugin("oorbit");
+    app.load_plugins().await;
+    let router = shiny::api::build_router(app.state.clone());
+
+    let body = json_body(router.clone().oneshot(request("/api/oorbit/state", Some("one"))).await.unwrap()).await;
+    assert!(body["data"]["planet"].is_null(), "no planet before founding");
+
+    let response = router
+        .clone()
+        .oneshot(post_json("/api/oorbit/found", "one", serde_json::json!({ "climate": "temperate" })))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = json_body(response).await;
+    assert_eq!(body["data"]["planet"]["era"], 1);
+    assert_eq!(body["data"]["planet"]["tiles"].as_array().unwrap().len(), 32);
+    assert!(body["data"]["techs"].as_array().unwrap().iter().any(|t| t["id"] == "fire" && t["status"] == "available"));
+
+    let again = router
+        .clone()
+        .oneshot(post_json("/api/oorbit/found", "one", serde_json::json!({ "climate": "arid" })))
+        .await
+        .unwrap();
+    assert_eq!(again.status(), StatusCode::BAD_REQUEST, "a planet is founded once");
+
+    let response = router
+        .clone()
+        .oneshot(post_json("/api/oorbit/action", "one", serde_json::json!({ "type": "research", "tech": "fire" })))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = json_body(router.clone().oneshot(request("/api/oorbit/state", Some("one"))).await.unwrap()).await;
+    assert_eq!(body["data"]["planet"]["research"], "fire", "the action was saved");
+    assert_eq!(body["data"]["planet"]["climate"], "temperate");
+
+    let refused = router
+        .clone()
+        .oneshot(post_json("/api/oorbit/action", "one", serde_json::json!({ "type": "research", "tech": "writing" })))
+        .await
+        .unwrap();
+    assert_eq!(refused.status(), StatusCode::BAD_REQUEST);
+
+    let catalog = json_body(router.oneshot(request("/api/oorbit/catalog", Some("one"))).await.unwrap()).await;
+    assert!(catalog["data"]["eras"].as_array().unwrap().len() >= 3);
+}

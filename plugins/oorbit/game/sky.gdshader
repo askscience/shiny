@@ -7,8 +7,13 @@ uniform vec3 bottom_color = vec3(0.24, 0.2, 0.38);
 uniform vec2 size = vec2(480.0, 300.0);
 uniform float star_amount = 0.0025;
 
+// An integer hash: the usual fract(sin()) one draws visible diagonal
+// streaks on a pixel grid.
 float hash(vec2 p) {
-	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+	uvec2 q = uvec2(ivec2(p) + ivec2(4096)) * uvec2(1597334673u, 3812015801u);
+	uint n = (q.x ^ q.y) * 1597334673u;
+	n ^= n >> 15u;
+	return float(n) * (1.0 / 4294967295.0);
 }
 
 void fragment() {

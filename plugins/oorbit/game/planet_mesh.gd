@@ -106,16 +106,54 @@ func build(biomes: Array, colors: Dictionary) -> ArrayMesh:
 		var side := top.darkened(0.25)
 		var ring := corners[i]
 		var n := ring.size()
-		# Tile top: a fan around the centre.
-		var c := centers[i] * h
+		# Tile top: a fan around the centre, each triangle split in four so
+		# the land reads as small facets rather than one flat plate.
+		var c := centers[i] * surface(i, centers[i], h, biome)
 		for k in n:
-			_tri(st, top, c, ring[k] * h, ring[(k + 1) % n] * h)
+			var a := ring[k] * h
+			var b := ring[(k + 1) % n] * h
+			var ab := _bump((a + b) * 0.5, h, biome, 0.4)
+			var ca := _bump((c + a) * 0.5, h, biome, 1.0)
+			var bc := _bump((b + c) * 0.5, h, biome, 1.0)
+			_tri(st, top, c, ca, bc)
+			_tri(st, top, ca, a, ab)
+			_tri(st, top, bc, ab, b)
+			_tri(st, top, ca, ab, bc)
 		# Tile sides, down to the base: they show wherever a neighbour is lower.
 		for k in n:
 			var p0 := ring[k]
 			var p1 := ring[(k + 1) % n]
 			_quad(st, side, p0 * h, p0 * BASE_RADIUS, p1 * BASE_RADIUS, p1 * h)
 	return st.commit()
+
+
+## How much a biome's ground undulates (as a share of the radius).
+const ROUGHNESS := {
+	"coast": 0.008,
+	"plains": 0.02,
+	"forest": 0.025,
+	"desert": 0.028,
+	"ice": 0.022,
+	"mountain": 0.06,
+}
+
+
+## A repeatable pseudo-random value in -1..1 for a point.
+static func _noise(p: Vector3) -> float:
+	var v := sin(p.dot(Vector3(12.9898, 78.233, 37.719)) * 43758.5453)
+	return (v - floor(v)) * 2.0 - 1.0
+
+
+## A point on the tile top pushed in or out a little.
+static func _bump(p: Vector3, h: float, biome: String, weight: float) -> Vector3:
+	var rough: float = ROUGHNESS.get(biome, 0.01)
+	return p.normalized() * h * (1.0 + _noise(p) * rough * weight)
+
+
+## The radius of the tile's surface at its centre (props stand there).
+static func surface(_tile: int, center: Vector3, h: float, biome: String) -> float:
+	var rough: float = ROUGHNESS.get(biome, 0.01)
+	return h * (1.0 + absf(_noise(center * h)) * rough)
 
 
 static func _tri(st: SurfaceTool, color: Color, a: Vector3, b: Vector3, c: Vector3) -> void:

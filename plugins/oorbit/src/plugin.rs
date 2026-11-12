@@ -16,7 +16,13 @@ pub const PERSONA: &str =
     "the chronicler of the user's Oorbit planet, a tiny world whose society grows slowly in real time";
 
 fn route_specs() -> Vec<RouteSpec> {
-    vec![RouteSpec::get("/api/oorbit/ping", "ping")]
+    vec![
+        RouteSpec::get("/api/oorbit/ping", "ping"),
+        RouteSpec::get("/api/oorbit/catalog", "catalog"),
+        RouteSpec::get("/api/oorbit/state", "state"),
+        RouteSpec::post("/api/oorbit/found", "found"),
+        RouteSpec::post("/api/oorbit/action", "action"),
+    ]
 }
 
 #[async_trait]
@@ -35,7 +41,7 @@ impl Plugin for OorbitPlugin {
         builder
             .persona(PERSONA)
             .skills(include_str!("../skills/oorbit.md"))
-            .context_line("Oorbit: enabled. The Oorbit window shows the user's planet (early prototype, no game state yet).");
+            .context_line("Oorbit: enabled. The Oorbit window shows the user's planet; the game is played in the window.");
         builder.routes(route_specs());
     }
 

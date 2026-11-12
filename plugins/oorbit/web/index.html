@@ -78,6 +78,15 @@
         .catch((error) => ({ success: false, error: String(error) }))
         .then((reply) => callback(JSON.stringify(reply)));
     },
+    postJson: (path, bodyJson, callback) => {
+      fetchJson(path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: bodyJson,
+      })
+        .catch((error) => ({ success: false, error: String(error) }))
+        .then((reply) => callback(JSON.stringify(reply)));
+    },
   };
 
   function showNotice(text) {

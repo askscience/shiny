@@ -46,6 +46,21 @@ func get_json(path: String, done: Callable) -> void:
 	_host.getJson(path, on_reply)
 
 
+## POST `body` as JSON to a plugin route; `done` as for `get_json`.
+func post_json(path: String, body: Variant, done: Callable) -> void:
+	if not available:
+		done.call({"success": false, "error": "no host bridge"})
+		return
+	var holder: Array[JavaScriptObject] = []
+	var on_reply := JavaScriptBridge.create_callback(func(args: Array) -> void:
+		_callbacks.erase(holder[0])
+		done.call(_parse(str(args[0])))
+	)
+	holder.append(on_reply)
+	_callbacks.append(on_reply)
+	_host.postJson(path, JSON.stringify(body), on_reply)
+
+
 func _on_context(args: Array) -> void:
 	context_changed.emit(_parse(str(args[0])))
 

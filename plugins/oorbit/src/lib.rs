@@ -4,5 +4,6 @@
 
 pub mod plugin;
 pub mod routes;
+pub mod store;
 
 pub use plugin::OorbitPlugin;

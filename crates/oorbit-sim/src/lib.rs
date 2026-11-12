@@ -22,6 +22,7 @@ pub mod catalog;
 pub mod planet;
 pub mod rng;
 pub mod step;
+pub mod view;
 
 pub use actions::{apply, Action, ActionError};
 pub use catalog::Catalog;

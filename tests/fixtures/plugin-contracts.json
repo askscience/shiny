@@ -976,7 +976,27 @@
       {
         "auth": "auth",
         "method": "Get",
+        "path": "/api/oorbit/catalog"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
         "path": "/api/oorbit/ping"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
+        "path": "/api/oorbit/state"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/oorbit/action"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/oorbit/found"
       }
     ],
     "tools": []

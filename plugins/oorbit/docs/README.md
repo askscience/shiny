@@ -6,9 +6,10 @@ document covers the plugin as built; the game itself is described in
 [design.md](design.md), and its rules live in
 [`crates/oorbit-sim`](../../../crates/oorbit-sim/README.md).
 
-Status: **0.1.1, M0 prototype.** The window shows a turning planet and a status
-line proving the three links the game needs: the plugin's routes, the host
-language and the host light/dark mode. There is no game state yet.
+Status: **0.2.0, playable alone.** The user founds a planet (one per account),
+and the window shows it as it is now: research, buildings on its 32 tiles,
+work priorities, events, notable people and the Chronicle. Friends, Laura's
+Chronicle and the assistant's tools come next.
 
 Category: **Games**. See the [plugin docs index](../../../docs/plugins/README.md).
 
@@ -44,7 +45,29 @@ Low-poly 3D drawn as pixel art, with soft colours:
 
 The planet is a truncated icosahedron: 12 pentagons, then 20 hexagons, the
 same 32 tiles in the same order as the simulation (`game/planet_mesh.gd`).
-Until the window reads the simulation, the biomes come from a fixed seed.
+Each tile top is cut into small facets nudged up and down by biome, so the
+land reads as terrain. Every building has its own small model
+(`game/planet_view.gd`, drawn 1.6× larger than life so it reads at the pixel
+scale), and scaffolding stands while it is being built.
+
+## Playing
+
+| Where | What |
+|---|---|
+| Founding screen | Choose a climate: temperate, arid, frozen or oceanic. The Research panel opens right after. |
+| Top bar | Era, people / housing, mood, and each resource with its rate per hour. |
+| Research (flask) | Discoveries of the eras reached, what is left to leave the era; the icon glows while nothing is studied. |
+| Society (people) | Work priorities (0 to 4), notable people, cultural traits. |
+| Chronicle (scroll) | What happened, newest first, with how long ago. |
+| A tile (click) | Its biome, its building or construction time left, and what can be built there, with cost, time and effects. |
+| Event dialog | Appears when an event waits; each choice lists its consequences. |
+| Planet | Drag to turn it; it turns by itself again after a few idle seconds. |
+
+The window refreshes the planet every minute and after every action. On a
+narrow window (a phone) the panels become one sheet at the bottom and the
+camera moves back so the planet fits the width. Strings come from
+`game/i18n/<lang>.json` (English and Italian; other languages fall back to
+English).
 
 ## Layout
 
@@ -52,11 +75,15 @@ Until the window reads the simulation, the biomes come from a fixed seed.
 |---|---|
 | `src/plugin.rs` | Manifest, persona, skills, route registration (`ctx_plugin!`). |
 | `src/routes.rs` | REST routes. |
+| `src/store.rs` | Loading and saving the user's planet, the catalog, new seeds. |
+| `migrations/001_init.sql` | The `oorbit_planets` table. |
+| `game/ui.gd`, `game/i18n.gd`, `game/i18n/` | The interface and its strings. |
+| `game/planet_view.gd` | The planet drawn from the state, picking and dragging. |
 | `skills/oorbit.md` | What the assistant reads about Oorbit. |
 | `game/` | The Godot 4.7 project (GDScript, GL Compatibility renderer). |
 | `game/host.gd` | The game's side of the page bridge; the only GDScript that touches JavaScript. |
 | `scripts/export-web.sh` | Exports `game/` to `web/game/<hash>/` and writes `web/game/build.json`; refuses to export when a script has errors. |
-| `scripts/preview-server.py`, `scripts/preview-shot.mjs` | Serve the window outside LiteAura (with the core's web-app CSP and a stub route) and screenshot it headless, under `xvfb-run`. |
+| `scripts/preview-server.py`, `scripts/preview-shot.mjs` | Serve the window outside LiteAura (with the core's web-app CSP, and the real simulation through `crates/oorbit-sim/examples/preview.rs` on a local state file) and screenshot it headless, under `xvfb-run`. |
 | `web/index.html` | The window: boots the export and exposes `window.oorbitHost`. |
 | `web/game/` | Export output, **not committed** (`.gitignore`); rebuild it with the script. |
 
@@ -65,6 +92,23 @@ Until the window reads the simulation, the biomes come from a fixed seed.
 | Method | Path | Auth | Returns |
 |---|---|---|---|
 | `GET` | `/api/oorbit/ping` | user | `{ plugin, version, user, server_time_ms }`: the window's health check. |
+| `GET` | `/api/oorbit/catalog` | user | The game data (`oorbit_sim::Catalog`): eras, discoveries, buildings, events, climates. |
+| `GET` | `/api/oorbit/state` | user | The planet advanced to now (`oorbit_sim::view::planet_view`), or `{ planet: null }` before founding. |
+| `POST` | `/api/oorbit/found` | user | `{ climate }`: founds the user's planet; `400` when one exists. |
+| `POST` | `/api/oorbit/action` | user | One `oorbit_sim::Action` (`{"type":"research","tech":"fire"}`, `build`, `set_priorities`, `resolve_event`); `400` with the reason when refused. |
+
+The view carries the planet, its rates, and for each discovery and building
+of the eras reached a `status` (`available`, `researching`, `known`,
+`locked`, `not_affordable`, `monument_done`) plus the free tiles a building
+fits, so the window never re-implements the rules.
+
+## Storage
+
+`migrations/001_init.sql` creates `oorbit_planets` (one row per user: the
+planet as JSON). Every read and action loads it, advances it to now, changes
+it and writes it back under one lock (`src/store.rs`). The simulation is
+deterministic and its JSON round-trips exactly, so this row is all the game
+needs.
 
 ## The page bridge
 
