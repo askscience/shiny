@@ -41,7 +41,8 @@ sdk_revision = "source revision used to build the SDK"
 
 Legacy archives without this table remain accepted. Metadata is diagnostic and
 is not a guarantee that a library is safe to load. Native compatibility tests
-compare registered tools and routes against `tests/fixtures/plugin-contracts.json`.
+compare registered tools and routes against `tests/fixtures/plugin-contracts.json`:
+a removed or changed tool or route fails, a new one is recorded automatically.
 They stage explicit build artifacts into temporary directories and do not start
 plugin `on_load` work or read the kiosk's installed copies.
 

@@ -185,9 +185,13 @@ directory is `target/debug`; set `SHINY_TEST_LIB_DIR` explicitly for another bui
 profile or `CARGO_TARGET_DIR`. Tests never auto-discover installed plugins or run
 plugin startup hooks. Keep build concurrency low while working inside Terminal.
 
-`tests/fixtures/plugin-contracts.json` pins native tools and routes. To recapture
-an intentionally changed contract, run only the explicit capture test against the
-chosen known build, then review the resulting diff:
+`tests/fixtures/plugin-contracts.json` pins native tools and routes. The test
+fails only when one disappears or changes (path, method, auth, API level): that
+is what breaks the frontend and the assistant's skills. New tools and routes
+pass, and a local run (not CI) writes them into the baseline by itself, so
+commit the updated file with the change. After an intentional removal or
+rename, recapture the baseline with the explicit capture test and review the
+diff:
 
 ```bash
 cargo test -p shiny --test plugin_contracts capture_plugin_contracts -- --ignored
