@@ -7,16 +7,27 @@ extends Control
 
 ## Target height of the low-resolution view, in pixels.
 const PIXEL_HEIGHT := 300.0
-## How often the window asks for the planet again, in seconds.
+## How often the window asks for the planet again, in seconds: while you
+## play (and tells the plugin you are playing, so the planet runs fast), and
+## while the window only sits there.
+const PLAY_REFRESH_SECONDS := 5.0
 const REFRESH_SECONDS := 60.0
+## You count as playing until this long after your last touch.
+const PLAYING_AFTER_INPUT_MS := 5 * 60 * 1000
 ## A press that moves less than this (screen pixels) is a click, not a drag.
 const CLICK_SLOP := 6.0
-## Zoom: 1 shows the whole planet; closer, the camera moves in and the
-## low-resolution view grows with it (`PIXEL_HEIGHT * zoom` pixels tall), so
-## a close look is sharper, down to single screen pixels.
+## Zoom: 1 shows the whole planet; closer, the camera comes down towards the
+## ground and tilts to the horizon, and the low-resolution view grows with
+## it (up to `PIXEL_HEIGHT * PIXEL_ZOOM_MAX` pixels tall), so a close look
+## is sharper.
 const ZOOM_MIN := 1.0
-const ZOOM_MAX := 1.7
-const ZOOM_STEP := 1.1
+const ZOOM_MAX := 5.0
+const ZOOM_STEP := 1.15
+const PIXEL_ZOOM_MAX := 2.4
+## Distance of the camera from the planet's centre at zoom 1.
+const FAR := 4.4
+## A double click flies to the cell and comes at least this close.
+const FOCUS_ZOOM := 3.5
 ## Frames per second while the window is on screen: the planet turns slowly
 ## and the art is low-resolution, so more would only spend battery.
 const FPS_VISIBLE := 30
@@ -41,6 +52,8 @@ var _visible := true
 var _zoom := 1.0
 var _zoom_target := 1.0
 var _touches := {}
+var _double_click := false
+var _last_input_ms := 0
 var _pinch_distance := 0.0
 
 
@@ -58,6 +71,13 @@ func _ready() -> void:
 		_busy = true
 		host.post_json("dev/skip", {"hours": hours}, _on_view))
 	ui.tile_closed.connect(func(): _select(-1))
+	ui.tile_focus_requested.connect(func(cell: int):
+		planet_view.focus(cell)
+		_zoom_target = maxf(_zoom_target, FOCUS_ZOOM)
+		_select(cell))
+	planet_view.clock = ui.live_now_ms
+	planet_view.delivered.connect(_on_delivered)
+	_last_input_ms = Time.get_ticks_msec()
 	resized.connect(_fit)
 	_fit()
 	host.context_changed.connect(_apply_context)
@@ -96,10 +116,26 @@ func _on_visibility(on_screen: bool) -> void:
 		_refresh()
 
 
+func _playing() -> bool:
+	return Time.get_ticks_msec() - _last_input_ms < PLAYING_AFTER_INPUT_MS
+
+
+func _input(event: InputEvent) -> void:
+	if event is InputEventMouseButton or event is InputEventScreenTouch or event is InputEventKey or event is InputEventMagnifyGesture:
+		var was_playing := _playing()
+		_last_input_ms = Time.get_ticks_msec()
+		# Coming back after a pause: speed the planet up at once.
+		if not was_playing and not _busy and not ui.catalog.is_empty() and ui.view.get("planet") != null:
+			_refresh()
+
+
 func _refresh() -> void:
 	_refresh_left = REFRESH_SECONDS
 	_busy = true
-	host.get_json("state", _on_view)
+	if _playing() and ui.view.get("planet") != null:
+		host.post_json("presence", {}, _on_view)
+	else:
+		host.get_json("state", _on_view)
 
 
 func _on_catalog(reply: Dictionary) -> void:
@@ -107,6 +143,14 @@ func _on_catalog(reply: Dictionary) -> void:
 		ui.toast(I18n.t("ui.error", {"error": reply.get("error", "?")}))
 		return
 	ui.catalog = reply.get("data", {})
+	host.get_json("layout", _on_layout)
+
+
+func _on_layout(reply: Dictionary) -> void:
+	if not reply.get("success", false):
+		ui.toast(I18n.t("ui.error", {"error": reply.get("error", "?")}))
+		return
+	planet_view.set_layout(reply.get("data", {}))
 	_refresh()
 
 
@@ -119,7 +163,8 @@ func _on_view(reply: Dictionary) -> void:
 	var planet = data.get("planet")
 	if planet != null:
 		planet_view.visible = true
-		planet_view.show_planet(planet)
+		planet_view.time_rate = float(data.get("clock", {}).get("rate", 1.0))
+		planet_view.show_planet(planet, data.get("rates", {}))
 		var era = data.get("era")
 		_set_palette(int(era["number"]) if era != null else 1)
 		traffic.visible = true
@@ -129,8 +174,20 @@ func _on_view(reply: Dictionary) -> void:
 		traffic.visible = false
 	ui.show_view(data)
 	# Look again right after the next thing finishes, or in a minute.
-	var next := ui.next_change_ms()
-	_refresh_left = REFRESH_SECONDS if next < 0.0 else clampf(next / 1000.0 + 2.0, 5.0, REFRESH_SECONDS)
+	if _playing() and planet != null:
+		_refresh_left = PLAY_REFRESH_SECONDS
+	else:
+		var next := ui.next_change_ms()
+		_refresh_left = REFRESH_SECONDS if next < 0.0 else clampf(ui.wall_ms(next) / 1000.0 + 2.0, 5.0, REFRESH_SECONDS)
+
+
+## A crew brought something home: a little "+3 wood" over the spot.
+func _on_delivered(where: Vector3, text: String, color: Color) -> void:
+	# Only on the side of the planet facing the camera.
+	if camera.is_position_behind(where) or where.dot(camera.global_position - where) <= 0.0:
+		return
+	var screen := camera.unproject_position(where) * float(container.stretch_shrink)
+	ui.float_text(screen, text, color)
 
 
 var _palette_era := 0
@@ -210,17 +267,26 @@ func _gui_input(event: InputEvent) -> void:
 			_pressing = true
 			_dragged = false
 			_press = event.position
+			_double_click = event.double_click
 		else:
 			_pressing = false
 			if not _dragged:
 				var tile := planet_view.pick(camera, event.position / float(container.stretch_shrink))
-				_select(tile if tile != planet_view.selected else -1)
+				if _double_click and tile >= 0:
+					# A double click (or tap) flies over the cell.
+					planet_view.focus(tile)
+					_zoom_target = maxf(_zoom_target, FOCUS_ZOOM)
+					_select(tile)
+				else:
+					_select(tile if tile != planet_view.selected else -1)
+			_double_click = false
 	elif event is InputEventMouseMotion and _pressing:
 		if _dragged or event.position.distance_to(_press) > CLICK_SLOP:
 			_dragged = true
 			if _touches.size() < 2:
-				# The same turn per screen pixel at any zoom: slower up close.
-				planet_view.drag(event.relative * (PIXEL_HEIGHT / maxf(size.y, 1.0)) / _zoom)
+				# The ground follows the finger: slower the closer the camera.
+				var closeness := (_distance() - 0.98) / (FAR - 1.0)
+				planet_view.drag(event.relative * (PIXEL_HEIGHT / maxf(size.y, 1.0)) * closeness)
 
 
 func _touch_spread() -> float:
@@ -305,14 +371,31 @@ func _build_world() -> void:
 
 ## Keep the pixels square and the view near PIXEL_HEIGHT pixels tall.
 func _fit() -> void:
-	var shrink := maxi(1, roundi(size.y / (PIXEL_HEIGHT * _zoom)))
+	var shrink := maxi(1, roundi(size.y / (PIXEL_HEIGHT * minf(_zoom, PIXEL_ZOOM_MAX))))
 	container.stretch_shrink = shrink
 	var source := (size / shrink).floor()
 	sky_material.set_shader_parameter("size", source)
-	# The camera's field of view is vertical: on a tall window (a phone) move
-	# back so the planet still fits the width.
+	# Close up, the camera sinks below the planet's equator and looks along
+	# the ground towards the horizon.
+	var d := _distance()
+	var k := clampf((_zoom - 1.8) / (ZOOM_MAX - 1.8), 0.0, 1.0)
+	var tilt := deg_to_rad(24.0) * k
+	camera.position = Vector3(0.0, -d * sin(tilt), d * cos(tilt))
+	camera.look_at(Vector3(0.0, 0.0, 1.0 * k), Vector3.UP)
+	if planet_view != null:
+		planet_view.spin_allowed = _zoom < 1.3
+		# The dark rim reads well around the whole planet, but up close it
+		# would stand above the horizon.
+		planet_view.set_rim(_zoom < 1.4)
+
+
+## The camera's distance from the planet's centre. The field of view is
+## vertical: on a tall window (a phone) the far view moves back so the
+## planet still fits the width.
+func _distance() -> float:
 	var aspect := size.x / maxf(size.y, 1.0)
-	camera.position.z = 4.4 / minf(1.0, aspect / 1.1) / _zoom
+	var far := (FAR - 1.0) / minf(1.0, aspect / 1.1)
+	return 1.0 + far / pow(_zoom, 1.3)
 
 
 func _apply_context(context: Dictionary) -> void:

@@ -5,7 +5,7 @@
 use serde_json::{json, Value as Json};
 
 use crate::actions::{can_build, can_research, ActionError};
-use crate::step::free_tiles;
+use crate::step::buildable;
 use crate::{rates, Catalog, Planet, STEP_MS};
 
 fn reason(error: &ActionError) -> &'static str {
@@ -56,7 +56,6 @@ pub fn planet_view(planet: &Planet, catalog: &Catalog, now_ms: i64) -> Json {
                 "monument": b.monument,
                 "requires": b.requires,
                 "status": status,
-                "tiles": free_tiles(planet, &b.biomes),
             })
         })
         .collect();
@@ -92,6 +91,29 @@ pub fn planet_view(planet: &Planet, catalog: &Catalog, now_ms: i64) -> Json {
         .collect();
     json!({
         "resource_eras": resource_eras,
+        "buildable": buildable(planet),
+        // Planet time runs `rate` times as fast as the wall clock now.
+        "clock": {
+            "rate": planet.clock.rate(),
+            "present": planet.clock.is_present(),
+            "present_left_ms": (planet.clock.present_until - planet.clock.wall_ms).max(0),
+            "active_rate": crate::clock::ACTIVE_RATE,
+            "away_rate": crate::clock::AWAY_RATE_HALVES as f64 / 2.0,
+        },
+        "crew": crate::orders::crew(planet, catalog),
+        "slots": crate::orders::SLOTS,
+        "work_reach": crate::orders::in_reach(planet)
+            .iter()
+            .enumerate()
+            .filter(|(_, r)| **r)
+            .map(|(i, _)| i)
+            .collect::<Vec<_>>(),
+        "harvest": (0..planet.tiles.len())
+            .filter_map(|i| {
+                let list = crate::orders::harvestable(planet, catalog, i);
+                (!list.is_empty()).then(|| (i.to_string(), json!(list)))
+            })
+            .collect::<serde_json::Map<String, Json>>(),
         "dock": dock,
         "now_ms": now_ms,
         "step_ms": STEP_MS,

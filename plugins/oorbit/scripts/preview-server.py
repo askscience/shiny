@@ -61,6 +61,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self._send(200, "application/json", json.dumps(body).encode())
         elif self.path.startswith("/api/oorbit/catalog"):
             self._game("catalog")
+        elif self.path.startswith("/api/oorbit/layout"):
+            self._game("layout")
         elif self.path.startswith("/api/oorbit/state"):
             self._game("state")
         elif self.path.startswith("/plugins/oorbit/"):
@@ -80,6 +82,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self._game("found", json.loads(body or "{}").get("climate", "temperate"))
         elif self.path.startswith("/api/oorbit/action"):
             self._game("action", body)
+        elif self.path.startswith("/api/oorbit/presence"):
+            self._game("presence")
         elif self.path.startswith("/api/oorbit/reset"):
             self._game("reset")
         elif self.path.startswith("/api/oorbit/dev/skip"):

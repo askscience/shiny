@@ -3,7 +3,7 @@
 # balance -- --nocapture`, which prints when a steady player reaches each era.
 
 [tuning]
-tiles = 72                    # a Goldberg GP(2,1) planet: 12 pentagons, 60 hexagons
+tiles = 642                   # a Goldberg GP(8,0) planet: 12 pentagons, 630 hexagons
 start_population = 8.0
 start_resources = { food = 30.0, wood = 10.0, stone = 4.0, knowledge = 4.0 }
 min_population = 4.0
@@ -43,27 +43,31 @@ neighbor_act_per_hour = 0.07   # each neighbour sends something about every 14 h
 
 [[climates]]
 id = "temperate"
+ocean = 0.55
 name = "Temperate"
 food = 1.0
-biomes = { coast = 6, plains = 9, forest = 9, mountain = 5, desert = 1, ice = 2 }
+biomes = { coast = 3, plains = 10, forest = 10, mountain = 4, desert = 1, ice = 2 }
 
 [[climates]]
 id = "arid"
+ocean = 0.45
 name = "Arid"
 food = 0.95
-biomes = { coast = 4, plains = 7, forest = 3, mountain = 7, desert = 10, ice = 1 }
+biomes = { coast = 2, plains = 8, forest = 3, mountain = 6, desert = 10, ice = 1 }
 
 [[climates]]
 id = "frozen"
+ocean = 0.5
 name = "Frozen"
 food = 0.8
-biomes = { coast = 5, plains = 5, forest = 6, mountain = 7, desert = 0, ice = 9 }
+biomes = { coast = 2, plains = 6, forest = 7, mountain = 6, desert = 0, ice = 9 }
 
 [[climates]]
 id = "oceanic"
+ocean = 0.68
 name = "Oceanic"
 food = 1.1
-biomes = { coast = 14, plains = 7, forest = 6, mountain = 3, desert = 0, ice = 2 }
+biomes = { coast = 6, plains = 9, forest = 8, mountain = 3, desert = 0, ice = 2 }
 
 # ---------------------------------------------------------------- resources
 

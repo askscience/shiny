@@ -43,6 +43,8 @@ static func name_of(kind: String, id: String) -> String:
 
 ## "3h 20m" for a number of milliseconds.
 static func duration(ms: float) -> String:
+	if ms < 59500.0:
+		return t("ui.time.s", {"s": maxi(1, roundi(ms / 1000.0))})
 	var minutes := int(ceil(ms / 60000.0))
 	if minutes >= 48 * 60:
 		return t("ui.time.d", {"d": roundi(minutes / 1440.0)})

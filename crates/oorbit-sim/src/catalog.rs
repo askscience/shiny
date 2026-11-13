@@ -45,10 +45,13 @@ pub enum Biome {
     Mountain,
     Desert,
     Ice,
+    /// Open sea: nothing is built on it (ports stand on the coast).
+    Ocean,
 }
 
 impl Biome {
-    pub const ALL: [Biome; 6] = [
+    /// The land biomes, the ones a climate weighs.
+    pub const LAND: [Biome; 6] = [
         Biome::Coast,
         Biome::Plains,
         Biome::Forest,
@@ -192,9 +195,17 @@ pub struct EventDef {
 pub struct ClimateDef {
     pub id: String,
     pub name: String,
+    /// How the land splits between biomes (weights).
     pub biomes: BTreeMap<Biome, u32>,
     /// Multiplies food output.
     pub food: f64,
+    /// Share of the planet under the sea.
+    #[serde(default = "default_ocean")]
+    pub ocean: f64,
+}
+
+fn default_ocean() -> f64 {
+    0.55
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

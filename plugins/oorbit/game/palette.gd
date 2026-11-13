@@ -21,6 +21,9 @@ const STONE_AGE: Array[Color] = [
 	Color("a9c3d4"), Color("c9dde8"), Color("eef3f2"),
 	# warm accents: huts, fire, light
 	Color("7a4f4f"), Color("a35d5d"), Color("e08f6c"), Color("f2c078"),
+	# in-between shades, where biomes fade into each other
+	Color("2f4f63"), Color("5e7d62"), Color("7fa070"), Color("b7bf8e"),
+	Color("a69a8a"), Color("7c8f86"), Color("8fb5a6"), Color("c3c9c6"),
 ]
 
 ## Colours each era adds to the palette (cumulative: a later era keeps the
@@ -46,15 +49,20 @@ static func for_era(era: int) -> Array[Color]:
 
 const BIOMES := {
 	"plains": Color("94b37e"),
-	"forest": Color("46695a"),
+	"forest": Color("4f6b4a"),
 	"mountain": Color("857c8a"),
 	"desert": Color("d9b48f"),
-	"coast": Color("6fa3a8"),
+	"coast": Color("e3cfa0"),
 	"ice": Color("eef3f2"),
+	# not biomes: the sea far from land and near it, the sand line, peaks
+	"ocean": Color("2f4f63"),
+	"shallow": Color("4a7a8c"),
+	"shore": Color("f0d9b5"),
+	"snow": Color("eef3f2"),
 }
 
 const OUTLINE := Color("15132a")
-const TREE := Color("2f4a3f")
+const TREE := Color("5e7d62")
 const PEAK := Color("b0a6ad")
 const SNOW := Color("eef3f2")
 const HUT_WALL := Color("b58e6b")

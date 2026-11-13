@@ -5,100 +5,52 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
-use crate::catalog::{Biome, Catalog, Category, ClimateDef};
-use crate::rng::Rng;
+use crate::catalog::{Biome, Catalog, Category};
+use crate::cells;
 use crate::step_of;
 
 /// Version of the serialized state, for migrations of saved planets.
-pub const STATE_VERSION: u32 = 3;
-
-/// Draw `count` tiles from a climate's biome weights. With `guarantee`,
-/// every planet stays playable whatever the dice say: at least one tile in
-/// eight each of plains, forest and mountain (the biomes the early eras build
-/// on).
-fn draw_tiles(rng: &mut Rng, climate: &ClimateDef, count: usize, guarantee: bool) -> Vec<Tile> {
-    let biomes: Vec<Biome> = climate.biomes.keys().copied().collect();
-    let weights: Vec<u32> = climate.biomes.values().copied().collect();
-    let mut tiles: Vec<Tile> = (0..count)
-        .map(|_| Tile {
-            biome: biomes[rng.weighted(&weights).unwrap_or(0)],
-            building: None,
-        })
-        .collect();
-    if !guarantee || count == 0 {
-        return tiles;
-    }
-    const GUARANTEED: [Biome; 3] = [Biome::Plains, Biome::Forest, Biome::Mountain];
-    let min_each = count.div_ceil(8);
-    let tally = |tiles: &[Tile], b: Biome| tiles.iter().filter(|t| t.biome == b).count();
-    let mut next = 0;
-    for biome in GUARANTEED {
-        while tally(&tiles, biome) < min_each {
-            // Take a tile no guarantee depends on.
-            let i = next % tiles.len();
-            next += 1;
-            let current = tiles[i].biome;
-            if current == biome
-                || (GUARANTEED.contains(&current) && tally(&tiles, current) <= min_each)
-            {
-                continue;
-            }
-            tiles[i].biome = biome;
-        }
-    }
-    tiles
-}
+pub const STATE_VERSION: u32 = 4;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Tile {
     pub biome: Biome,
     #[serde(default)]
     pub building: Option<String>,
+    /// Radius of the ground at the cell's centre (the sea is at 1.0).
+    #[serde(default = "default_height")]
+    pub height: f64,
+    /// What is left to gather here, 0 to 1: work spends it, rest refills it.
+    #[serde(default = "default_stock")]
+    pub stock: f64,
+}
+
+fn default_stock() -> f64 {
+    1.0
+}
+
+fn default_height() -> f64 {
+    1.0
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Construction {
     pub building: String,
     pub tile: usize,
+    /// The step it was started at (0 on planets from before it was kept).
+    #[serde(default)]
+    pub start_step: i64,
     /// The step at which it stands.
     pub done_step: i64,
 }
 
-/// How much of the workforce goes to each category, 0 to 4 each.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Priorities {
-    pub food: u8,
-    pub materials: u8,
-    pub knowledge: u8,
-    pub culture: u8,
-}
-
-impl Default for Priorities {
-    fn default() -> Self {
-        Priorities {
-            food: 3,
-            materials: 2,
-            knowledge: 2,
-            culture: 1,
-        }
-    }
-}
-
-impl Priorities {
-    pub const MAX: u8 = 4;
-
-    pub fn get(&self, category: Category) -> u8 {
-        match category {
-            Category::Food => self.food,
-            Category::Materials => self.materials,
-            Category::Knowledge => self.knowledge,
-            Category::Culture => self.culture,
-        }
-    }
-
-    pub fn total(&self) -> u32 {
-        Category::ALL.iter().map(|&c| self.get(c) as u32).sum()
-    }
+/// A standing order: a crew of the people works this cell for this
+/// resource until told otherwise (it moves on by itself when the cell is
+/// spent).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Order {
+    pub tile: usize,
+    pub resource: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -144,10 +96,18 @@ pub struct Planet {
     pub mood: f64,
     pub resources: BTreeMap<String, f64>,
     pub tiles: Vec<Tile>,
+    /// The cell the first settlement stands on.
+    #[serde(default)]
+    pub home: usize,
     pub construction: Vec<Construction>,
     pub known: BTreeSet<String>,
     pub research: Option<String>,
-    pub priorities: Priorities,
+    /// Where the people work (see `Order`); the rest think and make culture.
+    #[serde(default)]
+    pub orders: Vec<Order>,
+    /// The first orders were given (a new or reborn planet gets some).
+    #[serde(default)]
+    pub orders_given: bool,
     pub pending_event: Option<PendingEvent>,
     pub last_event_step: i64,
     pub traits: BTreeMap<String, i32>,
@@ -174,6 +134,9 @@ pub struct Planet {
     /// reads it; the plugin adds it to "now".
     #[serde(default)]
     pub clock_offset_ms: i64,
+    /// Planet time against wall time (kept by the plugin, see `clock`).
+    #[serde(default)]
+    pub clock: crate::clock::Clock,
 }
 
 impl Planet {
@@ -182,8 +145,9 @@ impl Planet {
         let climate_def = catalog
             .climate(climate)
             .ok_or_else(|| format!("unknown climate `{climate}`"))?;
-        let mut rng = Rng::new(seed ^ 0x0A0B_C0DE);
-        let tiles = draw_tiles(&mut rng, climate_def, catalog.tuning.tiles, true);
+        let layout = cells::layout(catalog.tuning.tiles)
+            .ok_or_else(|| format!("no cell layout for {} cells", catalog.tuning.tiles))?;
+        let (tiles, home) = crate::terrain::generate(seed, climate_def, layout);
 
         let step = step_of(now_ms);
         let mut planet = Planet {
@@ -199,10 +163,12 @@ impl Planet {
             mood: 0.6,
             resources: BTreeMap::new(),
             tiles,
+            home,
             construction: Vec::new(),
             known: BTreeSet::new(),
             research: None,
-            priorities: Priorities::default(),
+            orders: Vec::new(),
+            orders_given: false,
             pending_event: None,
             last_event_step: step,
             traits: BTreeMap::new(),
@@ -215,7 +181,9 @@ impl Planet {
             offers: Vec::new(),
             next_id: 0,
             clock_offset_ms: 0,
+            clock: crate::clock::Clock::default(),
         };
+        crate::orders::first_orders(&mut planet, catalog);
         crate::neighbors::ensure_neighbors(&mut planet, catalog);
         for r in &catalog.resources {
             planet.resources.insert(r.id.clone(), 0.0);
@@ -227,20 +195,66 @@ impl Planet {
         Ok(planet)
     }
 
-    /// Bring a saved planet up to the catalog's tile count: a planet saved
-    /// with fewer tiles (version 1 had 32) gains new land drawn from its
-    /// climate, and keeps every tile, building and construction it had.
+    /// Bring a saved planet up to the catalog's cells. A planet saved on
+    /// another layout (versions 1 to 3 had 32 or 72 tiles) is reborn with
+    /// continents and seas drawn from its seed and climate: it keeps its era,
+    /// discoveries, people and stock, and its buildings move to the land
+    /// around the new home.
     pub fn fit_tiles(&mut self, catalog: &Catalog) {
         let want = catalog.tuning.tiles;
-        if self.tiles.len() < want {
-            if let Some(climate) = catalog.climate(&self.climate) {
-                let mut rng = Rng::new(self.seed ^ 0x0071_11E5 ^ self.tiles.len() as u64);
-                let extra = draw_tiles(&mut rng, climate, want - self.tiles.len(), false);
-                self.tiles.extend(extra);
+        if self.tiles.len() != want {
+            if let (Some(climate), Some(layout)) =
+                (catalog.climate(&self.climate), cells::layout(want))
+            {
+                let (tiles, home) = crate::terrain::generate(self.seed, climate, layout);
+                let old = std::mem::replace(&mut self.tiles, tiles);
+                self.home = home;
+                let mut moved: Vec<String> = old.into_iter().filter_map(|t| t.building).collect();
+                let mut works = std::mem::take(&mut self.construction);
+                // Monuments first, so they find room.
+                moved.sort_by_key(|b| !catalog.building(b).is_some_and(|d| d.monument));
+                for building in moved {
+                    let biomes = catalog
+                        .building(&building)
+                        .map(|b| b.biomes.clone())
+                        .unwrap_or_default();
+                    if let Some(&cell) = crate::step::free_tiles(self, &biomes).first() {
+                        self.tiles[cell].building = Some(building);
+                    }
+                }
+                for c in works.iter_mut() {
+                    let biomes = catalog
+                        .building(&c.building)
+                        .map(|b| b.biomes.clone())
+                        .unwrap_or_default();
+                    if let Some(&cell) = crate::step::free_tiles(self, &biomes).first() {
+                        c.tile = cell;
+                        self.construction.push(c.clone());
+                    }
+                }
+                let step = self.step;
+                self.log(catalog, step, "reborn", &[]);
+                self.orders.clear();
+                self.orders_given = false;
             }
+        }
+        if !self.orders_given {
+            crate::orders::first_orders(self, catalog);
         }
         crate::neighbors::ensure_neighbors(self, catalog);
         self.version = STATE_VERSION;
+    }
+
+    /// Planet time at the wall time `wall_ms`, moving the planet's clock
+    /// there (see `clock`). A planet from before the clock starts it where
+    /// its own time was (the old test offset included).
+    pub fn time_at(&mut self, wall_ms: i64) -> i64 {
+        if self.clock == crate::clock::Clock::default() {
+            self.clock = crate::clock::Clock::starting(wall_ms + self.clock_offset_ms);
+            self.clock.wall_ms = wall_ms;
+            self.clock_offset_ms = 0;
+        }
+        self.clock.tick(wall_ms)
     }
 
     pub fn amount(&self, resource: &str) -> f64 {

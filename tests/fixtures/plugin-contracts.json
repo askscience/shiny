@@ -981,6 +981,11 @@
       {
         "auth": "auth",
         "method": "Get",
+        "path": "/api/oorbit/layout"
+      },
+      {
+        "auth": "auth",
+        "method": "Get",
         "path": "/api/oorbit/ping"
       },
       {
@@ -1002,6 +1007,11 @@
         "auth": "auth",
         "method": "Post",
         "path": "/api/oorbit/found"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/oorbit/presence"
       },
       {
         "auth": "auth",

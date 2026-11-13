@@ -28,6 +28,11 @@ fn run(args: &[String]) -> Result<serde_json::Value, String> {
     if command == "catalog" {
         return Ok(json!({ "success": true, "data": catalog }));
     }
+    if command == "layout" {
+        let text = oorbit_sim::cells::layout_json(catalog.tuning.tiles).ok_or("no layout")?;
+        let data: serde_json::Value = serde_json::from_str(text).map_err(|e| e.to_string())?;
+        return Ok(json!({ "success": true, "data": data }));
+    }
     if command == "autoplay" {
         let days: f64 = rest
             .first()
@@ -37,6 +42,7 @@ fn run(args: &[String]) -> Result<serde_json::Value, String> {
         let start = now - (days * 86_400_000.0) as i64;
         let mut planet = Planet::new(start as u64 ^ 0x5EED, climate, start, &catalog)?;
         oorbit_sim::autoplay::play_until(&mut planet, &catalog, now, 2);
+        planet.clock = oorbit_sim::clock::Clock::starting(now);
         std::fs::write(file, serde_json::to_string(&planet).unwrap()).map_err(|e| e.to_string())?;
         return Ok(json!({ "success": true, "data": planet_view(&planet, &catalog, now) }));
     }
@@ -51,7 +57,10 @@ fn run(args: &[String]) -> Result<serde_json::Value, String> {
         ("found", Some(_)) => return Err("this planet is already founded".into()),
         ("found", None) => {
             let climate = rest.first().ok_or("found needs a climate")?;
-            Planet::new(now as u64 ^ 0x5EED, climate, now, &catalog)?
+            let mut planet = Planet::new(now as u64 ^ 0x5EED, climate, now, &catalog)?;
+            planet.clock = oorbit_sim::clock::Clock::starting(now);
+            planet.clock.present(now);
+            planet
         }
         (_, None) => {
             return Ok(json!({ "success": true, "data": { "now_ms": now, "planet": null } }))
@@ -63,9 +72,16 @@ fn run(args: &[String]) -> Result<serde_json::Value, String> {
             .first()
             .and_then(|h| h.parse().ok())
             .ok_or("skip needs hours")?;
-        planet.clock_offset_ms += (hours * 3_600_000.0) as i64;
+        planet.time_at(now);
+        planet.clock.skip((hours * 3_600_000.0) as i64);
     }
-    let now = now + planet.clock_offset_ms;
+    // Acting (or reporting presence) is playing: play speed for a while.
+    let wall = now;
+    if command == "action" || command == "presence" {
+        planet.time_at(wall);
+        planet.clock.present(wall);
+    }
+    let now = planet.time_at(wall);
     advance(&mut planet, &catalog, now);
     let mut error = None;
     if command == "action" {

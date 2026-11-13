@@ -7,7 +7,7 @@ use std::collections::BTreeSet;
 use crate::actions::{can_build, can_research};
 use crate::catalog::{Biome, BuildingDef, Catalog, Effect};
 use crate::step::free_tiles;
-use crate::{apply, Action, Planet, Priorities};
+use crate::{apply, Action, Planet};
 
 /// Buildings that produce `resource`: a converter making it, or the building
 /// it is extracted from.
@@ -119,7 +119,7 @@ fn try_build(
         ]
         .iter()
         .position(|x| *x == b)
-        .unwrap()
+        .unwrap_or(9)
     };
     if def.biomes.is_empty() {
         tiles.sort_by_key(|&i| rank(planet.tiles[i].biome));
@@ -162,6 +162,64 @@ fn try_build(
     .is_ok()
 }
 
+/// Point the crews where they are needed: more on food when it runs short,
+/// otherwise a balance of food and materials, the rest thinking.
+pub fn set_orders(planet: &mut Planet, catalog: &Catalog, now: i64, hungry: bool) {
+    let mut want: Vec<(&str, usize)> = if hungry {
+        vec![("food", 4), ("wood", 1), ("stone", 1)]
+    } else {
+        vec![("food", 2), ("wood", 1), ("stone", 1)]
+    };
+    // One crew on the newest material the land gives (clay, then marble),
+    // and the rest of the people thinking.
+    if !hungry {
+        for extra in ["marble", "clay"] {
+            if planet.orders.iter().any(|o| o.resource == extra)
+                || crate::orders::nearest_for(planet, catalog, extra, 0.3).is_some()
+            {
+                want.push((extra, 1));
+                break;
+            }
+        }
+    }
+    for (resource, count) in &want {
+        let mut have: Vec<usize> = planet
+            .orders
+            .iter()
+            .filter(|o| o.resource == *resource)
+            .map(|o| o.tile)
+            .collect();
+        while have.len() > *count {
+            let tile = have.pop().unwrap();
+            let _ = apply(planet, catalog, now, &Action::StopHarvest { tile });
+        }
+    }
+    let known: Vec<&str> = want.iter().map(|(r, _)| *r).collect();
+    let stray: Vec<usize> = planet
+        .orders
+        .iter()
+        .filter(|o| !known.contains(&o.resource.as_str()))
+        .map(|o| o.tile)
+        .collect();
+    for tile in stray {
+        let _ = apply(planet, catalog, now, &Action::StopHarvest { tile });
+    }
+    for (resource, count) in want {
+        while planet.orders.iter().filter(|o| o.resource == resource).count() < count {
+            let Some(tile) = crate::orders::nearest_for(planet, catalog, resource, 0.3) else {
+                break;
+            };
+            let action = Action::Harvest {
+                tile,
+                resource: resource.into(),
+            };
+            if apply(planet, catalog, now, &action).is_err() {
+                break;
+            }
+        }
+    }
+}
+
 /// One visit: answer the event, keep the people fed and housed, research
 /// and build what helps reach the next era.
 pub fn play_session(planet: &mut Planet, catalog: &Catalog, now: i64) {
@@ -178,22 +236,8 @@ pub fn play_session(planet: &mut Planet, catalog: &Catalog, now: i64) {
     }
     let rates = crate::rates(planet, catalog);
     let food_rate = rates.per_hour.get("food").copied().unwrap_or(0.0);
-    let priorities = if food_rate < 0.2 || planet.amount("food") < 20.0 {
-        Priorities {
-            food: 4,
-            materials: 2,
-            knowledge: 2,
-            culture: 1,
-        }
-    } else {
-        Priorities {
-            food: 2,
-            materials: 3,
-            knowledge: 3,
-            culture: 1,
-        }
-    };
-    apply(planet, catalog, now, &Action::SetPriorities { priorities }).unwrap();
+    let hungry = food_rate < 0.2 || planet.amount("food") < 20.0;
+    set_orders(planet, catalog, now, hungry);
 
     let era = catalog.era(planet.era).unwrap().clone();
     if planet.research.is_none() {

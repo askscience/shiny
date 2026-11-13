@@ -19,10 +19,12 @@ fn route_specs() -> Vec<RouteSpec> {
     vec![
         RouteSpec::get("/api/oorbit/ping", "ping"),
         RouteSpec::get("/api/oorbit/catalog", "catalog"),
+        RouteSpec::get("/api/oorbit/layout", "layout"),
         RouteSpec::get("/api/oorbit/state", "state"),
         RouteSpec::post("/api/oorbit/found", "found"),
         RouteSpec::post("/api/oorbit/action", "action"),
         RouteSpec::post("/api/oorbit/reset", "reset"),
+        RouteSpec::post("/api/oorbit/presence", "presence"),
         // Testing only (temporary): the window's time-skip buttons.
         RouteSpec::post("/api/oorbit/dev/skip", "dev_skip"),
     ]

@@ -21,11 +21,13 @@ pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
     Some(match tag {
         "ping" => ping(),
         "catalog" => catalog_route(),
+        "layout" => layout_route(),
         "state" => state(ctx),
         "found" => found(ctx),
         "action" => action(ctx),
         "reset" => reset(ctx),
         "dev_skip" => dev_skip(ctx),
+        "presence" => presence(ctx),
         _ => return None,
     })
 }
@@ -71,6 +73,21 @@ fn catalog_route() -> RouteHandler {
     })
 }
 
+/// The planet's cells (centres, shared corners, rings and neighbours), the
+/// same layout the simulation uses. It changes only with the plugin.
+fn layout_route() -> RouteHandler {
+    bridged_route(move |req: axum::extract::Request| async move {
+        user_id(&req)?;
+        static LAYOUT: std::sync::OnceLock<serde_json::Value> = std::sync::OnceLock::new();
+        let value = LAYOUT.get_or_init(|| {
+            oorbit_sim::cells::layout_json(catalog().tuning.tiles)
+                .and_then(|text| serde_json::from_str(text).ok())
+                .unwrap_or_default()
+        });
+        Ok(ok(value.clone()))
+    })
+}
+
 /// The user's planet as of now (`planet: null` before it is founded).
 fn state(ctx: Arc<PluginCtx>) -> RouteHandler {
     bridged_route(move |req: axum::extract::Request| {
@@ -82,7 +99,7 @@ fn state(ctx: Arc<PluginCtx>) -> RouteHandler {
             match store::load(&ctx, &uid)? {
                 None => Ok(ok(json!({ "now_ms": now, "planet": null }))),
                 Some(mut planet) => {
-                    let now = now + planet.clock_offset_ms;
+                    let now = planet.time_at(now);
                     advance(&mut planet, catalog(), now);
                     store::save(&ctx, &uid, &planet)?;
                     Ok(ok(planet_view(&planet, catalog(), now)))
@@ -110,8 +127,10 @@ fn found(ctx: Arc<PluginCtx>) -> RouteHandler {
                     "this planet is already founded".into(),
                 ));
             }
-            let planet = Planet::new(store::new_seed(&uid, now), &body.climate, now, catalog())
+            let mut planet = Planet::new(store::new_seed(&uid, now), &body.climate, now, catalog())
                 .map_err(AppError::BadRequest)?;
+            planet.clock = oorbit_sim::clock::Clock::starting(now);
+            planet.clock.present(now);
             store::save(&ctx, &uid, &planet)?;
             Ok(ok(planet_view(&planet, catalog(), now)))
         }
@@ -129,7 +148,10 @@ fn action(ctx: Arc<PluginCtx>) -> RouteHandler {
             let _guard = store::lock();
             let mut planet = store::load(&ctx, &uid)?
                 .ok_or_else(|| AppError::BadRequest("found a planet first".into()))?;
-            let now = now + planet.clock_offset_ms;
+            // Acting is playing: the planet runs at play speed a while.
+            planet.time_at(now);
+            planet.clock.present(now);
+            let now = planet.time_at(now);
             let result = apply(&mut planet, catalog(), now, &action);
             // Save even when the action is refused: the planet advanced.
             store::save(&ctx, &uid, &planet)?;
@@ -139,9 +161,30 @@ fn action(ctx: Arc<PluginCtx>) -> RouteHandler {
     })
 }
 
-/// Testing only (temporary): move this planet's clock forward by `hours`,
-/// as if that much time had passed. The planet keeps the offset, so its
-/// clock stays ahead from then on.
+/// The window reports that someone is playing (it sends this every few
+/// seconds while the player is active and the window is on screen): the
+/// planet runs at play speed for a little while more.
+fn presence(ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req: axum::extract::Request| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            let wall = now_ms();
+            let _guard = store::lock();
+            let mut planet = store::load(&ctx, &uid)?
+                .ok_or_else(|| AppError::BadRequest("found a planet first".into()))?;
+            planet.time_at(wall);
+            planet.clock.present(wall);
+            let now = planet.time_at(wall);
+            advance(&mut planet, catalog(), now);
+            store::save(&ctx, &uid, &planet)?;
+            Ok(ok(planet_view(&planet, catalog(), now)))
+        }
+    })
+}
+
+/// Testing only (temporary): move this planet's time forward by `hours` of
+/// planet time, as if that much had passed.
 fn dev_skip(ctx: Arc<PluginCtx>) -> RouteHandler {
     #[derive(Deserialize)]
     struct Body {
@@ -158,8 +201,9 @@ fn dev_skip(ctx: Arc<PluginCtx>) -> RouteHandler {
             let _guard = store::lock();
             let mut planet = store::load(&ctx, &uid)?
                 .ok_or_else(|| AppError::BadRequest("found a planet first".into()))?;
-            planet.clock_offset_ms += (body.hours * 3_600_000.0) as i64;
-            let now = now_ms() + planet.clock_offset_ms;
+            planet.time_at(now_ms());
+            planet.clock.skip((body.hours * 3_600_000.0) as i64);
+            let now = planet.time_at(now_ms());
             advance(&mut planet, catalog(), now);
             store::save(&ctx, &uid, &planet)?;
             Ok(ok(planet_view(&planet, catalog(), now)))

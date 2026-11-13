@@ -39,5 +39,5 @@ for (const [name, x, y, wait, wheel] of JSON.parse(process.env.STEPS || '[]')) {
   await page.screenshot({ path: `${out}/${i++}-${name}.png` });
 }
 const quiet = /^\[(debug|verbose)\]|Godot Engine|OpenGL API|Build configuration/;
-console.log(logs.filter((l) => !quiet.test(l)).slice(0, 40).join('\n'));
+console.log(logs.filter((l) => !quiet.test(l)).slice(-80).join('\n'));
 await browser.close();

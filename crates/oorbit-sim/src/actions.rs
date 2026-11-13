@@ -5,15 +5,21 @@ use serde::{Deserialize, Serialize};
 
 use crate::catalog::Catalog;
 use crate::neighbors::{capacity, launch, Ship, ShipKind};
-use crate::planet::{Construction, Planet, Priorities};
+use crate::planet::{Construction, Order, Planet};
 use crate::step::{advance, check_era, free_tiles, resolve};
 use crate::{hours_to_steps, step_of};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Action {
-    SetPriorities {
-        priorities: Priorities,
+    /// Send a crew to gather `resource` on `tile`.
+    Harvest {
+        tile: usize,
+        resource: String,
+    },
+    /// Call the crew on `tile` back (they go back to thinking).
+    StopHarvest {
+        tile: usize,
     },
     Research {
         tech: String,
@@ -49,7 +55,8 @@ pub enum Action {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ActionError {
-    InvalidPriorities,
+    CannotHarvest(usize),
+    NoCrew(usize),
     UnknownTech(String),
     AlreadyKnown(String),
     TechLocked(String),
@@ -70,9 +77,10 @@ pub enum ActionError {
 impl std::fmt::Display for ActionError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ActionError::InvalidPriorities => {
-                write!(f, "priorities must be 0 to 4 each, not all zero")
+            ActionError::CannotHarvest(i) => {
+                write!(f, "no crew can gather that on tile {i} (too far, nothing there, or every crew is busy)")
             }
+            ActionError::NoCrew(i) => write!(f, "nobody works tile {i}"),
             ActionError::UnknownTech(id) => write!(f, "unknown discovery `{id}`"),
             ActionError::AlreadyKnown(id) => write!(f, "`{id}` is already known"),
             ActionError::TechLocked(id) => write!(f, "`{id}` cannot be researched yet"),
@@ -146,20 +154,20 @@ pub fn apply(
     advance(planet, catalog, now_ms);
     let step = step_of(now_ms).max(planet.step);
     match action {
-        Action::SetPriorities { priorities } => {
-            let valid = priorities.total() > 0
-                && [
-                    priorities.food,
-                    priorities.materials,
-                    priorities.knowledge,
-                    priorities.culture,
-                ]
-                .iter()
-                .all(|&p| p <= Priorities::MAX);
-            if !valid {
-                return Err(ActionError::InvalidPriorities);
+        Action::Harvest { tile, resource } => {
+            if !crate::orders::can_order(planet, catalog, *tile, resource) {
+                return Err(ActionError::CannotHarvest(*tile));
             }
-            planet.priorities = *priorities;
+            planet.orders.push(Order {
+                tile: *tile,
+                resource: resource.clone(),
+            });
+        }
+        Action::StopHarvest { tile } => {
+            if !planet.orders.iter().any(|o| o.tile == *tile) {
+                return Err(ActionError::NoCrew(*tile));
+            }
+            planet.orders.retain(|o| o.tile != *tile);
         }
         Action::Research { tech } => {
             can_research(planet, catalog, tech)?;
@@ -178,6 +186,7 @@ pub fn apply(
             planet.construction.push(Construction {
                 building: building.clone(),
                 tile: *tile,
+                start_step: step,
                 done_step: step + hours_to_steps(def.build_hours),
             });
             let t = tile.to_string();

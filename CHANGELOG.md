@@ -44,6 +44,21 @@
   faster and bigger with every era.
 - Oorbit test tools (temporary): a fast-forward panel moves your planet's
   clock on by an hour, six hours, a day or three days.
+- Oorbit 0.6.0: a new planet of 642 cells with continents, seas and beaches.
+  Biomes fade into each other instead of meeting at a hard line, mountains
+  are part of the ground, and trees, rocks and buildings stand on the land
+  where they are (no more floating peaks). Zoom goes down to the surface,
+  where the camera tilts to the horizon, and a double click flies over a
+  cell. The village grows outward from its home: new buildings go next to
+  the old ones. Planets from earlier versions are reborn on the new land and
+  keep their era, discoveries, people, stock and buildings.
+- Oorbit 0.6.1: an active game. Point at a forest, a hill, a meadow or the
+  sea by the shore and a crew goes to work there; crews walk back to the
+  village with their load ("+3 wood"), cells thin out while they are worked
+  and grow back at rest, and buildings rise from their footing while
+  builders work on them. The work sliders are gone: whoever has no crew
+  thinks and makes culture. While you play, an hour of the planet lasts a
+  minute; while you are away, the planet runs at half speed.
 
 ### Changed
 

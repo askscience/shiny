@@ -20,15 +20,19 @@
 pub mod actions;
 pub mod autoplay;
 pub mod catalog;
+pub mod clock;
+pub mod cells;
 pub mod neighbors;
+pub mod orders;
 pub mod planet;
 pub mod rng;
 pub mod step;
+pub mod terrain;
 pub mod view;
 
 pub use actions::{apply, Action, ActionError};
 pub use catalog::Catalog;
-pub use planet::{Planet, Priorities};
+pub use planet::{Order, Planet};
 pub use step::{advance, rates, Rates};
 
 /// Length of one simulation step: ten minutes of wall-clock time.

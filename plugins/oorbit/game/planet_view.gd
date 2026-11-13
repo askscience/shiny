@@ -1,11 +1,15 @@
-## The 3D planet drawn from the simulation's state: tiles by biome, a small
-## model for each building (scaffolding while it is being built), nature on
-## the free tiles, and the selected tile's outline. Turns by itself, or by
-## dragging; a click picks a tile.
+## The 3D planet drawn from the simulation's state: continuous ground whose
+## biomes fade into each other, a small model for each building
+## (scaffolding while it is being built), nature on the free cells, and the
+## selected cell's outline. Everything stands on the ground (`ground()`),
+## never above it. Turns by itself while the whole planet is in view, or by
+## dragging; a click picks a cell; `focus()` flies the camera over one.
 class_name PlanetView
 extends Node3D
 
 signal tile_picked(index: int)
+## A crew brought something home: where (world space) and what ("+3 wood").
+signal delivered(where: Vector3, text: String, color: Color)
 
 const SPIN_SPEED := 0.08          # radians per second, while idle
 const IDLE_BEFORE_SPIN := 6.0     # seconds after the last touch
@@ -23,17 +27,42 @@ var _colors := PackedColorArray()
 var _indices := PackedInt32Array()
 static var _shapes := {}
 
-## Little people walking around the inhabited tiles: one per two people, up
-## to MAX_WALKERS, all in one MultiMesh (one draw call).
-const MAX_WALKERS := 30
+## Little people, all in one MultiMesh (one draw call): crews walking
+## between the village and the cell they work and back with their load,
+## builders on building sites, and a few people strolling at home.
+const MAX_WALKERS := 48
+## Walking speed (planet radii per second) and time spent working a cell.
+const WALK_SPEED := 0.05
+const WORK_SECONDS := 5.0
+## The planet's time now (ms) and how fast it runs: set by the window.
+var clock := func() -> float: return 0.0
+var time_rate := 1.0
+## Crews' routes: per order, ground points from home to the cell.
+var _routes := []
+## Building sites growing: [node, footing, normal, start_ms, done_ms].
+var _sites := []
+const RESOURCE_COLORS := {
+	"food": Color("e08f6c"), "wood": Color("8f6f5a"), "stone": Color("b0a6ad"),
+	"clay": Color("c07a54"), "marble": Color("eae2d6"),
+}
 const WALKER_COLORS := [Color("f2c078"), Color("e08f6c"), Color("eef3f2"), Color("e3c3c6"), Color("c2d69b")]
 var _walkers: MultiMeshInstance3D
-var _walk := []  # per walker: [tile, angle, radius, speed, phase]
+var _walk := []  # per walker: a Dictionary (kind, route or cell, time...)
 var _highlight: MeshInstance3D
 var _biomes: Array = []
 var _signature := ""
 var _idle := IDLE_BEFORE_SPIN
 var selected := -1
+var _heights: Array = []
+## Turning on its own: only while the whole planet is in view.
+var spin_allowed := true
+## Flying to a cell: the pivot turns from `_fly_from` to `_fly_to`.
+var _fly_from := Quaternion.IDENTITY
+var _fly_to := Quaternion.IDENTITY
+var _fly_t := 1.0
+const FLY_SECONDS := 0.7
+var _focused_home := false
+var _home := -1
 
 
 func _ready() -> void:
@@ -75,98 +104,236 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	_idle += delta
-	if _idle > IDLE_BEFORE_SPIN and selected < 0:
+	if _fly_t < 1.0:
+		_fly_t = minf(1.0, _fly_t + delta / FLY_SECONDS)
+		var t := _fly_t * _fly_t * (3.0 - 2.0 * _fly_t)
+		pivot.quaternion = _fly_from.slerp(_fly_to, t)
+	elif _idle > IDLE_BEFORE_SPIN and selected < 0 and spin_allowed:
 		pivot.rotate(Vector3.UP, SPIN_SPEED * delta)
 	_move_walkers(delta)
 
 
+## Seconds since the window started: people walk on this clock, so placing
+## them again never sends them back home.
+var _seconds := 0.0
+
+
 func _move_walkers(delta: float) -> void:
+	_seconds += delta
 	var multimesh := _walkers.multimesh
+	var size := _tile_size() * 1.2
 	for k in _walk.size():
-		var w: Array = _walk[k]
-		w[1] = float(w[1]) + float(w[3]) * delta
-		var tile: int = w[0]
-		var normal: Vector3 = builder.centers[tile]
-		var h: float = PlanetMesh.HEIGHT.get(_biomes[tile], 1.0)
-		var base := normal * PlanetMesh.surface(tile, normal, h, _biomes[tile])
-		var t := _tangents(normal)
-		var u: Vector3 = t[0]
-		var v: Vector3 = t[1]
-		var angle: float = w[1]
-		var r: float = w[2]
-		# A slow loop around the tile, with a little bounce in the step.
-		var bob := absf(sin(angle * 9.0 + float(w[4]))) * 0.008
-		var at := base + (u * cos(angle) + v * sin(angle)) * r + normal * (0.02 + bob)
-		var forward := (-u * sin(angle) + v * cos(angle)) * signf(float(w[3]))
-		var basis := Basis(forward.cross(normal).normalized(), normal, -forward).scaled(Vector3.ONE * _tile_size())
+		var w: Dictionary = _walk[k]
+		w["t"] = _seconds + float(w["offset"])
+		var at := Vector3.ZERO
+		var forward := Vector3.FORWARD
+		var normal := Vector3.UP
+		match w["kind"]:
+			"crew":
+				var route: Dictionary = _routes[w["route"]]
+				var points: PackedVector3Array = route["points"]
+				var walk := float(route["walk"])
+				var period := walk * 2.0 + WORK_SECONDS
+				var t := fmod(float(w["t"]), period)
+				var along := 0.0
+				if t < walk:
+					along = t / walk
+				elif t < walk + WORK_SECONDS:
+					along = 1.0
+				else:
+					along = 1.0 - (t - walk - WORK_SECONDS) / walk
+				# Home with the load: show what it brought.
+				if t < float(w["last"]) and w.get("leader", false):
+					var where: Vector3 = pivot.to_global(points[0])
+					delivered.emit(where, route["text"], route["color"])
+				w["last"] = t
+				var f := along * (points.size() - 1)
+				var i := mini(int(f), points.size() - 2)
+				at = points[i].lerp(points[i + 1], f - i)
+				forward = (points[i + 1] - points[i]).normalized() * (1.0 if t < walk else -1.0)
+				normal = at.normalized()
+				if t >= walk and t < walk + WORK_SECONDS:
+					# Working: a little bob on the spot.
+					at += normal * absf(sin(t * 12.0)) * 0.003
+					at += forward.cross(normal).normalized() * sin(float(w["phase"])) * 0.01
+				multimesh.set_instance_color(k, route["color"] if t >= walk + WORK_SECONDS else WALKER_COLORS[k % WALKER_COLORS.size()])
+			_:
+				# Strolling or building: a slow loop around a cell.
+				var cell: int = w["cell"]
+				normal = builder.centers[cell]
+				var tg := _tangents(normal)
+				var angle := float(w["phase"]) + float(w["t"]) * float(w["speed"])
+				var r := float(w["radius"])
+				at = builder.ground(normal + (tg[0] * cos(angle) + tg[1] * sin(angle)) * r, cell)
+				forward = (-tg[0] * sin(angle) + tg[1] * cos(angle)) * signf(float(w["speed"]))
+				if w["kind"] == "builder":
+					at += normal * absf(sin(float(w["t"]) * 10.0)) * 0.004
+		at += normal * (0.026 * size + absf(sin(float(w["t"]) * 9.0)) * 0.002)
+		var side := forward.cross(normal)
+		if side.length_squared() < 1e-8:
+			side = _tangents(normal)[0]
+		side = side.normalized()
+		var basis := Basis(side, normal, side.cross(normal)).scaled(Vector3.ONE * size)
 		multimesh.set_instance_transform(k, Transform3D(basis, at))
+	# Building sites rise with their progress.
+	var now: float = clock.call()
+	for site in _sites:
+		var node: MeshInstance3D = site[0]
+		var p := clampf((now - float(site[3])) / maxf(1.0, float(site[4]) - float(site[3])), 0.05, 1.0)
+		var n: Vector3 = site[2]
+		var f: Vector3 = site[1]
+		# Scale along the ground's up through the footing.
+		var b := Basis.IDENTITY
+		b.x += n * n.x * (p - 1.0)
+		b.y += n * n.y * (p - 1.0)
+		b.z += n * n.z * (p - 1.0)
+		node.transform = Transform3D(b, f - b * f)
 
 
-## Props shrink on denser planets (more, smaller tiles); they were drawn for
+## Props shrink on denser planets (more, smaller cells); they were drawn for
 ## a 32-tile planet.
 func _tile_size() -> float:
 	return sqrt(32.0 / maxf(1.0, float(builder.centers.size())))
 
 
+func set_rim(on: bool) -> void:
+	_outline.visible = on
+
+
+## Take the cell layout (once, before the first planet).
+func set_layout(data: Dictionary) -> void:
+	builder.load_layout(data)
+	_signature = ""
+	_biomes = []
+
+
 var _ts := 1.0
 
 
-## Place the walkers for this many people on the inhabited tiles.
-func _place_walkers(population: float, buildings: Array) -> void:
-	var homes := []
-	for i in buildings.size():
-		if buildings[i] != "" and not str(buildings[i]).begins_with("construction:"):
-			homes.append(i)
-	if homes.is_empty():
-		for i in _biomes.size():
-			if _biomes[i] == "plains" or _biomes[i] == "forest":
-				homes.append(i)
-		homes = homes.slice(0, 2)
-	var count := mini(MAX_WALKERS, maxi(2, roundi(population / 2.0)))
-	if homes.is_empty():
-		count = 0
+## Ground points along the way from one cell to another (local space).
+func _route(from: int, to: int) -> PackedVector3Array:
+	var a: Vector3 = builder.centers[from]
+	var b: Vector3 = builder.centers[to]
+	var steps := maxi(4, int(a.angle_to(b) / 0.02))
+	var points := PackedVector3Array()
+	for i in steps + 1:
+		var d := a.slerp(b, float(i) / steps)
+		var g := builder.ground(d)
+		points.append(g.normalized() * maxf(g.length(), PlanetMesh.SEA_LEVEL + 0.001))
+	return points
+
+
+## Place the people: crews on their routes, builders on sites, a few
+## strolling at home.
+func _place_walkers(planet: Dictionary, rates: Dictionary) -> void:
+	_walk.clear()
+	_routes.clear()
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 23
-	_walk.clear()
+	var orders: Array = planet.get("orders", [])
+	var outputs: Array = rates.get("orders", [])
+	var population := float(planet.get("population", 0))
+	var crew_size := clampi(roundi(population / 16.0) + 1, 2, 4)
+	for k in orders.size():
+		var cell := int(orders[k]["tile"])
+		if cell < 0 or cell >= builder.centers.size():
+			continue
+		var points := _route(_home, cell)
+		var length := 0.0
+		for i in points.size() - 1:
+			length += points[i].distance_to(points[i + 1])
+		var walk := maxf(1.5, length / WALK_SPEED)
+		var resource: String = orders[k]["resource"]
+		# What one trip brings: the crew's planet-hour output over a trip.
+		var trip_hours := (walk * 2.0 + WORK_SECONDS) * time_rate / 3600.0
+		var amount := (float(outputs[k]) if k < outputs.size() else 0.0) * trip_hours
+		var text := "+%s %s" % [_short(amount), I18n.name_of("resource", resource).to_lower()]
+		_routes.append({"points": points, "walk": walk, "text": text, "resource": resource, "color": RESOURCE_COLORS.get(resource, Color("f2c078"))})
+		for m in crew_size:
+			var period := walk * 2.0 + WORK_SECONDS
+			# The crew walks together, a step apart; the first one tells
+			# what they brought.
+			var offset := m * 0.35 + float(k) * 1.7
+			_walk.append({"kind": "crew", "route": _routes.size() - 1, "offset": offset, "t": 0.0, "last": fmod(_seconds + offset, period), "phase": rng.randf() * TAU, "leader": m == 0})
+	for c in planet.get("construction", []):
+		for m in 2:
+			_walk.append({"kind": "builder", "cell": int(c["tile"]), "offset": 0.0, "t": 0.0, "phase": m * PI + rng.randf(), "speed": 0.6, "radius": 0.035 * _tile_size()})
+	var strollers := clampi(roundi(population / 10.0), 2, 8)
+	for m in strollers:
+		var speed := (0.12 + rng.randf() * 0.2) * (1.0 if rng.randf() < 0.5 else -1.0)
+		_walk.append({"kind": "stroll", "cell": _home, "offset": 0.0, "t": 0.0, "phase": rng.randf() * TAU, "speed": speed, "radius": (0.1 + rng.randf() * 0.12) * _tile_size()})
+	if _walk.size() > MAX_WALKERS:
+		_walk.resize(MAX_WALKERS)
 	var multimesh := _walkers.multimesh
-	multimesh.instance_count = count
-	for k in count:
-		var speed := (0.25 + rng.randf() * 0.35) * (1.0 if rng.randf() < 0.5 else -1.0)
-		_walk.append([homes[k % homes.size()], rng.randf() * TAU, (0.08 + rng.randf() * 0.1) * _tile_size(), speed, rng.randf() * TAU])
+	multimesh.instance_count = _walk.size()
+	for k in _walk.size():
 		multimesh.set_instance_color(k, WALKER_COLORS[k % WALKER_COLORS.size()])
 	_move_walkers(0.0)
 
 
+static func _short(v: float) -> String:
+	if v >= 10.0:
+		return str(roundi(v))
+	return "%.1f" % v
+
+
 ## Rebuild what changed in the planet (`planet` is the simulation's JSON).
-func show_planet(planet: Dictionary) -> void:
+func show_planet(planet: Dictionary, rates := {}) -> void:
 	var tiles: Array = planet.get("tiles", [])
+	if not builder.ready() or tiles.size() != builder.centers.size():
+		return
+	_home = int(planet.get("home", 0))
 	var building_at := {}
 	for c in planet.get("construction", []):
 		building_at[int(c["tile"])] = "construction:" + str(c["building"])
 	var biomes := []
+	var heights := []
 	var buildings := []
 	for i in tiles.size():
 		biomes.append(str(tiles[i]["biome"]))
+		heights.append(float(tiles[i].get("height", 1.0)))
 		var b = tiles[i].get("building")
 		buildings.append(str(b) if b != null else building_at.get(i, ""))
-	var signature := JSON.stringify([biomes, buildings, roundi(float(planet.get("population", 0)) / 2.0)])
+	var stocks := []
+	for t in tiles:
+		stocks.append(roundi(float(t.get("stock", 1.0)) * 4.0))
+	# People move on every view; the props only when something they show
+	# changed.
+	_home = int(planet.get("home", 0))
+	_place_walkers(planet, rates)
+	var signature := JSON.stringify([biomes, buildings, planet.get("orders", []), stocks])
 	if signature == _signature:
 		return
 	_signature = signature
-	if biomes != _biomes:
+	if biomes != _biomes or heights != _heights:
 		_biomes = biomes
-		var mesh := builder.build(biomes, Palette.BIOMES)
-		_land.mesh = mesh
-		_outline.mesh = mesh
+		_heights = heights
+		_land.mesh = builder.build(biomes, heights, Palette.BIOMES)
+		# The rim only needs the shape: the coarse surface is enough.
+		_outline.mesh = builder.build(biomes, heights, Palette.BIOMES, 1)
 		_ts = _tile_size()
+	if not _focused_home:
+		_focused_home = true
+		focus(_home, true)
 	_verts = PackedVector3Array()
 	_normals = PackedVector3Array()
 	_colors = PackedColorArray()
 	_indices = PackedInt32Array()
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 11
+	_stocks = stocks
+	_ordered = {}
+	for o in planet.get("orders", []):
+		_ordered[int(o["tile"])] = str(o["resource"])
+	for site in _sites:
+		site[0].queue_free()
+	_sites.clear()
+	var step_ms := 600000.0
+	for c in planet.get("construction", []):
+		_site_times[int(c["tile"])] = [float(c.get("start_step", 0)) * step_ms, float(c["done_step"]) * step_ms]
 	for i in biomes.size():
 		_place_tile(i, biomes[i], buildings[i], rng)
+	_site_times.clear()
 	var arrays := []
 	arrays.resize(Mesh.ARRAY_MAX)
 	arrays[Mesh.ARRAY_VERTEX] = _verts
@@ -177,13 +344,13 @@ func show_planet(planet: Dictionary) -> void:
 	if _verts.size() > 0:
 		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 	_props.mesh = mesh
-	_place_walkers(float(planet.get("population", 0)), buildings)
 	_update_highlight()
 
 
 ## Rotate by a drag of `relative` pixels (in the low-resolution view).
 func drag(relative: Vector2) -> void:
 	_idle = 0.0
+	_fly_t = 1.0
 	pivot.rotate(Vector3.UP, relative.x * 0.012)
 	pivot.rotate(Vector3.RIGHT, relative.y * 0.012)
 
@@ -202,15 +369,35 @@ func pick(camera: Camera3D, point: Vector2) -> int:
 	if disc < 0.0:
 		return -1
 	var hit := origin + direction * (-b - sqrt(disc))
-	var local := (pivot.global_transform.affine_inverse() * hit).normalized()
-	var best := -1
-	var best_dot := -2.0
-	for i in builder.centers.size():
-		var d := local.dot(builder.centers[i])
-		if d > best_dot:
-			best_dot = d
-			best = i
-	return best
+	var to_local := pivot.global_transform.affine_inverse()
+	var local := (to_local * hit).normalized()
+	# Refine against the real ground: hills and peaks stand above the sphere.
+	var local_origin := to_local * origin
+	var local_dir := (to_local.basis * direction).normalized()
+	for k in 3:
+		var r := builder.ground(local).length()
+		var lb := local_origin.dot(local_dir)
+		var lc := local_origin.dot(local_origin) - r * r
+		var ld := lb * lb - lc
+		if ld < 0.0:
+			break
+		local = (local_origin + local_dir * (-lb - sqrt(ld))).normalized()
+	return builder.cell_at(local)
+
+
+## Turn the planet so `cell` faces the camera (at once with `instant`).
+func focus(cell: int, instant := false) -> void:
+	if cell < 0 or cell >= builder.centers.size():
+		return
+	var current := pivot.quaternion
+	var world := current * builder.centers[cell]
+	var turn := Quaternion(world.normalized(), Vector3.BACK)
+	_fly_from = current
+	_fly_to = (turn * current).normalized()
+	_fly_t = 1.0 if instant else 0.0
+	if instant:
+		pivot.quaternion = _fly_to
+	_idle = 0.0
 
 
 func select(index: int) -> void:
@@ -220,15 +407,14 @@ func select(index: int) -> void:
 
 
 func _update_highlight() -> void:
-	if selected < 0 or selected >= builder.corners.size():
+	if selected < 0 or selected >= builder.corner_points.size() or not builder.ready() or builder.center_points.is_empty():
 		_highlight.mesh = null
 		return
-	var ring: PackedVector3Array = builder.corners[selected]
-	var h: float = PlanetMesh.HEIGHT.get(_biomes[selected], 1.0) * 1.012
+	var ring := builder.outline(selected)
 	var mesh := ImmediateMesh.new()
 	mesh.surface_begin(Mesh.PRIMITIVE_LINE_STRIP)
 	for k in ring.size() + 1:
-		mesh.surface_add_vertex(ring[k % ring.size()] * h)
+		mesh.surface_add_vertex(ring[k % ring.size()])
 	mesh.surface_end()
 	_highlight.mesh = mesh
 
@@ -300,7 +486,12 @@ func _put(shape: Array, color: Color, normal: Vector3, base: Vector3, offset: Ve
 	var y := normal.normalized()
 	var basis := Basis(u, y, w).rotated(y, turn).scaled(Vector3.ONE * size * _scale * _ts)
 	offset *= _scale * _ts
-	var xform := Transform3D(basis, base + u * offset.x + y * offset.y + w * offset.z)
+	var at := base + u * offset.x + w * offset.z
+	if _on_ground:
+		# Nature stands wherever it is: on the ground at that very spot,
+		# sunk a little so slopes never leave a gap underneath.
+		at = builder.ground(at, _cell) - y * 0.004 * _ts
+	var xform := Transform3D(basis, at + y * offset.y)
 	var rotation := basis.orthonormalized()
 	var start := _verts.size()
 	var verts: PackedVector3Array = shape[Mesh.ARRAY_VERTEX]
@@ -314,19 +505,57 @@ func _put(shape: Array, color: Color, normal: Vector3, base: Vector3, offset: Ve
 		_indices.append(start + index)
 
 
+## Nature follows the ground prop by prop; buildings stand on one footing.
+var _on_ground := false
+var _cell := -1
+
+
 func _place_tile(i: int, biome: String, building: String, rng: RandomNumberGenerator) -> void:
 	var normal: Vector3 = builder.centers[i]
-	var h: float = PlanetMesh.HEIGHT.get(biome, 1.0)
-	var base := normal * PlanetMesh.surface(i, normal, h, biome)
-	if building.begins_with("construction:"):
-		_scaffold(normal, base)
-		_nature(normal, base, biome, rng, 2)
+	_cell = i
+	var base := builder.ground(normal, i)
+	if biome == "ocean":
 		return
 	if building == "":
-		_nature(normal, base, biome, rng, 6)
+		_on_ground = true
+		# Worked land thins out: fewer trees and rocks while it is spent.
+		var stock := float(_stocks[i]) / 4.0 if i < _stocks.size() else 1.0
+		_nature(normal, base, biome, rng, maxi(1, roundi(6.0 * (0.25 + 0.75 * stock))))
+		if _ordered.has(i):
+			# A stake with a little flag the colour of what is gathered.
+			_put(_box(0.012, 0.16, 0.012), Palette.HUT_WALL, normal, base, Vector3(0, 0.08, 0))
+			_put(_box(0.06, 0.035, 0.008), RESOURCE_COLORS.get(_ordered[i], Color("f2c078")), normal, base, Vector3(0.03, 0.14, 0))
+		_on_ground = false
 		return
-	_building(building, normal, base)
+	# The footing: the lowest ground under the building, with a plinth
+	# below it so a slope never shows a gap.
+	var footing := base
+	var t := _tangents(normal)
+	for k in 6:
+		var a := k * TAU / 6.0
+		var p := builder.ground(base + (t[0] * cos(a) + t[1] * sin(a)) * 0.05 * _ts, i)
+		if p.length() < footing.length():
+			footing = p
+	footing = footing.normalized() * (footing.length() - 0.002)
+	_put(_box(0.26, 0.08, 0.26), _plinth(biome), normal, footing, Vector3(0, -0.035, 0))
+	if building.begins_with("construction:"):
+		_scaffold(normal, footing)
+		_grow_site(i, building.substr(13), normal, footing)
+	else:
+		_building(building, normal, footing)
+	_on_ground = true
 	_nature(normal, base, biome, rng, 2)
+	_on_ground = false
+
+
+## The plinth under a building: packed earth, sand or stone.
+static func _plinth(biome: String) -> Color:
+	match biome:
+		"desert", "coast":
+			return Color("b58e6b")
+		"mountain", "ice":
+			return Color("857c8a")
+	return Color("8f6f5a")
 
 
 ## Buildings are drawn larger than life, so they read at the pixel scale.
@@ -337,26 +566,66 @@ const BUILDING_SCALE := 1.15
 func _nature(normal: Vector3, base: Vector3, biome: String, rng: RandomNumberGenerator, amount: int) -> void:
 	match biome:
 		"forest":
-			for k in amount:
-				var angle := k * TAU / amount + rng.randf() * 0.6
-				var r := (0.05 + rng.randf() * 0.09) if amount > 2 else 0.13
+			for k in amount * 2:
+				var angle := k * TAU / (amount * 2) + rng.randf() * 0.6
+				var r := (0.04 + rng.randf() * 0.2) if amount > 2 else 0.2 + rng.randf() * 0.06
 				var s := 0.7 + rng.randf() * 0.6
 				_put(_cone(0.06, 0.18, 5), Palette.TREE, normal, base,
 					Vector3(cos(angle) * r, 0.09 * s, sin(angle) * r), s)
 		"mountain":
-			var peaks := 2 if amount > 2 else 1
-			for k in peaks:
-				var angle := k * PI + rng.randf()
-				var r := (0.035 + k * 0.05) if amount > 2 else 0.12
-				var s := 1.0 - k * 0.3 if amount > 2 else 0.6
-				var at := Vector3(cos(angle) * r, 0.0, sin(angle) * r)
-				_put(_cone(0.16, 0.26, 4), Palette.PEAK, normal, base, at + Vector3(0, 0.13 * s, 0), s)
-				_put(_cone(0.065, 0.1, 4), Palette.SNOW, normal, base, at + Vector3(0, 0.21 * s, 0), s)
+			# The peak is the ground itself; a few boulders on its flanks.
+			for k in mini(amount, 3):
+				var angle := k * TAU / 3.0 + rng.randf()
+				var r := 0.12 + rng.randf() * 0.1
+				_put(_box(0.05, 0.04, 0.045), Palette.PEAK, normal, base,
+					Vector3(cos(angle) * r, 0.012, sin(angle) * r), 0.7 + rng.randf() * 0.6, rng.randf() * TAU)
+		"plains":
+			for k in mini(amount, 2):
+				var angle := rng.randf() * TAU
+				var r := 0.08 + rng.randf() * 0.14
+				_put(_ball(0.035), Color("6f9163"), normal, base,
+					Vector3(cos(angle) * r, 0.015, sin(angle) * r), 0.8 + rng.randf() * 0.5)
 		"ice":
 			for k in mini(amount, 3):
 				var angle := k * TAU / 3.0 + rng.randf()
 				_put(_cone(0.08, 0.06, 5), Palette.SNOW, normal, base,
-					Vector3(cos(angle) * 0.1, 0.03, sin(angle) * 0.1), 0.8 + rng.randf() * 0.4)
+					Vector3(cos(angle) * 0.14, 0.02, sin(angle) * 0.14), 0.8 + rng.randf() * 0.4)
+
+
+var _stocks := []
+var _ordered := {}
+var _site_times := {}
+
+
+## The building going up on a site: its own small mesh, scaled up from the
+## footing as the work goes on (see `_move_walkers`).
+func _grow_site(cell: int, id: String, normal: Vector3, footing: Vector3) -> void:
+	var saved := [_verts, _normals, _colors, _indices]
+	_verts = PackedVector3Array()
+	_normals = PackedVector3Array()
+	_colors = PackedColorArray()
+	_indices = PackedInt32Array()
+	_building(id, normal, footing)
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = _verts
+	arrays[Mesh.ARRAY_NORMAL] = _normals
+	arrays[Mesh.ARRAY_COLOR] = _colors
+	arrays[Mesh.ARRAY_INDEX] = _indices
+	_verts = saved[0]
+	_normals = saved[1]
+	_colors = saved[2]
+	_indices = saved[3]
+	if arrays[Mesh.ARRAY_VERTEX].is_empty():
+		return
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	var node := MeshInstance3D.new()
+	node.mesh = mesh
+	node.material_override = _props.material_override
+	pivot.add_child(node)
+	var times: Array = _site_times.get(cell, [0.0, 1.0])
+	_sites.append([node, footing, normal.normalized(), times[0], times[1]])
 
 
 func _scaffold(normal: Vector3, base: Vector3) -> void:

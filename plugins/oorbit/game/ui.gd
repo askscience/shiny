@@ -11,6 +11,7 @@ signal found_requested(climate: String)
 signal reset_requested
 signal skip_requested(hours: float)
 signal tile_closed
+signal tile_focus_requested(index: int)
 
 const PANEL_WIDTH := 320.0
 const NARROW := 640.0
@@ -270,6 +271,24 @@ func _fit_height(body: Control, available: float) -> float:
 	return minf(available, body.get_combined_minimum_size().y + 24.0)
 
 
+## A short text rising and fading over a spot of the screen ("+3 wood").
+func float_text(at: Vector2, text: String, color := Color("f2e1c8")) -> void:
+	if get_child_count() > 80:
+		return
+	var l := _label(text, 14, color.lightened(0.35), false)
+	l.add_theme_color_override("font_outline_color", Color("15132a"))
+	l.add_theme_constant_override("outline_size", 4)
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(l)
+	move_child(l, 0)
+	l.position = at - Vector2(20, 24)
+	var tween := l.create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(l, "position:y", l.position.y - 28.0, 1.6)
+	tween.tween_property(l, "modulate:a", 0.0, 1.6).set_ease(Tween.EASE_IN)
+	tween.chain().tween_callback(l.queue_free)
+
+
 func toast(text: String) -> void:
 	_toast.text = text
 	_toast.visible = true
@@ -291,7 +310,9 @@ func _show_founding_message(text: String) -> void:
 	_rail.visible = false
 	_founding.visible = true
 	_clear(_founding)
-	_founding.add_child(_label(text, 15))
+	# No wrapping: inside a CenterContainer a wrapped label shrinks to one
+	# letter per line.
+	_founding.add_child(_label(text, 15, Color("eef3f2"), false))
 
 
 ## Redraw everything from a view (the plugin's reply).
@@ -347,9 +368,34 @@ func _planet() -> Dictionary:
 	return view.get("planet", {})
 
 
-## The current time on the server's clock, moving on since the view arrived.
+## The planet's time now, moving on since the view arrived: fast while
+## someone plays (until the presence the view reported runs out), slow after.
 func live_now_ms() -> float:
-	return float(view.get("now_ms", 0)) + float(Time.get_ticks_msec() - _view_ticks)
+	var elapsed := float(Time.get_ticks_msec() - _view_ticks)
+	var clock: Dictionary = view.get("clock", {})
+	if clock.is_empty():
+		return float(view.get("now_ms", 0)) + elapsed
+	var fast := minf(elapsed, float(clock.get("present_left_ms", 0))) if clock.get("present", false) else 0.0
+	return float(view.get("now_ms", 0)) + fast * float(clock.get("active_rate", 60)) + (elapsed - fast) * float(clock.get("away_rate", 0.5))
+
+
+## Planet time per wall time right now.
+func clock_rate() -> float:
+	return maxf(0.01, float(view.get("clock", {}).get("rate", 1.0)))
+
+
+## How long `planet_ms` of planet time takes on the wall clock at the
+## current speed.
+func wall_ms(planet_ms: float) -> float:
+	return planet_ms / clock_rate()
+
+
+## A rate per planet hour as the player feels it: per real minute while
+## playing (a planet hour is a minute then), per real hour otherwise.
+func _felt_rate(per_planet_hour: float) -> Array:
+	if view.get("clock", {}).get("present", false):
+		return [per_planet_hour * clock_rate() / 60.0, I18n.t("ui.per_minute")]
+	return [per_planet_hour * clock_rate(), I18n.t("ui.per_hour")]
 
 
 ## Hours since the state's last simulation step.
@@ -433,10 +479,14 @@ func _fill_top() -> void:
 		if amount < 0.5 and absf(rate) < 0.01:
 			continue
 		var sign := "+" if rate >= 0.0 else ""
-		var l := _label("%s %s (%s%s%s)" % [I18n.name_of("resource", id), _fmt(amount), sign, _fmt(rate), I18n.t("ui.per_hour")], 13, Color("eef3f2"), false)
+		var felt := _felt_rate(rate)
+		var l := _label("%s %s (%s%s%s)" % [I18n.name_of("resource", id), _fmt(amount), sign, _fmt(felt[0]), felt[1]], 13, Color("eef3f2"), false)
 		if id == "food" and planet.get("starving", false):
 			l.add_theme_color_override("font_color", Color("e08f6c"))
 		_top_row.add_child(l)
+	# How fast the planet's time runs: quick while you play, slow while away.
+	var present: bool = view.get("clock", {}).get("present", false)
+	_top_row.add_child(_label(I18n.t("ui.speed.fast" if present else "ui.speed.slow"), 13, Color("f2c078") if present else Color("9fb3c8"), false))
 
 
 func _toggle_panel(id: String) -> void:
@@ -525,26 +575,31 @@ func _fill_research() -> void:
 func _fill_society() -> void:
 	var planet := _planet()
 	var rates: Dictionary = view.get("rates", {})
-	_side_body.add_child(_label(I18n.t("ui.priorities"), 15, Color("f2c078")))
-	var priorities: Dictionary = planet.get("priorities", {})
-	for category in ["food", "materials", "knowledge", "culture"]:
+	_side_body.add_child(_label(I18n.t("ui.crews"), 15, Color("f2c078")))
+	var orders: Array = planet.get("orders", [])
+	var outputs: Array = rates.get("orders", [])
+	_side_body.add_child(_muted(I18n.t("ui.crews.help", {"n": orders.size(), "max": int(view.get("slots", 9)), "people": _fmt(float(view.get("crew", 0)))})))
+	for k in orders.size():
+		var o: Dictionary = orders[k]
+		var tile := int(o["tile"])
+		var stock := float(planet.get("tiles", [])[tile].get("stock", 1.0))
+		var out := float(outputs[k]) if k < outputs.size() else 0.0
+		var felt := _felt_rate(out)
 		var row := HBoxContainer.new()
-		var name := _label(I18n.name_of("category", category))
-		name.custom_minimum_size = Vector2(96, 0)
-		row.add_child(name)
-		var slider := HSlider.new()
-		slider.min_value = 0
-		slider.max_value = 4
-		slider.step = 1
-		slider.value = int(priorities.get(category, 0))
-		slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		slider.custom_minimum_size = Vector2(0, 24)
-		slider.drag_ended.connect(func(_changed: bool): _send_priorities())
-		slider.set_meta("category", category)
-		row.add_child(slider)
+		var text := _label(I18n.t("ui.crew.row", {"resource": I18n.name_of("resource", o["resource"]), "rate": "+%s%s" % [_fmt(felt[0]), felt[1]], "stock": roundi(stock * 100.0)}))
+		text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(text)
+		var look := Button.new()
+		look.text = I18n.t("ui.crew.look")
+		look.pressed.connect(func(): tile_focus_requested.emit(tile))
+		row.add_child(look)
+		var stop := Button.new()
+		stop.text = I18n.t("ui.crew.stop")
+		stop.pressed.connect(func(): action_requested.emit({"type": "stop_harvest", "tile": tile}))
+		row.add_child(stop)
 		_side_body.add_child(row)
-		var workers := float(rates.get("workers", {}).get(category, 0.0))
-		_side_body.add_child(_muted(I18n.t("ui.workers", {"n": _fmt(workers)})))
+	var thinkers := float(rates.get("workers", {}).get("knowledge", 0.0)) + float(rates.get("workers", {}).get("culture", 0.0))
+	_side_body.add_child(_muted(I18n.t("ui.thinkers", {"n": _fmt(thinkers)})))
 	var notables: Array = planet.get("notables", [])
 	if notables.size() > 0:
 		_side_body.add_child(_label(I18n.t("ui.notables"), 14, Color("f2c078")))
@@ -557,16 +612,6 @@ func _fill_society() -> void:
 			_side_body.add_child(_label("%s %+d" % [I18n.t("ui.trait." + id), int(traits[id])]))
 	# Starting over takes two presses, the second within a few seconds.
 	_side_body.add_child(_confirm_button(I18n.t("ui.reset"), I18n.t("ui.reset.confirm"), func(): reset_requested.emit()))
-
-
-func _send_priorities() -> void:
-	var priorities := {}
-	for row in _side_body.get_children():
-		for child in row.get_children():
-			if child is HSlider:
-				priorities[child.get_meta("category")] = int(child.value)
-	if priorities.size() == 4:
-		action_requested.emit({"type": "set_priorities", "priorities": priorities})
 
 
 func _fill_chronicle() -> void:
@@ -629,7 +674,7 @@ func _fill_dock() -> void:
 	var planet := _planet()
 	var dock: Dictionary = view.get("dock", {})
 	_side_body.add_child(_label(I18n.t("ui.dock"), 15, Color("f2c078")))
-	_side_body.add_child(_muted(I18n.t("ui.dock.travel", {"hours": _fmt(float(dock.get("travel_hours", 0))), "capacity": _fmt(float(dock.get("capacity", 0)))})))
+	_side_body.add_child(_muted(I18n.t("ui.dock.travel", {"time": I18n.duration(wall_ms(float(dock.get("travel_hours", 0)) * 3600000.0)), "capacity": _fmt(float(dock.get("capacity", 0)))})))
 
 	var offers: Array = planet.get("offers", [])
 	if offers.size() > 0:
@@ -662,7 +707,7 @@ func _fill_dock() -> void:
 		var incoming: bool = s["to"] == "home"
 		var other: String = s["from"] if incoming else s["to"]
 		var key := "ui.dock.incoming" if incoming else "ui.dock.outgoing"
-		_side_body.add_child(_muted(I18n.t(key, {"kind": I18n.t("kind." + str(s["kind"])), "name": _neighbor(other).get("name", "?"), "time": I18n.duration(left)})))
+		_side_body.add_child(_muted(I18n.t(key, {"kind": I18n.t("kind." + str(s["kind"])), "name": _neighbor(other).get("name", "?"), "time": I18n.duration(wall_ms(left))})))
 
 	var cap := float(dock.get("capacity", 0))
 	for n in dock.get("neighbors", []):
@@ -802,15 +847,21 @@ func _fill_tile() -> void:
 			_countdown = _label(_countdown_text())
 			_tile_body.add_child(_countdown)
 			return
+	_fill_crew(tile)
+	if tile["biome"] == "ocean":
+		if not view.get("harvest", {}).has(str(selected_tile)):
+			_tile_body.add_child(_muted(I18n.t("ui.tile.sea")))
+		return
+	# JSON numbers arrive as floats: compare cell indices as ints.
+	var reachable := false
+	for t in view.get("buildable", []):
+		reachable = reachable or int(t) == selected_tile
+	if not reachable:
+		_tile_body.add_child(_muted(I18n.t("ui.tile.far")))
+		return
 	_tile_body.add_child(_muted(I18n.t("ui.tile.empty")))
 	var any := false
 	for b in view.get("buildings", []):
-		# JSON numbers arrive as floats: compare tile indices as ints.
-		var free := false
-		for t in b.get("tiles", []):
-			free = free or int(t) == selected_tile
-		if not free and b["status"] != "not_affordable":
-			continue
 		if not _fits(b, tile["biome"]):
 			continue
 		if b["status"] == "locked" or b["status"] == "monument_done":
@@ -824,7 +875,7 @@ func _fill_tile() -> void:
 		var name := I18n.name_of("building", id)
 		if b.get("monument", false):
 			name = "%s · %s" % [name, I18n.t("ui.monument")]
-		button.text = "%s\n%s · %s" % [name, ", ".join(costs), I18n.t("ui.hours", {"n": _fmt(float(b["build_hours"]))})]
+		button.text = "%s\n%s · %s" % [name, ", ".join(costs), I18n.duration(wall_ms(float(b["build_hours"]) * 3600000.0))]
 		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		button.icon = load("res://icons/build.svg")
 		button.expand_icon = false
@@ -840,9 +891,51 @@ func _fill_tile() -> void:
 		_tile_body.add_child(_muted(I18n.t("ui.tile.none")))
 
 
+## The crew working this cell, or buttons to send one.
+func _fill_crew(tile: Dictionary) -> void:
+	var planet := _planet()
+	var orders: Array = planet.get("orders", [])
+	var outputs: Array = view.get("rates", {}).get("orders", [])
+	for k in orders.size():
+		if int(orders[k]["tile"]) != selected_tile:
+			continue
+		var out := float(outputs[k]) if k < outputs.size() else 0.0
+		var felt := _felt_rate(out)
+		_tile_body.add_child(_label(I18n.t("ui.crew.here", {"resource": I18n.name_of("resource", orders[k]["resource"]).to_lower(), "rate": "+%s%s" % [_fmt(felt[0]), felt[1]]}), 14, Color("c2d69b")))
+		_tile_body.add_child(_muted(I18n.t("ui.crew.stock", {"stock": roundi(float(tile.get("stock", 1.0)) * 100.0)})))
+		var stop := Button.new()
+		stop.text = I18n.t("ui.crew.stop")
+		var tile_index := selected_tile
+		stop.pressed.connect(func(): action_requested.emit({"type": "stop_harvest", "tile": tile_index}))
+		_tile_body.add_child(stop)
+		return
+	var options: Array = view.get("harvest", {}).get(str(selected_tile), [])
+	if options.is_empty():
+		return
+	var reachable := false
+	for t in view.get("work_reach", []):
+		reachable = reachable or int(t) == selected_tile
+	if not reachable:
+		_tile_body.add_child(_muted(I18n.t("ui.crew.far")))
+		return
+	if orders.size() >= int(view.get("slots", 9)):
+		_tile_body.add_child(_muted(I18n.t("ui.crew.full")))
+		return
+	if float(tile.get("stock", 1.0)) < 0.99:
+		_tile_body.add_child(_muted(I18n.t("ui.crew.stock", {"stock": roundi(float(tile.get("stock", 1.0)) * 100.0)})))
+	for resource in options:
+		var b := Button.new()
+		b.text = I18n.t("ui.crew.send", {"resource": I18n.name_of("resource", resource).to_lower()})
+		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		var tile_index := selected_tile
+		var res: String = resource
+		b.pressed.connect(func(): action_requested.emit({"type": "harvest", "tile": tile_index, "resource": res}))
+		_tile_body.add_child(b)
+
+
 func _countdown_text() -> String:
 	var left := maxf(0.0, _countdown_done_ms - live_now_ms())
-	return I18n.t("ui.tile.building", {"building": I18n.name_of("building", _countdown_building), "time": I18n.duration(left)})
+	return I18n.t("ui.tile.building", {"building": I18n.name_of("building", _countdown_building), "time": I18n.duration(wall_ms(left))})
 
 
 func _update_research_bar() -> void:

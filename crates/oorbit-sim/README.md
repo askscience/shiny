@@ -17,18 +17,27 @@ drive the same rules.
   with the result it would have had if it stayed on.
 - `apply(planet, catalog, now_ms, action)` advances to `now_ms`, then checks
   and applies the action.
-- A planet saved with fewer tiles than the catalog asks (version 1 had
-  32, now 72) gains new land from its climate on its next advance.
+- The planet has 642 cells (`cells.rs`, embedded from `data/cells_642.json`)
+  whose land and sea `terrain.rs` draws from the seed and climate. A planet
+  saved on another layout (32 or 72 tiles before version 4) is reborn on its
+  next advance: new land, its buildings moved around the new home, the rest
+  kept.
 - Saved planets round-trip through JSON exactly (`serde_json` with
   `float_roundtrip`): reloading a planet never changes its future.
+
+## Time
+
+Everything here runs on planet time. `clock.rs` turns wall time into it for
+the plugin: 60 times faster while someone plays (`Clock::present`), half as
+fast otherwise, counted in half milliseconds so it is exact in pieces.
 
 ## Rules in brief
 
 | Part | How it works |
 |---|---|
-| Work | 80% of the population works, split by four priorities (food, materials, knowledge, culture; 0 to 4 each). |
+| Work | 80% of the population works. Each standing order (`orders.rs`: a cell and a resource) and each extracting building (a mine) takes a crew of one ninth of the workers (smaller with more than nine). Whoever has no crew thinks: two thirds make knowledge, one third culture. |
 | Output | Per worker-hour rate × (1 + bonuses) × efficiency. Efficiency is `0.6 + 0.8 × mood`, halved after 36 hours with no action (the planet slows down, it never decays), times the settlers' zeal of a young planet. |
-| Materials | Split among the materials the planet can gather, weighted by the tiles of their biome (wood: forest, stone: mountain, clay: plains once Pottery is known) or by the buildings that extract them (copper and tin: mines). Bronze comes from a foundry's conversion. |
+| Gathering | A crew gathers its resource on its cell: food on meadows, forests, beaches and the shallow sea; wood in forests; stone on mountains; clay on meadows once Pottery is known; marble on mountains once Masonry is. The cell's stock (0 to 1) drops 2% an hour while worked and refills 1.5% an hour at rest; output is `0.4 + 0.6 × stock` of a full cell's, and below 15% the crew moves to the nearest fuller cell. Mines yield copper and tin, later iron and coal. Bronze comes from a foundry's conversion. |
 | Food | Seasons follow a one-week year; the climate multiplies food. Each person eats a fixed amount. |
 | People | Grow while fed and housed, shrink slowly while hungry, leave when there is no room; never below the floor. |
 | Mood | Heads towards a target made of food, housing, culture per person, effects and traits. |

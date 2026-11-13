@@ -138,25 +138,31 @@ fn the_state_survives_a_json_round_trip() {
 }
 
 #[test]
-fn a_planet_saved_with_32_tiles_grows_to_the_catalog_count() {
+fn a_planet_saved_with_72_tiles_is_reborn_with_its_buildings() {
     let catalog = Catalog::builtin();
     let mut planet = Planet::new(4, "temperate", T0, &catalog).unwrap();
     for i in 0..8 {
         play_session(&mut planet, &catalog, T0 + i * 6 * HOUR);
     }
-    // What a version 1 planet looked like.
-    planet.tiles.truncate(32);
-    planet.construction.retain(|c| c.tile < 32);
-    planet.version = 1;
-    let old: Vec<_> = planet.tiles.clone();
+    // What a version 3 planet looked like: 72 tiles.
+    let built: Vec<String> = planet.built().map(String::from).collect();
+    assert!(!built.is_empty());
+    planet.tiles.truncate(72);
+    for (i, b) in built.iter().enumerate() {
+        planet.tiles[i].building = Some(b.clone());
+    }
+    planet.construction.clear();
+    planet.version = 3;
+    let (era, known) = (planet.era, planet.known.clone());
     advance(&mut planet, &catalog, T0 + 3 * DAY);
     assert_eq!(planet.tiles.len(), catalog.tuning.tiles);
     assert_eq!(planet.version, oorbit_sim::planet::STATE_VERSION);
-    for (now, before) in planet.tiles.iter().zip(&old) {
-        assert_eq!(now.biome, before.biome);
-        if before.building.is_some() {
-            assert_eq!(now.building, before.building);
-        }
+    assert!(planet.era >= era && planet.known.is_superset(&known));
+    let now: Vec<String> = planet.built().map(String::from).collect();
+    for b in &built {
+        let want = built.iter().filter(|x| *x == b).count();
+        let have = now.iter().filter(|x| *x == b).count();
+        assert!(have >= want, "{b}: every building found a place on the new land");
     }
-    assert!(planet.tiles[32..].iter().all(|t| t.building.is_none()));
+    assert!(planet.chronicle.iter().any(|e| e.key == "reborn"));
 }

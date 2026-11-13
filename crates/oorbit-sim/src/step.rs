@@ -23,6 +23,8 @@ pub struct Rates {
     pub mood_target: f64,
     /// Output multiplier from mood, season and absence.
     pub efficiency: f64,
+    /// What each order's crew gathers per hour (in `planet.orders` order).
+    pub orders: Vec<f64>,
     pub season: usize,
 }
 
@@ -64,38 +66,6 @@ fn effects<'a>(planet: &'a Planet, catalog: &'a Catalog) -> Vec<Effect> {
 fn season_of(step: i64, catalog: &Catalog) -> usize {
     let season_steps = (catalog.tuning.season_days * 24.0 * STEPS_PER_HOUR as f64) as i64;
     (step.div_euclid(season_steps.max(1)) % 4) as usize
-}
-
-/// Share of material output each material gets, from the tiles and
-/// buildings that yield it.
-fn material_mix(planet: &Planet, catalog: &Catalog) -> Vec<(String, f64)> {
-    let mut mix = Vec::new();
-    for r in catalog
-        .resources
-        .iter()
-        .filter(|r| r.category == Category::Materials)
-    {
-        if let Some(tech) = &r.unlocked_by {
-            if !planet.known.contains(tech) {
-                continue;
-            }
-        }
-        let weight = match (&r.from_building, r.biome) {
-            (Some(building), _) => planet.built().filter(|b| b == building).count() as f64 * 3.0,
-            (None, Some(biome)) => planet.tiles.iter().filter(|t| t.biome == biome).count() as f64,
-            (None, None) => 0.0,
-        };
-        if weight > 0.0 {
-            mix.push((r.id.clone(), weight));
-        }
-    }
-    let total: f64 = mix.iter().map(|(_, w)| w).sum();
-    if total > 0.0 {
-        for (_, w) in mix.iter_mut() {
-            *w /= total;
-        }
-    }
-    mix
 }
 
 /// The planet's rates at `step`.
@@ -147,34 +117,47 @@ fn rates_at(planet: &Planet, catalog: &Catalog, step: i64) -> Rates {
         .map(|c| c.food)
         .unwrap_or(1.0);
 
+    // Crews on their cells (and in their mines); everyone else thinks
+    // (two thirds) and makes culture (one third).
     let workers_total = planet.population * t.worker_share;
-    let weight_total = planet.priorities.total().max(1) as f64;
-    let mut workers = BTreeMap::new();
+    let crew = crate::orders::crew(planet, catalog);
+    let mut workers: BTreeMap<String, f64> = Category::ALL
+        .iter()
+        .map(|c| (c.as_str().to_string(), 0.0))
+        .collect();
     let mut per_hour: BTreeMap<String, f64> = BTreeMap::new();
-    for category in Category::ALL {
-        let w = workers_total * planet.priorities.get(category) as f64 / weight_total;
-        workers.insert(category.as_str().to_string(), w);
-        let mult = (1.0 + bonus.get(&category).copied().unwrap_or(0.0)) * efficiency;
-        match category {
-            Category::Food => {
-                let out = w * t.food_per_worker_hour * mult * t.seasons[season] * food_factor;
-                *per_hour.entry("food".into()).or_insert(0.0) += out;
-            }
-            Category::Materials => {
-                let out = w * t.materials_per_worker_hour * mult;
-                for (id, share) in material_mix(planet, catalog) {
-                    *per_hour.entry(id).or_insert(0.0) += out * share;
-                }
-            }
-            Category::Knowledge => {
-                *per_hour.entry("knowledge".into()).or_insert(0.0) +=
-                    w * t.knowledge_per_worker_hour * mult;
-            }
-            Category::Culture => {
-                *per_hour.entry("culture".into()).or_insert(0.0) +=
-                    w * t.culture_per_worker_hour * mult;
-            }
+    let mult = |category: Category| (1.0 + bonus.get(&category).copied().unwrap_or(0.0)) * efficiency;
+    let per_worker = |category: Category| match category {
+        Category::Food => t.food_per_worker_hour * t.seasons[season] * food_factor,
+        Category::Materials => t.materials_per_worker_hour,
+        Category::Knowledge => t.knowledge_per_worker_hour,
+        Category::Culture => t.culture_per_worker_hour,
+    };
+    let mut busy = 0.0;
+    let mut order_out = Vec::new();
+    for order in &planet.orders {
+        let category = crate::orders::category(catalog, &order.resource);
+        let stock = planet.tiles.get(order.tile).map(|t| t.stock).unwrap_or(1.0);
+        let out = crew * per_worker(category) * mult(category) * crate::orders::yield_factor(stock);
+        *per_hour.entry(order.resource.clone()).or_insert(0.0) += out;
+        order_out.push(out);
+        *workers.entry(category.as_str().into()).or_insert(0.0) += crew;
+        busy += crew;
+    }
+    for (_, yields) in crate::orders::extractors(planet, catalog) {
+        let out = crew * per_worker(Category::Materials) * mult(Category::Materials);
+        for id in &yields {
+            *per_hour.entry(id.clone()).or_insert(0.0) += out / yields.len() as f64;
         }
+        *workers.entry("materials".into()).or_insert(0.0) += crew;
+        busy += crew;
+    }
+    let thinkers = (workers_total - busy).max(0.0);
+    for (category, share) in [(Category::Knowledge, 2.0 / 3.0), (Category::Culture, 1.0 / 3.0)] {
+        let w = thinkers * share;
+        workers.insert(category.as_str().into(), w);
+        *per_hour.entry(category.as_str().into()).or_insert(0.0) +=
+            w * per_worker(category) * mult(category);
     }
     *per_hour.entry("food".into()).or_insert(0.0) -= planet.population * t.food_per_person_hour;
 
@@ -234,6 +217,7 @@ fn rates_at(planet: &Planet, catalog: &Catalog, step: i64) -> Rates {
         storage,
         mood_target,
         efficiency,
+        orders: order_out,
         season,
     }
 }
@@ -281,6 +265,8 @@ fn run_step(planet: &mut Planet, catalog: &Catalog, step: i64) {
 
     planet.mood += (rates.mood_target - planet.mood) * t.mood_approach_per_hour * STEP_HOURS;
     planet.mood = planet.mood.clamp(0.0, 1.0);
+
+    crate::orders::run_orders(planet, catalog, step);
 
     // Buildings that are finished now.
     let mut finished = Vec::new();
@@ -480,11 +466,16 @@ fn run_notables(planet: &mut Planet, catalog: &Catalog, step: i64, rng: &mut Rng
     if planet.notables.len() >= t.max_notables || roll >= t.notable_chance_per_hour * STEP_HOURS {
         return;
     }
-    // A notable person follows what the people care about most.
+    // A notable person follows what most of the people do.
+    let rates = rates_at(planet, catalog, step);
     let category = Category::ALL
         .iter()
         .copied()
-        .max_by_key(|&c| (planet.priorities.get(c), std::cmp::Reverse(c)))
+        .max_by(|&a, &b| {
+            let wa = rates.workers.get(a.as_str()).copied().unwrap_or(0.0);
+            let wb = rates.workers.get(b.as_str()).copied().unwrap_or(0.0);
+            wa.total_cmp(&wb).then(b.cmp(&a))
+        })
         .unwrap_or(Category::Food);
     let name = notable_name(&mut name_rng);
     planet.notables.push(Notable {
@@ -501,17 +492,45 @@ fn run_notables(planet: &mut Planet, catalog: &Catalog, step: i64, rng: &mut Rng
     );
 }
 
-/// Biomes with free tiles a building may use.
-pub fn free_tiles(planet: &Planet, allowed: &[Biome]) -> Vec<usize> {
-    planet
-        .tiles
-        .iter()
-        .enumerate()
-        .filter(|(i, t)| {
-            t.building.is_none()
-                && !planet.construction.iter().any(|c| c.tile == *i)
-                && (allowed.is_empty() || allowed.contains(&t.biome))
+/// How far from the settled land (the home, buildings and building sites)
+/// new buildings may go, in cells.
+pub const REACH: usize = 2;
+
+/// Free land within reach of the settlement, nearest to the home first.
+pub fn buildable(planet: &Planet) -> Vec<usize> {
+    let Some(layout) = crate::cells::layout(planet.tiles.len()) else {
+        return Vec::new();
+    };
+    let land = |j: usize| planet.tiles[j].biome != Biome::Ocean;
+    let mut settled = vec![planet.home];
+    settled.extend(
+        planet
+            .tiles
+            .iter()
+            .enumerate()
+            .filter(|(_, t)| t.building.is_some())
+            .map(|(i, _)| i),
+    );
+    settled.extend(planet.construction.iter().map(|c| c.tile));
+    let reach = layout.hops(&settled, land);
+    let from_home = layout.hops(&[planet.home], land);
+    let mut cells: Vec<usize> = (0..planet.tiles.len())
+        .filter(|&i| {
+            reach[i] <= REACH
+                && land(i)
+                && planet.tiles[i].building.is_none()
+                && !planet.construction.iter().any(|c| c.tile == i)
         })
-        .map(|(i, _)| i)
+        .collect();
+    cells.sort_by_key(|&i| (from_home[i], i));
+    cells
+}
+
+/// Free cells within reach a building with these biomes may use, nearest to
+/// the home first.
+pub fn free_tiles(planet: &Planet, allowed: &[Biome]) -> Vec<usize> {
+    buildable(planet)
+        .into_iter()
+        .filter(|&i| allowed.is_empty() || allowed.contains(&planet.tiles[i].biome))
         .collect()
 }

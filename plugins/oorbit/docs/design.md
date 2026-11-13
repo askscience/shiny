@@ -20,24 +20,34 @@ Status of each part: **built** in `crates/oorbit-sim` (M1), or **planned**.
 
 ## Loop
 
-- **Session (2 to 5 minutes, once or twice a day):** the planet catches up
-  (with a short timelapse), the Chronicle tells what happened, pending events
-  get an answer, then build, research, set priorities, load the dock.
+- **Session (as long as you like):** while you play, an hour of the planet
+  lasts a minute. Point at a forest, a hill, a meadow or the sea by the shore
+  and a crew goes there; watch them walk back with their load, put up
+  buildings and see them rise, answer events, research, load the dock.
+- **Away:** the planet keeps going at half the speed of the wall clock: the
+  crews keep working, ships arrive, events wait.
 - **Days:** a discovery, a key building, a trade with a friend.
 - **Weeks:** a new era, the era's monument, a shared project.
 
 ## The planet (built)
 
-72 tiles (12 pentagons, 60 hexagons) of six biomes (coast, plains, forest, mountain, desert, ice), drawn
-from the climate (temperate, arid, frozen, oceanic), with at least one tile in
-eight each of plains, forest and mountain. A planet year lasts one real week; the
+642 cells (12 pentagons, 630 hexagons): open sea and land of six biomes
+(coast, plains, forest, mountain, desert, ice). Continents come from smooth
+noise; the climate (temperate, arid, frozen, oceanic) sets the share of sea
+and how the land splits between biomes. The home stands on the largest
+continent with forest, hills and plains within two cells, and the village
+grows outward from it. A planet year lasts one real week; the
 seasons change food output. Planned: a low-poly sphere whose look changes with
 the era.
 
 ## Society (built)
 
-- Population starts at 8. 80% work, split by four priorities (food,
-  materials, knowledge, culture).
+- Population starts at 8. 80% work. Up to nine crews, each a ninth of the
+  workers, gather on the cells they are sent to (a new planet starts with
+  three on food, two on wood and one on stone); the cell's stock runs down
+  while it is worked and grows back at rest, and a crew on a spent cell
+  moves on by itself. Mines keep a crew of their own. Everyone else thinks
+  (knowledge) and makes culture.
 - Needs: food, housing, culture. Mood follows them and drives output and
   growth; low mood means people leave or work less, never game over.
 - Notable people are born now and then with a name, boost one category for

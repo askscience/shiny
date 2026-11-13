@@ -308,7 +308,16 @@ async fn oorbit_founds_saves_and_plays_a_planet() {
     assert_eq!(body["data"]["planet"]["era"], 1);
     assert_eq!(
         body["data"]["planet"]["tiles"].as_array().unwrap().len(),
-        72
+        642
+    );
+    let home = body["data"]["planet"]["home"].as_u64().unwrap();
+    assert!(
+        body["data"]["buildable"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|c| c.as_u64() == Some(home)),
+        "the home cell is free to build on"
     );
     assert!(body["data"]["techs"]
         .as_array()
@@ -366,6 +375,36 @@ async fn oorbit_founds_saves_and_plays_a_planet() {
         .unwrap();
     assert_eq!(refused.status(), StatusCode::BAD_REQUEST);
 
+    // Crews: a new planet has some at work; one can be called back and
+    // sent again.
+    let orders = body["data"]["planet"]["orders"].as_array().unwrap().clone();
+    assert!(orders.len() >= 3, "a new planet has crews at work");
+    let tile = orders[0]["tile"].clone();
+    let resource = orders[0]["resource"].clone();
+    for action in [
+        serde_json::json!({ "type": "stop_harvest", "tile": tile }),
+        serde_json::json!({ "type": "harvest", "tile": tile, "resource": resource }),
+    ] {
+        let response = router
+            .clone()
+            .oneshot(post_json("/api/oorbit/action", "one", action))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    // The window reports play: the planet's time runs fast.
+    let present = json_body(
+        router
+            .clone()
+            .oneshot(post_json("/api/oorbit/presence", "one", serde_json::json!({})))
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(present["data"]["clock"]["present"], true);
+    assert_eq!(present["data"]["clock"]["rate"], 60.0);
+
     // The temporary time-skip tool moves this planet's clock forward.
     let skipped = json_body(
         router
@@ -379,7 +418,8 @@ async fn oorbit_founds_saves_and_plays_a_planet() {
             .unwrap(),
     )
     .await;
-    assert_eq!(skipped["data"]["planet"]["clock_offset_ms"], 86_400_000);
+    let jumped = skipped["data"]["now_ms"].as_i64().unwrap() - present["data"]["now_ms"].as_i64().unwrap();
+    assert!(jumped >= 86_400_000, "a day of planet time went by: {jumped}");
     assert_eq!(
         skipped["data"]["dock"]["neighbors"]
             .as_array()
@@ -417,12 +457,23 @@ async fn oorbit_founds_saves_and_plays_a_planet() {
 
     let catalog = json_body(
         router
+            .clone()
             .oneshot(request("/api/oorbit/catalog", Some("one")))
             .await
             .unwrap(),
     )
     .await;
     assert!(catalog["data"]["eras"].as_array().unwrap().len() >= 3);
+
+    let layout = json_body(
+        router
+            .oneshot(request("/api/oorbit/layout", Some("one")))
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(layout["data"]["centers"].as_array().unwrap().len(), 642);
+    assert_eq!(layout["data"]["neighbors"].as_array().unwrap().len(), 642);
 }
 
 /// A web app may ship precompressed copies of big files; a browser that
