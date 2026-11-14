@@ -21,6 +21,10 @@ pub enum Action {
     StopHarvest {
         tile: usize,
     },
+    /// Plant trees on a thinned forest nobody works: it grows back faster.
+    Plant {
+        tile: usize,
+    },
     Research {
         tech: String,
     },
@@ -80,6 +84,7 @@ pub enum ActionError {
     NoOffer(u64),
     CannotDemolish(usize),
     CannotLink,
+    CannotPlant(usize),
 }
 
 impl std::fmt::Display for ActionError {
@@ -103,6 +108,9 @@ impl std::fmt::Display for ActionError {
             ActionError::ShipLocked(kind) => write!(f, "`{kind}` ships cannot be sent yet"),
             ActionError::BadCargo => write!(f, "that cargo cannot be sent"),
             ActionError::NoOffer(id) => write!(f, "no offer {id}"),
+            ActionError::CannotPlant(i) => {
+                write!(f, "trees cannot be planted on tile {i} (not a thinned forest in reach, worked, or not enough food)")
+            }
             ActionError::CannotLink => {
                 write!(f, "no way can be opened between those cities (no path, already linked, or too costly)")
             }
@@ -174,6 +182,15 @@ pub fn apply(
                 resource: resource.clone(),
             });
         }
+        Action::Plant { tile } => {
+            if !crate::orders::can_plant(planet, *tile) || planet.amount("food") < crate::orders::PLANT_FOOD {
+                return Err(ActionError::CannotPlant(*tile));
+            }
+            planet.add("food", -crate::orders::PLANT_FOOD);
+            planet.tiles[*tile].planted_until = step + hours_to_steps(crate::orders::PLANTED_HOURS);
+            let t = tile.to_string();
+            planet.log(catalog, step, "trees_planted", &[("tile", &t)]);
+        }
         Action::StopHarvest { tile } => {
             if !planet.orders.iter().any(|o| o.tile == *tile) {
                 return Err(ActionError::NoCrew(*tile));
@@ -200,6 +217,26 @@ pub fn apply(
                 start_step: step,
                 done_step: step + hours_to_steps(def.build_hours),
             });
+            // A crew working this cell moves to the nearest cell like it.
+            if let Some(k) = planet.orders.iter().position(|o| o.tile == *tile) {
+                let resource = planet.orders[k].resource.clone();
+                match crate::orders::nearest_for(planet, catalog, &resource, 0.3) {
+                    Some(next) => {
+                        planet.orders[k].tile = next;
+                        let (from, to) = (tile.to_string(), next.to_string());
+                        planet.log(
+                            catalog,
+                            step,
+                            "crew_moved",
+                            &[("resource", &resource), ("from", &from), ("tile", &to)],
+                        );
+                    }
+                    None => {
+                        planet.orders.remove(k);
+                        planet.log(catalog, step, "crew_home", &[("resource", &resource)]);
+                    }
+                }
+            }
             let t = tile.to_string();
             planet.log(
                 catalog,

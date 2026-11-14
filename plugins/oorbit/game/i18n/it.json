@@ -397,5 +397,18 @@
  "ui.city.port_hint": "Un pontile sulla costa di entrambe le città apre una rotta per mare.",
  "ui.city.bonus": "Colonie collegate: +{n}% conoscenza e cultura.",
  "ui.effect.city": "fonda una città",
- "ui.tile.site": "Qui dei coloni potrebbero fondare una città."
+ "ui.tile.site": "Qui dei coloni potrebbero fondare una città.",
+ "log.deposit_exhausted": "Un giacimento è esaurito: lì non c'è più {resource}.",
+ "log.crew_home": "La squadra che raccoglieva {resource} non ha trovato più niente vicino ed è tornata a pensare.",
+ "log.trees_planted": "Sono stati piantati alberi per far ricrescere il bosco.",
+ "ui.tile.deposit": "Nel terreno: {n} unità da scavare, che non tornano più.",
+ "ui.tile.exhausted": "Una cava esaurita: non resta niente da scavare.",
+ "ui.tile.trees": "Alberi: {stock}% (ricrescono piano se nessuno li taglia).",
+ "ui.plant": "Pianta alberi · {food} cibo",
+ "ui.plant.help": "Gli alberi piantati ricrescono quattro volte più in fretta per due giorni.",
+ "ui.planted": "Qui stanno crescendo alberi giovani.",
+ "ui.crew.cost": "Una squadra in più: conoscenza {from} → {to}",
+ "ui.build.moves_crew": "La squadra che lavora qui si sposterà sulla cella simile più vicina.",
+ "ui.crew.row_deposit": "{resource} {rate} · ne restano {n}",
+ "ui.crew.deposit": "Restano {n} unità nel terreno."
 }

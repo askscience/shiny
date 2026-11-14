@@ -59,6 +59,16 @@
   builders work on them. The work sliders are gone: whoever has no crew
   thinks and makes culture. While you play, an hour of the planet lasts a
   minute; while you are away, the planet runs at half speed.
+- Oorbit 0.7.0: the land runs out and the first session moves. Stone,
+  clay and ores come out of deposits that end for good (a worked-out quarry
+  shows as a pit), forests thin as they are cut and take days to grow back
+  (plant trees to speed them up), and meadows and fish rest before they
+  give again. Crews take at most three quarters of the workers, so someone
+  always thinks; the window shows what one more crew costs in knowledge. A
+  crew whose cell is built on moves to the nearest cell like it. Watching
+  the planet now counts as playing, so it never slows down for idleness
+  while you are there, and a first session reaches the Agricultural Age in
+  about twenty minutes.
 - Oorbit 0.6.2: cities. From the Agricultural Age a colony founds a new
   city on free land five cells or more from the others, and new buildings
   go up within four cells of a city. Link a colony to the capital with a

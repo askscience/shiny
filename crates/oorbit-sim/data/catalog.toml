@@ -22,8 +22,8 @@ mood_approach_per_hour = 0.05
 culture_for_full_mood = 0.01
 idle_after_hours = 36.0
 idle_factor = 0.5
-zeal_bonus = 8.0              # a new planet starts nine times faster...
-zeal_hours = 8.0              # ...and settles down over its first day
+zeal_bonus = 6.0              # a new planet starts seven times faster...
+zeal_hours = 30.0             # ...and settles down over its first days
 season_days = 1.75            # a year of the planet is one real week
 seasons = [1.1, 1.25, 1.0, 0.7] # spring, summer, autumn, winter (food)
 event_gap_hours = 4.0
@@ -84,12 +84,14 @@ biome = "forest"
 
 [[resources]]
 id = "stone"
+deposit = true
 name = "Stone"
 category = "materials"
 biome = "mountain"
 
 [[resources]]
 id = "clay"
+deposit = true
 name = "Clay"
 category = "materials"
 biome = "plains"
@@ -97,6 +99,7 @@ unlocked_by = "pottery"
 
 [[resources]]
 id = "copper"
+deposit = true
 name = "Copper"
 category = "materials"
 unlocked_by = "mining"
@@ -104,6 +107,7 @@ from_building = "mine"
 
 [[resources]]
 id = "tin"
+deposit = true
 name = "Tin"
 category = "materials"
 unlocked_by = "mining"
@@ -128,6 +132,7 @@ uncapped = true
 
 [[resources]]
 id = "marble"
+deposit = true
 name = "Marble"
 category = "materials"
 biome = "mountain"
@@ -140,6 +145,7 @@ category = "materials"
 
 [[resources]]
 id = "iron"
+deposit = true
 name = "Iron"
 category = "materials"
 unlocked_by = "iron_working"
@@ -157,6 +163,7 @@ category = "materials"
 
 [[resources]]
 id = "coal"
+deposit = true
 name = "Coal"
 category = "materials"
 unlocked_by = "steam"
@@ -678,7 +685,7 @@ id = "stone_circle"
 name = "Stone Circle"
 era = 1
 monument = true
-cost = { stone = 25.0, wood = 15.0 }
+cost = { stone = 20.0, wood = 12.0 }
 build_hours = 6.0
 biomes = ["plains", "mountain"]
 effects = [{ type = "bonus", category = "culture", amount = 0.4 }, { type = "mood", amount = 0.05 }]
@@ -699,7 +706,7 @@ id = "colony"
 name = "Colony"
 era = 2
 requires = "farming"
-cost = { food = 40.0, wood = 40.0, stone = 20.0 }
+cost = { food = 40.0, wood = 25.0, stone = 30.0 }
 build_hours = 6.0
 biomes = ["plains", "forest", "coast"]
 city = true

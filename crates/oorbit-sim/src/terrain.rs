@@ -175,9 +175,24 @@ pub fn generate(seed: u64, climate: &ClimateDef, layout: &Layout) -> (Vec<Tile>,
             building: None,
             height: round4(height[i]),
             stock: 1.0,
+            deposit: deposit_for(seed, i, biome[i]),
+            planted_until: 0,
         })
         .collect();
     (tiles, home)
+}
+
+/// What a cell holds in the ground, in units: mountains are rich in stone
+/// and ores, meadows hold some clay, the rest nothing to dig.
+pub fn deposit_for(seed: u64, cell: usize, biome: Biome) -> f64 {
+    let r = hash(seed ^ 0xD3B0, cell as i64, 7, 11);
+    let units = match biome {
+        Biome::Mountain => 900.0 + 1100.0 * r,
+        Biome::Plains => 200.0 + 300.0 * r,
+        Biome::Desert | Biome::Coast => 100.0 + 150.0 * r,
+        _ => 0.0,
+    };
+    units.round()
 }
 
 /// Pick the home cell (plains with forest, hills and sea close by) and make

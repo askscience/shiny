@@ -25,6 +25,8 @@ pub struct Rates {
     pub efficiency: f64,
     /// What each order's crew gathers per hour (in `planet.orders` order).
     pub orders: Vec<f64>,
+    /// What each mine digs per hour, by cell.
+    pub extracted: Vec<(usize, f64)>,
     pub season: usize,
 }
 
@@ -151,15 +153,17 @@ fn rates_at(planet: &Planet, catalog: &Catalog, step: i64) -> Rates {
         let out = crew
             * per_worker(category)
             * mult(category)
-            * crate::orders::yield_factor(stock)
+            * crate::orders::yield_factor(catalog, &order.resource, stock)
             * pace_at(order.tile);
         *per_hour.entry(order.resource.clone()).or_insert(0.0) += out;
         order_out.push(out);
         *workers.entry(category.as_str().into()).or_insert(0.0) += crew;
         busy += crew;
     }
+    let mut extracted = Vec::new();
     for (cell, yields) in crate::orders::extractors(planet, catalog) {
         let out = crew * per_worker(Category::Materials) * mult(Category::Materials) * pace_at(cell);
+        extracted.push((cell, out));
         for id in &yields {
             *per_hour.entry(id.clone()).or_insert(0.0) += out / yields.len() as f64;
         }
@@ -232,6 +236,7 @@ fn rates_at(planet: &Planet, catalog: &Catalog, step: i64) -> Rates {
         mood_target,
         efficiency,
         orders: order_out,
+        extracted,
         season,
     }
 }
@@ -280,7 +285,7 @@ fn run_step(planet: &mut Planet, catalog: &Catalog, step: i64) {
     planet.mood += (rates.mood_target - planet.mood) * t.mood_approach_per_hour * STEP_HOURS;
     planet.mood = planet.mood.clamp(0.0, 1.0);
 
-    crate::orders::run_orders(planet, catalog, step);
+    crate::orders::run_orders(planet, catalog, step, &rates.orders, &rates.extracted);
 
     // Buildings that are finished now.
     let mut finished = Vec::new();

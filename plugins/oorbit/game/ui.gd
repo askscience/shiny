@@ -586,7 +586,10 @@ func _fill_society() -> void:
 		var out := float(outputs[k]) if k < outputs.size() else 0.0
 		var felt := _felt_rate(out)
 		var row := HBoxContainer.new()
-		var text := _label(I18n.t("ui.crew.row", {"resource": I18n.name_of("resource", o["resource"]), "rate": "+%s%s" % [_fmt(felt[0]), felt[1]], "stock": roundi(stock * 100.0)}))
+		var row_text := I18n.t("ui.crew.row", {"resource": I18n.name_of("resource", o["resource"]), "rate": "+%s%s" % [_fmt(felt[0]), felt[1]], "stock": roundi(stock * 100.0)})
+		if _is_deposit(str(o["resource"])):
+			row_text = I18n.t("ui.crew.row_deposit", {"resource": I18n.name_of("resource", o["resource"]), "rate": "+%s%s" % [_fmt(felt[0]), felt[1]], "n": roundi(float(planet.get("tiles", [])[tile].get("deposit", 0.0)))})
+		var text := _label(row_text)
 		text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(text)
 		var look := Button.new()
@@ -872,6 +875,7 @@ func _fill_tile() -> void:
 			_tile_body.add_child(_countdown)
 			return
 	_fill_crew(tile)
+	_fill_ground(tile)
 	if tile["biome"] == "ocean":
 		if not view.get("harvest", {}).has(str(selected_tile)):
 			_tile_body.add_child(_muted(I18n.t("ui.tile.sea")))
@@ -887,6 +891,9 @@ func _fill_tile() -> void:
 		_tile_body.add_child(_muted(I18n.t("ui.tile.far")))
 		return
 	_tile_body.add_child(_muted(I18n.t("ui.tile.empty") if reachable else I18n.t("ui.tile.site")))
+	for o in planet.get("orders", []):
+		if int(o["tile"]) == selected_tile:
+			_tile_body.add_child(_label(I18n.t("ui.build.moves_crew"), 12, Color("e3cfa0")))
 	var any := false
 	for b in view.get("buildings", []):
 		if not _fits(b, tile["biome"]):
@@ -932,7 +939,10 @@ func _fill_crew(tile: Dictionary) -> void:
 		var out := float(outputs[k]) if k < outputs.size() else 0.0
 		var felt := _felt_rate(out)
 		_tile_body.add_child(_label(I18n.t("ui.crew.here", {"resource": I18n.name_of("resource", orders[k]["resource"]).to_lower(), "rate": "+%s%s" % [_fmt(felt[0]), felt[1]]}), 14, Color("c2d69b")))
-		_tile_body.add_child(_muted(I18n.t("ui.crew.stock", {"stock": roundi(float(tile.get("stock", 1.0)) * 100.0)})))
+		if _is_deposit(str(orders[k]["resource"])):
+			_tile_body.add_child(_muted(I18n.t("ui.crew.deposit", {"n": roundi(float(tile.get("deposit", 0.0)))})))
+		else:
+			_tile_body.add_child(_muted(I18n.t("ui.crew.stock", {"stock": roundi(float(tile.get("stock", 1.0)) * 100.0)})))
 		var stop := Button.new()
 		stop.text = I18n.t("ui.crew.stop")
 		var tile_index := selected_tile
@@ -951,8 +961,17 @@ func _fill_crew(tile: Dictionary) -> void:
 	if orders.size() >= int(view.get("slots", 9)):
 		_tile_body.add_child(_muted(I18n.t("ui.crew.full")))
 		return
-	if float(tile.get("stock", 1.0)) < 0.99:
+	if float(tile.get("stock", 1.0)) < 0.99 and tile["biome"] != "forest":
 		_tile_body.add_child(_muted(I18n.t("ui.crew.stock", {"stock": roundi(float(tile.get("stock", 1.0)) * 100.0)})))
+	# What one more crew costs the thinkers.
+	var rates: Dictionary = view.get("rates", {})
+	var thinkers := float(rates.get("workers", {}).get("knowledge", 0.0)) + float(rates.get("workers", {}).get("culture", 0.0))
+	var know := float(rates.get("per_hour", {}).get("knowledge", 0.0))
+	if thinkers > 0.0 and know > 0.0:
+		var after := know * maxf(0.0, thinkers - float(view.get("crew", 0.0))) / thinkers
+		var a := _felt_rate(know)
+		var b := _felt_rate(after)
+		_tile_body.add_child(_muted(I18n.t("ui.crew.cost", {"from": "+%s%s" % [_fmt(a[0]), a[1]], "to": "+%s%s" % [_fmt(b[0]), b[1]]})))
 	for resource in options:
 		var b := Button.new()
 		b.text = I18n.t("ui.crew.send", {"resource": I18n.name_of("resource", resource).to_lower()})
@@ -1109,3 +1128,38 @@ func _fill_city(k: int) -> void:
 		_tile_body.add_child(button)
 	if cities.size() > 1 and not any_sea and c.get("ports", []).is_empty():
 		_tile_body.add_child(_muted(I18n.t("ui.city.port_hint")))
+
+
+func _is_deposit(resource: String) -> bool:
+	return resource in view.get("deposits", [])
+
+
+## What the cell holds: trees (and planting them), or a deposit to dig.
+func _fill_ground(tile: Dictionary) -> void:
+	var biome := str(tile["biome"])
+	var deposit := float(tile.get("deposit", 0.0))
+	var digs := false
+	for r in view.get("harvest", {}).get(str(selected_tile), []):
+		digs = digs or _is_deposit(str(r))
+	if biome == "forest":
+		_tile_body.add_child(_muted(I18n.t("ui.tile.trees", {"stock": roundi(float(tile.get("stock", 1.0)) * 100.0)})))
+		var planet := _planet()
+		if float(tile.get("planted_until", 0)) > float(planet.get("step", 0)):
+			_tile_body.add_child(_label(I18n.t("ui.planted"), 13, Color("c2d69b")))
+		var plantable := false
+		for t in view.get("plantable", []):
+			plantable = plantable or int(t) == selected_tile
+		if plantable:
+			var food := float(view.get("plant_food", 6.0))
+			var b := Button.new()
+			b.text = I18n.t("ui.plant", {"food": _fmt(food)})
+			b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+			b.disabled = live_amount("food") < food
+			var tile_index := selected_tile
+			b.pressed.connect(func(): action_requested.emit({"type": "plant", "tile": tile_index}))
+			_tile_body.add_child(b)
+			_tile_body.add_child(_muted(I18n.t("ui.plant.help")))
+	elif deposit > 0.0 and digs:
+		_tile_body.add_child(_muted(I18n.t("ui.tile.deposit", {"n": roundi(deposit)})))
+	elif deposit == 0.0 and biome == "mountain":
+		_tile_body.add_child(_muted(I18n.t("ui.tile.exhausted")))

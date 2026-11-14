@@ -130,7 +130,7 @@ fn found(ctx: Arc<PluginCtx>) -> RouteHandler {
             let mut planet = Planet::new(store::new_seed(&uid, now), &body.climate, now, catalog())
                 .map_err(AppError::BadRequest)?;
             planet.clock = oorbit_sim::clock::Clock::starting(now);
-            planet.clock.present(now);
+            planet.present(now);
             store::save(&ctx, &uid, &planet)?;
             Ok(ok(planet_view(&planet, catalog(), now)))
         }
@@ -150,7 +150,7 @@ fn action(ctx: Arc<PluginCtx>) -> RouteHandler {
                 .ok_or_else(|| AppError::BadRequest("found a planet first".into()))?;
             // Acting is playing: the planet runs at play speed a while.
             planet.time_at(now);
-            planet.clock.present(now);
+            planet.present(now);
             let now = planet.time_at(now);
             let result = apply(&mut planet, catalog(), now, &action);
             // Save even when the action is refused: the planet advanced.
@@ -174,7 +174,7 @@ fn presence(ctx: Arc<PluginCtx>) -> RouteHandler {
             let mut planet = store::load(&ctx, &uid)?
                 .ok_or_else(|| AppError::BadRequest("found a planet first".into()))?;
             planet.time_at(wall);
-            planet.clock.present(wall);
+            planet.present(wall);
             let now = planet.time_at(wall);
             advance(&mut planet, catalog(), now);
             store::save(&ctx, &uid, &planet)?;

@@ -131,6 +131,11 @@ pub fn planet_view(planet: &Planet, catalog: &Catalog, now_ms: i64) -> Json {
             })
             .collect::<serde_json::Map<String, Json>>(),
         "dock": dock,
+        "plantable": (0..planet.tiles.len())
+            .filter(|&i| crate::orders::can_plant(planet, i))
+            .collect::<Vec<_>>(),
+        "plant_food": crate::orders::PLANT_FOOD,
+        "deposits": catalog.resources.iter().filter(|r| r.deposit).map(|r| r.id.clone()).collect::<Vec<_>>(),
         "cities": cities,
         "links": planet.links.iter().map(|l| json!({
             "kind": l.kind,

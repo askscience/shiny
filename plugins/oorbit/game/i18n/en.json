@@ -397,5 +397,18 @@
  "ui.city.port_hint": "A jetty on the shore of both cities opens a sea route.",
  "ui.city.bonus": "Linked colonies: +{n}% knowledge and culture.",
  "ui.effect.city": "founds a city",
- "ui.tile.site": "Settlers could found a city here."
+ "ui.tile.site": "Settlers could found a city here.",
+ "log.deposit_exhausted": "A deposit is worked out: no more {resource} there.",
+ "log.crew_home": "The crew gathering {resource} found nothing left nearby and came home to think.",
+ "log.trees_planted": "Trees were planted to grow the forest back.",
+ "ui.tile.deposit": "In the ground: {n} units to dig, gone for good once dug.",
+ "ui.tile.exhausted": "A worked-out quarry: nothing left to dig.",
+ "ui.tile.trees": "Trees: {stock}% (they grow back slowly while nobody cuts them).",
+ "ui.plant": "Plant trees · {food} food",
+ "ui.plant.help": "Planted trees grow back four times faster for two days.",
+ "ui.planted": "Young trees are growing here.",
+ "ui.crew.cost": "One more crew: knowledge {from} → {to}",
+ "ui.build.moves_crew": "The crew working here will move to the nearest cell like it.",
+ "ui.crew.row_deposit": "{resource} {rate} · {n} left",
+ "ui.crew.deposit": "{n} units left in the ground."
 }

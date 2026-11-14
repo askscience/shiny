@@ -349,12 +349,15 @@ func show_planet(planet: Dictionary, rates := {}) -> void:
 	var stocks := []
 	for t in tiles:
 		stocks.append(roundi(float(t.get("stock", 1.0)) * 4.0))
+	var dug := []
+	for t in tiles:
+		dug.append(float(t.get("deposit", 1.0)) == 0.0 and str(t["biome"]) in ["mountain", "plains", "desert", "coast"])
 	# People move on every view; the props only when something they show
 	# changed.
 	_home = int(planet.get("home", 0))
 	_place_walkers(planet, rates)
 	_place_rides()
-	var signature := JSON.stringify([biomes, buildings, planet.get("orders", []), stocks, _cities])
+	var signature := JSON.stringify([biomes, buildings, planet.get("orders", []), stocks, _cities, dug])
 	_build_roads()
 	if signature == _signature:
 		return
@@ -376,6 +379,7 @@ func show_planet(planet: Dictionary, rates := {}) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 11
 	_stocks = stocks
+	_dug = dug
 	_ordered = {}
 	for o in planet.get("orders", []):
 		_ordered[int(o["tile"])] = str(o["resource"])
@@ -576,7 +580,16 @@ func _place_tile(i: int, biome: String, building: String, rng: RandomNumberGener
 		_on_ground = true
 		# Worked land thins out: fewer trees and rocks while it is spent.
 		var stock := float(_stocks[i]) / 4.0 if i < _stocks.size() else 1.0
-		_nature(normal, base, biome, rng, maxi(1, roundi(6.0 * (0.25 + 0.75 * stock))))
+		if i < _dug.size() and _dug[i]:
+			_quarry(normal, base, rng)
+		else:
+			_nature(normal, base, biome, rng, maxi(1, roundi(6.0 * (0.25 + 0.75 * stock))))
+		if biome == "forest" and stock < 0.75:
+			# Stumps where the trees were cut.
+			for k in roundi((1.0 - stock) * 7.0):
+				var a := rng.randf() * TAU
+				var r := 0.05 + rng.randf() * 0.18
+				_put(_cylinder(0.014, 0.022, 5), Color("8f6f5a"), normal, base, Vector3(cos(a) * r, 0.008, sin(a) * r))
 		if _ordered.has(i):
 			# A stake with a little flag the colour of what is gathered.
 			_put(_box(0.012, 0.16, 0.012), Palette.HUT_WALL, normal, base, Vector3(0, 0.08, 0))
@@ -603,6 +616,15 @@ func _place_tile(i: int, biome: String, building: String, rng: RandomNumberGener
 	_on_ground = true
 	_nature(normal, base, biome, rng, 2)
 	_on_ground = false
+
+
+## A worked-out quarry: a dark pit with spoil heaps around it.
+func _quarry(normal: Vector3, base: Vector3, rng: RandomNumberGenerator) -> void:
+	_put(_cylinder(0.11, 0.012, 7), Color("4a4152"), normal, base, Vector3(0, 0.002, 0))
+	_put(_cylinder(0.075, 0.014, 7), Color("2f2a38"), normal, base, Vector3(0, 0.004, 0))
+	for k in 4:
+		var a := k * TAU / 4.0 + rng.randf()
+		_put(_cone(0.04, 0.03, 5), Color("a39aa8"), normal, base, Vector3(cos(a) * 0.15, 0.012, sin(a) * 0.15), 0.8 + rng.randf() * 0.5)
 
 
 ## The plinth under a building: packed earth, sand or stone.
@@ -650,6 +672,7 @@ func _nature(normal: Vector3, base: Vector3, biome: String, rng: RandomNumberGen
 
 
 var _stocks := []
+var _dug := []
 var _ordered := {}
 var _site_times := {}
 

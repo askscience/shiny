@@ -23,10 +23,21 @@ pub struct Tile {
     /// What is left to gather here, 0 to 1: work spends it, rest refills it.
     #[serde(default = "default_stock")]
     pub stock: f64,
+    /// What is left in the ground (stone, clay, ores), in units: digging
+    /// spends it for good. Negative: not drawn yet (planets from before).
+    #[serde(default = "unset")]
+    pub deposit: f64,
+    /// Trees planted here grow back faster until this step.
+    #[serde(default)]
+    pub planted_until: i64,
 }
 
 fn default_stock() -> f64 {
     1.0
+}
+
+fn unset() -> f64 {
+    -1.0
 }
 
 fn default_height() -> f64 {
@@ -255,6 +266,11 @@ impl Planet {
             }
         }
         crate::cities::ensure_capital(self);
+        for (i, t) in self.tiles.iter_mut().enumerate() {
+            if t.deposit < 0.0 {
+                t.deposit = crate::terrain::deposit_for(self.seed, i, t.biome);
+            }
+        }
         if !self.orders_given {
             crate::orders::first_orders(self, catalog);
         }
@@ -272,6 +288,16 @@ impl Planet {
             self.clock_offset_ms = 0;
         }
         self.clock.tick(wall_ms)
+    }
+
+    /// Someone is playing at wall time `wall_ms`: the planet runs at play
+    /// speed for a while, and playing counts as acting (the planet never
+    /// slows down for idleness while someone watches it).
+    pub fn present(&mut self, wall_ms: i64) {
+        self.time_at(wall_ms);
+        self.clock.present(wall_ms);
+        let step = step_of(self.clock.planet_ms());
+        self.last_action_step = self.last_action_step.max(step);
     }
 
     pub fn amount(&self, resource: &str) -> f64 {

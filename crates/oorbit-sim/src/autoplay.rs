@@ -168,11 +168,28 @@ fn try_build(
 /// Point the crews where they are needed: more on food when it runs short,
 /// otherwise a balance of food and materials, the rest thinking.
 pub fn set_orders(planet: &mut Planet, catalog: &Catalog, now: i64, hungry: bool) {
+    // With nothing left to study, thinking is wasted: more hands on wood
+    // and stone.
+    let minds_idle = planet.research.is_none()
+        && !catalog.techs.iter().any(|t| can_research(planet, catalog, &t.id).is_ok());
     let mut want: Vec<(&str, usize)> = if hungry {
         vec![("food", 4), ("wood", 1), ("stone", 1)]
+    } else if minds_idle {
+        vec![("food", 2), ("wood", 3), ("stone", 3)]
     } else {
         vec![("food", 2), ("wood", 1), ("stone", 1)]
     };
+    // One more crew on whatever the era's monument still lacks.
+    if let Some(monument) = catalog.era(planet.era).and_then(|e| catalog.building(&e.monument)) {
+        for (resource, need) in &monument.cost {
+            if planet.amount(resource) >= *need {
+                continue;
+            }
+            if let Some(w) = want.iter_mut().find(|(r, _)| r == resource) {
+                w.1 += 1;
+            }
+        }
+    }
     // One crew on the newest material the land gives (clay, then marble),
     // and the rest of the people thinking.
     if !hungry {

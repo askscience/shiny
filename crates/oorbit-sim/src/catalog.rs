@@ -134,6 +134,10 @@ pub struct ResourceDef {
     /// Stored without the storage cap (knowledge, culture).
     #[serde(default)]
     pub uncapped: bool,
+    /// Dug out of the ground: gathering it empties the cell's deposit,
+    /// which never grows back.
+    #[serde(default)]
+    pub deposit: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

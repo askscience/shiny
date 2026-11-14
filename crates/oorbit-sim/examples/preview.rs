@@ -59,7 +59,7 @@ fn run(args: &[String]) -> Result<serde_json::Value, String> {
             let climate = rest.first().ok_or("found needs a climate")?;
             let mut planet = Planet::new(now as u64 ^ 0x5EED, climate, now, &catalog)?;
             planet.clock = oorbit_sim::clock::Clock::starting(now);
-            planet.clock.present(now);
+            planet.present(now);
             planet
         }
         (_, None) => {
@@ -79,7 +79,7 @@ fn run(args: &[String]) -> Result<serde_json::Value, String> {
     let wall = now;
     if command == "action" || command == "presence" {
         planet.time_at(wall);
-        planet.clock.present(wall);
+        planet.present(wall);
     }
     let now = planet.time_at(wall);
     advance(&mut planet, &catalog, now);

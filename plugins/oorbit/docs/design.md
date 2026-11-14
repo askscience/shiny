@@ -51,11 +51,14 @@ colony brings a little more knowledge and culture.
 
 ## Society (built)
 
-- Population starts at 8. 80% work. Up to nine crews, each a ninth of the
-  workers, gather on the cells they are sent to (a new planet starts with
-  three on food, two on wood and one on stone); the cell's stock runs down
-  while it is worked and grows back at rest, and a crew on a spent cell
-  moves on by itself. Mines keep a crew of their own. Everyone else thinks
+- Population starts at 8. 80% work. Up to nine crews, together at most
+  three quarters of the workers, gather on the cells they are sent to (a
+  new planet starts with three on food, two on wood and one on stone).
+  Meadows, game and fish run down while worked and grow back in a day or
+  two, forests take a week (planting trees speeds them up), and stone, clay
+  and ores come out of deposits that end for good, so the people look
+  further and found colonies near new ground. A crew on a spent cell moves
+  on by itself. Mines keep a crew of their own. Everyone else thinks
   (knowledge) and makes culture.
 - Needs: food, housing, culture. Mood follows them and drives output and
   growth; low mood means people leave or work less, never game over.
