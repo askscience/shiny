@@ -53,6 +53,8 @@ var _highlight: MeshInstance3D
 ## going back and forth on the finished ones; a name over every city.
 var _roads: MeshInstance3D
 var _vehicles: MultiMeshInstance3D
+var _boats: MultiMeshInstance3D
+var _fishers := []  # per fishing crew: the ocean cell its boat bobs around
 var _rides := []  # per vehicle: {points, length, offset, boat}
 var _links := []
 var _road_built := []
@@ -104,8 +106,12 @@ func _ready() -> void:
 	_props.material_override = _toon(Color.WHITE, true)
 	pivot.add_child(_props)
 	_walkers = MultiMeshInstance3D.new()
-	var walker_mesh := BoxMesh.new()
-	walker_mesh.size = Vector3(0.03, 0.055, 0.03)
+	var walker_mesh := _compose(func():
+		# A person: legs, a body in a tunic, a head.
+		_put(_box(0.022, 0.018, 0.016), Color("6b5a4e"), Vector3.UP, Vector3.ZERO, Vector3(0, -0.018, 0))
+		_put(_box(0.03, 0.03, 0.022), Color.WHITE, Vector3.UP, Vector3.ZERO, Vector3(0, 0.006, 0))
+		_put(_ball(0.012), Color("e8c4a0"), Vector3.UP, Vector3.ZERO, Vector3(0, 0.021, 0))
+		_put(_box(0.016, 0.012, 0.016), Color("e8c4a0"), Vector3.UP, Vector3.ZERO, Vector3(0, 0.024, 0)))
 	var multimesh := MultiMesh.new()
 	multimesh.transform_format = MultiMesh.TRANSFORM_3D
 	multimesh.use_colors = true
@@ -119,8 +125,13 @@ func _ready() -> void:
 	_roads.material_override = road_material
 	pivot.add_child(_roads)
 	_vehicles = MultiMeshInstance3D.new()
-	var vehicle_mesh := BoxMesh.new()
-	vehicle_mesh.size = Vector3(0.045, 0.03, 0.03)
+	var vehicle_mesh := _compose(func():
+		# A cart: a box on two wheels, a load on top.
+		_put(_box(0.05, 0.016, 0.03), Color("8f6f5a"), Vector3.UP, Vector3.ZERO, Vector3(0, 0.004, 0))
+		_put(_box(0.034, 0.014, 0.024), Color.WHITE, Vector3.UP, Vector3.ZERO, Vector3(0, 0.018, 0))
+		for side in [-1.0, 1.0]:
+			_put(_cylinder(0.012, 0.006, 8), Color("4a3b33"), Vector3.UP, Vector3.ZERO, Vector3(0, -0.004, side * 0.018), 1.0, PI / 2.0, PI / 2.0)
+		_put(_box(0.03, 0.004, 0.004), Color("6b5a4e"), Vector3.UP, Vector3.ZERO, Vector3(0.035, 0.0, 0)))
 	var vehicles := MultiMesh.new()
 	vehicles.transform_format = MultiMesh.TRANSFORM_3D
 	vehicles.use_colors = true
@@ -128,6 +139,19 @@ func _ready() -> void:
 	_vehicles.multimesh = vehicles
 	_vehicles.material_override = _toon(Color.WHITE, true)
 	pivot.add_child(_vehicles)
+	_boats = MultiMeshInstance3D.new()
+	var boats := MultiMesh.new()
+	boats.transform_format = MultiMesh.TRANSFORM_3D
+	boats.use_colors = true
+	boats.mesh = _compose(func():
+		# A boat: a hull pointed at the bow, a mast and a sail.
+		_put(_box(0.06, 0.014, 0.026), Color("6b5a4e"), Vector3.UP, Vector3.ZERO, Vector3(0, 0.0, 0))
+		_put(_cone(0.013, 0.02, 4), Color("6b5a4e"), Vector3.UP, Vector3.ZERO, Vector3(0.038, 0.0, 0), 1.0, PI / 4.0, -PI / 2.0)
+		_put(_box(0.004, 0.05, 0.004), Color("4a3b33"), Vector3.UP, Vector3.ZERO, Vector3(-0.002, 0.03, 0))
+		_put(_prism(0.004, 0.04, 0.03), Color.WHITE, Vector3.UP, Vector3.ZERO, Vector3(0.008, 0.032, 0), 1.0, PI / 2.0))
+	_boats.multimesh = boats
+	_boats.material_override = _toon(Color.WHITE, true)
+	pivot.add_child(_boats)
 	_highlight = MeshInstance3D.new()
 	var line_material := StandardMaterial3D.new()
 	line_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -285,10 +309,13 @@ func _place_walkers(planet: Dictionary, rates: Dictionary) -> void:
 	var outputs: Array = rates.get("orders", [])
 	var population := float(planet.get("population", 0))
 	var crew_size := clampi(roundi(population / 16.0) + 1, 2, 4)
+	_fishers.clear()
 	for k in orders.size():
 		var cell := int(orders[k]["tile"])
 		if cell < 0 or cell >= builder.centers.size():
 			continue
+		if cell < _biomes.size() and str(_biomes[cell]) == "ocean":
+			_fishers.append(cell)
 		var points := _route(_city_of(cell), cell)
 		var length := 0.0
 		for i in points.size() - 1:
@@ -356,6 +383,9 @@ func show_planet(planet: Dictionary, rates := {}) -> void:
 	var biomes := []
 	var heights := []
 	var buildings := []
+	_site_cells.clear()
+	for c in planet.get("construction", []):
+		_site_cells.append(int(c["tile"]))
 	for i in tiles.size():
 		biomes.append(str(tiles[i]["biome"]))
 		heights.append(float(tiles[i].get("height", 1.0)))
@@ -376,6 +406,13 @@ func show_planet(planet: Dictionary, rates := {}) -> void:
 	var event = planet.get("pending_event")
 	var event_tile := int(event["tile"]) if event != null and event.get("tile") != null else -1
 	_place_marks(finds, event_tile)
+	_town.clear()
+	for i in tiles.size():
+		_town.append(buildings[i] != "")
+	for c in _cities:
+		var t := int(c["tile"])
+		if t < _town.size():
+			_town[t] = true
 	_finds_at = {}
 	for f in finds:
 		_finds_at[int(f["tile"])] = str(f["kind"])
@@ -560,12 +597,14 @@ func _tangents(normal: Vector3) -> Array:
 
 ## Place `mesh` on the tile: `offset` is (along u, up, along w) in the tile's
 ## frame, `turn` rotates it around the tile's up.
-func _put(shape: Array, color: Color, normal: Vector3, base: Vector3, offset: Vector3, size := 1.0, turn := 0.0) -> void:
+func _put(shape: Array, color: Color, normal: Vector3, base: Vector3, offset: Vector3, size := 1.0, turn := 0.0, roll := 0.0) -> void:
 	var t := _tangents(normal)
 	var u: Vector3 = t[0]
 	var w: Vector3 = t[1]
 	var y := normal.normalized()
-	var basis := Basis(u, y, w).rotated(y, turn).scaled(Vector3.ONE * size * _scale * _ts)
+	# `roll` tips the shape over around its own first axis (a wheel, a
+	# log lying down), then `turn` spins it around the ground's up.
+	var basis := (Basis(u, y, w) * Basis(Vector3.RIGHT, roll)).rotated(y, turn).scaled(Vector3.ONE * size * _scale * _ts)
 	offset *= _scale * _ts
 	var at := base + u * offset.x + w * offset.z
 	if _on_ground:
@@ -642,6 +681,35 @@ func _place_tile(i: int, biome: String, building: String, rng: RandomNumberGener
 	_on_ground = false
 
 
+## A tree with a trunk: a conifer (stacked cones) or a broadleaf (a few
+## round crowns), standing on the ground at `at` (offset in the cell's
+## frame).
+func _tree(normal: Vector3, base: Vector3, at: Vector3, s: float, conifer: bool, rng: RandomNumberGenerator) -> void:
+	var trunk := Color("6b5a4e")
+	_put(_cylinder(0.011, 0.06, 5), trunk, normal, base, at + Vector3(0, 0.03 * s, 0), s)
+	if conifer:
+		var green := Palette.TREE
+		_put(_cone(0.06, 0.1, 6), green.darkened(0.08), normal, base, at + Vector3(0, 0.075 * s, 0), s)
+		_put(_cone(0.047, 0.085, 6), green, normal, base, at + Vector3(0, 0.12 * s, 0), s)
+		_put(_cone(0.032, 0.065, 6), green.lightened(0.08), normal, base, at + Vector3(0, 0.16 * s, 0), s)
+	else:
+		var leaf := Color("6f9163").lerp(Color("8fae6b"), rng.randf())
+		_put(_ball(0.05), leaf.darkened(0.1), normal, base, at + Vector3(0, 0.055 * s, 0), s)
+		_put(_ball(0.04), leaf, normal, base, at + Vector3(0.022 * s, 0.075 * s, 0.01 * s), s)
+		_put(_ball(0.035), leaf.lightened(0.08), normal, base, at + Vector3(-0.018 * s, 0.085 * s, -0.012 * s), s)
+
+
+## A palm: a leaning trunk in three pieces and a crown of fronds.
+func _palm(normal: Vector3, base: Vector3, at: Vector3, s: float, rng: RandomNumberGenerator) -> void:
+	var lean := Vector3(0.012, 0.0, 0.006) * s
+	for k in 3:
+		_put(_cylinder(0.008, 0.035, 5), Color("8f6f5a"), normal, base, at + lean * k + Vector3(0, (0.017 + 0.033 * k) * s, 0), s)
+	var top := at + lean * 3.0 + Vector3(0, 0.105 * s, 0)
+	for k in 5:
+		var a := k * TAU / 5.0 + rng.randf() * 0.3
+		_put(_box(0.05, 0.006, 0.014), Color("6f9163"), normal, base, top + Vector3(cos(a) * 0.022, -0.004, sin(a) * 0.022) * s, s, -a)
+
+
 ## A worked-out quarry: a dark pit with spoil heaps around it.
 func _quarry(normal: Vector3, base: Vector3, rng: RandomNumberGenerator) -> void:
 	_put(_cylinder(0.11, 0.012, 7), Color("4a4152"), normal, base, Vector3(0, 0.002, 0))
@@ -673,8 +741,7 @@ func _nature(normal: Vector3, base: Vector3, biome: String, rng: RandomNumberGen
 				var angle := k * TAU / (amount * 2) + rng.randf() * 0.6
 				var r := (0.04 + rng.randf() * 0.2) if amount > 2 else 0.2 + rng.randf() * 0.06
 				var s := 0.7 + rng.randf() * 0.6
-				_put(_cone(0.06, 0.18, 5), Palette.TREE, normal, base,
-					Vector3(cos(angle) * r, 0.09 * s, sin(angle) * r), s)
+				_tree(normal, base, Vector3(cos(angle) * r, 0.0, sin(angle) * r), s, rng.randf() < 0.6, rng)
 		"mountain":
 			# The peak is the ground itself; a few boulders on its flanks.
 			for k in mini(amount, 3):
@@ -687,7 +754,19 @@ func _nature(normal: Vector3, base: Vector3, biome: String, rng: RandomNumberGen
 				var angle := rng.randf() * TAU
 				var r := 0.08 + rng.randf() * 0.14
 				_put(_ball(0.035), Color("6f9163"), normal, base,
-					Vector3(cos(angle) * r, 0.015, sin(angle) * r), 0.8 + rng.randf() * 0.5)
+					Vector3(cos(angle) * r, 0.0, sin(angle) * r), 0.8 + rng.randf() * 0.5)
+			# Now and then a lone broadleaf tree, and flowers.
+			if amount > 3 and rng.randf() < 0.45:
+				var a := rng.randf() * TAU
+				_tree(normal, base, Vector3(cos(a) * 0.17, 0.0, sin(a) * 0.17), 0.8, false, rng)
+			for k in 3:
+				var a := rng.randf() * TAU
+				var r := 0.05 + rng.randf() * 0.2
+				_put(_box(0.012, 0.01, 0.012), [Color("f2c078"), Color("e3c3c6"), Color("eef3f2")][k], normal, base, Vector3(cos(a) * r, 0.005, sin(a) * r))
+		"coast", "desert":
+			if amount > 3 and rng.randf() < 0.5:
+				var a := rng.randf() * TAU
+				_palm(normal, base, Vector3(cos(a) * 0.15, 0.0, sin(a) * 0.15), 0.9 + rng.randf() * 0.3, rng)
 		"ice":
 			for k in mini(amount, 3):
 				var angle := k * TAU / 3.0 + rng.randf()
@@ -758,78 +837,129 @@ func _building_parts(id: String, n: Vector3, b: Vector3) -> void:
 	var stone := Palette.PEAK
 	match id:
 		"hut":
-			_put(_box(0.11, 0.07, 0.11), wall, n, b, Vector3(0, 0.035, 0))
-			_put(_cone(0.1, 0.09, 4), roof, n, b, Vector3(0, 0.115, 0))
+			# Round walls of wattle, a door, a thatched cone with an overhang.
+			_put(_cylinder(0.06, 0.06, 8), wall, n, b, Vector3(0, 0.03, 0))
+			_put(_box(0.02, 0.035, 0.012), Color("4a3b33"), n, b, Vector3(0.0, 0.018, 0.058))
+			_put(_cone(0.085, 0.08, 8), roof, n, b, Vector3(0, 0.1, 0))
+			_put(_cylinder(0.008, 0.02, 5), Color("6b5a4e"), n, b, Vector3(0, 0.145, 0))
 		"house":
-			_put(_box(0.15, 0.09, 0.11), Color("d9b48f"), n, b, Vector3(0, 0.045, 0))
-			_put(_cone(0.12, 0.08, 4), roof, n, b, Vector3(0, 0.13, 0), 1.0, PI / 4.0)
+			# Walls of brick, a gable roof, door, windows and a chimney.
+			_put(_box(0.15, 0.08, 0.1), Color("d9b48f"), n, b, Vector3(0, 0.04, 0))
+			_put(_prism(0.17, 0.06, 0.115), roof, n, b, Vector3(0, 0.11, 0), 1.0, PI / 2.0)
+			_put(_box(0.024, 0.042, 0.006), Color("6b4a3a"), n, b, Vector3(0.0, 0.021, 0.051))
+			for side in [-1, 1]:
+				_put(_box(0.02, 0.018, 0.006), Color("f2e1a0"), n, b, Vector3(side * 0.045, 0.05, 0.051))
+			_put(_box(0.018, 0.04, 0.018), Color("a35d5d"), n, b, Vector3(0.045, 0.13, -0.02))
 		"hunting_camp":
-			_put(_cone(0.08, 0.13, 6), Color("8f6f5a"), n, b, Vector3(-0.03, 0.065, 0))
-			_put(_box(0.01, 0.16, 0.01), Color("7a4f4f"), n, b, Vector3(0.07, 0.08, 0.02))
+			_put(_cone(0.07, 0.12, 6), Color("b58e6b"), n, b, Vector3(-0.04, 0.06, 0))
+			_put(_box(0.02, 0.03, 0.006), Color("4a3b33"), n, b, Vector3(-0.04, 0.015, 0.05))
+			# A drying rack with hides, and a small fire.
+			for side in [-1, 1]:
+				_put(_box(0.008, 0.08, 0.008), Color("6b5a4e"), n, b, Vector3(0.06, 0.04, side * 0.04))
+			_put(_box(0.008, 0.008, 0.09), Color("6b5a4e"), n, b, Vector3(0.06, 0.078, 0))
+			_put(_box(0.006, 0.04, 0.05), Color("d9b48f"), n, b, Vector3(0.06, 0.055, 0))
+			_put(_cone(0.015, 0.03, 5), Color("f2c078"), n, b, Vector3(0.02, 0.015, 0.07))
 		"fire_pit":
-			for k in 6:
-				var a := k * TAU / 6.0
-				_put(_box(0.03, 0.02, 0.03), stone, n, b, Vector3(cos(a) * 0.06, 0.01, sin(a) * 0.06))
-			_put(_cone(0.04, 0.08, 5), Color("f2c078"), n, b, Vector3(0, 0.04, 0))
-			_put(_cone(0.025, 0.05, 5), Color("e08f6c"), n, b, Vector3(0, 0.07, 0))
-		"stone_circle":
-			for k in 7:
-				var a := k * TAU / 7.0
-				_put(_box(0.035, 0.11, 0.03), stone, n, b, Vector3(cos(a) * 0.12, 0.055, sin(a) * 0.12), 1.0, a)
-			_put(_box(0.06, 0.04, 0.06), Color("d9d0cc"), n, b, Vector3(0, 0.02, 0))
-		"field":
+			for k in 8:
+				var a := k * TAU / 8.0
+				_put(_box(0.026, 0.02, 0.026), stone, n, b, Vector3(cos(a) * 0.06, 0.01, sin(a) * 0.06), 1.0, a)
 			for k in 3:
-				_put(_box(0.24, 0.02, 0.05), Color("f2c078") if k != 1 else Color("c2d69b"), n, b, Vector3(0, 0.01, (k - 1) * 0.07))
+				_put(_box(0.07, 0.012, 0.012), Color("6b5a4e"), n, b, Vector3(0, 0.008, 0), 1.0, k * PI / 3.0)
+			_put(_cone(0.04, 0.08, 5), Color("f2c078"), n, b, Vector3(0, 0.045, 0))
+			_put(_cone(0.025, 0.06, 5), Color("e08f6c"), n, b, Vector3(0.006, 0.07, 0))
+			# Logs to sit on.
+			for k in 3:
+				var a := k * TAU / 3.0 + 0.5
+				_put(_cylinder(0.012, 0.07, 6), Color("8f6f5a"), n, b, Vector3(cos(a) * 0.12, 0.01, sin(a) * 0.12), 1.0, -a, PI / 2.0)
+		"stone_circle":
+			# Trilithons: pairs of standing stones with a lintel.
+			for k in 5:
+				var a := k * TAU / 5.0
+				var c := Vector3(cos(a) * 0.12, 0.0, sin(a) * 0.12)
+				var side := Vector3(-sin(a), 0.0, cos(a)) * 0.025
+				_put(_box(0.024, 0.1, 0.02), stone, n, b, c + side + Vector3(0, 0.05, 0), 1.0, -a)
+				_put(_box(0.024, 0.1, 0.02), stone, n, b, c - side + Vector3(0, 0.05, 0), 1.0, -a)
+				_put(_box(0.026, 0.018, 0.075), Color("a39aa8"), n, b, c + Vector3(0, 0.108, 0), 1.0, -a)
+			_put(_box(0.05, 0.03, 0.05), Color("d9d0cc"), n, b, Vector3(0, 0.015, 0))
+		"field":
+			# Furrows of two crops and a low fence.
+			for k in 5:
+				_put(_box(0.24, 0.016, 0.03), Color("f2c078") if k % 2 == 0 else Color("c2d69b"), n, b, Vector3(0, 0.008, (k - 2) * 0.045))
+			for k in 6:
+				_put(_box(0.008, 0.03, 0.008), Color("8f6f5a"), n, b, Vector3(-0.13 + k * 0.052, 0.015, 0.125))
+			_put(_box(0.27, 0.006, 0.006), Color("8f6f5a"), n, b, Vector3(0, 0.024, 0.125))
 		"pasture":
-			for k in 4:
-				var a := k * TAU / 4.0
-				_put(_box(0.2, 0.025, 0.01), Color("8f6f5a"), n, b, Vector3(cos(a) * 0.1, 0.02, sin(a) * 0.1), 1.0, a + PI / 2.0)
-			_put(_box(0.04, 0.03, 0.06), Palette.SNOW, n, b, Vector3(0.02, 0.025, 0.02))
-			_put(_box(0.04, 0.03, 0.06), Palette.SNOW, n, b, Vector3(-0.04, 0.025, -0.03), 1.0, 1.0)
+			for k in 8:
+				var a := k * TAU / 8.0
+				_put(_box(0.008, 0.035, 0.008), Color("8f6f5a"), n, b, Vector3(cos(a) * 0.13, 0.017, sin(a) * 0.13))
+				_put(_box(0.1, 0.006, 0.006), Color("8f6f5a"), n, b, Vector3(cos(a + PI / 8.0) * 0.12, 0.027, sin(a + PI / 8.0) * 0.12), 1.0, -(a + PI / 8.0) + PI / 2.0)
+			for k in 3:
+				var a := k * 2.1 + 0.4
+				var at := Vector3(cos(a) * 0.06, 0.0, sin(a) * 0.06)
+				_put(_box(0.045, 0.028, 0.03), Palette.SNOW, n, b, at + Vector3(0, 0.024, 0), 1.0, a)
+				_put(_box(0.016, 0.016, 0.016), Color("4a3b33"), n, b, at + Vector3(cos(a) * 0.028, 0.032, -sin(a) * 0.028), 1.0, a)
 		"storehouse":
 			_put(_box(0.2, 0.08, 0.12), Color("b58e6b"), n, b, Vector3(0, 0.04, 0))
-			_put(_box(0.22, 0.02, 0.14), roof, n, b, Vector3(0, 0.09, 0))
+			_put(_prism(0.22, 0.06, 0.135), roof, n, b, Vector3(0, 0.11, 0), 1.0, PI / 2.0)
+			_put(_box(0.05, 0.06, 0.006), Color("6b4a3a"), n, b, Vector3(0, 0.03, 0.061))
+			_put(_box(0.03, 0.025, 0.04), Color("d9b48f"), n, b, Vector3(0.12, 0.0125, 0.05))
 		"great_granary":
-			_put(_cylinder(0.09, 0.16, 8), Color("d9b48f"), n, b, Vector3(0, 0.08, 0))
-			_put(_cone(0.11, 0.1, 8), roof, n, b, Vector3(0, 0.21, 0))
-			_put(_cylinder(0.05, 0.1, 6), Color("d9b48f"), n, b, Vector3(0.13, 0.05, 0.04))
-			_put(_cone(0.065, 0.06, 6), roof, n, b, Vector3(0.13, 0.13, 0.04))
+			_put(_cylinder(0.09, 0.16, 10), Color("d9b48f"), n, b, Vector3(0, 0.08, 0))
+			_put(_cone(0.11, 0.1, 10), roof, n, b, Vector3(0, 0.21, 0))
+			_put(_cylinder(0.05, 0.1, 8), Color("d9b48f"), n, b, Vector3(0.13, 0.05, 0.04))
+			_put(_cone(0.065, 0.06, 8), roof, n, b, Vector3(0.13, 0.13, 0.04))
+			_put(_box(0.03, 0.05, 0.006), Color("6b4a3a"), n, b, Vector3(0, 0.025, 0.09))
+			for k in 4:
+				_put(_box(0.012, 0.012, 0.03), Color("f2c078"), n, b, Vector3(-0.08 + k * 0.02, 0.006, 0.1))
 		"mine":
 			_put(_box(0.13, 0.08, 0.08), Color("5b5466"), n, b, Vector3(0, 0.04, 0))
 			_put(_box(0.06, 0.05, 0.02), Palette.OUTLINE, n, b, Vector3(0, 0.025, 0.045))
-			_put(_box(0.05, 0.03, 0.04), Color("b58e6b"), n, b, Vector3(0.09, 0.015, 0.06))
+			for side in [-1, 1]:
+				_put(_box(0.01, 0.06, 0.01), Color("8f6f5a"), n, b, Vector3(side * 0.035, 0.03, 0.056))
+			_put(_box(0.08, 0.01, 0.01), Color("8f6f5a"), n, b, Vector3(0, 0.06, 0.056))
+			for side in [-1, 1]:
+				_put(_box(0.004, 0.004, 0.09), Color("4a4a4f"), n, b, Vector3(side * 0.012, 0.002, 0.1))
+			_put(_box(0.03, 0.02, 0.025), Color("6b5a4e"), n, b, Vector3(0, 0.012, 0.11))
+			_put(_cone(0.04, 0.03, 6), Color("857c8a"), n, b, Vector3(0.1, 0.015, 0.05))
 		"foundry":
 			_put(_box(0.14, 0.08, 0.11), Color("857c8a"), n, b, Vector3(0, 0.04, 0))
-			_put(_cylinder(0.02, 0.12, 6), Color("5b5466"), n, b, Vector3(0.04, 0.13, 0.02))
-			_put(_box(0.04, 0.03, 0.01), Color("e08f6c"), n, b, Vector3(-0.03, 0.03, 0.056))
+			_put(_prism(0.15, 0.04, 0.12), Color("5b5466"), n, b, Vector3(0, 0.1, 0), 1.0, PI / 2.0)
+			_put(_cylinder(0.022, 0.13, 6), Color("5b5466"), n, b, Vector3(0.04, 0.14, 0.02))
+			_put(_box(0.04, 0.03, 0.006), Color("e08f6c"), n, b, Vector3(-0.03, 0.025, 0.056))
+			_put(_ball(0.018), Color("b0a6ad"), n, b, Vector3(0.04, 0.21, 0.02))
 		"temple":
-			_put(_box(0.18, 0.03, 0.14), stone, n, b, Vector3(0, 0.015, 0))
-			for k in 4:
-				_put(_box(0.015, 0.09, 0.015), Color("d9d0cc"), n, b, Vector3(-0.06 + k * 0.04, 0.075, 0.05))
-			_put(_cone(0.12, 0.05, 4), Color("d9d0cc"), n, b, Vector3(0, 0.145, 0), 1.0, PI / 4.0)
+			_put(_box(0.2, 0.03, 0.15), stone, n, b, Vector3(0, 0.015, 0))
+			_put(_box(0.16, 0.012, 0.12), Color("d9d0cc"), n, b, Vector3(0, 0.036, 0))
+			for k in 5:
+				for row in [-1, 1]:
+					_put(_cylinder(0.009, 0.09, 6), Color("eae2d6"), n, b, Vector3(-0.07 + k * 0.035, 0.087, row * 0.05))
+			_put(_box(0.18, 0.015, 0.13), Color("d9d0cc"), n, b, Vector3(0, 0.138, 0))
+			_put(_prism(0.19, 0.04, 0.14), Color("c07a54"), n, b, Vector3(0, 0.165, 0))
 		"scribe_house":
 			_put(_box(0.13, 0.09, 0.11), Color("e3c3c6"), n, b, Vector3(0, 0.045, 0))
 			_put(_box(0.15, 0.02, 0.13), Color("7a4f4f"), n, b, Vector3(0, 0.1, 0))
-		"colony":
-			# A longhouse inside a palisade.
-			_put(_box(0.16, 0.07, 0.09), Color("d9b48f"), n, b, Vector3(0, 0.035, 0))
-			_put(_cone(0.12, 0.07, 4), roof, n, b, Vector3(0, 0.105, 0), 1.0, PI / 4.0)
-			for k in 12:
-				var a := k * TAU / 12.0
-				if k == 3:
-					continue
-				_put(_box(0.016, 0.06, 0.016), Color("8f6f5a"), n, b, Vector3(cos(a) * 0.15, 0.03, sin(a) * 0.15))
-		"jetty":
-			_put(_box(0.26, 0.02, 0.06), Color("8f6f5a"), n, b, Vector3(0.04, 0.014, 0))
-			for k in 3:
-				_put(_box(0.014, 0.04, 0.014), Color("6b5a4e"), n, b, Vector3(-0.04 + k * 0.08, 0.0, 0.035))
-			_put(_box(0.08, 0.025, 0.035), BOAT_COLOR, n, b, Vector3(0.1, 0.012, 0.075))
-			_put(_cone(0.025, 0.06, 3), Color("e3cfa0"), n, b, Vector3(0.1, 0.055, 0.075))
+			_put(_box(0.024, 0.045, 0.006), Color("6b4a3a"), n, b, Vector3(0, 0.022, 0.056))
+			for side in [-1, 1]:
+				_put(_box(0.018, 0.018, 0.006), Color("f2e1a0"), n, b, Vector3(side * 0.04, 0.06, 0.056))
+			_put(_box(0.03, 0.004, 0.04), Color("eae2d6"), n, b, Vector3(0.08, 0.002, 0.06))
 		"ziggurat":
 			for k in 4:
 				var s := 0.26 - k * 0.055
 				_put(_box(s, 0.05, s), Color("d9b48f") if k % 2 == 0 else Color("b58e6b"), n, b, Vector3(0, 0.025 + k * 0.05, 0))
+			_put(_box(0.03, 0.2, 0.02), Color("c07a54"), n, b, Vector3(0, 0.09, 0.12))
 			_put(_box(0.04, 0.04, 0.04), Color("f2c078"), n, b, Vector3(0, 0.22, 0))
+		"colony":
+			# A longhouse with a gable roof inside a pointed palisade.
+			_put(_box(0.16, 0.07, 0.09), Color("d9b48f"), n, b, Vector3(0, 0.035, 0))
+			_put(_prism(0.18, 0.06, 0.1), roof, n, b, Vector3(0, 0.1, 0), 1.0, PI / 2.0)
+			_put(_box(0.024, 0.04, 0.006), Color("6b4a3a"), n, b, Vector3(0, 0.02, 0.046))
+			for k in 16:
+				var a := k * TAU / 16.0
+				if k == 4 or k == 5:
+					continue
+				var at := Vector3(cos(a) * 0.15, 0.0, sin(a) * 0.15)
+				_put(_cylinder(0.009, 0.055, 5), Color("8f6f5a"), n, b, at + Vector3(0, 0.027, 0))
+				_put(_cone(0.009, 0.016, 5), Color("6b5a4e"), n, b, at + Vector3(0, 0.062, 0))
 		_:
 			_styled(id, n, b)
 
@@ -901,11 +1031,14 @@ func _styled(id: String, n: Vector3, b: Vector3) -> void:
 	var k: float = style[3]
 	match style[0]:
 		"house":
-			_put(_box(0.12 * k, 0.08 * k, 0.1 * k), c1, n, b, Vector3(0, 0.04 * k, 0))
-			_put(_cone(0.1 * k, 0.08 * k, 4), c2, n, b, Vector3(0, 0.12 * k, 0), 1.0, PI / 4.0)
+			_put(_box(0.13 * k, 0.08 * k, 0.1 * k), c1, n, b, Vector3(0, 0.04 * k, 0))
+			_put(_prism(0.15 * k, 0.06 * k, 0.115 * k), c2, n, b, Vector3(0, 0.11 * k, 0), 1.0, PI / 2.0)
+			_facade(n, b, k, 0.051, 1)
+			_put(_box(0.016 * k, 0.04 * k, 0.016 * k), c2.darkened(0.2), n, b, Vector3(0.04 * k, 0.13 * k, -0.02 * k))
 		"hall":
 			_put(_box(0.2 * k, 0.08 * k, 0.12 * k), c1, n, b, Vector3(0, 0.04 * k, 0))
 			_put(_box(0.22 * k, 0.02 * k, 0.14 * k), c2, n, b, Vector3(0, 0.09 * k, 0))
+			_facade(n, b, k, 0.061, 2)
 		"temple":
 			_put(_box(0.2 * k, 0.03 * k, 0.15 * k), c2, n, b, Vector3(0, 0.015 * k, 0))
 			for i in 5:
@@ -953,6 +1086,9 @@ func _styled(id: String, n: Vector3, b: Vector3) -> void:
 			_put(_box(0.12 * k, 0.18 * k, 0.12 * k), c1, n, b, Vector3(0, 0.09 * k, 0))
 			for i in 3:
 				_put(_box(0.124 * k, 0.012 * k, 0.124 * k), c2, n, b, Vector3(0, (0.05 + i * 0.05) * k, 0))
+			for i in 3:
+				for j in 3:
+					_put(_box(0.018 * k, 0.018 * k, 0.004 * k), Color("f2e1a0"), n, b, Vector3((j - 1) * 0.035 * k, (0.03 + i * 0.05) * k, 0.061 * k))
 		"lattice":
 			for i in 4:
 				var s := (0.16 - i * 0.035) * k
@@ -1112,7 +1248,8 @@ func _strip(points: PackedVector3Array, width: float, color: Color, every: int) 
 			_indices.append(start + k)
 
 
-## Carts on the finished roads, boats on the finished sea routes.
+## Carts on the finished roads, boats on the finished sea routes, and a
+## fishing boat on every cell of sea a crew works.
 func _place_rides() -> void:
 	_rides.clear()
 	for k in _links.size():
@@ -1128,18 +1265,31 @@ func _place_rides() -> void:
 		var boat: bool = l["kind"] == "sea"
 		for m in (1 if boat else 2):
 			_rides.append({"points": points, "length": length, "offset": m * 0.5 + k * 0.37, "boat": boat})
-	var multimesh := _vehicles.multimesh
-	multimesh.instance_count = _rides.size()
-	for k in _rides.size():
-		multimesh.set_instance_color(k, BOAT_COLOR if _rides[k]["boat"] else CART_COLOR)
+	var carts := _rides.filter(func(r): return not r["boat"])
+	var sails := _rides.filter(func(r): return r["boat"])
+	_rides = carts + sails
+	_vehicles.multimesh.instance_count = carts.size()
+	for k in carts.size():
+		_vehicles.multimesh.set_instance_color(k, Color("d9b48f"))
+	_boats.multimesh.instance_count = sails.size() + _fishers.size()
+	for k in _boats.multimesh.instance_count:
+		_boats.multimesh.set_instance_color(k, Color("eef3f2"))
 	_move_vehicles()
 
 
+func _ride_basis(forward: Vector3, normal: Vector3, size: float) -> Basis:
+	var side := forward.cross(normal)
+	if side.length_squared() < 1e-8:
+		side = _tangents(normal)[0]
+	side = side.normalized()
+	return Basis(side, normal, side.cross(normal)).scaled(Vector3.ONE * size)
+
+
 func _move_vehicles() -> void:
-	var multimesh := _vehicles.multimesh
 	var size := _tile_size() * 1.2
-	for k in _rides.size():
-		var r: Dictionary = _rides[k]
+	var carts := 0
+	var boats := 0
+	for r in _rides:
 		var points: PackedVector3Array = r["points"]
 		var trip := float(r["length"]) / (WALK_SPEED * 1.4)
 		var t := fmod(_seconds / trip + float(r["offset"]), 2.0)
@@ -1148,14 +1298,29 @@ func _move_vehicles() -> void:
 		var i := mini(int(f), points.size() - 2)
 		var at := points[i].lerp(points[i + 1], f - i)
 		var normal := at.normalized()
-		var forward := (points[i + 1] - points[i]).normalized()
-		var side := forward.cross(normal)
-		if side.length_squared() < 1e-8:
-			side = _tangents(normal)[0]
-		side = side.normalized()
-		var basis := Basis(side.cross(normal), normal, -side).scaled(Vector3.ONE * size)
-		at += normal * 0.018 * size
-		multimesh.set_instance_transform(k, Transform3D(basis, at))
+		var forward := (points[i + 1] - points[i]).normalized() * (1.0 if t < 1.0 else -1.0)
+		if r["boat"]:
+			at += normal * (0.004 * size + 0.002 * sin(_seconds * 2.0 + boats))
+			_boats.multimesh.set_instance_transform(boats, Transform3D(_ride_basis(forward, normal, size), at))
+			boats += 1
+		else:
+			at += normal * 0.022 * size
+			_vehicles.multimesh.set_instance_transform(carts, Transform3D(_ride_basis(forward, normal, size), at))
+			carts += 1
+	# Fishing boats circle slowly on their cell.
+	for k in _fishers.size():
+		var cell: int = _fishers[k]
+		if boats >= _boats.multimesh.instance_count or cell >= builder.centers.size():
+			break
+		var n: Vector3 = builder.centers[cell]
+		var tg := _tangents(n)
+		var a := _seconds * 0.25 + k * 2.1
+		var dir: Vector3 = tg[0] * cos(a) + tg[1] * sin(a)
+		var at := n * PlanetMesh.SEA_LEVEL + dir * 0.03 * _ts
+		at = at.normalized() * (PlanetMesh.SEA_LEVEL + 0.004 * size + 0.002 * sin(_seconds * 2.0 + k))
+		var forward: Vector3 = -tg[0] * sin(a) + tg[1] * cos(a)
+		_boats.multimesh.set_instance_transform(boats, Transform3D(_ride_basis(forward, at.normalized(), size), at))
+		boats += 1
 
 
 ## City names over their centres.
@@ -1270,3 +1435,101 @@ func marks() -> Array:
 	for mark in _marks:
 		out.append({"tile": mark["tile"], "kind": mark["kind"], "at": pivot.to_global(mark["base"]), "normal": (pivot.global_transform.basis * (mark["base"] as Vector3)).normalized()})
 	return out
+
+
+# ---------------------------------------------------------------- sound
+
+var _town := []
+var _site_cells := []
+
+
+## The kinds of land around the middle of the view (shares adding to 1):
+## ocean, forest, open (meadows, beaches), rock (mountains, desert, ice),
+## town (built cells). The closer the camera, the smaller the patch.
+func view_mix(camera_position: Vector3, closeness: float) -> Dictionary:
+	var mix := {"ocean": 0.0, "forest": 0.0, "open": 0.0, "rock": 0.0, "town": 0.0}
+	if _biomes.is_empty() or not builder.ready():
+		return mix
+	var centre := (pivot.global_transform.affine_inverse() * camera_position).normalized()
+	var radius := lerpf(0.7, 0.12, closeness)
+	var t := _tangents(centre)
+	var count := 0.0
+	for ring in 3:
+		var r := radius * ring / 2.0
+		var n := 1 if ring == 0 else 6 * ring
+		for k in n:
+			var a := k * TAU / n
+			var d: Vector3 = (centre + (t[0] * cos(a) + t[1] * sin(a)) * r).normalized()
+			var cell := builder.cell_at(d)
+			count += 1.0
+			if cell < _town.size() and _town[cell]:
+				mix["town"] += 1.0
+				continue
+			match str(_biomes[cell]):
+				"ocean":
+					mix["ocean"] += 1.0
+				"forest":
+					mix["forest"] += 1.0
+				"plains", "coast":
+					mix["open"] += 1.0
+				_:
+					mix["rock"] += 1.0
+	for k in mix:
+		mix[k] /= maxf(1.0, count)
+	return mix
+
+
+## Building sites, in world space (for their hammers).
+func site_points() -> Array:
+	var out := []
+	for cell in _site_cells:
+		if cell >= 0 and cell < builder.centers.size():
+			out.append(pivot.to_global(builder.ground(builder.centers[cell], cell)))
+	return out
+
+
+## A small mesh built from shapes in a local frame (up is +Y, the front is
+## +X), for MultiMesh instances.
+func _compose(build: Callable) -> ArrayMesh:
+	var saved := [_verts, _normals, _colors, _indices, _ts, _scale, _on_ground]
+	_verts = PackedVector3Array()
+	_normals = PackedVector3Array()
+	_colors = PackedColorArray()
+	_indices = PackedInt32Array()
+	_ts = 1.0
+	_scale = 1.0
+	_on_ground = false
+	build.call()
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = _verts
+	arrays[Mesh.ARRAY_NORMAL] = _normals
+	arrays[Mesh.ARRAY_COLOR] = _colors
+	arrays[Mesh.ARRAY_INDEX] = _indices
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	_verts = saved[0]
+	_normals = saved[1]
+	_colors = saved[2]
+	_indices = saved[3]
+	_ts = saved[4]
+	_scale = saved[5]
+	_on_ground = saved[6]
+	return mesh
+
+
+## A triangular prism (a gable roof): `x` wide, `y` high, `z` long.
+static func _prism(x: float, y: float, z: float) -> Array:
+	return _shape("prism %s %s %s" % [x, y, z], func():
+		var mesh := PrismMesh.new()
+		mesh.size = Vector3(x, y, z)
+		return mesh)
+
+
+## A front with a door and lit windows (`z` is the wall's depth from the
+## middle, `rows` of windows on each side of the door).
+func _facade(n: Vector3, b: Vector3, k: float, z: float, rows: int) -> void:
+	_put(_box(0.024 * k, 0.042 * k, 0.005 * k), Color("6b4a3a"), n, b, Vector3(0, 0.021 * k, z * k))
+	for side in [-1, 1]:
+		for r in rows:
+			_put(_box(0.018 * k, 0.016 * k, 0.005 * k), Color("f2e1a0"), n, b, Vector3(side * (0.04 + r * 0.035) * k, 0.052 * k, z * k))

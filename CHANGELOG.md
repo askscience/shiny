@@ -59,6 +59,19 @@
   builders work on them. The work sliders are gone: whoever has no crew
   thinks and makes culture. While you play, an hour of the planet lasts a
   minute; while you are away, the planet runs at half speed.
+- Oorbit 0.7.2: sound and richer models. The planet has sound: the hum of
+  space from afar, and coming down to the ground the sea, birds over the
+  forests, voices over the towns and crickets on the meadows, mixed by what
+  the camera looks at; effects for taps, building, hammers on the sites,
+  discoveries, the new era, finds and boats fade with their distance from
+  the middle of the view and are silent on the far side. A button on the
+  left mutes it, and the window remembers. The sounds are synthesized by a
+  script (`plugins/oorbit/scripts/synth-sounds.py`). Trees have trunks
+  (conifers, broadleaves, palms by the sea), houses gable roofs, doors and
+  lit windows, the first eras' buildings more detail (round huts, a fire
+  pit with logs, trilithons, fenced fields and pastures with sheep, mine
+  frames), people have heads, carts wheels, and boats a hull and a sail;
+  fishing crews go out in a boat.
 - Oorbit 0.7.1: more to do while playing. Things turn up on the land for a
   few hours (berries, lost goats, a crate washed ashore, a meteorite, wild
   horses, a wreck, old ruins): tap one and the people bring it home at

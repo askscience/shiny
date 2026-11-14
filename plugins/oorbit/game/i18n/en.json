@@ -446,5 +446,7 @@
  "find.meteorite.text": "Still warm. Strange stone, and much to wonder about.",
  "find.horses.text": "Fast and shy. With patience they could be tamed.",
  "find.wreck.text": "Timber and rope, good for building.",
- "find.ruins.text": "Someone lived here long ago. What did they know?"
+ "find.ruins.text": "Someone lived here long ago. What did they know?",
+ "ui.sound": "Sound on (tap to mute)",
+ "ui.sound.off": "Sound off (tap to turn on)"
 }

@@ -446,5 +446,7 @@
  "find.meteorite.text": "Ancora caldo. Pietra strana, e tante domande.",
  "find.horses.text": "Veloci e timidi. Con pazienza si potrebbero domare.",
  "find.wreck.text": "Legname e corde, buoni per costruire.",
- "find.ruins.text": "Qualcuno ha vissuto qui tanto tempo fa. Cosa sapevano?"
+ "find.ruins.text": "Qualcuno ha vissuto qui tanto tempo fa. Cosa sapevano?",
+ "ui.sound": "Audio attivo (tocca per silenziare)",
+ "ui.sound.off": "Audio spento (tocca per riattivare)"
 }

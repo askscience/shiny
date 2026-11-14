@@ -43,6 +43,9 @@ var pixel_material: ShaderMaterial
 var planet_view: PlanetView
 var traffic: SkyTraffic
 var ui: GameUI
+var audio: PlanetAudio
+var _listen_left := 0.0
+var _hammer_left := 2.0
 var _refresh_left := REFRESH_SECONDS
 var _press := Vector2.ZERO
 var _pressing := false
@@ -64,6 +67,14 @@ func _ready() -> void:
 	_build_world()
 	ui = GameUI.new()
 	add_child(ui)
+	audio = PlanetAudio.new()
+	add_child(audio)
+	audio.muted = _load_muted()
+	ui.set_muted(audio.muted)
+	ui.sound_requested.connect(func(name: String): audio.play(name))
+	ui.mute_toggled.connect(func(on: bool):
+		audio.muted = on
+		_save_muted(on))
 	ui.action_requested.connect(_send_action)
 	ui.found_requested.connect(_found)
 	ui.reset_requested.connect(_reset)
@@ -99,6 +110,7 @@ func _process(delta: float) -> void:
 	if traffic.visible:
 		traffic.tick(ui.live_now_ms())
 	_update_marks()
+	_update_sound(delta)
 	if not host.available or ui.catalog.is_empty():
 		return
 	if not _visible:
@@ -159,6 +171,7 @@ func _on_view(reply: Dictionary) -> void:
 	_busy = false
 	if not reply.get("success", false):
 		ui.toast(I18n.t("ui.error", {"error": reply.get("error", "?")}))
+		audio.play("error")
 		return
 	var data: Dictionary = reply.get("data", {})
 	var planet = data.get("planet")
@@ -192,6 +205,53 @@ func _on_view(reply: Dictionary) -> void:
 var _event_focused := ""
 
 
+## How loud something at `where` (world space) should sound: full in the
+## middle of the view and close up, fading towards the edges, silent on the
+## far side of the planet.
+func _weight_at(where: Vector3) -> float:
+	if camera.is_position_behind(where):
+		return 0.0
+	var normal := (where - planet_view.pivot.global_position).normalized()
+	if normal.dot((camera.global_position - where).normalized()) <= 0.0:
+		return 0.0
+	var screen := camera.unproject_position(where) * float(container.stretch_shrink)
+	var size := get_viewport_rect().size
+	var d := clampf((screen - size / 2.0).length() / (size.length() / 2.0), 0.0, 1.0)
+	var closeness := clampf((_zoom - 1.0) / (ZOOM_MAX - 1.0), 0.0, 1.0)
+	return pow(1.0 - d, 2.0) * (0.35 + 0.65 * closeness)
+
+
+## The ambient mix follows what the camera looks at; now and then a hammer
+## rings on a building site in view.
+func _update_sound(delta: float) -> void:
+	if not planet_view.visible:
+		audio.listen(0.0, {})
+		return
+	_listen_left -= delta
+	if _listen_left <= 0.0:
+		_listen_left = 0.25
+		var closeness := clampf((_zoom - 1.0) / (ZOOM_MAX - 1.0), 0.0, 1.0)
+		audio.listen(closeness, planet_view.view_mix(camera.global_position, closeness))
+	_hammer_left -= delta
+	if _hammer_left <= 0.0:
+		_hammer_left = randf_range(1.6, 3.2)
+		var sites := planet_view.site_points()
+		if not sites.is_empty():
+			audio.play("hammer", _weight_at(sites[randi() % sites.size()]))
+
+
+func _load_muted() -> bool:
+	if not OS.has_feature("web"):
+		return false
+	var v = JavaScriptBridge.eval("(function(){try{return localStorage.getItem('oorbit.muted')||''}catch(e){return ''}})()")
+	return str(v) == "1"
+
+
+func _save_muted(on: bool) -> void:
+	if OS.has_feature("web"):
+		JavaScriptBridge.eval("(function(){try{localStorage.setItem('oorbit.muted','%s')}catch(e){}})()" % ("1" if on else "0"))
+
+
 ## Finds and events on the planet: where they are on screen, and whether
 ## they face the camera (the window puts a marker on the edge for the
 ## hidden ones).
@@ -218,6 +278,7 @@ func _on_delivered(where: Vector3, text: String, color: Color) -> void:
 		return
 	var screen := camera.unproject_position(where) * float(container.stretch_shrink)
 	ui.float_text(screen, text, color)
+	audio.play("deliver", _weight_at(where))
 
 
 var _palette_era := 0
@@ -309,6 +370,8 @@ func _gui_input(event: InputEvent) -> void:
 					_select(tile)
 				else:
 					_select(tile if tile != planet_view.selected else -1)
+				if tile >= 0:
+					audio.play("tap")
 			_double_click = false
 	elif event is InputEventMouseMotion and _pressing:
 		if _dragged or event.position.distance_to(_press) > CLICK_SLOP:

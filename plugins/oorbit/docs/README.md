@@ -6,7 +6,7 @@ document covers the plugin as built; the game itself is described in
 [design.md](design.md), and its rules live in
 [`crates/oorbit-sim`](../../../crates/oorbit-sim/README.md).
 
-Status: **0.7.1, an active game with cities.** The user founds a planet (one
+Status: **0.7.2, an active game with cities.** The user founds a planet (one
 per account), and the window shows it as it is now: continents and seas of
 642 cells, crews sent to work by pointing at the land, buildings that rise
 while they are built, colonies linked to the capital by roads and sea routes, research, events, notable people, the Chronicle, and a dock that
@@ -135,6 +135,26 @@ narrow window (a phone) the panels become one sheet at the bottom and the
 camera moves back so the planet fits the width. Strings come from
 `game/i18n/<lang>.json` (English and Italian; other languages fall back to
 English).
+
+## Sound
+
+`game/audio.gd` (`PlanetAudio`) plays six ambient loops and ten effects
+from `game/sounds/`, WAV files made by `scripts/synth-sounds.py` (standard
+library only, fixed seeds; run it again to regenerate them):
+
+- **Ambient:** every quarter second `main.gd` tells it how close the camera
+  is and what land is around the middle of the view
+  (`PlanetView.view_mix`: ocean, forest, open, rock, town). Far away only
+  space and a little wind; close up the sea, birds, voices and crickets
+  follow the land in view, with slow fades.
+- **Effects:** taps, building started and finished, hammers on sites in
+  view, discoveries, a new era or city, finds, boats, deliveries, errors.
+  The loudness of one placed on the planet follows its distance from the
+  middle of the view and the zoom, and is zero on the far side. Four voices
+  at most, and the same effect never stacks up.
+- **Mute:** the speaker button at the bottom of the left rail; the choice
+  is kept in the browser (`localStorage`, `oorbit.muted`). Browsers start
+  the sound at the first tap in the window.
 
 ## Layout
 

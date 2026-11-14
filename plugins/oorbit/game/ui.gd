@@ -12,6 +12,9 @@ signal reset_requested
 signal skip_requested(hours: float)
 signal tile_closed
 signal tile_focus_requested(index: int)
+## An effect to play (see `PlanetAudio`), and the mute button.
+signal sound_requested(name: String)
+signal mute_toggled(on: bool)
 
 const PANEL_WIDTH := 320.0
 const NARROW := 640.0
@@ -73,6 +76,11 @@ func _ready() -> void:
 		button.pressed.connect(_toggle_panel.bind(id))
 		_buttons[id] = button
 		_rail.add_child(button)
+	_mute = _icon_button("res://icons/sound.svg", I18n.t("ui.sound"))
+	_mute.pressed.connect(func():
+		set_muted(not _sound_off)
+		mute_toggled.emit(_sound_off))
+	_rail.add_child(_mute)
 
 	_side = _panel()
 	_side.visible = false
@@ -1326,7 +1334,28 @@ func _announce(planet: Dictionary) -> void:
 		var e: Dictionary = chronicle[k]
 		if int(e["step"]) * 1000 + (k + 1) % 1000 <= _seen_entries:
 			break
-		if not said and str(e["key"]) in ["goal_done", "find_collected", "city_founded", "era_reached", "deposit_exhausted"]:
+		var key := str(e["key"])
+		if not said and key in ["goal_done", "find_collected", "city_founded", "era_reached", "deposit_exhausted"]:
 			toast(describe(e))
 			said = true
+		var sound: String = ANNOUNCE_SOUNDS.get(key, "")
+		if sound != "":
+			sound_requested.emit(sound)
 	_seen_entries = last
+
+
+const ANNOUNCE_SOUNDS := {
+	"building_done": "done", "goal_done": "done", "road_done": "done", "tech_done": "discovery",
+	"era_reached": "era", "city_founded": "era", "find_collected": "find", "sea_done": "boat",
+	"sea_started": "boat", "building_started": "build", "road_started": "build", "site_helped": "build",
+	"trees_planted": "build",
+}
+var _mute: Button
+var _sound_off := false
+
+
+func set_muted(on: bool) -> void:
+	_sound_off = on
+	if _mute != null:
+		_mute.icon = load("res://icons/mute.svg" if on else "res://icons/sound.svg")
+		_mute.tooltip_text = I18n.t("ui.sound.off" if on else "ui.sound")
