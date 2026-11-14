@@ -20,7 +20,7 @@ fn with_colony(seed: u64) -> (Planet, Catalog, i64) {
     let catalog = Catalog::builtin();
     let mut planet = Planet::new(seed, "temperate", T0, &catalog).unwrap();
     rich(&mut planet);
-    let site = cities::city_sites(&planet, &catalog)[0];
+    let site = cities::sites_for(&planet, &catalog, catalog.building("colony").unwrap())[0];
     apply(&mut planet, &catalog, T0, &Action::Build { building: "colony".into(), tile: site }).unwrap();
     let now = T0 + 7 * HOUR;
     advance(&mut planet, &catalog, now);
@@ -86,31 +86,20 @@ fn a_road_links_a_colony_and_lifts_its_pace() {
 }
 
 #[test]
-fn sea_routes_need_ports_and_sail_only_on_water() {
+fn a_boat_links_two_cities_on_the_same_sea() {
     let catalog = Catalog::builtin();
-    for seed in 1..12u64 {
+    for seed in 1..20u64 {
         let (mut planet, _, now) = with_colony(seed);
-        assert!(cities::route(&planet, &catalog, LinkKind::Sea, 0, 1).is_none(), "no ports, no route");
-        // A jetty on each city's shore, where there is one.
-        let owner = cities::owners(&planet);
-        let mut ports = 0;
-        for city in 0..2 {
-            let shore = (0..planet.tiles.len()).find(|&c| {
-                owner[c] == city && planet.tiles[c].biome == Biome::Coast && planet.tiles[c].building.is_none()
-            });
-            if let Some(c) = shore {
-                planet.tiles[c].building = Some("jetty".into());
-                ports += 1;
-            }
-        }
-        if ports < 2 {
+        if cities::shores_of(&planet, 0).is_empty() || cities::shores_of(&planet, 1).is_empty() {
+            assert!(cities::route(&planet, &catalog, LinkKind::Sea, 0, 1).is_none(), "no shore, no boat");
             continue;
         }
         let Some(route) = cities::route(&planet, &catalog, LinkKind::Sea, 0, 1) else {
             continue;
         };
         let inner = &route.cells[1..route.cells.len() - 1];
-        assert!(inner.iter().all(|&c| planet.tiles[c].biome == Biome::Ocean));
+        assert!(inner.iter().all(|&c| planet.tiles[c].biome == Biome::Ocean), "a boat sails only on water");
+        assert!(route.cost.contains_key("wood"));
         apply(&mut planet, &catalog, now, &Action::Link { kind: LinkKind::Sea, from: 0, to: 1 }).unwrap();
         advance(&mut planet, &catalog, now + 4 * HOUR);
         assert_eq!(cities::connected(&planet), vec![true, true]);

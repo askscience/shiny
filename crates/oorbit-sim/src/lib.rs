@@ -22,6 +22,8 @@ pub mod autoplay;
 pub mod catalog;
 pub mod cities;
 pub mod clock;
+pub mod finds;
+pub mod goals;
 pub mod cells;
 pub mod neighbors;
 pub mod orders;

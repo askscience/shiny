@@ -45,9 +45,17 @@ the era.
 The planet starts with one city on its home. From the Agricultural Age a
 colony founds another on free land a few cells away; new buildings go up
 near a city, so a growing people spreads into new cities. A road over land
-(laid cell by cell, carts on it) or a sea route between two jetties links a
+(laid cell by cell, carts on it) or a boat between two cities on the shore links a
 colony to the capital: until then its crews work at 60%, and every linked
 colony brings a little more knowledge and culture.
+
+## Playing (built)
+
+Besides sending crews and building: things turn up on the land for a few
+hours (berries, goats, a crate, a meteorite, horses, a wreck, ruins) and
+are brought home with a tap; some events happen on a cell; a building site
+can be helped by the thinkers, at the cost of research; three small goals
+with a reward are always open.
 
 ## Society (built)
 

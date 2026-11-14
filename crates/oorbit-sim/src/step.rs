@@ -171,8 +171,10 @@ fn rates_at(planet: &Planet, catalog: &Catalog, step: i64) -> Rates {
         busy += crew;
     }
     let thinkers = (workers_total - busy).max(0.0);
+    // Thinkers helping on building sites make no knowledge meanwhile.
+    let helping = planet.helping_until > step;
     for (category, share) in [(Category::Knowledge, 2.0 / 3.0), (Category::Culture, 1.0 / 3.0)] {
-        let w = thinkers * share;
+        let w = if helping && category == Category::Knowledge { 0.0 } else { thinkers * share };
         workers.insert(category.as_str().into(), w);
         *per_hour.entry(category.as_str().into()).or_insert(0.0) +=
             w * per_worker(category) * mult(category);
@@ -328,6 +330,8 @@ fn run_step(planet: &mut Planet, catalog: &Catalog, step: i64) {
     run_events(planet, catalog, step, &mut rng);
     run_notables(planet, catalog, step, &mut rng);
     crate::neighbors::run_neighbors(planet, catalog, step, &mut rng);
+    crate::finds::run_finds(planet, catalog, step);
+    crate::goals::run_goals(planet, catalog, step);
 }
 
 /// Move to the next era when the current one is complete.
@@ -405,9 +409,19 @@ fn run_events(planet: &mut Planet, catalog: &Catalog, step: i64, rng: &mut Rng) 
     let mut pick_rng = Rng::new(pick);
     if let Some(i) = pick_rng.weighted(&weights) {
         let id = eligible[i].id.clone();
+        // An event with a place happens on a cell of that biome near the
+        // people (drawn from the same pick, so no extra draw).
+        let tile = eligible[i].place.and_then(|biome| {
+            let reach = crate::orders::in_reach(planet);
+            let cells: Vec<usize> = (0..planet.tiles.len())
+                .filter(|&c| reach[c] && planet.tiles[c].biome == biome)
+                .collect();
+            (!cells.is_empty()).then(|| cells[(pick_rng.next_u64() % cells.len() as u64) as usize])
+        });
         planet.pending_event = Some(PendingEvent {
             id: id.clone(),
             step,
+            tile,
         });
         planet.last_event_step = step;
         planet.log(catalog, step, "event", &[("event", &id)]);

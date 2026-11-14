@@ -1,7 +1,7 @@
 //! Cities and the ways between them. The planet starts with one city on its
 //! home; a colony built far enough away founds another. New buildings go
-//! near a city, so a growing people needs new cities. A road over land or a
-//! sea route between two ports links two cities; the crews of a city with
+//! near a city, so a growing people needs new cities. A road over land, or a
+//! boat between two cities on the same sea, links two cities; the crews of a city with
 //! no way to the capital work at [`UNLINKED`] of their pace, and every
 //! linked colony lifts knowledge and culture a little (ideas travel).
 
@@ -19,14 +19,15 @@ pub const CITY_RADIUS: usize = 4;
 pub const CITY_SPACING: usize = 5;
 /// How far over land settlers walk to found a city, in cells.
 pub const COLONY_RANGE: usize = 8;
-/// With a port, settlers sail to any shore this many cells away.
+/// From a city on the shore, settlers sail to any shore this many cells
+/// away.
 pub const SEA_RANGE: usize = 16;
 /// The pace of a city's crews while it has no way to the capital.
 pub const UNLINKED: f64 = 0.6;
 /// Knowledge and culture bonus per linked colony, up to [`MAX_LINKED`].
 pub const LINK_BONUS: f64 = 0.05;
 pub const MAX_LINKED: usize = 4;
-/// Hours to lay one cell of road, and to fit out a sea route.
+/// Hours to lay one cell of road, and to build the boat of a sea route.
 pub const ROAD_HOURS_PER_CELL: f64 = 0.5;
 pub const SEA_HOURS: f64 = 3.0;
 
@@ -152,27 +153,25 @@ pub fn near_city(planet: &Planet) -> Vec<bool> {
         .collect()
 }
 
-/// Is `building` a landing for boats?
-pub fn is_port(catalog: &Catalog, building: &str) -> bool {
-    catalog.building(building).is_some_and(|b| b.port)
-}
-
-/// The ports a city has (port buildings on its cells).
-pub fn ports_of(planet: &Planet, catalog: &Catalog, city: usize) -> Vec<usize> {
-    let owner = owners(planet);
-    planet
-        .tiles
-        .iter()
-        .enumerate()
-        .filter(|(i, t)| owner[*i] == city && t.building.as_deref().is_some_and(|b| is_port(catalog, b)))
-        .map(|(i, _)| i)
+/// A city's shore: its land cells by the sea, within its radius.
+pub fn shores_of(planet: &Planet, city: usize) -> Vec<usize> {
+    let Some(layout) = crate::cells::layout(planet.tiles.len()) else {
+        return Vec::new();
+    };
+    let Some(centre) = planet.cities.get(city).map(|c| c.tile) else {
+        return Vec::new();
+    };
+    let near = layout.hops(&[centre], |c| land(planet, c));
+    (0..planet.tiles.len())
+        .filter(|&c| near[c] <= CITY_RADIUS && land(planet, c))
+        .filter(|&c| layout.neighbors[c].iter().any(|&m| !land(planet, m)))
         .collect()
 }
 
 /// Where a colony could be founded now: free land far enough from every
 /// city and colony site, within walking range of a city over land, or by
-/// any shore within sailing range once a port stands. Nearest to the home
-/// first.
+/// any shore within sailing range of a city on the shore. Nearest to the
+/// home first.
 pub fn city_sites(planet: &Planet, catalog: &Catalog) -> Vec<usize> {
     let Some(layout) = crate::cells::layout(planet.tiles.len()) else {
         return Vec::new();
@@ -188,11 +187,12 @@ pub fn city_sites(planet: &Planet, catalog: &Catalog) -> Vec<usize> {
     let apart = layout.hops(&centres, |_| true);
     let city_tiles: Vec<usize> = planet.cities.iter().map(|c| c.tile).collect();
     let walk = layout.hops(&city_tiles, |c| land(planet, c));
-    let has_port = planet
-        .tiles
-        .iter()
-        .any(|t| t.building.as_deref().is_some_and(|b| is_port(catalog, b)));
-    let sail = layout.hops(&city_tiles, |_| true);
+    let sailors: Vec<usize> = (0..planet.cities.len())
+        .filter(|&k| !shores_of(planet, k).is_empty())
+        .map(|k| planet.cities[k].tile)
+        .collect();
+    let has_port = !sailors.is_empty();
+    let sail = layout.hops(&sailors, |_| true);
     let shore = |c: usize| layout.neighbors[c].iter().any(|&m| !land(planet, m));
     let from_home = layout.hops(&[planet.home], |_| true);
     let mut sites: Vec<usize> = (0..planet.tiles.len())
@@ -227,10 +227,15 @@ fn road_cost(cells: &[usize]) -> BTreeMap<String, f64> {
     BTreeMap::from([("wood".to_string(), 3.0 * n), ("stone".to_string(), 2.0 * n)])
 }
 
-/// What fitting out a sea route takes: boats, and a little per cell sailed.
-fn sea_cost(cells: &[usize]) -> BTreeMap<String, f64> {
+/// What a sea route takes: its boat (wood, and iron from the Middle Ages),
+/// and a little per cell sailed.
+fn sea_cost(planet: &Planet, cells: &[usize]) -> BTreeMap<String, f64> {
     let n = cells.len().saturating_sub(1) as f64;
-    BTreeMap::from([("wood".to_string(), 20.0 + 1.5 * n)])
+    let mut cost = BTreeMap::from([("wood".to_string(), 25.0 + 1.0 * n)]);
+    if planet.era >= 5 {
+        cost.insert("iron".into(), 10.0);
+    }
+    cost
 }
 
 /// The price of walking into a cell when laying a road.
@@ -251,11 +256,11 @@ pub fn road_path(planet: &Planet, from: usize, to: usize) -> Option<Vec<usize>> 
     layout.cheapest_path(&[a], &[b], |c| road_price(planet.tiles[c].biome))
 }
 
-/// The sea route from one city's ports to another's, if the water joins.
-pub fn sea_path(planet: &Planet, catalog: &Catalog, from: usize, to: usize) -> Option<Vec<usize>> {
+/// The sea route from one city's shore to another's, if the water joins.
+pub fn sea_path(planet: &Planet, from: usize, to: usize) -> Option<Vec<usize>> {
     let layout = crate::cells::layout(planet.tiles.len())?;
-    let a = ports_of(planet, catalog, from);
-    let b = ports_of(planet, catalog, to);
+    let a = shores_of(planet, from);
+    let b = shores_of(planet, to);
     if a.is_empty() || b.is_empty() {
         return None;
     }
@@ -284,8 +289,9 @@ pub fn route(planet: &Planet, catalog: &Catalog, kind: LinkKind, from: usize, to
             (cells, cost, hours)
         }
         LinkKind::Sea => {
-            let cells = sea_path(planet, catalog, from, to)?;
-            let cost = sea_cost(&cells);
+            // A boat needs water between the two shores.
+            let cells = sea_path(planet, from, to).filter(|c| c.len() >= 3)?;
+            let cost = sea_cost(planet, &cells);
             (cells, cost, SEA_HOURS)
         }
     };

@@ -64,7 +64,7 @@ fn a_steady_player_paces_through_every_era() {
                 ("era 2", day(2), 1.5..=5.0),
                 ("era 3", day(3), 5.0..=12.0),
                 ("era 4", day(4), 10.0..=22.0),
-                ("era 7", day(7), 30.0..=52.0),
+                ("era 7", day(7), 28.0..=52.0),
                 ("era 10", day(10), 45.0..=72.0),
                 (
                     "the last era done",

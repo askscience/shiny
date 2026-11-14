@@ -98,6 +98,7 @@ func _process(delta: float) -> void:
 		_fit()
 	if traffic.visible:
 		traffic.tick(ui.live_now_ms())
+	_update_marks()
 	if not host.available or ui.catalog.is_empty():
 		return
 	if not _visible:
@@ -173,12 +174,41 @@ func _on_view(reply: Dictionary) -> void:
 		planet_view.visible = false
 		traffic.visible = false
 	ui.show_view(data)
+	# An event that happens somewhere: fly there once.
+	if planet != null and planet.get("pending_event") != null:
+		var e: Dictionary = planet["pending_event"]
+		var key := "%s@%s" % [e.get("id"), e.get("step")]
+		if e.get("tile") != null and key != _event_focused:
+			_event_focused = key
+			planet_view.focus(int(e["tile"]))
 	# Look again right after the next thing finishes, or in a minute.
 	if _playing() and planet != null:
 		_refresh_left = PLAY_REFRESH_SECONDS
 	else:
 		var next := ui.next_change_ms()
 		_refresh_left = REFRESH_SECONDS if next < 0.0 else clampf(ui.wall_ms(next) / 1000.0 + 2.0, 5.0, REFRESH_SECONDS)
+
+
+var _event_focused := ""
+
+
+## Finds and events on the planet: where they are on screen, and whether
+## they face the camera (the window puts a marker on the edge for the
+## hidden ones).
+func _update_marks() -> void:
+	if not planet_view.visible:
+		ui.set_marks([])
+		return
+	var list := []
+	var shrink := float(container.stretch_shrink)
+	var size := get_viewport_rect().size
+	for m in planet_view.marks():
+		var at: Vector3 = m["at"]
+		var facing := (m["normal"] as Vector3).dot((camera.global_position - at).normalized()) > 0.05
+		var screen := camera.unproject_position(at) * shrink
+		var inside := Rect2(Vector2.ZERO, size).grow(-24.0).has_point(screen)
+		list.append({"tile": m["tile"], "kind": m["kind"], "screen": screen, "hidden": not facing or not inside or camera.is_position_behind(at)})
+	ui.set_marks(list)
 
 
 ## A crew brought something home: a little "+3 wood" over the spot.

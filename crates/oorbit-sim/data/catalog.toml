@@ -713,16 +713,6 @@ city = true
 effects = [{ type = "housing", amount = 6.0 }]
 
 [[buildings]]
-id = "jetty"
-name = "Jetty"
-era = 2
-cost = { wood = 25.0, stone = 10.0 }
-build_hours = 3.0
-biomes = ["coast"]
-port = true
-effects = [{ type = "bonus", category = "food", amount = 0.05 }]
-
-[[buildings]]
 id = "house"
 name = "House"
 era = 2
@@ -1234,6 +1224,7 @@ monument = true
 
 [[events]]
 id = "lightning"
+place = "forest"
 era_min = 1
 era_max = 1
 weight = 6
@@ -1249,6 +1240,7 @@ outcomes = [{ type = "mood", amount = 0.05 }, { type = "trait", id = "traditiona
 
 [[events]]
 id = "storm"
+place = "coast"
 era_min = 1
 era_max = 6
 weight = 5
@@ -1277,6 +1269,7 @@ outcomes = [{ type = "trait", id = "open", amount = -1 }]
 
 [[events]]
 id = "great_hunt"
+place = "forest"
 era_min = 1
 era_max = 2
 weight = 4
@@ -1324,6 +1317,7 @@ outcomes = [{ type = "resource", id = "knowledge", amount = 10.0 }, { type = "tr
 
 [[events]]
 id = "drought"
+place = "plains"
 era_min = 2
 era_max = 6
 weight = 3
@@ -1353,6 +1347,7 @@ outcomes = [{ type = "resource", id = "food", amount = -30.0 }, { type = "resour
 
 [[events]]
 id = "traders"
+place = "plains"
 era_min = 3
 era_max = 6
 weight = 4
@@ -1437,6 +1432,7 @@ outcomes = [{ type = "mood", amount = -0.03 }, { type = "trait", id = "tradition
 
 [[events]]
 id = "explorers"
+place = "coast"
 era_min = 6
 era_max = 7
 weight = 3
@@ -1535,6 +1531,7 @@ outcomes = [{ type = "resource", id = "culture", amount = 400.0 }, { type = "moo
 
 [[events]]
 id = "meteor"
+place = "mountain"
 era_min = 10
 weight = 2
 
@@ -1546,3 +1543,265 @@ outcomes = [{ type = "resource", id = "fuel", amount = -100.0 }, { type = "resou
 id = "watch"
 outcomes = [{ type = "resource", id = "culture", amount = 300.0 }, { type = "trait", id = "curious", amount = 1 }]
 
+# ---------------------------------------------------------------- goals
+# Three at a time, in this order, up to the current era; each gives its reward once.
+
+[[goals]]
+id = "g_shelter"
+era = 1
+type = "tech"
+tech = "shelter"
+reward = { wood = 6.0 }
+
+[[goals]]
+id = "g_huts"
+era = 1
+type = "build"
+building = "hut"
+count = 2
+reward = { wood = 8.0 }
+
+[[goals]]
+id = "g_stone_crew"
+era = 1
+type = "order"
+resource = "stone"
+reward = { food = 10.0 }
+
+[[goals]]
+id = "g_fire_pit"
+era = 1
+type = "build"
+building = "fire_pit"
+count = 1
+reward = { culture = 5.0 }
+
+[[goals]]
+id = "g_find"
+era = 1
+type = "finds"
+count = 1
+reward = { knowledge = 6.0 }
+
+[[goals]]
+id = "g_wood"
+era = 1
+type = "have"
+resource = "wood"
+amount = 25.0
+reward = { stone = 6.0 }
+
+[[goals]]
+id = "g_people_12"
+era = 1
+type = "population"
+count = 12.0
+reward = { food = 15.0 }
+
+[[goals]]
+id = "g_farming"
+era = 2
+type = "tech"
+tech = "farming"
+reward = { wood = 15.0 }
+
+[[goals]]
+id = "g_fields"
+era = 2
+type = "build"
+building = "field"
+count = 2
+reward = { food = 25.0 }
+
+[[goals]]
+id = "g_houses"
+era = 2
+type = "build"
+building = "house"
+count = 2
+reward = { clay = 15.0 }
+
+[[goals]]
+id = "g_colony"
+era = 2
+type = "cities"
+count = 2
+reward = { food = 30.0, wood = 20.0 }
+
+[[goals]]
+id = "g_linked"
+era = 2
+type = "linked"
+count = 1
+reward = { stone = 30.0 }
+
+[[goals]]
+id = "g_plant"
+era = 2
+type = "planted"
+count = 1
+reward = { food = 12.0 }
+
+[[goals]]
+id = "g_people_25"
+era = 2
+type = "population"
+count = 25.0
+reward = { culture = 15.0 }
+
+[[goals]]
+id = "g_finds_5"
+era = 2
+type = "finds"
+count = 5
+reward = { knowledge = 25.0 }
+
+[[goals]]
+id = "g_mine"
+era = 3
+type = "build"
+building = "mine"
+count = 1
+reward = { wood = 30.0 }
+
+[[goals]]
+id = "g_foundry"
+era = 3
+type = "build"
+building = "foundry"
+count = 1
+reward = { stone = 40.0 }
+
+[[goals]]
+id = "g_bronze"
+era = 3
+type = "have"
+resource = "bronze"
+amount = 20.0
+reward = { knowledge = 60.0 }
+
+[[goals]]
+id = "g_cities_3"
+era = 3
+type = "cities"
+count = 3
+reward = { food = 60.0, wood = 40.0 }
+
+[[goals]]
+id = "g_people_50"
+era = 3
+type = "population"
+count = 50.0
+reward = { culture = 40.0 }
+
+[[goals]]
+id = "g_marble"
+era = 4
+type = "order"
+resource = "marble"
+reward = { stone = 50.0 }
+
+[[goals]]
+id = "g_academy"
+era = 4
+type = "build"
+building = "academy"
+count = 1
+reward = { knowledge = 120.0 }
+
+[[goals]]
+id = "g_linked_2"
+era = 4
+type = "linked"
+count = 2
+reward = { marble = 40.0 }
+
+[[goals]]
+id = "g_people_100"
+era = 4
+type = "population"
+count = 100.0
+reward = { coins = 40.0 }
+
+[[goals]]
+id = "g_iron_mine"
+era = 5
+type = "build"
+building = "iron_mine"
+count = 1
+reward = { wood = 80.0 }
+
+[[goals]]
+id = "g_cities_4"
+era = 5
+type = "cities"
+count = 4
+reward = { stone = 120.0 }
+
+[[goals]]
+id = "g_finds_15"
+era = 5
+type = "finds"
+count = 15
+reward = { knowledge = 250.0 }
+
+[[goals]]
+id = "g_harbor"
+era = 6
+type = "build"
+building = "harbor"
+count = 1
+reward = { glass = 30.0 }
+
+[[goals]]
+id = "g_people_250"
+era = 6
+type = "population"
+count = 250.0
+reward = { culture = 200.0 }
+
+[[goals]]
+id = "g_factory"
+era = 7
+type = "build"
+building = "factory"
+count = 1
+reward = { coal = 80.0 }
+
+[[goals]]
+id = "g_cities_5"
+era = 7
+type = "cities"
+count = 5
+reward = { steel = 60.0 }
+
+[[goals]]
+id = "g_power"
+era = 8
+type = "build"
+building = "power_plant"
+count = 1
+reward = { steel = 120.0 }
+
+[[goals]]
+id = "g_people_600"
+era = 8
+type = "population"
+count = 600.0
+reward = { culture = 600.0 }
+
+[[goals]]
+id = "g_data"
+era = 9
+type = "build"
+building = "data_center"
+count = 1
+reward = { electricity = 200.0 }
+
+[[goals]]
+id = "g_launch"
+era = 10
+type = "build"
+building = "launch_pad"
+count = 1
+reward = { knowledge = 2000.0 }

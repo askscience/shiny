@@ -101,7 +101,7 @@ pub fn planet_view(planet: &Planet, catalog: &Catalog, now_ms: i64) -> Json {
                 "tile": c.tile,
                 "name": c.name,
                 "connected": reach[k],
-                "ports": crate::cities::ports_of(planet, catalog, k),
+                "shore": !crate::cities::shores_of(planet, k).is_empty(),
             })
         })
         .collect();
@@ -131,6 +131,23 @@ pub fn planet_view(planet: &Planet, catalog: &Catalog, now_ms: i64) -> Json {
             })
             .collect::<serde_json::Map<String, Json>>(),
         "dock": dock,
+        "finds": planet.finds.iter().map(|f| json!({
+            "id": f.id,
+            "kind": f.kind,
+            "tile": f.tile,
+            "until_ms": f.until_step * STEP_MS,
+            "reward": crate::finds::reward(planet, catalog, &f.kind),
+        })).collect::<Vec<_>>(),
+        "goals": crate::goals::active(planet, catalog).iter().map(|g| {
+            let (have, need) = crate::goals::progress(planet, &g.goal);
+            json!({ "id": g.id, "goal": g.goal, "have": have, "need": need, "reward": g.reward })
+        }).collect::<Vec<_>>(),
+        "goals_done": planet.goals_done.len(),
+        "help": planet.construction.iter().filter_map(|c| {
+            crate::actions::help_saves(planet, planet.step, c.tile)
+                .map(|saved| (c.tile.to_string(), json!(saved * STEP_MS)))
+        }).collect::<serde_json::Map<String, Json>>(),
+        "helping_until_ms": planet.helping_until * STEP_MS,
         "plantable": (0..planet.tiles.len())
             .filter(|&i| crate::orders::can_plant(planet, i))
             .collect::<Vec<_>>(),

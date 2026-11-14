@@ -254,6 +254,10 @@ pub fn play_session(planet: &mut Planet, catalog: &Catalog, now: i64) {
             let _ = apply(planet, catalog, now, &Action::AcceptOffer { id: offer.id });
         }
     }
+    // Whatever turned up within reach is brought home.
+    for id in planet.finds.iter().map(|f| f.id).collect::<Vec<_>>() {
+        let _ = apply(planet, catalog, now, &Action::Collect { id });
+    }
     let rates = crate::rates(planet, catalog);
     let food_rate = rates.per_hour.get("food").copied().unwrap_or(0.0);
     let hungry = food_rate < 0.2 || planet.amount("food") < 20.0;

@@ -38,13 +38,16 @@ fast otherwise, counted in half milliseconds so it is exact in pieces.
 | Work | 80% of the population works. Each standing order (`orders.rs`: a cell and a resource) and each extracting building (a mine) takes a crew of one ninth of three quarters of the workers (smaller with more than nine), so at least a quarter always thinks: two thirds make knowledge, one third culture. |
 | Output | Per worker-hour rate × (1 + bonuses) × efficiency. Efficiency is `0.6 + 0.8 × mood`, halved after 36 hours with no action (the planet slows down, it never decays), times the settlers' zeal of a young planet. |
 | Gathering | A crew gathers its resource on its cell: food on meadows, forests, beaches and the shallow sea; wood in forests; stone on mountains; clay on meadows once Pottery is known; marble on mountains once Masonry is. Food and wood come from the cell's stock (0 to 1): meadows, game and fish drop 2% an hour while worked and refill 1.5% at rest; a forest drops 2.5% and refills 0.8% (four times faster for 48 hours after `Plant`, which costs 6 food). Output is `0.1 + 0.9 × stock` of a full cell's; below 15% the crew moves to the nearest cell with half its stock, or comes home when there is none. Stone, clay, marble and ores (`deposit = true` in the catalog) come out of the cell's `deposit` (900 to 2000 units on a mountain, 200 to 500 on a meadow, 100 to 250 on sand, drawn from the seed), unit for unit, and never refill; a mine draws a quarter of its output from its own cell, and stops when it is empty. Mines yield copper and tin, later iron and coal. Bronze comes from a foundry's conversion. |
-| Cities | The capital stands on the home (`cities.rs`). A colony (era 2) founds a city on free land at least 5 cells from the others, within 8 cells over land of a city or by any shore within 16 once a port stands. New buildings go within 4 cells (over land) of a city. A road (A* over land, mountains dear, 3 wood and 2 stone per cell, half an hour per cell) or a sea route between two cities' ports (20 wood plus 1.5 per cell, 3 hours) links two cities. Crews on the cells of a city with no way to the capital work at 60%; each linked colony adds 5% to knowledge and culture (up to four). |
+| Cities | The capital stands on the home (`cities.rs`). A colony (era 2) founds a city on free land at least 5 cells from the others, within 8 cells over land of a city or by any shore within 16 once a port stands. New buildings go within 4 cells (over land) of a city. A road (A* over land, mountains dear, 3 wood and 2 stone per cell, half an hour per cell) or a boat between two cities that both reach the shore (25 wood plus 1 per cell sailed, 10 iron from the Middle Ages, 3 hours) links two cities. Crews on the cells of a city with no way to the capital work at 60%; each linked colony adds 5% to knowledge and culture (up to four). |
+| Finds | `finds.rs`: on its own random stream, something turns up about every three hours (at most three at once) on a free cell in reach, for 8 hours; `Collect` brings its reward home at once (more in later eras). |
+| Goals | `goals.rs`: the catalog's `[[goals]]` in order, three at a time up to the current era (discover, build, store, send a crew, people, cities, linked colonies, finds, trees planted); each pays its reward once. |
+| Help | `Help` on a building site halves the time left, once per site; the thinkers make no knowledge for as long as that saves. |
 | Food | Seasons follow a one-week year; the climate multiplies food. Each person eats a fixed amount. |
 | People | Grow while fed and housed, shrink slowly while hungry, leave when there is no room; never below the floor. |
 | Mood | Heads towards a target made of food, housing, culture per person, effects and traits. |
 | Research | One discovery at a time; it completes when enough knowledge is banked. |
 | Eras | Advance when the era's discoveries are known and its monument stands. |
-| Events | About one or two a day, each with choices; unanswered for a day, the people take the first (prudent) choice themselves. |
+| Events | About one or two a day, each with choices; unanswered for a day, the people take the first (prudent) choice themselves. An event with a `place` happens on a cell of that biome in reach. |
 | Notables | Named people who boost the category the people care most about, for three weeks. |
 | Workshops | Converters (foundry, mint, glassworks, steel mill, power plant, data centre...) scale with the population and the materials bonuses, stop when their output is full, and leave a tenth of the storage of every input still needed to build. |
 | Demolition | Any building but a monument can be cleared for something new; nothing is refunded. |
@@ -79,9 +82,9 @@ SEED=2 CLIMATE=arid FROM=30 TO=60 cargo test --release -p oorbit-sim --test trac
 `tests/balance.rs` plays 12 planets (four climates, three seeds) with the
 steady player of `autoplay.rs` (two visits a day, waking hours only) and
 checks the pacing: era 2 by day 1.5 to 5, era 3 by day 5 to 12, era 4 by day
-10 to 22, era 7 by day 30 to 52, era 10 by day 45 to 72, the whole game done
+10 to 22, era 7 by day 28 to 52, era 10 by day 45 to 72, the whole game done
 by day 50 to 85. `tests/neighbors.rs` covers the neighbours, `tests/cities.rs` colonies, roads and sea routes.
-`tests/active_session.rs` checks an active first session (a player acting every real minute at play speed reaches era 2 within about twenty minutes), `tests/resources.rs` the deposits, forests, planting and presence. `tests/first_session.rs` checks the first visit: a player looking in every
+`tests/active_session.rs` checks an active first session (a player acting every real minute at play speed reaches era 2 within about twenty minutes), `tests/resources.rs` the deposits, forests, planting and presence, `tests/interaction.rs` finds, goals, help and events with a place. `tests/first_session.rs` checks the first visit: a player looking in every
 five minutes sees a discovery within 20 minutes, two within the hour and a
 first building within 90 minutes. Settlers' zeal (`zeal_bonus`,
 `zeal_hours`) makes a new planet work up to seven times faster at first,

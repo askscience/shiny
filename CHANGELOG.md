@@ -59,6 +59,16 @@
   builders work on them. The work sliders are gone: whoever has no crew
   thinks and makes culture. While you play, an hour of the planet lasts a
   minute; while you are away, the planet runs at half speed.
+- Oorbit 0.7.1: more to do while playing. Things turn up on the land for a
+  few hours (berries, lost goats, a crate washed ashore, a meteorite, wild
+  horses, a wreck, old ruins): tap one and the people bring it home at
+  once; a marker on the edge of the window points at the ones on the far
+  side. Some events happen on a cell (lightning in a forest, a storm on the
+  coast, traders on the plains) and the camera flies there. Help a building
+  site and the thinkers finish it in half the time, at the cost of a pause
+  in research. A new Goals panel always has three small goals with a
+  reward. Sea routes are now a boat between two cities on the shore; the
+  jetty is gone.
 - Oorbit 0.7.0: the land runs out and the first session moves. Stone,
   clay and ores come out of deposits that end for good (a worked-out quarry
   shows as a pit), forests thin as they are cut and take days to grow back

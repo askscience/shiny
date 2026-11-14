@@ -67,7 +67,7 @@ func _ready() -> void:
 	_rail = VBoxContainer.new()
 	_rail.add_theme_constant_override("separation", 6)
 	add_child(_rail)
-	for id in ["research", "society", "chronicle", "dock", "dev"]:
+	for id in ["goals", "research", "society", "chronicle", "dock", "dev"]:
 		var button := _icon_button("res://icons/%s.svg" % id, I18n.t("ui." + id))
 		button.toggle_mode = true
 		button.pressed.connect(_toggle_panel.bind(id))
@@ -334,6 +334,7 @@ func show_view(new_view: Dictionary) -> void:
 	_fill_side()
 	_fill_tile()
 	_fill_event()
+	_announce(planet)
 	_layout.call_deferred()
 
 
@@ -509,6 +510,8 @@ func _fill_side() -> void:
 		return
 	_clear(_side_body)
 	match open_panel:
+		"goals":
+			_fill_goals()
 		"research":
 			_fill_research()
 		"society":
@@ -818,6 +821,13 @@ func describe(entry: Dictionary) -> String:
 				params[k] = I18n.t("kind." + v).to_lower()
 			"prank":
 				params[k] = I18n.t("prank." + v)
+			"find":
+				params[k] = I18n.name_of("find", v).to_lower()
+			"goal":
+				params[k] = v
+				for g in catalog.get("goals", []):
+					if g["id"] == v:
+						params[k] = _goal_text({"goal": g})
 			"persona":
 				params["message"] = I18n.t("message." + v)
 			_:
@@ -867,12 +877,25 @@ func _fill_tile() -> void:
 			_tile_body.add_child(_confirm_button(I18n.t("ui.demolish"), I18n.t("ui.demolish.confirm"),
 				func(): action_requested.emit({"type": "demolish", "tile": tile_index})))
 		return
+	_fill_find_and_event()
 	for c in planet.get("construction", []):
 		if int(c["tile"]) == selected_tile:
 			_countdown_done_ms = float(c["done_step"]) * float(view.get("step_ms", 600000))
 			_countdown_building = str(c["building"])
 			_countdown = _label(_countdown_text())
 			_tile_body.add_child(_countdown)
+			var help: Dictionary = view.get("help", {})
+			if help.has(str(selected_tile)):
+				var saved := float(help[str(selected_tile)])
+				var b := Button.new()
+				b.text = I18n.t("ui.help", {"time": I18n.duration(wall_ms(saved))})
+				b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+				var tile_index := selected_tile
+				b.pressed.connect(func(): action_requested.emit({"type": "help", "tile": tile_index}))
+				_tile_body.add_child(b)
+				_tile_body.add_child(_muted(I18n.t("ui.help.cost", {"time": I18n.duration(wall_ms(saved))})))
+			elif float(view.get("helping_until_ms", 0)) > live_now_ms():
+				_tile_body.add_child(_muted(I18n.t("ui.help.busy")))
 			return
 	_fill_crew(tile)
 	_fill_ground(tile)
@@ -1126,7 +1149,7 @@ func _fill_city(k: int) -> void:
 		button.disabled = not affordable
 		button.pressed.connect(func(): action_requested.emit({"type": "link", "kind": kind, "from": a, "to": b}))
 		_tile_body.add_child(button)
-	if cities.size() > 1 and not any_sea and c.get("ports", []).is_empty():
+	if cities.size() > 1 and not any_sea and not c.get("shore", false):
 		_tile_body.add_child(_muted(I18n.t("ui.city.port_hint")))
 
 
@@ -1163,3 +1186,147 @@ func _fill_ground(tile: Dictionary) -> void:
 		_tile_body.add_child(_muted(I18n.t("ui.tile.deposit", {"n": roundi(deposit)})))
 	elif deposit == 0.0 and biome == "mountain":
 		_tile_body.add_child(_muted(I18n.t("ui.tile.exhausted")))
+
+
+# ---------------------------------------------------------------- edge marks
+
+var _mark_buttons := []
+
+
+## Finds and events on the hidden side of the planet (or off screen): a
+## small button on the edge, in their direction; a press flies there.
+func set_marks(list: Array) -> void:
+	var hidden := list.filter(func(m): return m["hidden"])
+	while _mark_buttons.size() < hidden.size():
+		var b := Button.new()
+		b.custom_minimum_size = Vector2(30, 30)
+		b.focus_mode = Control.FOCUS_NONE
+		b.add_theme_font_size_override("font_size", 15)
+		add_child(b)
+		move_child(b, 0)
+		_mark_buttons.append(b)
+	var centre := size / 2.0
+	for k in _mark_buttons.size():
+		var b: Button = _mark_buttons[k]
+		b.visible = k < hidden.size()
+		if not b.visible:
+			continue
+		var m: Dictionary = hidden[k]
+		var event: bool = m["kind"] == "event"
+		b.text = "!" if event else "*"
+		b.add_theme_color_override("font_color", Color("e08f6c") if event else Color("f2c078"))
+		b.tooltip_text = I18n.t("ui.mark.event") if event else I18n.name_of("find", str(m["kind"]).substr(5))
+		# Towards the mark from the centre, clamped to the edge.
+		var dir: Vector2 = (m["screen"] as Vector2) - centre
+		if dir.length() < 1.0:
+			dir = Vector2(0, 1)
+		# Inside the margins: clear of the top bar and the left rail.
+		var area := Rect2(Vector2(72, _top.size.y + 20), size - Vector2(72 + 24, _top.size.y + 20 + 24))
+		var mid := area.get_center()
+		dir = (m["screen"] as Vector2) - mid
+		if dir.length() < 1.0:
+			dir = Vector2(0, 1)
+		var half := area.size / 2.0
+		var t := minf(half.x / maxf(0.001, absf(dir.x)), half.y / maxf(0.001, absf(dir.y)))
+		b.position = mid + dir * minf(t, 1.0) - b.custom_minimum_size / 2.0
+		if b.pressed.is_connected(_on_mark):
+			b.pressed.disconnect(_on_mark)
+		b.pressed.connect(_on_mark.bind(int(m["tile"])))
+
+
+func _on_mark(tile: int) -> void:
+	tile_focus_requested.emit(tile)
+
+
+func _reward_text(reward: Dictionary) -> String:
+	var parts := PackedStringArray()
+	for r in reward:
+		parts.append("+%s %s" % [_fmt(float(reward[r])), I18n.name_of("resource", r).to_lower()])
+	return ", ".join(parts)
+
+
+## A find on this cell (with a button to bring it home), or the event
+## happening here (with a button to answer it).
+func _fill_find_and_event() -> void:
+	for f in view.get("finds", []):
+		if int(f["tile"]) != selected_tile:
+			continue
+		var kind := str(f["kind"])
+		_tile_body.add_child(_label(I18n.name_of("find", kind), 15, Color("f2c078")))
+		_tile_body.add_child(_muted(I18n.t("find.%s.text" % kind)))
+		var b := Button.new()
+		b.text = I18n.t("ui.find.collect", {"reward": _reward_text(f.get("reward", {}))})
+		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		var id := int(f["id"])
+		b.pressed.connect(func(): action_requested.emit({"type": "collect", "id": id}))
+		_tile_body.add_child(b)
+		_tile_body.add_child(_muted(I18n.t("ui.find.left", {"time": I18n.duration(wall_ms(maxf(0.0, float(f["until_ms"]) - live_now_ms())))})))
+	var event = _planet().get("pending_event")
+	if event != null and event.get("tile") != null and int(event["tile"]) == selected_tile:
+		_tile_body.add_child(_label(I18n.name_of("event", str(event["id"])), 15, Color("e08f6c")))
+		var b := Button.new()
+		b.text = I18n.t("ui.event.answer")
+		b.pressed.connect(func():
+			dismissed_event = ""
+			_fill_event())
+		_tile_body.add_child(b)
+
+
+func _goal_text(g: Dictionary) -> String:
+	var goal: Dictionary = g["goal"]
+	var kind := str(goal["type"])
+	var params := {}
+	for k in goal:
+		var v = goal[k]
+		match k:
+			"tech":
+				params[k] = I18n.name_of("tech", str(v))
+			"building":
+				params[k] = I18n.name_of("building", str(v))
+			"resource":
+				params[k] = I18n.name_of("resource", str(v)).to_lower()
+			"count", "amount":
+				params[k] = _fmt(float(v))
+	return I18n.t("goal." + kind, params)
+
+
+func _fill_goals() -> void:
+	_side_body.add_child(_label(I18n.t("ui.goals"), 15, Color("f2c078")))
+	var goals: Array = view.get("goals", [])
+	if goals.is_empty():
+		_side_body.add_child(_muted(I18n.t("ui.goals.none")))
+	for g in goals:
+		_side_body.add_child(_label(_goal_text(g), 14))
+		var bar := ProgressBar.new()
+		bar.max_value = maxf(1.0, float(g["need"]))
+		bar.value = float(g["have"])
+		bar.show_percentage = false
+		bar.custom_minimum_size = Vector2(0, 6)
+		_side_body.add_child(bar)
+		_side_body.add_child(_muted("%s / %s · %s" % [_fmt(float(g["have"])), _fmt(float(g["need"])), _reward_text(g.get("reward", {}))]))
+	_side_body.add_child(_muted(I18n.t("ui.goals.done", {"n": int(view.get("goals_done", 0))})))
+
+
+var _seen_entries := -1
+
+
+## Tell what was just reached: a goal, a find brought home.
+func _announce(planet: Dictionary) -> void:
+	var chronicle: Array = planet.get("chronicle", [])
+	var last := 0
+	if not chronicle.is_empty():
+		last = int(chronicle[-1]["step"]) * 1000 + chronicle.size() % 1000
+	if _seen_entries < 0:
+		_seen_entries = last
+		return
+	if last == _seen_entries:
+		return
+	var said := false
+	for k in range(chronicle.size() - 1, maxi(-1, chronicle.size() - 8), -1):
+		var e: Dictionary = chronicle[k]
+		if int(e["step"]) * 1000 + (k + 1) % 1000 <= _seen_entries:
+			break
+		if not said and str(e["key"]) in ["goal_done", "find_collected", "city_founded", "era_reached", "deposit_exhausted"]:
+			toast(describe(e))
+			said = true
+	_seen_entries = last

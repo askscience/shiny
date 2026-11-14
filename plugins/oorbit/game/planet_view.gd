@@ -64,6 +64,11 @@ const SEA_COLOR := Color("dfe9ec")
 const CART_COLOR := Color("8f6f5a")
 const BOAT_COLOR := Color("eef3f2")
 const CITY_COLORS := [Color("e08f6c"), Color("4fa3c7"), Color("c2d69b"), Color("e3c3c6"), Color("f2c078"), Color("9b8ec4")]
+## Finds to pick up and the cell of a waiting event: a model on the
+## ground and a bobbing marker over it.
+var _marks := []  # [{node, tile, kind, base}]
+const FIND_COLOR := Color("f2c078")
+const EVENT_COLOR := Color("e08f6c")
 var _biomes: Array = []
 var _signature := ""
 var _idle := IDLE_BEFORE_SPIN
@@ -146,6 +151,7 @@ func _process(delta: float) -> void:
 ## Seconds since the window started: people walk on this clock, so placing
 ## them again never sends them back home.
 var _seconds := 0.0
+var _warned := false
 
 
 func _move_walkers(delta: float) -> void:
@@ -204,8 +210,16 @@ func _move_walkers(delta: float) -> void:
 			side = _tangents(normal)[0]
 		side = side.normalized()
 		var basis := Basis(side, normal, side.cross(normal)).scaled(Vector3.ONE * size)
+		if not (at.length() < 1.3) or not basis.is_finite():
+			# Never draw anyone off the planet.
+			if not _warned:
+				_warned = true
+				push_warning("walker off the planet: %s %s at %s" % [w["kind"], w.get("cell", w.get("route", "")), at])
+			basis = Basis().scaled(Vector3.ZERO)
+			at = Vector3.ZERO
 		multimesh.set_instance_transform(k, Transform3D(basis, at))
 	_move_vehicles()
+	_bob_marks()
 	# Roads grow cell by cell.
 	for k in mini(_links.size(), _road_built.size()):
 		if _built_cells(_links[k]) != int(_road_built[k]):
@@ -239,6 +253,7 @@ func set_rim(on: bool) -> void:
 ## Take the cell layout (once, before the first planet).
 func set_layout(data: Dictionary) -> void:
 	builder.load_layout(data)
+	_ts = _tile_size()
 	_signature = ""
 	_biomes = []
 
@@ -357,7 +372,14 @@ func show_planet(planet: Dictionary, rates := {}) -> void:
 	_home = int(planet.get("home", 0))
 	_place_walkers(planet, rates)
 	_place_rides()
-	var signature := JSON.stringify([biomes, buildings, planet.get("orders", []), stocks, _cities, dug])
+	var finds: Array = planet.get("finds", [])
+	var event = planet.get("pending_event")
+	var event_tile := int(event["tile"]) if event != null and event.get("tile") != null else -1
+	_place_marks(finds, event_tile)
+	_finds_at = {}
+	for f in finds:
+		_finds_at[int(f["tile"])] = str(f["kind"])
+	var signature := JSON.stringify([biomes, buildings, planet.get("orders", []), stocks, _cities, dug, _finds_at])
 	_build_roads()
 	if signature == _signature:
 		return
@@ -590,6 +612,8 @@ func _place_tile(i: int, biome: String, building: String, rng: RandomNumberGener
 				var a := rng.randf() * TAU
 				var r := 0.05 + rng.randf() * 0.18
 				_put(_cylinder(0.014, 0.022, 5), Color("8f6f5a"), normal, base, Vector3(cos(a) * r, 0.008, sin(a) * r))
+		if _finds_at.has(i):
+			_find_model(_finds_at[i], normal, base, rng)
 		if _ordered.has(i):
 			# A stake with a little flag the colour of what is gathered.
 			_put(_box(0.012, 0.16, 0.012), Palette.HUT_WALL, normal, base, Vector3(0, 0.08, 0))
@@ -672,6 +696,7 @@ func _nature(normal: Vector3, base: Vector3, biome: String, rng: RandomNumberGen
 
 
 var _stocks := []
+var _finds_at := {}
 var _dug := []
 var _ordered := {}
 var _site_times := {}
@@ -1157,3 +1182,91 @@ func _place_labels() -> void:
 		label.position = builder.ground(n, cell) + n.normalized() * 0.2 * _ts
 		pivot.add_child(label)
 		_labels.append(label)
+
+
+# ---------------------------------------------------------------- finds and marks
+
+## What a find looks like on the ground.
+func _find_model(kind: String, normal: Vector3, base: Vector3, rng: RandomNumberGenerator) -> void:
+	match kind:
+		"berries":
+			for k in 3:
+				var a := k * TAU / 3.0
+				_put(_ball(0.04), Color("4f6b4a"), normal, base, Vector3(cos(a) * 0.05, 0.0, sin(a) * 0.05))
+				_put(_ball(0.012), Color("b03a2e"), normal, base, Vector3(cos(a) * 0.05, 0.035, sin(a) * 0.05))
+		"goats", "horses":
+			var coat := Color("eef3f2") if kind == "goats" else Color("8f6f5a")
+			for k in 3:
+				var a := rng.randf() * TAU
+				var at := Vector3(cos(a) * 0.08, 0.02, sin(a) * 0.08)
+				_put(_box(0.05, 0.03, 0.025), coat, normal, base, at, 1.0, a)
+				_put(_box(0.02, 0.02, 0.02), coat.darkened(0.2), normal, base, at + Vector3(cos(a) * 0.03, 0.015, -sin(a) * 0.03), 1.0, a)
+		"crate":
+			_put(_box(0.06, 0.05, 0.06), Color("b58e6b"), normal, base, Vector3(0, 0.025, 0), 1.0, 0.4)
+			_put(_box(0.065, 0.01, 0.065), Color("6b5a4e"), normal, base, Vector3(0, 0.04, 0), 1.0, 0.4)
+		"meteorite":
+			_put(_ball(0.05), Color("4a4152"), normal, base, Vector3(0, -0.01, 0))
+			_put(_ball(0.025), Color("ff9d3b"), normal, base, Vector3(0.02, 0.02, 0.01))
+			_put(_cylinder(0.1, 0.006, 8), Color("5b5466"), normal, base, Vector3(0, 0.0, 0))
+		"wreck":
+			_put(_box(0.16, 0.035, 0.05), Color("6b5a4e"), normal, base, Vector3(0, 0.012, 0), 1.0, 0.5)
+			_put(_box(0.01, 0.1, 0.01), Color("8f6f5a"), normal, base, Vector3(0.02, 0.05, 0.01))
+		"ruins":
+			for k in 4:
+				var a := k * TAU / 4.0
+				_put(_box(0.025, 0.04 + 0.03 * (k % 2), 0.025), Color("b0a6ad"), normal, base, Vector3(cos(a) * 0.07, 0.025, sin(a) * 0.07))
+			_put(_box(0.1, 0.012, 0.03), Color("b0a6ad"), normal, base, Vector3(0, 0.002, 0), 1.0, 0.3)
+
+
+func _marker_mesh(color: Color) -> MeshInstance3D:
+	var mesh := SphereMesh.new()
+	mesh.radius = 0.018
+	mesh.height = 0.05
+	mesh.radial_segments = 4
+	mesh.rings = 2
+	var node := MeshInstance3D.new()
+	node.mesh = mesh
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.albedo_color = color
+	node.material_override = m
+	return node
+
+
+## One bobbing marker per find, and one over the waiting event's cell.
+func _place_marks(finds: Array, event_tile: int) -> void:
+	for mark in _marks:
+		mark["node"].queue_free()
+	_marks.clear()
+	var wanted := []
+	for f in finds:
+		wanted.append([int(f["tile"]), "find:" + str(f["kind"]), FIND_COLOR])
+	if event_tile >= 0:
+		wanted.append([event_tile, "event", EVENT_COLOR])
+	for w in wanted:
+		var cell: int = w[0]
+		if cell < 0 or cell >= builder.centers.size():
+			continue
+		var node := _marker_mesh(w[2])
+		node.scale = Vector3.ONE * _tile_size() * 5.0
+		pivot.add_child(node)
+		var n: Vector3 = builder.centers[cell]
+		_marks.append({"node": node, "tile": cell, "kind": w[1], "base": builder.ground(n, cell) + n.normalized() * 0.09 * _tile_size()})
+	_bob_marks()
+
+
+func _bob_marks() -> void:
+	for k in _marks.size():
+		var mark: Dictionary = _marks[k]
+		var base: Vector3 = mark["base"]
+		var node: MeshInstance3D = mark["node"]
+		node.position = base + base.normalized() * (0.012 * _tile_size() * sin(_seconds * 3.0 + k))
+		node.rotation = Vector3(0.0, _seconds * 2.0, 0.0)
+
+
+## Where the marks are (world space), for the window's edge markers.
+func marks() -> Array:
+	var out := []
+	for mark in _marks:
+		out.append({"tile": mark["tile"], "kind": mark["kind"], "at": pivot.to_global(mark["base"]), "normal": (pivot.global_transform.basis * (mark["base"] as Vector3)).normalized()})
+	return out

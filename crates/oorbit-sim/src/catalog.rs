@@ -199,6 +199,9 @@ pub struct EventDef {
     pub if_known: Option<String>,
     /// The first choice is the prudent one, taken when nobody answers.
     pub choices: Vec<Choice>,
+    /// Happens on a cell of this biome near the people (shown on the map).
+    #[serde(default)]
+    pub place: Option<Biome>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -280,6 +283,9 @@ pub struct Catalog {
     pub techs: Vec<TechDef>,
     pub events: Vec<EventDef>,
     pub climates: Vec<ClimateDef>,
+    /// Small goals that guide the player (see `goals`).
+    #[serde(default)]
+    pub goals: Vec<crate::goals::GoalDef>,
 }
 
 /// The catalog shipped with the game.
@@ -453,6 +459,22 @@ impl Catalog {
                 tech(id, &owner)?;
             }
             effects(&t.effects, &owner)?;
+        }
+        for g in &self.goals {
+            let owner = format!("goal `{}`", g.id);
+            for id in g.reward.keys() {
+                resource(id, &owner)?;
+            }
+            match &g.goal {
+                crate::goals::Goal::Tech { tech: id } => tech(id, &owner)?,
+                crate::goals::Goal::Build { building, .. } if !buildings.contains(building) => {
+                    return Err(format!("{owner}: unknown building `{building}`"));
+                }
+                crate::goals::Goal::Have { resource: id, .. } | crate::goals::Goal::Order { resource: id } => {
+                    resource(id, &owner)?
+                }
+                _ => {}
+            }
         }
         for e in &self.events {
             let owner = format!("event `{}`", e.id);

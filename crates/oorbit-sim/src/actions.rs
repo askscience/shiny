@@ -25,6 +25,15 @@ pub enum Action {
     Plant {
         tile: usize,
     },
+    /// Bring a find home (see `finds`).
+    Collect {
+        id: u64,
+    },
+    /// Put the thinkers to work on a building site: it finishes in half the
+    /// time left, and research stops for as long as they help.
+    Help {
+        tile: usize,
+    },
     Research {
         tech: String,
     },
@@ -85,6 +94,8 @@ pub enum ActionError {
     CannotDemolish(usize),
     CannotLink,
     CannotPlant(usize),
+    NoFind(u64),
+    CannotHelp(usize),
 }
 
 impl std::fmt::Display for ActionError {
@@ -111,6 +122,10 @@ impl std::fmt::Display for ActionError {
             ActionError::CannotPlant(i) => {
                 write!(f, "trees cannot be planted on tile {i} (not a thinned forest in reach, worked, or not enough food)")
             }
+            ActionError::NoFind(id) => write!(f, "nothing to pick up with id {id} (gone, or too far)"),
+            ActionError::CannotHelp(i) => {
+                write!(f, "no building site on tile {i} that can use help (already helped, or the thinkers are busy)")
+            }
             ActionError::CannotLink => {
                 write!(f, "no way can be opened between those cities (no path, already linked, or too costly)")
             }
@@ -122,6 +137,17 @@ impl std::fmt::Display for ActionError {
 }
 
 impl std::error::Error for ActionError {}
+
+/// Steps helping would save on the building site at `tile` (half the time
+/// left), if it can be helped now.
+pub fn help_saves(planet: &Planet, step: i64, tile: usize) -> Option<i64> {
+    let c = planet.construction.iter().find(|c| c.tile == tile)?;
+    if c.helped || planet.helping_until > step {
+        return None;
+    }
+    let saved = (c.done_step - step) / 2;
+    (saved >= 1).then_some(saved)
+}
 
 /// Can the planet research this discovery now?
 pub fn can_research(planet: &Planet, catalog: &Catalog, id: &str) -> Result<(), ActionError> {
@@ -188,8 +214,26 @@ pub fn apply(
             }
             planet.add("food", -crate::orders::PLANT_FOOD);
             planet.tiles[*tile].planted_until = step + hours_to_steps(crate::orders::PLANTED_HOURS);
+            planet.trees_planted += 1;
             let t = tile.to_string();
             planet.log(catalog, step, "trees_planted", &[("tile", &t)]);
+        }
+        Action::Collect { id } => {
+            let reach = crate::orders::in_reach(planet);
+            let near = planet.finds.iter().any(|f| f.id == *id && reach.get(f.tile).copied().unwrap_or(false));
+            if !near || !crate::finds::collect(planet, catalog, step, *id) {
+                return Err(ActionError::NoFind(*id));
+            }
+        }
+        Action::Help { tile } => {
+            let saved = help_saves(planet, step, *tile).ok_or(ActionError::CannotHelp(*tile))?;
+            let c = planet.construction.iter_mut().find(|c| c.tile == *tile).expect("checked");
+            c.done_step -= saved;
+            c.helped = true;
+            planet.helping_until = step + saved;
+            let building = c.building.clone();
+            let t = tile.to_string();
+            planet.log(catalog, step, "site_helped", &[("building", &building), ("tile", &t)]);
         }
         Action::StopHarvest { tile } => {
             if !planet.orders.iter().any(|o| o.tile == *tile) {
@@ -216,6 +260,7 @@ pub fn apply(
                 tile: *tile,
                 start_step: step,
                 done_step: step + hours_to_steps(def.build_hours),
+                helped: false,
             });
             // A crew working this cell moves to the nearest cell like it.
             if let Some(k) = planet.orders.iter().position(|o| o.tile == *tile) {

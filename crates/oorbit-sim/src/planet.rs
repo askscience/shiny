@@ -53,6 +53,9 @@ pub struct Construction {
     pub start_step: i64,
     /// The step at which it stands.
     pub done_step: i64,
+    /// The thinkers already helped here (once per site).
+    #[serde(default)]
+    pub helped: bool,
 }
 
 /// A standing order: a crew of the people works this cell for this
@@ -68,6 +71,9 @@ pub struct Order {
 pub struct PendingEvent {
     pub id: String,
     pub step: i64,
+    /// The cell it happens on, for events with a place.
+    #[serde(default)]
+    pub tile: Option<usize>,
 }
 
 /// A person with a name who boosts one category for a while.
@@ -140,6 +146,20 @@ pub struct Planet {
     /// Source of ship and offer ids.
     #[serde(default)]
     pub next_id: u64,
+    /// Things to pick up on the land (see `finds`).
+    #[serde(default)]
+    pub finds: Vec<crate::finds::Find>,
+    #[serde(default)]
+    pub finds_collected: u32,
+    #[serde(default)]
+    pub trees_planted: u32,
+    /// Goals reached (see `goals`).
+    #[serde(default)]
+    pub goals_done: BTreeSet<String>,
+    /// The thinkers are helping on building sites until this step: no
+    /// knowledge meanwhile.
+    #[serde(default)]
+    pub helping_until: i64,
     /// The cities, the capital first (see `cities`).
     #[serde(default)]
     pub cities: Vec<crate::cities::City>,
@@ -197,6 +217,11 @@ impl Planet {
             ships: Vec::new(),
             offers: Vec::new(),
             next_id: 0,
+            finds: Vec::new(),
+            finds_collected: 0,
+            trees_planted: 0,
+            goals_done: BTreeSet::new(),
+            helping_until: 0,
             cities: Vec::new(),
             links: Vec::new(),
             clock_offset_ms: 0,
@@ -266,6 +291,13 @@ impl Planet {
             }
         }
         crate::cities::ensure_capital(self);
+        // Buildings the catalog no longer has (the jetty) are cleared.
+        for t in self.tiles.iter_mut() {
+            if t.building.as_ref().is_some_and(|b| catalog.building(b).is_none()) {
+                t.building = None;
+            }
+        }
+        self.construction.retain(|c| catalog.building(&c.building).is_some());
         for (i, t) in self.tiles.iter_mut().enumerate() {
             if t.deposit < 0.0 {
                 t.deposit = crate::terrain::deposit_for(self.seed, i, t.biome);
