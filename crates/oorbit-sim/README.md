@@ -38,6 +38,7 @@ fast otherwise, counted in half milliseconds so it is exact in pieces.
 | Work | 80% of the population works. Each standing order (`orders.rs`: a cell and a resource) and each extracting building (a mine) takes a crew of one ninth of the workers (smaller with more than nine). Whoever has no crew thinks: two thirds make knowledge, one third culture. |
 | Output | Per worker-hour rate × (1 + bonuses) × efficiency. Efficiency is `0.6 + 0.8 × mood`, halved after 36 hours with no action (the planet slows down, it never decays), times the settlers' zeal of a young planet. |
 | Gathering | A crew gathers its resource on its cell: food on meadows, forests, beaches and the shallow sea; wood in forests; stone on mountains; clay on meadows once Pottery is known; marble on mountains once Masonry is. The cell's stock (0 to 1) drops 2% an hour while worked and refills 1.5% an hour at rest; output is `0.4 + 0.6 × stock` of a full cell's, and below 15% the crew moves to the nearest fuller cell. Mines yield copper and tin, later iron and coal. Bronze comes from a foundry's conversion. |
+| Cities | The capital stands on the home (`cities.rs`). A colony (era 2) founds a city on free land at least 5 cells from the others, within 8 cells over land of a city or by any shore within 16 once a port stands. New buildings go within 4 cells (over land) of a city. A road (A* over land, mountains dear, 3 wood and 2 stone per cell, half an hour per cell) or a sea route between two cities' ports (20 wood plus 1.5 per cell, 3 hours) links two cities. Crews on the cells of a city with no way to the capital work at 60%; each linked colony adds 5% to knowledge and culture (up to four). |
 | Food | Seasons follow a one-week year; the climate multiplies food. Each person eats a fixed amount. |
 | People | Grow while fed and housed, shrink slowly while hungry, leave when there is no room; never below the floor. |
 | Mood | Heads towards a target made of food, housing, culture per person, effects and traits. |
@@ -79,7 +80,7 @@ SEED=2 CLIMATE=arid FROM=30 TO=60 cargo test --release -p oorbit-sim --test trac
 steady player of `autoplay.rs` (two visits a day, waking hours only) and
 checks the pacing: era 2 by day 1.5 to 5, era 3 by day 5 to 12, era 4 by day
 10 to 22, era 7 by day 30 to 52, era 10 by day 45 to 72, the whole game done
-by day 50 to 85. `tests/neighbors.rs` covers the neighbours.
+by day 50 to 85. `tests/neighbors.rs` covers the neighbours, `tests/cities.rs` colonies, roads and sea routes.
 `tests/first_session.rs` checks the first visit: a player looking in every
 five minutes sees a discovery within 20 minutes, two within the hour and a
 first building within 90 minutes. Settlers' zeal (`zeal_bonus`,

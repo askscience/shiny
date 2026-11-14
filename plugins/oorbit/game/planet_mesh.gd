@@ -230,33 +230,49 @@ func cell_at(direction: Vector3) -> int:
 
 
 ## The point of the ground in `direction`, inside cell `cell` (pass -1 to
-## look the cell up). Exact on the built surface.
+## look the cell up). Exact on the built surface. A direction outside the
+## given cell is looked up again, so the point is always on the ground.
 func ground(direction: Vector3, cell := -1) -> Vector3:
 	var d := direction.normalized()
 	if center_points.is_empty():
 		return d
 	if cell < 0:
 		cell = cell_at(d)
+	var p := _ground_in(d, cell)
+	if p == Vector3.ZERO:
+		p = _ground_in(d, cell_at(d))
+	if p == Vector3.ZERO:
+		return d * center_points[cell].length()
+	return p
+
+
+## The ground in direction `d` if it falls inside `cell`, else zero.
+func _ground_in(d: Vector3, cell: int) -> Vector3:
 	var c := center_points[cell]
+	if c.dot(d) <= 0.0:
+		return Vector3.ZERO
 	var ring := rings[cell]
 	for k in ring.size():
 		var a := corner_points[ring[k]]
 		var b := corner_points[ring[(k + 1) % ring.size()]]
-		if _in_cone(d, c, a, b) or k == ring.size() - 1:
-			var normal := (b - c).cross(a - c)
-			var along := normal.dot(d)
-			if absf(along) < 1e-6:
-				return d * c.length()
-			var flat := d * (normal.dot(c) / along)
-			# Barycentric weights of the point in the triangle, for the
-			# roughness the mesh used there.
-			var area := normal.length_squared()
-			var wa := (c - flat).cross(b - flat).dot(normal) / area
-			var wb := (a - flat).cross(c - flat).dot(normal) / area
-			var wc := 1.0 - absf(wa) - absf(wb)
-			var rough := _cell_rough[cell] * wc + _corner_rough[ring[k]] * absf(wa) + _corner_rough[ring[(k + 1) % ring.size()]] * absf(wb)
-			return flat * (1.0 + rough * wave(d))
-	return d * c.length()
+		if not _in_cone(d, c, a, b):
+			continue
+		var normal := (b - c).cross(a - c)
+		var along := normal.dot(d)
+		if absf(along) < 1e-6:
+			return d * c.length()
+		var flat := d * (normal.dot(c) / along)
+		# Barycentric weights of the point in the triangle, for the
+		# roughness the mesh used there.
+		var area := normal.length_squared()
+		var wa := (c - flat).cross(b - flat).dot(normal) / area
+		var wb := (a - flat).cross(c - flat).dot(normal) / area
+		var wc := 1.0 - absf(wa) - absf(wb)
+		var rough := _cell_rough[cell] * wc + _corner_rough[ring[k]] * absf(wa) + _corner_rough[ring[(k + 1) % ring.size()]] * absf(wb)
+		var p := flat * (1.0 + rough * wave(d))
+		# Never off the planet, whatever the numbers do near an edge.
+		return d * clampf(p.length(), 0.95, 1.12)
+	return Vector3.ZERO
 
 
 ## Is `d` inside the cone from the origin through triangle (c, a, b)?

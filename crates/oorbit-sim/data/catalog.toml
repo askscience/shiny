@@ -695,6 +695,27 @@ biomes = ["plains", "coast"]
 effects = [{ type = "bonus", category = "food", amount = 0.35 }]
 
 [[buildings]]
+id = "colony"
+name = "Colony"
+era = 2
+requires = "farming"
+cost = { food = 40.0, wood = 40.0, stone = 20.0 }
+build_hours = 6.0
+biomes = ["plains", "forest", "coast"]
+city = true
+effects = [{ type = "housing", amount = 6.0 }]
+
+[[buildings]]
+id = "jetty"
+name = "Jetty"
+era = 2
+cost = { wood = 25.0, stone = 10.0 }
+build_hours = 3.0
+biomes = ["coast"]
+port = true
+effects = [{ type = "bonus", category = "food", amount = 0.05 }]
+
+[[buildings]]
 id = "house"
 name = "House"
 era = 2
@@ -950,6 +971,7 @@ requires = "navigation"
 cost = { wood = 140.0, iron = 35.0 }
 build_hours = 12.0
 biomes = ["coast"]
+port = true
 effects = [{ type = "bonus", category = "food", amount = 0.4 }, { type = "storage", amount = 400.0 }]
 
 [[buildings]]

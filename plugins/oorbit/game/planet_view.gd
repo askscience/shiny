@@ -49,6 +49,21 @@ const WALKER_COLORS := [Color("f2c078"), Color("e08f6c"), Color("eef3f2"), Color
 var _walkers: MultiMeshInstance3D
 var _walk := []  # per walker: a Dictionary (kind, route or cell, time...)
 var _highlight: MeshInstance3D
+## Roads and sea routes, drawn on the ground and the water; carts and boats
+## going back and forth on the finished ones; a name over every city.
+var _roads: MeshInstance3D
+var _vehicles: MultiMeshInstance3D
+var _rides := []  # per vehicle: {points, length, offset, boat}
+var _links := []
+var _road_built := []
+var _cities := []
+var _labels := []
+const ROAD_COLOR := Color("b58e6b")
+const ROAD_PLAN := Color("e3cfa0")
+const SEA_COLOR := Color("dfe9ec")
+const CART_COLOR := Color("8f6f5a")
+const BOAT_COLOR := Color("eef3f2")
+const CITY_COLORS := [Color("e08f6c"), Color("4fa3c7"), Color("c2d69b"), Color("e3c3c6"), Color("f2c078"), Color("9b8ec4")]
 var _biomes: Array = []
 var _signature := ""
 var _idle := IDLE_BEFORE_SPIN
@@ -93,6 +108,21 @@ func _ready() -> void:
 	_walkers.multimesh = multimesh
 	_walkers.material_override = _toon(Color.WHITE, true)
 	pivot.add_child(_walkers)
+	_roads = MeshInstance3D.new()
+	var road_material := _toon(Color.WHITE, true)
+	road_material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	_roads.material_override = road_material
+	pivot.add_child(_roads)
+	_vehicles = MultiMeshInstance3D.new()
+	var vehicle_mesh := BoxMesh.new()
+	vehicle_mesh.size = Vector3(0.045, 0.03, 0.03)
+	var vehicles := MultiMesh.new()
+	vehicles.transform_format = MultiMesh.TRANSFORM_3D
+	vehicles.use_colors = true
+	vehicles.mesh = vehicle_mesh
+	_vehicles.multimesh = vehicles
+	_vehicles.material_override = _toon(Color.WHITE, true)
+	pivot.add_child(_vehicles)
 	_highlight = MeshInstance3D.new()
 	var line_material := StandardMaterial3D.new()
 	line_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -175,6 +205,12 @@ func _move_walkers(delta: float) -> void:
 		side = side.normalized()
 		var basis := Basis(side, normal, side.cross(normal)).scaled(Vector3.ONE * size)
 		multimesh.set_instance_transform(k, Transform3D(basis, at))
+	_move_vehicles()
+	# Roads grow cell by cell.
+	for k in mini(_links.size(), _road_built.size()):
+		if _built_cells(_links[k]) != int(_road_built[k]):
+			_build_roads()
+			break
 	# Building sites rise with their progress.
 	var now: float = clock.call()
 	for site in _sites:
@@ -238,7 +274,7 @@ func _place_walkers(planet: Dictionary, rates: Dictionary) -> void:
 		var cell := int(orders[k]["tile"])
 		if cell < 0 or cell >= builder.centers.size():
 			continue
-		var points := _route(_home, cell)
+		var points := _route(_city_of(cell), cell)
 		var length := 0.0
 		for i in points.size() - 1:
 			length += points[i].distance_to(points[i + 1])
@@ -259,9 +295,23 @@ func _place_walkers(planet: Dictionary, rates: Dictionary) -> void:
 		for m in 2:
 			_walk.append({"kind": "builder", "cell": int(c["tile"]), "offset": 0.0, "t": 0.0, "phase": m * PI + rng.randf(), "speed": 0.6, "radius": 0.035 * _tile_size()})
 	var strollers := clampi(roundi(population / 10.0), 2, 8)
-	for m in strollers:
+	var homes := [_home]
+	for c in _cities:
+		if int(c["tile"]) != _home:
+			homes.append(int(c["tile"]))
+	for m in strollers + homes.size() - 1:
 		var speed := (0.12 + rng.randf() * 0.2) * (1.0 if rng.randf() < 0.5 else -1.0)
-		_walk.append({"kind": "stroll", "cell": _home, "offset": 0.0, "t": 0.0, "phase": rng.randf() * TAU, "speed": speed, "radius": (0.1 + rng.randf() * 0.12) * _tile_size()})
+		# The capital gets most of the strollers, every colony one.
+		var at: int = homes[m - strollers + 1] if m >= strollers else _home
+		_walk.append({"kind": "stroll", "cell": at, "offset": 0.0, "t": 0.0, "phase": rng.randf() * TAU, "speed": speed, "radius": (0.1 + rng.randf() * 0.12) * _tile_size()})
+	# Road builders at the end of the road being laid.
+	for l in _links:
+		if l["kind"] != "road" or _link_progress(l) >= 1.0:
+			continue
+		var cells: Array = l["cells"]
+		var at := int(cells[mini(cells.size() - 1, int(_link_progress(l) * (cells.size() - 1)) + 1)])
+		for m in 2:
+			_walk.append({"kind": "builder", "cell": at, "offset": 0.0, "t": 0.0, "phase": m * PI + rng.randf(), "speed": 0.6, "radius": 0.05 * _tile_size()})
 	if _walk.size() > MAX_WALKERS:
 		_walk.resize(MAX_WALKERS)
 	var multimesh := _walkers.multimesh
@@ -283,6 +333,8 @@ func show_planet(planet: Dictionary, rates := {}) -> void:
 	if not builder.ready() or tiles.size() != builder.centers.size():
 		return
 	_home = int(planet.get("home", 0))
+	_cities = planet.get("cities", [])
+	_links = planet.get("links", [])
 	var building_at := {}
 	for c in planet.get("construction", []):
 		building_at[int(c["tile"])] = "construction:" + str(c["building"])
@@ -301,7 +353,9 @@ func show_planet(planet: Dictionary, rates := {}) -> void:
 	# changed.
 	_home = int(planet.get("home", 0))
 	_place_walkers(planet, rates)
-	var signature := JSON.stringify([biomes, buildings, planet.get("orders", []), stocks])
+	_place_rides()
+	var signature := JSON.stringify([biomes, buildings, planet.get("orders", []), stocks, _cities])
+	_build_roads()
 	if signature == _signature:
 		return
 	_signature = signature
@@ -344,6 +398,7 @@ func show_planet(planet: Dictionary, rates := {}) -> void:
 	if _verts.size() > 0:
 		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 	_props.mesh = mesh
+	_place_labels()
 	_update_highlight()
 
 
@@ -517,6 +572,7 @@ func _place_tile(i: int, biome: String, building: String, rng: RandomNumberGener
 	if biome == "ocean":
 		return
 	if building == "":
+		_flag(i, normal, base)
 		_on_ground = true
 		# Worked land thins out: fewer trees and rocks while it is spent.
 		var stock := float(_stocks[i]) / 4.0 if i < _stocks.size() else 1.0
@@ -543,6 +599,7 @@ func _place_tile(i: int, biome: String, building: String, rng: RandomNumberGener
 		_grow_site(i, building.substr(13), normal, footing)
 	else:
 		_building(building, normal, footing)
+	_flag(i, normal, footing)
 	_on_ground = true
 	_nature(normal, base, biome, rng, 2)
 	_on_ground = false
@@ -705,6 +762,21 @@ func _building_parts(id: String, n: Vector3, b: Vector3) -> void:
 		"scribe_house":
 			_put(_box(0.13, 0.09, 0.11), Color("e3c3c6"), n, b, Vector3(0, 0.045, 0))
 			_put(_box(0.15, 0.02, 0.13), Color("7a4f4f"), n, b, Vector3(0, 0.1, 0))
+		"colony":
+			# A longhouse inside a palisade.
+			_put(_box(0.16, 0.07, 0.09), Color("d9b48f"), n, b, Vector3(0, 0.035, 0))
+			_put(_cone(0.12, 0.07, 4), roof, n, b, Vector3(0, 0.105, 0), 1.0, PI / 4.0)
+			for k in 12:
+				var a := k * TAU / 12.0
+				if k == 3:
+					continue
+				_put(_box(0.016, 0.06, 0.016), Color("8f6f5a"), n, b, Vector3(cos(a) * 0.15, 0.03, sin(a) * 0.15))
+		"jetty":
+			_put(_box(0.26, 0.02, 0.06), Color("8f6f5a"), n, b, Vector3(0.04, 0.014, 0))
+			for k in 3:
+				_put(_box(0.014, 0.04, 0.014), Color("6b5a4e"), n, b, Vector3(-0.04 + k * 0.08, 0.0, 0.035))
+			_put(_box(0.08, 0.025, 0.035), BOAT_COLOR, n, b, Vector3(0.1, 0.012, 0.075))
+			_put(_cone(0.025, 0.06, 3), Color("e3cfa0"), n, b, Vector3(0.1, 0.055, 0.075))
 		"ziggurat":
 			for k in 4:
 				var s := 0.26 - k * 0.055
@@ -868,3 +940,197 @@ func _styled(id: String, n: Vector3, b: Vector3) -> void:
 			_put(_ball(0.05 * k), c1, n, b, Vector3(0, 0.24 * k, 0))
 		_:
 			_put(_box(0.1 * k, 0.08 * k, 0.1 * k), c1, n, b, Vector3(0, 0.04 * k, 0))
+
+
+# ---------------------------------------------------------------- cities
+
+## The city a cell's crews come from: the nearest centre.
+func _city_of(cell: int) -> int:
+	var best := _home
+	var best_dot := -2.0
+	var at: Vector3 = builder.centers[cell]
+	for c in _cities:
+		var t := int(c["tile"])
+		var d := at.dot(builder.centers[t])
+		if d > best_dot:
+			best_dot = d
+			best = t
+	return best
+
+
+func _city_index(cell: int) -> int:
+	for k in _cities.size():
+		if int(_cities[k]["tile"]) == cell:
+			return k
+	return -1
+
+
+## A city's banner: a pole with a flag in the city's colour.
+func _flag(cell: int, normal: Vector3, base: Vector3) -> void:
+	var k := _city_index(cell)
+	if k < 0:
+		return
+	var saved := _on_ground
+	_on_ground = false
+	_put(_box(0.012, 0.24, 0.012), Palette.HUT_WALL, normal, base, Vector3(-0.12, 0.12, -0.06))
+	_put(_box(0.08, 0.045, 0.008), CITY_COLORS[k % CITY_COLORS.size()], normal, base, Vector3(-0.08, 0.215, -0.06))
+	_on_ground = saved
+
+
+## How far along a way is now (0 to 1), on the planet's clock.
+func _link_progress(l: Dictionary) -> float:
+	var step_ms := 600000.0
+	var start := float(l.get("start_step", 0)) * step_ms
+	var done := float(l.get("done_step", 0)) * step_ms
+	if done <= start:
+		return 1.0
+	return clampf((float(clock.call()) - start) / (done - start), 0.0, 1.0)
+
+
+func _built_cells(l: Dictionary) -> int:
+	var cells: Array = l["cells"]
+	return int(floor(_link_progress(l) * (cells.size() - 1)))
+
+
+## Ground points along a way's cells, one after the other.
+func _way_points(l: Dictionary) -> PackedVector3Array:
+	var cells: Array = l["cells"]
+	var points := PackedVector3Array()
+	for i in cells.size() - 1:
+		var piece := _route(int(cells[i]), int(cells[i + 1]))
+		if i > 0:
+			piece.remove_at(0)
+		points.append_array(piece)
+	return points
+
+
+## Roads (laid cells solid, the rest a pale dotted plan) and sea routes
+## (dotted on the water), in one mesh.
+func _build_roads() -> void:
+	var saved := [_verts, _normals, _colors, _indices]
+	_verts = PackedVector3Array()
+	_normals = PackedVector3Array()
+	_colors = PackedColorArray()
+	_indices = PackedInt32Array()
+	_road_built.clear()
+	for l in _links:
+		var cells: Array = l["cells"]
+		var built := _built_cells(l)
+		_road_built.append(built)
+		var road: bool = l["kind"] == "road"
+		var done := _link_progress(l) >= 1.0
+		for i in cells.size() - 1:
+			var piece := _route(int(cells[i]), int(cells[i + 1]))
+			if road:
+				if i < built:
+					_strip(piece, 0.022 * _ts, ROAD_COLOR, 1)
+				else:
+					_strip(piece, 0.014 * _ts, ROAD_PLAN, 2)
+			else:
+				_strip(piece, 0.012 * _ts, SEA_COLOR if done else ROAD_PLAN, 2 if done else 3)
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = _verts
+	arrays[Mesh.ARRAY_NORMAL] = _normals
+	arrays[Mesh.ARRAY_COLOR] = _colors
+	arrays[Mesh.ARRAY_INDEX] = _indices
+	var mesh := ArrayMesh.new()
+	if _verts.size() > 0:
+		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	_roads.mesh = mesh
+	_verts = saved[0]
+	_normals = saved[1]
+	_colors = saved[2]
+	_indices = saved[3]
+
+
+## A flat band along `points`, a little above the ground; with `every` > 1
+## only one piece in `every` is drawn (dotted).
+func _strip(points: PackedVector3Array, width: float, color: Color, every: int) -> void:
+	for i in points.size() - 1:
+		if i % every != 0:
+			continue
+		var a := points[i]
+		var b := points[i + 1]
+		var n := a.normalized()
+		var side := (b - a).cross(n).normalized() * width * 0.5
+		var lift := n * 0.0025
+		var start := _verts.size()
+		for p in [a - side, a + side, b + side, b - side]:
+			_verts.append(p + lift)
+			_normals.append(n)
+			_colors.append(color)
+		for k in [0, 2, 1, 0, 3, 2]:
+			_indices.append(start + k)
+
+
+## Carts on the finished roads, boats on the finished sea routes.
+func _place_rides() -> void:
+	_rides.clear()
+	for k in _links.size():
+		var l: Dictionary = _links[k]
+		if _link_progress(l) < 1.0:
+			continue
+		var points := _way_points(l)
+		if points.size() < 2:
+			continue
+		var length := 0.0
+		for i in points.size() - 1:
+			length += points[i].distance_to(points[i + 1])
+		var boat: bool = l["kind"] == "sea"
+		for m in (1 if boat else 2):
+			_rides.append({"points": points, "length": length, "offset": m * 0.5 + k * 0.37, "boat": boat})
+	var multimesh := _vehicles.multimesh
+	multimesh.instance_count = _rides.size()
+	for k in _rides.size():
+		multimesh.set_instance_color(k, BOAT_COLOR if _rides[k]["boat"] else CART_COLOR)
+	_move_vehicles()
+
+
+func _move_vehicles() -> void:
+	var multimesh := _vehicles.multimesh
+	var size := _tile_size() * 1.2
+	for k in _rides.size():
+		var r: Dictionary = _rides[k]
+		var points: PackedVector3Array = r["points"]
+		var trip := float(r["length"]) / (WALK_SPEED * 1.4)
+		var t := fmod(_seconds / trip + float(r["offset"]), 2.0)
+		var along := t if t < 1.0 else 2.0 - t
+		var f := along * (points.size() - 1)
+		var i := mini(int(f), points.size() - 2)
+		var at := points[i].lerp(points[i + 1], f - i)
+		var normal := at.normalized()
+		var forward := (points[i + 1] - points[i]).normalized()
+		var side := forward.cross(normal)
+		if side.length_squared() < 1e-8:
+			side = _tangents(normal)[0]
+		side = side.normalized()
+		var basis := Basis(side.cross(normal), normal, -side).scaled(Vector3.ONE * size)
+		at += normal * 0.018 * size
+		multimesh.set_instance_transform(k, Transform3D(basis, at))
+
+
+## City names over their centres.
+func _place_labels() -> void:
+	for label in _labels:
+		label.queue_free()
+	_labels.clear()
+	for k in _cities.size():
+		var c: Dictionary = _cities[k]
+		var cell := int(c["tile"])
+		if cell < 0 or cell >= builder.centers.size():
+			continue
+		var label := Label3D.new()
+		label.text = str(c["name"])
+		label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		label.fixed_size = true
+		label.pixel_size = 0.0009
+		label.font_size = 28
+		label.outline_size = 8
+		label.modulate = CITY_COLORS[k % CITY_COLORS.size()].lightened(0.35)
+		label.outline_modulate = Palette.OUTLINE
+		label.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+		var n: Vector3 = builder.centers[cell]
+		label.position = builder.ground(n, cell) + n.normalized() * 0.2 * _ts
+		pivot.add_child(label)
+		_labels.append(label)

@@ -600,6 +600,26 @@ func _fill_society() -> void:
 		_side_body.add_child(row)
 	var thinkers := float(rates.get("workers", {}).get("knowledge", 0.0)) + float(rates.get("workers", {}).get("culture", 0.0))
 	_side_body.add_child(_muted(I18n.t("ui.thinkers", {"n": _fmt(thinkers)})))
+	var cities: Array = view.get("cities", [])
+	if int(planet.get("era", 1)) >= 2 or cities.size() > 1:
+		_side_body.add_child(_label(I18n.t("ui.cities"), 15, Color("f2c078")))
+		_side_body.add_child(_muted(I18n.t("ui.cities.help", {"r": 4, "n": 5})))
+		for k in cities.size():
+			var c: Dictionary = cities[k]
+			var row := HBoxContainer.new()
+			var status := I18n.t("ui.city.capital") if k == 0 else (I18n.t("ui.city.linked") if c.get("connected", false) else I18n.t("ui.city.unlinked", {"n": roundi(float(view.get("unlinked_pace", 0.6)) * 100.0)}))
+			var text := _label("%s · %s" % [c["name"], status])
+			text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			row.add_child(text)
+			var look := Button.new()
+			look.text = I18n.t("ui.crew.look")
+			var tile := int(c["tile"])
+			look.pressed.connect(func(): tile_focus_requested.emit(tile))
+			row.add_child(look)
+			_side_body.add_child(row)
+		var bonus := float(view.get("link_bonus", 0.0))
+		if bonus > 0.0:
+			_side_body.add_child(_muted(I18n.t("ui.city.bonus", {"n": roundi(bonus * 100.0)})))
 	var notables: Array = planet.get("notables", [])
 	if notables.size() > 0:
 		_side_body.add_child(_label(I18n.t("ui.notables"), 14, Color("f2c078")))
@@ -831,11 +851,15 @@ func _fill_tile() -> void:
 	head.add_child(close)
 	_tile_body.add_child(head)
 
+	var city := _city_at(selected_tile)
+	if city >= 0:
+		_fill_city(city)
 	var building = tile.get("building")
 	if building != null:
 		_tile_body.add_child(_label(I18n.name_of("building", building), 14))
 		_tile_body.add_child(_muted(_effects_text(_building_def(building))))
-		if not _building_def(building).get("monument", false):
+		var def := _building_def(building)
+		if not def.get("monument", false) and not def.get("city", false):
 			var tile_index := selected_tile
 			_tile_body.add_child(_confirm_button(I18n.t("ui.demolish"), I18n.t("ui.demolish.confirm"),
 				func(): action_requested.emit({"type": "demolish", "tile": tile_index})))
@@ -856,13 +880,19 @@ func _fill_tile() -> void:
 	var reachable := false
 	for t in view.get("buildable", []):
 		reachable = reachable or int(t) == selected_tile
-	if not reachable:
+	var site := false
+	for t in view.get("city_sites", []):
+		site = site or int(t) == selected_tile
+	if not reachable and not site:
 		_tile_body.add_child(_muted(I18n.t("ui.tile.far")))
 		return
-	_tile_body.add_child(_muted(I18n.t("ui.tile.empty")))
+	_tile_body.add_child(_muted(I18n.t("ui.tile.empty") if reachable else I18n.t("ui.tile.site")))
 	var any := false
 	for b in view.get("buildings", []):
 		if not _fits(b, tile["biome"]):
+			continue
+		var founds: bool = b.get("city", false)
+		if (founds and not site) or (not founds and not reachable):
 			continue
 		if b["status"] == "locked" or b["status"] == "monument_done":
 			continue
@@ -970,6 +1000,8 @@ func _effects_text(def: Dictionary) -> String:
 				parts.append(I18n.t("ui.effect.mood", {"n": roundi(float(e["amount"]) * 100.0)}))
 			"convert":
 				parts.append(I18n.t("ui.effect.convert", {"output": I18n.name_of("resource", e["output"]).to_lower()}))
+	if def.get("city", false):
+		parts.insert(0, I18n.t("ui.effect.city"))
 	return ", ".join(parts)
 
 
@@ -1011,3 +1043,69 @@ func _outcomes_text(outcomes: Array) -> String:
 			"trait":
 				parts.append("%+d %s" % [int(o["amount"]), I18n.t("ui.trait." + str(o["id"])).to_lower()])
 	return ", ".join(parts)
+
+
+func _city_at(tile: int) -> int:
+	var cities: Array = view.get("cities", [])
+	for k in cities.size():
+		if int(cities[k]["tile"]) == tile:
+			return k
+	return -1
+
+
+func _city_name(k: int) -> String:
+	var cities: Array = view.get("cities", [])
+	return str(cities[k]["name"]) if k >= 0 and k < cities.size() else "?"
+
+
+## A city: its name, whether it reaches the capital, its roads and sea
+## routes (being laid or open), and the ways that could be opened.
+func _fill_city(k: int) -> void:
+	var cities: Array = view.get("cities", [])
+	var c: Dictionary = cities[k]
+	_tile_body.add_child(_label(str(c["name"]), 16, Color("f2e1c8")))
+	if k == 0:
+		_tile_body.add_child(_muted(I18n.t("ui.city.capital")))
+	elif c.get("connected", false):
+		_tile_body.add_child(_muted(I18n.t("ui.city.linked")))
+	else:
+		_tile_body.add_child(_label(I18n.t("ui.city.unlinked", {"n": roundi(float(view.get("unlinked_pace", 0.6)) * 100.0)}), 13, Color("e08f6c")))
+	var way_name := func(kind: String, other: int) -> String:
+		return I18n.t("ui.city.road_to" if kind == "road" else "ui.city.sea_to", {"city": _city_name(other)})
+	for l in view.get("links", []):
+		var a := int(l["from"])
+		var b := int(l["to"])
+		if a != k and b != k:
+			continue
+		var other := b if a == k else a
+		var name: String = way_name.call(str(l["kind"]), other)
+		if l.get("done", false):
+			_tile_body.add_child(_label(name, 13, Color("c2d69b")))
+		else:
+			var start := float(l["start_ms"])
+			var done := float(l["done_ms"])
+			var p := clampf((live_now_ms() - start) / maxf(1.0, done - start), 0.0, 1.0)
+			_tile_body.add_child(_label(I18n.t("ui.city.way_building", {"way": name, "n": roundi(p * 100.0)})))
+	var any_sea := false
+	for r in view.get("routes", []):
+		var a := int(r["from"])
+		var b := int(r["to"])
+		if a != k and b != k:
+			continue
+		var other := b if a == k else a
+		var kind := str(r["kind"])
+		any_sea = any_sea or kind == "sea"
+		var costs := PackedStringArray()
+		var affordable := true
+		for id in r["cost"]:
+			var need := float(r["cost"][id])
+			costs.append("%s %s" % [_fmt(need), I18n.name_of("resource", id).to_lower()])
+			affordable = affordable and live_amount(id) >= need
+		var button := Button.new()
+		button.text = "%s\n%s · %s" % [way_name.call(kind, other), ", ".join(costs), I18n.duration(wall_ms(float(r["hours"]) * 3600000.0))]
+		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		button.disabled = not affordable
+		button.pressed.connect(func(): action_requested.emit({"type": "link", "kind": kind, "from": a, "to": b}))
+		_tile_body.add_child(button)
+	if cities.size() > 1 and not any_sea and c.get("ports", []).is_empty():
+		_tile_body.add_child(_muted(I18n.t("ui.city.port_hint")))

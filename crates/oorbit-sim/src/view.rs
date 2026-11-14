@@ -54,6 +54,8 @@ pub fn planet_view(planet: &Planet, catalog: &Catalog, now_ms: i64) -> Json {
                 "build_hours": b.build_hours,
                 "biomes": b.biomes,
                 "monument": b.monument,
+                "city": b.city,
+                "port": b.port,
                 "requires": b.requires,
                 "status": status,
             })
@@ -89,6 +91,20 @@ pub fn planet_view(planet: &Planet, catalog: &Catalog, now_ms: i64) -> Json {
         .iter()
         .map(|r| (r.id.clone(), json!(catalog.resource_era(&r.id))))
         .collect();
+    let reach = crate::cities::connected(planet);
+    let cities: Vec<Json> = planet
+        .cities
+        .iter()
+        .enumerate()
+        .map(|(k, c)| {
+            json!({
+                "tile": c.tile,
+                "name": c.name,
+                "connected": reach[k],
+                "ports": crate::cities::ports_of(planet, catalog, k),
+            })
+        })
+        .collect();
     json!({
         "resource_eras": resource_eras,
         "buildable": buildable(planet),
@@ -115,6 +131,21 @@ pub fn planet_view(planet: &Planet, catalog: &Catalog, now_ms: i64) -> Json {
             })
             .collect::<serde_json::Map<String, Json>>(),
         "dock": dock,
+        "cities": cities,
+        "links": planet.links.iter().map(|l| json!({
+            "kind": l.kind,
+            "from": l.from,
+            "to": l.to,
+            "cells": l.cells,
+            "start_ms": l.start_step * STEP_MS,
+            "done_ms": l.done_step * STEP_MS,
+            "progress": crate::cities::progress(l, planet.step),
+            "done": l.done_step <= planet.step,
+        })).collect::<Vec<_>>(),
+        "routes": crate::cities::routes(planet, catalog),
+        "city_sites": crate::cities::city_sites(planet, catalog),
+        "unlinked_pace": crate::cities::UNLINKED,
+        "link_bonus": crate::cities::link_bonus(planet),
         "now_ms": now_ms,
         "step_ms": STEP_MS,
         "planet": planet,

@@ -10,7 +10,7 @@ use crate::cells;
 use crate::step_of;
 
 /// Version of the serialized state, for migrations of saved planets.
-pub const STATE_VERSION: u32 = 4;
+pub const STATE_VERSION: u32 = 5;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Tile {
@@ -129,6 +129,12 @@ pub struct Planet {
     /// Source of ship and offer ids.
     #[serde(default)]
     pub next_id: u64,
+    /// The cities, the capital first (see `cities`).
+    #[serde(default)]
+    pub cities: Vec<crate::cities::City>,
+    /// Roads and sea routes between cities.
+    #[serde(default)]
+    pub links: Vec<crate::cities::Link>,
     /// Testing only: how far this planet's clock runs ahead of the wall
     /// clock (the plugin's time-skip tool). The simulation itself never
     /// reads it; the plugin adds it to "now".
@@ -180,9 +186,12 @@ impl Planet {
             ships: Vec::new(),
             offers: Vec::new(),
             next_id: 0,
+            cities: Vec::new(),
+            links: Vec::new(),
             clock_offset_ms: 0,
             clock: crate::clock::Clock::default(),
         };
+        crate::cities::ensure_capital(&mut planet);
         crate::orders::first_orders(&mut planet, catalog);
         crate::neighbors::ensure_neighbors(&mut planet, catalog);
         for r in &catalog.resources {
@@ -209,7 +218,14 @@ impl Planet {
                 let (tiles, home) = crate::terrain::generate(self.seed, climate, layout);
                 let old = std::mem::replace(&mut self.tiles, tiles);
                 self.home = home;
-                let mut moved: Vec<String> = old.into_iter().filter_map(|t| t.building).collect();
+                self.cities.clear();
+                self.links.clear();
+                crate::cities::ensure_capital(self);
+                let mut moved: Vec<String> = old
+                    .into_iter()
+                    .filter_map(|t| t.building)
+                    .filter(|b| !catalog.building(b).is_some_and(|d| d.city))
+                    .collect();
                 let mut works = std::mem::take(&mut self.construction);
                 // Monuments first, so they find room.
                 moved.sort_by_key(|b| !catalog.building(b).is_some_and(|d| d.monument));
@@ -238,6 +254,7 @@ impl Planet {
                 self.orders_given = false;
             }
         }
+        crate::cities::ensure_capital(self);
         if !self.orders_given {
             crate::orders::first_orders(self, catalog);
         }

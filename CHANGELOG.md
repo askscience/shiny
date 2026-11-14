@@ -59,6 +59,14 @@
   builders work on them. The work sliders are gone: whoever has no crew
   thinks and makes culture. While you play, an hour of the planet lasts a
   minute; while you are away, the planet runs at half speed.
+- Oorbit 0.6.2: cities. From the Agricultural Age a colony founds a new
+  city on free land five cells or more from the others, and new buildings
+  go up within four cells of a city. Link a colony to the capital with a
+  road over land (laid cell by cell, carts travel on it) or, with a jetty in
+  both cities, a sea route that boats sail. A colony with no way to the
+  capital works at 60%; every linked colony adds 5% to knowledge and
+  culture. Every city carries its name and its banner. Also fixed a dark
+  streak across the sky, a villager drawn far off the planet.
 
 ### Changed
 

@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::catalog::Catalog;
 use crate::neighbors::{capacity, launch, Ship, ShipKind};
 use crate::planet::{Construction, Order, Planet};
-use crate::step::{advance, check_era, free_tiles, resolve};
+use crate::step::{advance, check_era, resolve};
 use crate::{hours_to_steps, step_of};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -45,6 +45,13 @@ pub enum Action {
     Demolish {
         tile: usize,
     },
+    /// Open a road or a sea route between two cities (indices into
+    /// `cities`).
+    Link {
+        kind: crate::cities::LinkKind,
+        from: usize,
+        to: usize,
+    },
     AcceptOffer {
         id: u64,
     },
@@ -72,6 +79,7 @@ pub enum ActionError {
     BadCargo,
     NoOffer(u64),
     CannotDemolish(usize),
+    CannotLink,
 }
 
 impl std::fmt::Display for ActionError {
@@ -95,6 +103,9 @@ impl std::fmt::Display for ActionError {
             ActionError::ShipLocked(kind) => write!(f, "`{kind}` ships cannot be sent yet"),
             ActionError::BadCargo => write!(f, "that cargo cannot be sent"),
             ActionError::NoOffer(id) => write!(f, "no offer {id}"),
+            ActionError::CannotLink => {
+                write!(f, "no way can be opened between those cities (no path, already linked, or too costly)")
+            }
             ActionError::CannotDemolish(i) => {
                 write!(f, "tile {i} has nothing that can be demolished")
             }
@@ -177,7 +188,7 @@ pub fn apply(
         Action::Build { building, tile } => {
             can_build(planet, catalog, building)?;
             let def = catalog.building(building).expect("checked by can_build");
-            if !free_tiles(planet, &def.biomes).contains(tile) {
+            if !crate::cities::sites_for(planet, catalog, def).contains(tile) {
                 return Err(ActionError::BadTile(*tile));
             }
             for (r, need) in &def.cost {
@@ -239,7 +250,7 @@ pub fn apply(
                 .get(*tile)
                 .and_then(|t| t.building.clone())
                 .ok_or(ActionError::CannotDemolish(*tile))?;
-            if catalog.building(&building).is_some_and(|b| b.monument) {
+            if catalog.building(&building).is_some_and(|b| b.monument || b.city) {
                 return Err(ActionError::CannotDemolish(*tile));
             }
             planet.tiles[*tile].building = None;
@@ -250,6 +261,14 @@ pub fn apply(
                 "building_demolished",
                 &[("building", &building), ("tile", &t)],
             );
+        }
+        Action::Link { kind, from, to } => {
+            let route = crate::cities::route(planet, catalog, *kind, *from, *to)
+                .ok_or(ActionError::CannotLink)?;
+            if !route.cost.iter().all(|(r, need)| planet.amount(r) >= *need) {
+                return Err(ActionError::CannotLink);
+            }
+            crate::cities::open(planet, catalog, step, route);
         }
         Action::AcceptOffer { id } => {
             let offer = planet

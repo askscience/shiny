@@ -40,6 +40,15 @@ grows outward from it. A planet year lasts one real week; the
 seasons change food output. Planned: a low-poly sphere whose look changes with
 the era.
 
+## Cities (built)
+
+The planet starts with one city on its home. From the Agricultural Age a
+colony founds another on free land a few cells away; new buildings go up
+near a city, so a growing people spreads into new cities. A road over land
+(laid cell by cell, carts on it) or a sea route between two jetties links a
+colony to the capital: until then its crews work at 60%, and every linked
+colony brings a little more knowledge and culture.
+
 ## Society (built)
 
 - Population starts at 8. 80% work. Up to nine crews, each a ninth of the

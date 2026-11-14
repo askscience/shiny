@@ -311,6 +311,8 @@ async fn oorbit_founds_saves_and_plays_a_planet() {
         642
     );
     let home = body["data"]["planet"]["home"].as_u64().unwrap();
+    assert_eq!(body["data"]["cities"][0]["tile"].as_u64(), Some(home), "the capital stands on the home");
+    assert!(body["data"]["routes"].as_array().unwrap().is_empty());
     assert!(
         body["data"]["buildable"]
             .as_array()

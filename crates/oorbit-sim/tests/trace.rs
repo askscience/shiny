@@ -50,7 +50,7 @@ fn trace() {
             println!(
                 "day {day:2} era {} pop {:.0}/{:.0} storage {:.0} research {:?} missing {:?} free {} building {:?}\n   monument {}: {}",
                 planet.era, planet.population, r.housing, r.storage, planet.research, missing,
-                oorbit_sim::step::free_tiles(&planet, &[]).len(),
+                oorbit_sim::step::buildable(&planet).len(),
                 planet.construction.iter().map(|c| c.building.as_str()).collect::<Vec<_>>(),
                 monument.id, need.join(", ")
             );

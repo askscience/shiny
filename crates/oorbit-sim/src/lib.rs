@@ -20,6 +20,7 @@
 pub mod actions;
 pub mod autoplay;
 pub mod catalog;
+pub mod cities;
 pub mod clock;
 pub mod cells;
 pub mod neighbors;

@@ -89,6 +89,13 @@ fn rates_at(planet: &Planet, catalog: &Catalog, step: i64) -> Rates {
             Effect::Convert { .. } => {}
         }
     }
+    // Ideas travel along roads and sea routes.
+    let linked = crate::cities::link_bonus(planet);
+    if linked > 0.0 {
+        for category in [Category::Knowledge, Category::Culture] {
+            *bonus.entry(category).or_insert(0.0) += linked;
+        }
+    }
     for (id, value) in &planet.traits {
         // Traits lean the society: peaceful people are happier, curious ones
         // learn faster, traditional ones keep their culture.
@@ -135,17 +142,24 @@ fn rates_at(planet: &Planet, catalog: &Catalog, step: i64) -> Rates {
     };
     let mut busy = 0.0;
     let mut order_out = Vec::new();
+    // A city with no way to the capital works slower.
+    let pace = crate::cities::pace(planet);
+    let pace_at = |cell: usize| pace.get(cell).copied().unwrap_or(1.0);
     for order in &planet.orders {
         let category = crate::orders::category(catalog, &order.resource);
         let stock = planet.tiles.get(order.tile).map(|t| t.stock).unwrap_or(1.0);
-        let out = crew * per_worker(category) * mult(category) * crate::orders::yield_factor(stock);
+        let out = crew
+            * per_worker(category)
+            * mult(category)
+            * crate::orders::yield_factor(stock)
+            * pace_at(order.tile);
         *per_hour.entry(order.resource.clone()).or_insert(0.0) += out;
         order_out.push(out);
         *workers.entry(category.as_str().into()).or_insert(0.0) += crew;
         busy += crew;
     }
-    for (_, yields) in crate::orders::extractors(planet, catalog) {
-        let out = crew * per_worker(Category::Materials) * mult(Category::Materials);
+    for (cell, yields) in crate::orders::extractors(planet, catalog) {
+        let out = crew * per_worker(Category::Materials) * mult(Category::Materials) * pace_at(cell);
         for id in &yields {
             *per_hour.entry(id.clone()).or_insert(0.0) += out / yields.len() as f64;
         }
@@ -278,6 +292,7 @@ fn run_step(planet: &mut Planet, catalog: &Catalog, step: i64) {
             true
         }
     });
+    let stood: Vec<(String, usize)> = finished.iter().map(|c| (c.building.clone(), c.tile)).collect();
     for c in finished {
         if let Some(tile) = planet.tiles.get_mut(c.tile) {
             tile.building = Some(c.building.clone());
@@ -290,6 +305,7 @@ fn run_step(planet: &mut Planet, catalog: &Catalog, step: i64) {
             &[("building", &c.building), ("tile", &tile)],
         );
     }
+    crate::cities::run_cities(planet, catalog, step, &stood);
 
     // Research completes as soon as the knowledge is there.
     if let Some(id) = planet.research.clone() {
@@ -496,7 +512,8 @@ fn run_notables(planet: &mut Planet, catalog: &Catalog, step: i64, rng: &mut Rng
 /// new buildings may go, in cells.
 pub const REACH: usize = 2;
 
-/// Free land within reach of the settlement, nearest to the home first.
+/// Free land within reach of the settlement and near a city centre
+/// (`cities::CITY_RADIUS`), nearest to the home first.
 pub fn buildable(planet: &Planet) -> Vec<usize> {
     let Some(layout) = crate::cells::layout(planet.tiles.len()) else {
         return Vec::new();
@@ -513,10 +530,12 @@ pub fn buildable(planet: &Planet) -> Vec<usize> {
     );
     settled.extend(planet.construction.iter().map(|c| c.tile));
     let reach = layout.hops(&settled, land);
+    let near = crate::cities::near_city(planet);
     let from_home = layout.hops(&[planet.home], land);
     let mut cells: Vec<usize> = (0..planet.tiles.len())
         .filter(|&i| {
             reach[i] <= REACH
+                && (near[i] || planet.cities.is_empty())
                 && land(i)
                 && planet.tiles[i].building.is_none()
                 && !planet.construction.iter().any(|c| c.tile == i)

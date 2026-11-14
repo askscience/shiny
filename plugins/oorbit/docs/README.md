@@ -6,10 +6,10 @@ document covers the plugin as built; the game itself is described in
 [design.md](design.md), and its rules live in
 [`crates/oorbit-sim`](../../../crates/oorbit-sim/README.md).
 
-Status: **0.6.1, an active game.** The user founds a planet (one per account),
-and the window shows it as it is now: continents and seas of 642 cells,
-crews sent to work by pointing at the land, buildings that rise while they
-are built, research, events, notable people, the Chronicle, and a dock that
+Status: **0.6.2, an active game with cities.** The user founds a planet (one
+per account), and the window shows it as it is now: continents and seas of
+642 cells, crews sent to work by pointing at the land, buildings that rise
+while they are built, colonies linked to the capital by roads and sea routes, research, events, notable people, the Chronicle, and a dock that
 trades ships with three simulated neighbours. While the user plays, an hour
 of the planet lasts a minute; while nobody plays, the planet runs at half
 the speed of the wall clock. Friends over the network,
@@ -112,11 +112,12 @@ A planet from before the clock starts it where its own time was.
 | Founding screen | Choose a climate: temperate, arid, frozen or oceanic. The Research panel opens right after. |
 | Top bar | Era, people / housing, mood, each resource with its rate (per minute while playing, per hour while away), and how fast the planet's time runs. |
 | Research (flask) | Discoveries of the eras reached, what is left to leave the era; the icon glows while nothing is studied. |
-| Society (people) | The crews (what each gathers, how fast, how much is left on its cell; Show flies there, Call back frees it), how many people think, notable people, cultural traits. |
+| Society (people) | The crews (what each gathers, how fast, how much is left on its cell; Show flies there, Call back frees it), how many people think, the cities (capital, linked or not, Show), notable people, cultural traits. |
 | Chronicle (scroll) | What happened, newest first, with how long ago. |
-| A cell (click) | Its biome; the crew working it, or a button per resource to send one (food on meadows, forests, beaches and the shallow sea; wood in forests; stone on mountains; clay and marble once known); its building or construction time left; what can be built there, with cost, time and effects. A double click flies over it. |
+| A cell (click) | Its biome; the crew working it, or a button per resource to send one (food on meadows, forests, beaches and the shallow sea; wood in forests; stone on mountains; clay and marble once known); its building or construction time left; what can be built there, with cost, time and effects (only within four cells of a city; a colony only where a city may be founded). A double click flies over it. |
+| A city centre (click) | Its name, whether it reaches the capital (an unlinked city's crews work at 60%), its roads and sea routes with their progress, and a button per way that can be opened (road over land, or sea route between two cities with a jetty or harbour), with cost and time. |
 | Event dialog | Appears when an event waits; each choice lists its consequences. |
-| Planet | Drag to turn it; it turns by itself again after a few idle seconds while the whole planet is in view. Zoom with the wheel, a trackpad pinch or two fingers (up to 5×): the camera comes down to the ground and tilts to the horizon, and the low-resolution view grows with the zoom, so a close look is sharper. Crews walk between the village and their cell and back with their load ("+3 wood" rises over the village), builders work on the sites, and a building rises from its footing as the work goes on. |
+| Planet | Drag to turn it; it turns by itself again after a few idle seconds while the whole planet is in view. Zoom with the wheel, a trackpad pinch or two fingers (up to 5×): the camera comes down to the ground and tilts to the horizon, and the low-resolution view grows with the zoom, so a close look is sharper. Every city shows its name and banner; roads are drawn on the ground (laid cells solid, the plan dotted) with carts on them, sea routes dotted on the water with boats. Crews walk between their city and their cell and back with their load ("+3 wood" rises over the village), builders work on the sites, and a building rises from its footing as the work goes on. |
 | Dock (ship) | The three neighbours (climate, era, personality, friendship), what can be sent to each (gifts of the six most plentiful resources, an idea, a visitor, a prank, a message), ships under way with their countdowns, and trade offers to accept or decline. |
 | Test tools (fast-forward) | **Temporary.** +1h, +6h, +1d, +3d of planet time (`POST /api/oorbit/dev/skip`). To be removed before release. |
 | A built tile | Demolish (two presses) clears it for something new; monuments stay. |
@@ -164,7 +165,7 @@ English).
 | `POST` | `/api/oorbit/found` | user | `{ climate }`: founds the user's planet; `400` when one exists. |
 | `POST` | `/api/oorbit/dev/skip` | user | **Temporary, for testing.** `{ hours }` (0 to 720): moves this planet's clock forward and returns the view. |
 | `POST` | `/api/oorbit/reset` | user | Deletes the user's planet; the window shows the founding screen again. |
-| `POST` | `/api/oorbit/action` | user | One `oorbit_sim::Action` (`{"type":"research","tech":"fire"}`, `build`, `harvest` `{ tile, resource }`, `stop_harvest` `{ tile }`, `resolve_event`); `400` with the reason when refused. Acting counts as playing. |
+| `POST` | `/api/oorbit/action` | user | One `oorbit_sim::Action` (`{"type":"research","tech":"fire"}`, `build`, `harvest` `{ tile, resource }`, `stop_harvest` `{ tile }`, `link` `{ kind: "road"\|"sea", from, to }` between two cities, `resolve_event`); `400` with the reason when refused. Acting counts as playing. |
 | `POST` | `/api/oorbit/presence` | user | The window reports that someone is playing: the planet runs at play speed for 45 more seconds. Returns the view. |
 
 Actions also include `{"type":"send","to":"n1","kind":"gift","resource":"wood","amount":5}` (kinds: gift, idea, visit, prank, message), `accept_offer` / `decline_offer` `{ id }` and `demolish` `{ tile }`.

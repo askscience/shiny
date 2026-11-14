@@ -152,6 +152,12 @@ pub struct BuildingDef {
     pub effects: Vec<Effect>,
     #[serde(default)]
     pub monument: bool,
+    /// Founds a new city where it stands (it becomes the city's centre).
+    #[serde(default)]
+    pub city: bool,
+    /// A landing for boats: two cities with one each can open a sea route.
+    #[serde(default)]
+    pub port: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -1,6 +1,7 @@
 //! Shared by the tests: times, and the steady player (`oorbit_sim::autoplay`).
 #![allow(dead_code)]
 
+#[allow(unused_imports)]
 pub use oorbit_sim::autoplay::play_session;
 
 pub const HOUR: i64 = 3_600_000;

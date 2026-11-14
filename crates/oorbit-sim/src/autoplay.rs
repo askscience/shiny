@@ -6,7 +6,7 @@ use std::collections::BTreeSet;
 
 use crate::actions::{can_build, can_research};
 use crate::catalog::{Biome, BuildingDef, Catalog, Effect};
-use crate::step::free_tiles;
+use crate::cities::{sites_for, LinkKind};
 use crate::{apply, Action, Planet};
 
 /// Buildings that produce `resource`: a converter making it, or the building
@@ -99,11 +99,11 @@ fn try_build(
     if can_build(planet, catalog, id).is_err() {
         return false;
     }
-    let mut tiles = free_tiles(planet, &def.biomes);
+    let mut tiles = sites_for(planet, catalog, def);
     // Keep a couple of tiles the monument can stand on.
     if let Some(monument) = keep_for {
-        if !def.monument {
-            let room = free_tiles(planet, &monument.biomes);
+        if !def.monument && !def.city {
+            let room = sites_for(planet, catalog, monument);
             tiles.retain(|t| room.len() > 2 || !room.contains(t));
         }
     }
@@ -124,6 +124,9 @@ fn try_build(
     if def.biomes.is_empty() {
         tiles.sort_by_key(|&i| rank(planet.tiles[i].biome));
     }
+    if tiles.is_empty() && def.city {
+        return false;
+    }
     if tiles.is_empty() {
         // No room: clear the oldest ordinary building on land that fits.
         let victim = planet
@@ -137,7 +140,7 @@ fn try_build(
                     .map(|b| (i, catalog.building(b).unwrap()))
             })
             .filter(|(_, b)| {
-                !b.monument && b.era < planet.era.saturating_sub(1).max(1) + 1 && b.id != id
+                !b.monument && !b.city && b.era < planet.era.saturating_sub(1).max(1) + 1 && b.id != id
             })
             .min_by_key(|(_, b)| b.era)
             .map(|(i, _)| i);
@@ -273,7 +276,7 @@ pub fn play_session(planet: &mut Planet, catalog: &Catalog, now: i64) {
         let mut homes: Vec<&BuildingDef> = catalog
             .buildings
             .iter()
-            .filter(|b| housing(catalog, b) > 0.0 && !b.monument)
+            .filter(|b| housing(catalog, b) > 0.0 && !b.monument && !b.city)
             .collect();
         homes.sort_by(|a, b| housing(catalog, b).total_cmp(&housing(catalog, a)));
         wanted.extend(homes.iter().map(|b| b.id.clone()));
@@ -288,7 +291,7 @@ pub fn play_session(planet: &mut Planet, catalog: &Catalog, now: i64) {
         let mut rest: Vec<&BuildingDef> = catalog
             .buildings
             .iter()
-            .filter(|b| !b.monument && b.era <= planet.era && housing(catalog, b) == 0.0)
+            .filter(|b| !b.monument && !b.city && b.era <= planet.era && housing(catalog, b) == 0.0)
             .collect();
         rest.sort_by(|a, b| {
             (b.era, a.cost.values().sum::<f64>() as i64)
@@ -296,6 +299,10 @@ pub fn play_session(planet: &mut Planet, catalog: &Catalog, now: i64) {
         });
         wanted.extend(rest.iter().map(|b| b.id.clone()));
     }
+    // What the era's monument and the next buildings are made of.
+    let mut needs: Vec<String> = monument.cost.keys().cloned().collect();
+    needs.extend(["wood".to_string(), "stone".to_string()]);
+    grow_cities(planet, catalog, now, &needs);
     let mut started = 0;
     for id in wanted {
         let def = catalog.building(&id).unwrap();
@@ -337,6 +344,60 @@ pub fn play_session(planet: &mut Planet, catalog: &Catalog, now: i64) {
         ) {
             started += 1;
             if saving || started >= 2 {
+                break;
+            }
+        }
+    }
+}
+
+/// Found a new city when the land near the old ones runs short or a
+/// resource the era needs lies out of reach (next to that resource), and
+/// link every city to the capital.
+fn grow_cities(planet: &mut Planet, catalog: &Catalog, now: i64, needs: &[String]) {
+    let Some(colony) = catalog.buildings.iter().find(|b| b.city).cloned() else {
+        return;
+    };
+    let founding = planet
+        .construction
+        .iter()
+        .any(|c| catalog.building(&c.building).is_some_and(|b| b.city));
+    let reach = crate::orders::in_reach(planet);
+    let out_of_reach: Vec<usize> = needs
+        .iter()
+        .filter(|r| !planet.orders.iter().any(|o| &o.resource == *r))
+        .filter(|r| crate::orders::nearest_for(planet, catalog, r, 0.3).is_none())
+        .flat_map(|r| {
+            (0..planet.tiles.len())
+                .filter(|&i| !reach[i])
+                .filter(|&i| crate::orders::harvestable(planet, catalog, i).contains(r))
+                .collect::<Vec<_>>()
+        })
+        .collect();
+    let free = crate::step::buildable(planet).len();
+    // One more city every other era, sooner when the land runs out.
+    let crowded = planet.cities.len() < 1 + (planet.era as usize).saturating_sub(1) / 2 || free < 3;
+    if !founding && (crowded || !out_of_reach.is_empty()) && planet.cities.len() < 8 {
+        let mut sites = sites_for(planet, catalog, &colony);
+        if !out_of_reach.is_empty() {
+            if let Some(layout) = crate::cells::layout(planet.tiles.len()) {
+                let near = layout.hops(&out_of_reach, |_| true);
+                sites.sort_by_key(|&c| (near[c], c));
+            }
+        }
+        if let Some(&tile) = sites.first() {
+            let _ = apply(planet, catalog, now, &Action::Build { building: colony.id.clone(), tile });
+        }
+    }
+    let linked = crate::cities::connected(planet);
+    for city in 1..planet.cities.len() {
+        let pending = planet.links.iter().any(|l| l.from == city || l.to == city);
+        if linked[city] || pending {
+            continue;
+        }
+        let to = (0..city).find(|&c| linked[c]).unwrap_or(0);
+        for kind in [LinkKind::Road, LinkKind::Sea] {
+            let action = Action::Link { kind, from: to, to: city };
+            if apply(planet, catalog, now, &action).is_ok() {
                 break;
             }
         }
