@@ -93,6 +93,7 @@ func _ready() -> void:
 		_select(cell))
 	planet_view.clock = ui.live_now_ms
 	planet_view.delivered.connect(_on_delivered)
+	planet_view.sfx.connect(func(name: String, where: Vector3): audio.play(name, _weight_at(where)))
 	_last_input_ms = Time.get_ticks_msec()
 	resized.connect(_fit)
 	_fit()

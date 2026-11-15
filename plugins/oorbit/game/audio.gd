@@ -11,14 +11,15 @@ class_name PlanetAudio
 extends Node
 
 const AMBIENTS := ["space", "wind", "waves", "birds", "village", "crickets"]
-const EFFECTS := ["tap", "build", "hammer", "done", "discovery", "era", "deliver", "boat", "find", "error"]
+const EFFECTS := ["tap", "build", "hammer", "done", "discovery", "era", "deliver", "boat", "find", "error", "chop", "splash", "flutter"]
 ## Loudness of each effect (linear), before distance.
 const EFFECT_GAIN := {
 	"tap": 0.35, "build": 0.6, "hammer": 0.3, "done": 0.6, "discovery": 0.7, "era": 0.8,
 	"deliver": 0.18, "boat": 0.45, "find": 0.55, "error": 0.4,
+	"chop": 0.25, "splash": 0.25, "flutter": 0.3,
 }
 ## The same effect never plays twice within this many seconds.
-const MIN_GAP := {"deliver": 0.35, "hammer": 0.5, "tap": 0.06}
+const MIN_GAP := {"deliver": 0.35, "hammer": 0.5, "tap": 0.06, "chop": 0.3, "splash": 0.4, "flutter": 1.5}
 const VOICES := 4
 const AMBIENT_LEVEL := 0.55
 

@@ -59,6 +59,17 @@
   builders work on them. The work sliders are gone: whoever has no crew
   thinks and makes culture. While you play, an hour of the planet lasts a
   minute; while you are away, the planet runs at half speed.
+- Oorbit 0.7.4: little things alive. Hunters chase a deer across their
+  cell (arrows fly, muskets smoke, a spear is thrown), it falls and they
+  carry it home; wild animals run off when people come close. Fishers
+  stand at the water's edge with a line and a float, and fish jump with a
+  splash; boats at sea do the same. Woodcutters and quarrymen swing at a
+  tree or a rock and chips fly (leaves fall too), gatherers stoop over the
+  bushes. Birds are smaller and finer (body, head, beak, beating wings):
+  flocks of songbirds fly from wood to wood and settle on the treetops,
+  gulls rest on the water by the coast, and both take off when people come
+  near. Smoke rises from hearths and chimneys. New sounds: an axe, a
+  splash, wings.
 - Oorbit 0.7.3: Laura and a livelier planet. Laura, the chronicler, tells
   in a few lines what happened lately, written by the assistant's AI in the
   voice you pick (historian, village gossip, grumpy grandpa, scientist) at

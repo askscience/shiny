@@ -407,7 +407,7 @@
  "ui.plant": "Plant trees · {food} food",
  "ui.plant.help": "Planted trees grow back four times faster for two days.",
  "ui.planted": "Young trees are growing here.",
- "ui.crew.cost": "One more crew: knowledge {from} → {to}",
+ "ui.crew.cost": "One more crew: knowledge goes from {from} to {to}",
  "ui.build.moves_crew": "The crew working here will move to the nearest cell like it.",
  "ui.crew.row_deposit": "{resource} {rate} · {n} left",
  "ui.crew.deposit": "{n} units left in the ground.",

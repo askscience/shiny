@@ -6,7 +6,7 @@ document covers the plugin as built; the game itself is described in
 [design.md](design.md), and its rules live in
 [`crates/oorbit-sim`](../../../crates/oorbit-sim/README.md).
 
-Status: **0.7.3, an active game with cities.** The user founds a planet (one
+Status: **0.7.4, an active game with cities.** The user founds a planet (one
 per account), and the window shows it as it is now: continents and seas of
 642 cells, crews sent to work by pointing at the land, buildings that rise
 while they are built, colonies linked to the capital by roads and sea routes, research, events, notable people, the Chronicle, and a dock that
@@ -120,7 +120,7 @@ A planet from before the clock starts it where its own time was.
 | Event dialog | Appears when an event waits; each choice lists its consequences. An event with a place puts a marker on its cell and the camera flies there. |
 | A find (click its cell) | What it is, what it brings, Bring it home, and how long it waits. Finds are drawn on the ground with a bobbing marker; those on the far side or off screen get a small button on the window's edge that flies there. |
 | A building site (click) | Time left; Help (once) finishes it sooner while research pauses. |
-| Planet | Drag to turn it; it turns by itself again after a few idle seconds while the whole planet is in view. Zoom with the wheel, a trackpad pinch or two fingers (up to 5×): the camera comes down to the ground and tilts to the horizon, and the low-resolution view grows with the zoom, so a close look is sharper. Every city shows its name and banner; roads are drawn on the ground (laid cells solid, the plan dotted) with carts on them, sea routes dotted on the water with boats. Crews walk between their city and their cell and back with their load ("+3 wood" rises over the village), builders work on the sites, and a building rises from its footing as the work goes on. |
+| Planet | Drag to turn it; it turns by itself again after a few idle seconds while the whole planet is in view. Zoom with the wheel, a trackpad pinch or two fingers (up to 5×): the camera comes down to the ground and tilts to the horizon, and the low-resolution view grows with the zoom, so a close look is sharper. Crews work in view: hunters chase a quarry that falls and is carried home, fishers cast from the water's edge while fish jump, woodcutters and quarrymen swing and chips fly, gatherers stoop; wild animals flee from people; flocks of birds settle on treetops (gulls on the water) and take off when people come near; smoke rises from hearths and chimneys. Every city shows its name and banner; roads are drawn on the ground (laid cells solid, the plan dotted) with carts on them, sea routes dotted on the water with boats. Crews walk between their city and their cell and back with their load ("+3 wood" rises over the village), builders work on the sites, and a building rises from its footing as the work goes on. |
 | Dock (ship) | The three neighbours (climate, era, personality, friendship), what can be sent to each (gifts of the six most plentiful resources, an idea, a visitor, a prank, a message), ships under way with their countdowns, and trade offers to accept or decline. |
 | Test tools (fast-forward) | **Temporary.** +1h, +6h, +1d, +3d of planet time (`POST /api/oorbit/dev/skip`). To be removed before release. |
 | A built tile | Demolish (two presses) clears it for something new; monuments stay. |

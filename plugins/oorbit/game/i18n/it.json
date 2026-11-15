@@ -407,7 +407,7 @@
  "ui.plant": "Pianta alberi · {food} cibo",
  "ui.plant.help": "Gli alberi piantati ricrescono quattro volte più in fretta per due giorni.",
  "ui.planted": "Qui stanno crescendo alberi giovani.",
- "ui.crew.cost": "Una squadra in più: conoscenza {from} → {to}",
+ "ui.crew.cost": "Una squadra in più: la conoscenza passa da {from} a {to}",
  "ui.build.moves_crew": "La squadra che lavora qui si sposterà sulla cella simile più vicina.",
  "ui.crew.row_deposit": "{resource} {rate} · ne restano {n}",
  "ui.crew.deposit": "Restano {n} unità nel terreno.",

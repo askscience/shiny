@@ -254,10 +254,39 @@ def error(rng):
     return [(1.0 if math.sin(TAU * 110 * i / r) > 0 else -1.0) * 0.3 * e[i] for i in range(n)]
 
 
+def chop(rng):
+    r = EFFECT_RATE
+    track = [0.0] * int(0.25 * r)
+    place(track, knock(rng, 260, 0.12), 0.0, r)
+    crack = [a * math.exp(-60 * i / r) for i, a in enumerate(bandpass(noise(rng, int(0.1 * r)), 900, 3500, r))]
+    place(track, crack, 0.005, r, 0.8)
+    return track
+
+
+def splash(rng):
+    r = EFFECT_RATE
+    n = int(0.45 * r)
+    body = bandpass(noise(rng, n), 300, 3000, r)
+    return [a * (min(1.0, i / (0.01 * r)) * math.exp(-9 * i / r)) for i, a in enumerate(body)]
+
+
+def flutter(rng):
+    r = EFFECT_RATE
+    n = int(0.7 * r)
+    flaps = lowpass(noise(rng, n), 1800, r)
+    e = [abs(math.sin(TAU * 14 * i / r)) * math.exp(-3 * i / r) for i in range(n)]
+    track = [a * b for a, b in zip(flaps, e)]
+    for k in range(3):
+        m = int(0.07 * r)
+        chirp = [math.sin(TAU * (3000 + 1200 * math.sin(math.pi * i / m)) * i / r) * math.sin(math.pi * i / m) * 0.4 for i in range(m)]
+        place(track, chirp, 0.05 + k * 0.15, r)
+    return track
+
+
 def main():
     for name, make in [("space", space), ("wind", wind), ("waves", waves), ("birds", birds), ("village", village), ("crickets", crickets)]:
         write("amb_" + name, make(random.Random(name)), AMBIENT_RATE)
-    for name, make in [("tap", tap), ("build", build), ("hammer", hammer), ("done", done), ("discovery", discovery), ("era", era), ("deliver", deliver), ("boat", boat), ("find", find), ("error", error)]:
+    for name, make in [("tap", tap), ("build", build), ("hammer", hammer), ("done", done), ("discovery", discovery), ("era", era), ("deliver", deliver), ("boat", boat), ("find", find), ("error", error), ("chop", chop), ("splash", splash), ("flutter", flutter)]:
         write("sfx_" + name, make(random.Random(name)), EFFECT_RATE)
     print("sounds written to", os.path.abspath(OUT))
 
