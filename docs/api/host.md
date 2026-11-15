@@ -86,6 +86,8 @@ Details: [host/battery-power](../host/battery-power.md).
 |---|---|---|---|
 | `GET` | `/api/display` | — | — |
 | `PUT` | `/api/display` | ✔ | `{ "scale": "auto" | 1.25 }` |
+| `GET` | `/api/pointer` | — | — |
+| `PUT` | `/api/pointer` | ✔ | `{ "touchpad": { … }, "mouse": { … } }` (partial) |
 | `GET` | `/api/touchbar` | — | — |
 | `GET` | `/api/keyboard/backlight` | — | — |
 | `POST` | `/api/keyboard/backlight` | ✔ | `{ value }` |
@@ -99,7 +101,7 @@ Details: [host/display-input](../host/display-input.md).
 ## Response envelopes
 
 Reads use the standard `{ "success": true, "data": { … } }` shape. Mutations
-return `{ "success": true }` (or the updated value for `PUT /api/display`).
+return `{ "success": true }` (or the updated value for `PUT /api/display` and `PUT /api/pointer`).
 A rejected remote mutation returns `401`; an absent daemon read returns
 `available:false` inside `data`.
 

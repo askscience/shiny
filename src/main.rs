@@ -69,6 +69,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     workers.track(state.audio.start_tracked().await);
     workers.track(state.bluetooth.start_tracked().await);
     workers.track(state.battery.start_tracked().await);
+    // Mouse/touchpad options: applied when X comes up and on every hotplug.
+    state.pointer.start();
     // Optional services never prevent the desktop from becoming available.
     tracing::info!("Optional providers will be probed on use; unavailable services retain their existing fallbacks");
 

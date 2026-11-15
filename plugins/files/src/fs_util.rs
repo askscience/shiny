@@ -177,11 +177,23 @@ fn clean_rel(rel: &str) -> Result<PathBuf, AppError> {
 /// Resolve `rel` inside `home`, refusing anything that escapes the sandbox.
 /// Existing symlinks are canonicalized and checked; for not-yet-existing
 /// targets the nearest existing ancestor is checked instead.
+///
+/// `@volumes/<id>/…` names a mounted removable drive instead (see
+/// `volumes.rs`): the same checks then keep the path inside that drive.
 pub async fn resolve(home: &Path, rel: &str) -> Result<PathBuf, AppError> {
+    if let Some((id, rest)) = crate::volumes::split(rel) {
+        let root = crate::volumes::mount_root(&id)
+            .ok_or_else(|| AppError::NotFound("the drive is not mounted".into()))?;
+        return resolve_in(&root, &rest, "drive").await;
+    }
+    resolve_in(home, rel, "home folder").await
+}
+
+async fn resolve_in(home: &Path, rel: &str, what: &str) -> Result<PathBuf, AppError> {
     let rel = clean_rel(rel)?;
     let canon_home = tokio::fs::canonicalize(home)
         .await
-        .map_err(|_| AppError::Internal("home folder is unavailable".into()))?;
+        .map_err(|_| AppError::Internal(format!("{what} is unavailable")))?;
 
     if rel.as_os_str().is_empty() {
         return Ok(canon_home);
@@ -190,7 +202,7 @@ pub async fn resolve(home: &Path, rel: &str) -> Result<PathBuf, AppError> {
 
     if let Ok(canon) = tokio::fs::canonicalize(&target).await {
         if !canon.starts_with(&canon_home) {
-            return Err(AppError::BadRequest("path escapes the home folder".into()));
+            return Err(AppError::BadRequest(format!("path escapes the {what}")));
         }
         return Ok(canon);
     }
@@ -214,13 +226,24 @@ pub async fn resolve(home: &Path, rel: &str) -> Result<PathBuf, AppError> {
         .await
         .map_err(|_| AppError::BadRequest("invalid path".into()))?;
     if !canon_ancestor.starts_with(&canon_home) {
-        return Err(AppError::BadRequest("path escapes the home folder".into()));
+        return Err(AppError::BadRequest(format!("path escapes the {what}")));
     }
     Ok(target)
 }
 
 /// Home-relative path with `/` separators, for the API surface.
+/// A path on a mounted drive reads as `@volumes/<id>/…`.
 pub fn rel_display(home: &Path, path: &Path) -> String {
+    if !path.starts_with(home) {
+        if let Some((id, root)) = crate::volumes::root_containing(path) {
+            let rest = rel_display(&root, path);
+            return if rest.is_empty() {
+                format!("{}/{id}", crate::volumes::PREFIX)
+            } else {
+                format!("{}/{id}/{rest}", crate::volumes::PREFIX)
+            };
+        }
+    }
     let rel = path.strip_prefix(home).unwrap_or(path);
     let mut out = String::new();
     for comp in rel.components() {
@@ -373,6 +396,19 @@ async fn unique_path(dir: &Path, name: &str) -> PathBuf {
         .map(|d| d.as_secs())
         .unwrap_or(0);
     dir.join(format!("{stem}-{ts}"))
+}
+
+/// Move or rename an entry. Across filesystems (home ↔ a USB drive) a rename
+/// cannot work, so the entry is copied and the original removed.
+pub async fn move_entry(from: &Path, to: &Path) -> Result<(), AppError> {
+    match tokio::fs::rename(from, to).await {
+        Ok(()) => Ok(()),
+        Err(e) if e.raw_os_error() == Some(libc::EXDEV) => {
+            copy_entry(from, to).await?;
+            delete_permanent(from).await
+        }
+        Err(e) => Err(e.into()),
+    }
 }
 
 /// Move an entry into the user's `.Trash`, returning its new home-relative path.

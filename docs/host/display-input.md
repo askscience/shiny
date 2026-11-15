@@ -1,14 +1,16 @@
 # Display & input
 
-Four host integrations that are all "write the machine, not the page": the
+Host integrations that are all "write the machine, not the page": the
 **interface scale**, **screen brightness**, **keyboard backlight**, the
-**Touch Bar**, and **three-finger trackpad gestures**.
+**Touch Bar**, **mouse and touchpad options**, and **three-finger trackpad
+gestures**.
 
 Source: [`src/services/display.rs`](../../src/services/display.rs),
 [`keyboard_backlight.rs`](../../src/services/keyboard_backlight.rs),
 [`screen_brightness.rs`](../../src/services/screen_brightness.rs),
 [`backlight.rs`](../../src/services/backlight.rs),
 [`touchbar.rs`](../../src/services/touchbar.rs),
+[`pointer.rs`](../../src/services/pointer.rs),
 [`crates/liteaura/src/gestures.rs`](../../crates/liteaura/src/gestures.rs).
 
 ---
@@ -106,6 +108,45 @@ toggle the virtual keyboard, and open Settings. Per-user enablement lives in
 
 ---
 
+## Mouse & touchpad
+
+**Settings → Mouse & touchpad** sets the options the Xorg `libinput` driver
+exposes as XInput2 device properties. `PointerService` talks to the X server
+over x11rb (no `xinput` binary, no desktop daemon), finding the display the
+way the capture plugin does (`$DISPLAY`, else the lowest `/tmp/.X11-unix`
+socket).
+
+| Method | Path | Auth | Purpose |
+|---|---|---|---|
+| `GET` | `/api/pointer` | Bearer/cookie | Devices and their current values, read back from the X server. Remote → `available:false`. |
+| `PUT` | `/api/pointer` | **loopback** | A partial change, e.g. `{ "touchpad": { "tap_to_click": true } }`; `null` returns an option to the driver default. Returns the new status. |
+
+Options apply per class: every touchpad (a pointer with the tapping property)
+gets the touchpad options, every other libinput pointer with an acceleration
+property the mouse options.
+
+| Class | Option | Property |
+|---|---|---|
+| touchpad | `tap_to_click` | `libinput Tapping Enabled` |
+| touchpad | `natural_scroll` | `libinput Natural Scrolling Enabled` |
+| touchpad, mouse | `speed` (-1…1) | `libinput Accel Speed` |
+| touchpad | `disable_while_typing` | `libinput Disable While Typing Enabled` |
+| touchpad | `click_method` (`fingers` / `areas`) | `libinput Click Method Enabled` |
+| touchpad | `scroll_method` (`two_finger` / `edge`) | `libinput Scroll Method Enabled` |
+| mouse | `accel_profile` (`adaptive` / `flat`) | `libinput Accel Profile Enabled` |
+| mouse | `natural_scroll`, `left_handed` | `libinput Natural Scrolling Enabled`, `libinput Left Handed Enabled` |
+
+The choice lives in `~/.config/liteaura/pointer.json` (`LITEAURA_POINTER_FILE`
+overrides it) and holds only the options the user changed. Properties belong
+to the device, so a background thread applies the file when the X server comes
+up (it reconnects after every sign-in) and again on every XInput2 hierarchy
+event that adds or enables a device: a mouse plugged in starts from its
+defaults and gets the user's options a moment later. The Settings panel
+re-reads the devices every few seconds while it is open, so a mouse plugged in
+shows its group.
+
+---
+
 ## Trackpad gestures
 
 The kiosk recognises three-finger trackpad swipes:
@@ -178,5 +219,6 @@ unchanged. `LITEAURA_TOUCHPAD=/dev/input/eventN` overrides discovery.
 | No backlight device | `available:false`; slider hidden; write is a no-op. |
 | No Touch Bar | `auto` mode never activates; `install-touchbar.sh` exits doing nothing. |
 | No readable touchpad | Gesture reader stays off; pointer/scroll unaffected. |
+| No X display / not libinput | `/api/pointer` reports `available:false` or no devices; the Settings section says so. |
 | No `tiny-dfr` | Linux T2 bar simply isn't driven. |
 | Remote client | Reads report unavailable; all writes rejected. |

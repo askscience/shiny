@@ -7558,6 +7558,26 @@ html[data-phone='1'] :is(.pdf-edit-pill, .pdf-edit-apply, .pdf-edit-cancel) { mi
 .files-place.is-active .files-place-icon { color: var(--text); }
 .files-place-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .files-place-sep { height: 1px; margin: 6px 10px; background: var(--files-line); }
+/* A removable drive: the row opens it, the trailing button ejects it. */
+.files-place--volume { padding: 0 2px 0 0; cursor: default; }
+.files-place-open {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  height: 100%;
+  padding: 0 0 0 10px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.files-place--volume.is-unmounted .files-place-label { color: var(--muted); }
+.files-place-eject { flex: none; color: var(--muted); }
+.files-place-eject:hover { color: var(--text); }
 
 /* ── Main column ────────────────────────────────────────────── */
 .files-main {

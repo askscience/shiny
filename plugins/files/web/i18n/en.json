@@ -152,5 +152,14 @@
   "plugin.files.share.e2eHint": "Slower download, no progress bar.",
   "plugin.files.share.e2eSet": "End-to-end encrypted",
   "plugin.files.player.play": "Play",
-  "plugin.files.player.volume": "Volume"
+  "plugin.files.player.volume": "Volume",
+  "plugin.files.volume.eject": "Eject “{name}”",
+  "plugin.files.volume.ejected": "“{name}” can be removed",
+  "plugin.files.volume.ejectFailed": "Could not eject the drive",
+  "plugin.files.volume.mountFailed": "Could not open the drive",
+  "plugin.files.volume.noUdisks": "Mounting drives needs udisks2 on this machine",
+  "plugin.files.volume.connected": "Drive connected",
+  "plugin.files.volume.open": "Open",
+  "plugin.files.menu.automount": "Open drives automatically",
+  "plugin.files.toast.settingFailed": "Could not change the setting"
 }

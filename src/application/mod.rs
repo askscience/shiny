@@ -49,6 +49,7 @@ impl AppState {
             bluetooth: BluetoothService::new(),
             power: PowerService::new(),
             display: DisplayService::new(),
+            pointer: crate::services::pointer::PointerService::new(),
             touchbar: TouchBarService::new(),
             keyboard_backlight: KeyboardBacklightService::new(),
             screen_brightness: ScreenBrightnessService::new(),

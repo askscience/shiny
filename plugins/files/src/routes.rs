@@ -68,6 +68,11 @@ pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
         "files_empty_trash" => empty_trash(ctx),
         "files_search" => search(ctx),
         "files_recent" => recent(ctx),
+        "files_volumes" => volumes_list(ctx),
+        "files_volumes_mount" => volumes_action(ctx, VolumeAction::Mount),
+        "files_volumes_unmount" => volumes_action(ctx, VolumeAction::Unmount),
+        "files_volumes_eject" => volumes_action(ctx, VolumeAction::Eject),
+        "files_volumes_automount" => volumes_automount(ctx),
         other => return crate::share::routes::handle(&ctx, other),
     })
 }
@@ -812,7 +817,7 @@ fn rename(ctx: Arc<PluginCtx>) -> RouteHandler {
             if let Some(parent) = to.parent() {
                 tokio::fs::create_dir_all(parent).await?;
             }
-            tokio::fs::rename(&from, &to).await?;
+            fs_util::move_entry(&from, &to).await?;
             Ok(ok(json!({
                 "from": fs_util::rel_display(&home, &from),
                 "to": fs_util::rel_display(&home, &to),
@@ -838,8 +843,10 @@ fn delete(ctx: Arc<PluginCtx>) -> RouteHandler {
             if !tokio::fs::symlink_metadata(&path).await.is_ok() {
                 return Err(AppError::NotFound("file not found".into()));
             }
-            // Deleting from inside Trash is permanent; elsewhere it moves to Trash.
-            if fs_util::is_in_trash(&rel) {
+            // Deleting from inside Trash is permanent; elsewhere it moves to
+            // Trash. A drive has no Trash of ours (moving its files into the
+            // home would fill it), so there the window confirms and deletes.
+            if fs_util::is_in_trash(&rel) || crate::volumes::is_volume_path(&rel) {
                 fs_util::delete_permanent(&path).await?;
                 return Ok(ok(json!({ "deleted": fs_util::rel_display(&home, &path) })));
             }
@@ -908,6 +915,67 @@ fn recent(ctx: Arc<PluginCtx>) -> RouteHandler {
             let limit = q.limit.unwrap_or(40).clamp(1, 200);
             let entries = fs_util::recent(&home, limit).await?;
             Ok(ok(json!({ "entries": entries })))
+        }
+    })
+}
+
+/* ── removable drives (see volumes.rs) ──────────────────────── */
+
+#[derive(Clone, Copy)]
+enum VolumeAction {
+    Mount,
+    Unmount,
+    Eject,
+}
+
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct VolumeBody {
+    id: Option<String>,
+    enabled: Option<bool>,
+}
+
+fn volumes_list(ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req: Request| {
+        let _ = &ctx;
+        async move {
+            user_id(&req)?;
+            let list = crate::volumes::list().await;
+            Ok(ok(serde_json::to_value(list).unwrap_or_default()))
+        }
+    })
+}
+
+fn volumes_action(ctx: Arc<PluginCtx>, action: VolumeAction) -> RouteHandler {
+    bridged_route(move |req: Request| {
+        let _ = &ctx;
+        async move {
+            user_id(&req)?;
+            let axum::Json(body) = axum::Json::<VolumeBody>::from_request(req, &())
+                .await
+                .map_err(|e| AppError::BadRequest(format!("invalid JSON body: {e}")))?;
+            let id = body.id.unwrap_or_default();
+            let result = match action {
+                VolumeAction::Mount => crate::volumes::mount(&id).await.map(|path| json!({ "path": path })),
+                VolumeAction::Unmount => crate::volumes::unmount(&id).await.map(|()| json!({ "id": id })),
+                VolumeAction::Eject => crate::volumes::eject(&id).await.map(|()| json!({ "id": id })),
+            };
+            result.map(ok).map_err(AppError::BadRequest)
+        }
+    })
+}
+
+fn volumes_automount(ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req: Request| {
+        let _ = &ctx;
+        async move {
+            user_id(&req)?;
+            let axum::Json(body) = axum::Json::<VolumeBody>::from_request(req, &())
+                .await
+                .map_err(|e| AppError::BadRequest(format!("invalid JSON body: {e}")))?;
+            let on = body.enabled.unwrap_or(true);
+            crate::volumes::set_automount(on).map_err(AppError::Internal)?;
+            Ok(ok(json!({ "automount": on })))
         }
     })
 }

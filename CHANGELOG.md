@@ -4,6 +4,22 @@
 
 ### Added
 
+- Settings has a **Mouse & touchpad** section: tap to click, natural
+  scrolling, pointer speed, disable while typing, secondary click (two
+  fingers or corner) and scrolling (two fingers or edge) for touchpads;
+  speed, acceleration, natural scrolling and left-handed buttons for mice.
+  The options are the libinput driver's, set on the X server directly
+  (`/api/pointer`), remembered in `~/.config/liteaura/pointer.json` and
+  applied again when a mouse is plugged in or the session starts.
+- Files 0.1.1: USB sticks, SD cards and external disks appear under the
+  places, with an eject button. A drive is opened as soon as it is plugged
+  in (it can be turned off in the window menu) and a notification offers to
+  show it; a drive that is not mounted opens when picked. Moving files
+  between the home and a drive works, and deleting on a drive asks first and
+  is permanent, since a drive has no Trash. Mounting uses udisks2, which the
+  package now recommends; without it, drives that are already mounted can
+  still be browsed.
+
 - Plugins can be **hybrid** (`kind = "hybrid"` in `plugin.toml`): a native
   plugin with tools and routes whose window is its own framed web page, served
   like a Craft web app. This is what lets a game made with Godot run in a

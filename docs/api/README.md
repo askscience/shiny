@@ -87,7 +87,7 @@ into a header by core so a plugin's own axum can read them.
 | Plugins | `GET /api/plugins`, `GET /api/plugins/active`, `POST /api/plugins/install`, `POST /api/plugins/uninstall`, `POST /api/plugins/activate`, `POST /api/plugins/deactivate`, `POST /api/plugins/window/closed`, `POST /api/plugins/session/reset`, `GET /api/plugins/install.log`, `GET /api/plugins/store`, `POST /api/plugins/store/{refresh,install,mcp}` |
 | Remote | `GET /api/remote/status`, `POST /api/remote/{enable,rotate,pair,unpair}`, `GET /api/remote/qr`, `POST /api/remote/tailscale/{enable,disable}`, `GET /api/remote/tailscale/qr` |
 | Travel | `/api/trips…`, `/api/locations`, `/api/map…`, `/api/navigate/start`, `/api/diary…` |
-| Host | `/api/network…`, `/api/audio…`, `/api/battery…`, `/api/bluetooth…`, `/api/power…`, `/api/display`, `/api/touchbar`, `/api/keyboard/backlight`, `/api/screen/brightness` |
+| Host | `/api/network…`, `/api/audio…`, `/api/battery…`, `/api/bluetooth…`, `/api/power…`, `/api/display`, `/api/pointer`, `/api/touchbar`, `/api/keyboard/backlight`, `/api/screen/brightness` |
 
 The plugin endpoints (`/api/plugins/*`, remote, etc.) are documented in
 [plugin security](../plugins/security.md) and

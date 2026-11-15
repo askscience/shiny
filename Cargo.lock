@@ -6833,6 +6833,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "uuid",
+ "x11rb",
  "zbus",
  "zip 0.6.6",
 ]
@@ -6942,7 +6943,7 @@ version = "0.1.0"
 
 [[package]]
 name = "shiny-files-plugin"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "axum",
@@ -6960,6 +6961,8 @@ dependencies = [
  "sha2 0.10.9",
  "shiny-plugin-sdk",
  "tokio",
+ "tracing",
+ "zbus",
  "zip 0.6.6",
 ]
 

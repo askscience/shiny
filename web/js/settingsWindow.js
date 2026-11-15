@@ -11,6 +11,7 @@
  *   Appearance — theme, accent, gradient, interface language, window surface,
  *                top bar, background
  *   Desktop    — tiling layout
+ *   Mouse & touchpad — pointer speed, tap to click, scrolling, buttons
  *   Assistant  — name, provider, model
  *   Voice      — language, speech recognition, speech output
  *   Images     — local image generation model, quality + downloads
@@ -41,6 +42,7 @@ import { createVoiceSection } from './settings/voice.js';
 import { createImageSection } from './settings/image.js';
 import { createMusicSection } from './settings/music.js';
 import { createDesktopSection } from './settings/desktop.js';
+import { createPointerSection } from './settings/pointer.js';
 import { createSystemSection } from './settings/system.js';
 import { createTouchBarSection } from './settings/touchbar.js';
 import { createRemoteSection } from './settings/remote.js';
@@ -69,6 +71,13 @@ const SECTION_DEFS = [
     descKey: 'settings.section.desktop.desc',
     icon: 'ui/monitor',
     build: createDesktopSection,
+  },
+  {
+    id: 'pointer',
+    labelKey: 'settings.section.pointer',
+    descKey: 'settings.section.pointer.desc',
+    icon: 'ui/touchpad',
+    build: createPointerSection,
   },
   {
     id: 'assistant',

@@ -160,5 +160,14 @@
   "plugin.files.share.e2eHint": "Download più lento, senza barra di avanzamento.",
   "plugin.files.share.e2eSet": "Cifrato end-to-end",
   "plugin.files.player.play": "Riproduci",
-  "plugin.files.player.volume": "Volume"
+  "plugin.files.player.volume": "Volume",
+  "plugin.files.volume.eject": "Espelli “{name}”",
+  "plugin.files.volume.ejected": "“{name}” può essere rimosso",
+  "plugin.files.volume.ejectFailed": "Impossibile espellere l'unità",
+  "plugin.files.volume.mountFailed": "Impossibile aprire l'unità",
+  "plugin.files.volume.noUdisks": "Per montare le unità serve udisks2 su questa macchina",
+  "plugin.files.volume.connected": "Unità collegata",
+  "plugin.files.volume.open": "Apri",
+  "plugin.files.menu.automount": "Apri le unità automaticamente",
+  "plugin.files.toast.settingFailed": "Impossibile modificare l'impostazione"
 }

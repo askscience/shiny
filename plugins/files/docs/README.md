@@ -9,7 +9,7 @@ helpers every other plugin uses.
 |---|---|
 | Plugin name | `files` |
 | Category | `System` |
-| Version / API level | `0.1.0` / `1` |
+| Version / API level | `0.1.1` / `1` |
 | Crate | `shiny-files-plugin` (`libshiny_files_plugin.so`) |
 | Database | none |
 | Web surface | `plugins/files/web/plugin.js` (prefix `files-*`) |
@@ -20,6 +20,11 @@ helpers every other plugin uses.
 - A **Files window**: grid/list, lazy thumbnails, preview (Space), double-click
   opens a file in its owning app, upload, a `.Trash`, and a Sushi-style
   quick-look — a compact bare lightbox (rounded file, no frame) with hover arrows and a streaming video player with floating glass controls.
+- **Removable drives**: USB sticks, SD cards and external disks are listed
+  under the places with an eject button, mounted on insertion through udisks2
+  (automount can be turned off in the window menu), and browsed as
+  `@volumes/<id>/…`. `web/hud.js` polls the list for the whole session and
+  raises a "Drive connected" notification. See [routes.md](routes.md#removable-drives).
 - A **home per user**: `$HOME/.shiny/home/<user-id>/` with the classic folders
   (`Desktop`, `Documents`, `Downloads`, `Music`, `Pictures`, `Public`,
   `Templates`, `Videos`), provisioned by the `on_user_registered` hook and
@@ -56,9 +61,11 @@ plugins/files/
 │   ├── routes.rs     /api/files/* handlers
 │   ├── tools/mod.rs  10 file_* agent tools
 │   ├── fs_util.rs    home provisioning, sandbox, trash, search
+│   ├── volumes.rs    removable drives: mounts, udisks2, automount
 │   └── preview.rs    MIME/type detection, render dispatch
 └── web/
     ├── plugin.js     the Files window
+    ├── hud.js        drive watch + "Drive connected" notification
     └── icon.svg
 ```
 

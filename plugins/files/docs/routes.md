@@ -27,6 +27,28 @@ routes return bytes/streams directly). Registered in
 | `POST` | `/api/files/restore` | `{ name }` | Restore from `.Trash` (`name` or `.Trash/name`). |
 | `POST` | `/api/files/empty-trash` | — | Permanently delete `.Trash` contents. |
 
+### Removable drives
+
+Every route above also takes a path on a mounted removable drive,
+`@volumes/<kernel name>/…` (`@volumes/sdb1/Photos`): `fs_util::resolve` maps it
+onto the drive's mount point with the same escape checks as the home, and
+listings return paths in the same form. Only removable devices qualify (USB
+transport, the kernel's removable flag, or an SD card), never a system disk.
+On a drive `delete` is permanent (there is no Trash there) and `rename`
+between the home and a drive copies, then removes the original.
+
+| Method | Path | Query / body | Returns |
+|---|---|---|---|
+| `GET` | `/api/files/volumes` | — | `{ volumes, can_mount, automount, reason? }`; each volume `{ id, label, fs_type, size, drive, mounted, path, can_eject }`. `can_mount` is false without udisks2 (`reason` says why); the list then comes from `lsblk`. |
+| `POST` | `/api/files/volumes/mount` | `{ id }` | `{ path }` (`@volumes/<id>`). Through udisks2, as the signed-in user. |
+| `POST` | `/api/files/volumes/unmount` | `{ id }` | `{ id }` |
+| `POST` | `/api/files/volumes/eject` | `{ id }` | Unmounts every filesystem of the drive, then powers it off (or ejects the medium). |
+| `POST` | `/api/files/volumes/automount` | `{ enabled }` | `{ automount }`. Stored in `~/.config/liteaura/files.json`; default on. |
+
+Automount: the plugin follows udisks2's object manager and mounts a filesystem
+that appears on a removable drive (a stick plugged in). Drives already present
+when the plugin starts are left alone, so an unmount survives a restart.
+
 ### Link sharing (Gokapi)
 
 Handlers in [`src/share/routes.rs`](../src/share/routes.rs); the design notes

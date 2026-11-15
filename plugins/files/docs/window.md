@@ -16,7 +16,12 @@ export default {
 
 ## Layout
 
-- A sidebar of classic places (Home, Trash, the XDG folders). In a window
+- A sidebar of classic places (Home, Trash, the XDG folders) and, below
+  them, the removable drives: each row opens its drive (mounting it first
+  when needed) and carries an eject button. The breadcrumb of a drive starts
+  at its name; Up stops at its root; deleting there is permanent and asked
+  first; the drive on screen going away sends the window home. The app menu
+  has "Open drives automatically". In a window
   up to 560px wide, and on a phone, the places become a strip that scrolls
   sideways above the content.
 - The window bar (`data-window-bar`, merged with the title row by the tile

@@ -8,6 +8,7 @@ pub mod openai;
 pub mod web_search;
 pub mod gpsd;
 pub mod network;
+pub mod pointer;
 pub mod power;
 pub mod osm;
 pub mod diary_gen;

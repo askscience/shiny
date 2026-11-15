@@ -112,6 +112,10 @@ if-addrs = "0.15"
 # integration (src/services/unix_user.rs). On other platforms the module is a
 # stub, so this stays Linux-only.
 libc = "0.2"
+# XInput2 device properties for the mouse/touchpad settings
+# (src/services/pointer.rs): the libinput driver's options, set without the
+# `xinput` binary. Pure Rust; already in the tree through the capture plugin.
+x11rb = { version = "0.13", default-features = false, features = ["xinput"] }
 
 [features]
 iroh = ["dep:iroh", "dep:shiny-iroh-proto"]

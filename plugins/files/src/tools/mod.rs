@@ -214,7 +214,7 @@ impl Tool for FileMove {
         if let Some(parent) = to.parent() {
             tokio::fs::create_dir_all(parent).await?;
         }
-        tokio::fs::rename(&from, &to).await?;
+        fs_util::move_entry(&from, &to).await?;
         Ok(ActionOutcome::ok(
             "file_move",
             json!({
@@ -288,6 +288,13 @@ impl Tool for FileDelete {
         let home = home_for(&req).await?;
         if tokio::fs::symlink_metadata(&path).await.is_err() {
             return Err(AppError::NotFound("file not found".into()));
+        }
+        if crate::volumes::is_volume_path(&rel) {
+            // No Trash on a drive: deleting there is permanent, so it stays
+            // with the user (the Files window asks first).
+            return Err(AppError::BadRequest(
+                "files on a removable drive cannot be moved to Trash; ask the user to delete them in Files".into(),
+            ));
         }
         if fs_util::is_in_trash(&rel) {
             fs_util::delete_permanent(&path).await?;

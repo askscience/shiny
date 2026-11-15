@@ -48,6 +48,11 @@
     { "name": "home",         "dst": "ui/home.svg",         "src": "places/symbolic/user-home-symbolic.svg" },
     { "name": "trash",        "dst": "ui/trash.svg",        "src": "places/symbolic/user-trash-symbolic.svg" },
     { "name": "monitor",      "dst": "ui/monitor.svg",      "src": "devices/symbolic/video-display-symbolic.svg" },
+    { "name": "mouse",        "dst": "ui/mouse.svg",        "src": "devices/symbolic/input-mouse-symbolic.svg" },
+    { "name": "touchpad",     "dst": "ui/touchpad.svg",     "src": "devices/symbolic/input-touchpad-symbolic.svg" },
+    { "name": "usb-drive",    "dst": "ui/usb-drive.svg",    "src": "devices/symbolic/drive-removable-media-usb-pendrive-symbolic.svg" },
+    { "name": "drive",        "dst": "ui/drive.svg",        "src": "devices/symbolic/drive-removable-media-symbolic.svg" },
+    { "name": "eject",        "dst": "ui/eject.svg",        "src": "actions/symbolic/media-eject-symbolic.svg" },
     { "name": "download",     "dst": "ui/download.svg",     "src": "actions/symbolic/browser-download-symbolic.svg" },
 
     { "name": "search",       "dst": "ui/search.svg",       "src": "actions/symbolic/search-symbolic.svg" },

@@ -18,6 +18,10 @@ The classic home folders (`Desktop`, `Documents`, `Downloads`, `Music`,
 - Read before you write when the user's intent depends on current content.
 - Prefer `file_list` to discover what exists instead of guessing names.
 - `file_delete` moves to Trash (recoverable with `file_restore`).
+- A mounted USB stick or SD card is reachable as `@volumes/<id>/…` (e.g.
+  `@volumes/sdb1/Photos`); the Files window shows its id in the path. Listing,
+  reading, writing, copying and moving work there. `file_delete` refuses paths
+  on a drive (there is no Trash on it): tell the user to delete those in Files.
 
 ## Tools
 

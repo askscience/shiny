@@ -25,6 +25,7 @@ pub mod battery;
 pub mod bluetooth;
 pub mod power;
 pub mod display;
+pub mod pointer;
 pub mod touchbar;
 pub mod keyboard_backlight;
 pub mod screen_brightness;
@@ -53,6 +54,7 @@ use crate::services::battery::BatteryService;
 use crate::services::bluetooth::BluetoothService;
 use crate::services::diary_gen::DiaryGenerator;
 use crate::services::display::DisplayService;
+use crate::services::pointer::PointerService;
 use crate::services::gpsd::GpsdService;
 use crate::services::network::NetworkService;
 use crate::services::ollama::OllamaClient;
@@ -196,6 +198,8 @@ pub struct AppState {
     pub power: PowerService,
     /// Host interface scale (webview page zoom); the kiosk shell applies it.
     pub display: DisplayService,
+    /// Host mouse/touchpad options (libinput device properties over XInput2).
+    pub pointer: PointerService,
     /// Host Touch Bar capability (T2 MacBook); the web UI listens for its keys.
     pub touchbar: TouchBarService,
     /// Host keyboard backlight LED (the Mac's `kbd_backlight`).
@@ -807,6 +811,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/power/off", post(power::power_off))
         .route("/api/power/suspend", post(power::suspend))
         .route("/api/display", get(display::status).put(display::set_scale))
+        .route("/api/pointer", get(pointer::status).put(pointer::update))
         .route("/api/touchbar", get(touchbar::status))
         .route(
             "/api/keyboard/backlight",

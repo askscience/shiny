@@ -23,6 +23,9 @@ use crate::tools::{
 
 shiny_plugin_sdk::ctx_plugin!(FilesPlugin);
 
+/// The drive automount watcher, stopped with the plugin.
+static VOLUME_WATCH: std::sync::Mutex<Option<tokio::task::AbortHandle>> = std::sync::Mutex::new(None);
+
 /// Persona fragment the agent system prompt sees when this plugin is active.
 pub const PERSONA: &str = "a file manager; browse, preview and organize the user's home folders";
 
@@ -40,6 +43,12 @@ fn route_specs() -> Vec<RouteSpec> {
         RouteSpec::get("/api/files/download", "files_download"),
         RouteSpec::get("/api/files/search", "files_search"),
         RouteSpec::get("/api/files/recent", "files_recent"),
+        // Removable drives (src/volumes.rs).
+        RouteSpec::get("/api/files/volumes", "files_volumes"),
+        RouteSpec::post("/api/files/volumes/mount", "files_volumes_mount"),
+        RouteSpec::post("/api/files/volumes/unmount", "files_volumes_unmount"),
+        RouteSpec::post("/api/files/volumes/eject", "files_volumes_eject"),
+        RouteSpec::post("/api/files/volumes/automount", "files_volumes_automount"),
         RouteSpec::post("/api/files/upload", "files_upload"),
         RouteSpec::post("/api/files/write", "files_write"),
         RouteSpec::post("/api/files/mkdir", "files_mkdir"),
@@ -94,13 +103,21 @@ impl Plugin for FilesPlugin {
         ]);
     }
 
-    /// Create `file_shares` if its migration has not run, and bring the
+    /// Create `file_shares` if its migration has not run, start the drive
+    /// automount watcher, and bring the
     /// Gokapi server and its public gate back up when sharing was left enabled.
     ///
     /// `on_load` runs on the host executor: the supervisor's `tokio::spawn`
     /// must happen inside an `rt::spawn` job on the plugin runtime.
     async fn on_load(&self, ctx: Arc<PluginCtx>) {
         crate::share::store::ensure_schema(ctx.db());
+        // Mount USB sticks and SD cards as they are plugged in.
+        shiny_plugin_sdk::rt::spawn(async {
+            let task = tokio::spawn(crate::volumes::watch());
+            if let Some(old) = VOLUME_WATCH.lock().unwrap_or_else(|e| e.into_inner()).replace(task.abort_handle()) {
+                old.abort();
+            }
+        });
         if crate::share::server::load_instance()
             .map(|i| i.enabled)
             .unwrap_or(false)
@@ -115,6 +132,9 @@ impl Plugin for FilesPlugin {
 
     /// Stop the Gokapi child with the plugin.
     async fn on_unload(&self, _ctx: Arc<PluginCtx>) {
+        if let Some(task) = VOLUME_WATCH.lock().unwrap_or_else(|e| e.into_inner()).take() {
+            task.abort();
+        }
         let _ = shiny_plugin_sdk::rt::bridge(crate::share::server::stop_server()).await;
     }
 

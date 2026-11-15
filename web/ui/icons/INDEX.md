@@ -80,8 +80,10 @@ Core UI and the Files plugin: windows, folders, file types, navigation. Folder a
 | ![](ui/doc.svg) | `ui/doc` | `mimetypes/symbolic/x-office-document-symbolic.svg` |
 | ![](ui/dodge.svg) | `ui/dodge` | `— in-house` |
 | ![](ui/download.svg) | `ui/download` | `actions/symbolic/browser-download-symbolic.svg` |
+| ![](ui/drive.svg) | `ui/drive` | `devices/symbolic/drive-removable-media-symbolic.svg` |
 | ![](ui/droplet.svg) | `ui/droplet` | `— in-house` |
 | ![](ui/edge.svg) | `ui/edge` | `— in-house` |
+| ![](ui/eject.svg) | `ui/eject` | `actions/symbolic/media-eject-symbolic.svg` |
 | ![](ui/emboss.svg) | `ui/emboss` | `— in-house` |
 | ![](ui/eraser.svg) | `ui/eraser` | `— in-house` |
 | ![](ui/expand.svg) | `ui/expand` | `— in-house` |
@@ -134,6 +136,7 @@ Core UI and the Files plugin: windows, folders, file types, navigation. Folder a
 | ![](ui/minus.svg) | `ui/minus` | `— in-house` |
 | ![](ui/monitor.svg) | `ui/monitor` | `devices/symbolic/video-display-symbolic.svg` |
 | ![](ui/more.svg) | `ui/more` | `— in-house` |
+| ![](ui/mouse.svg) | `ui/mouse` | `devices/symbolic/input-mouse-symbolic.svg` |
 | ![](ui/move.svg) | `ui/move` | `— in-house` |
 | ![](ui/music.svg) | `ui/music` | `mimetypes/symbolic/audio-x-generic-symbolic.svg` |
 | ![](ui/navigator.svg) | `ui/navigator` | `— in-house` |
@@ -181,11 +184,13 @@ Core UI and the Files plugin: windows, folders, file types, navigation. Folder a
 | ![](ui/synthme.svg) | `ui/synthme` | `— in-house` |
 | ![](ui/text-color.svg) | `ui/text-color` | `— in-house` |
 | ![](ui/threshold.svg) | `ui/threshold` | `— in-house` |
+| ![](ui/touchpad.svg) | `ui/touchpad` | `devices/symbolic/input-touchpad-symbolic.svg` |
 | ![](ui/trash.svg) | `ui/trash` | `places/symbolic/user-trash-symbolic.svg` |
 | ![](ui/type.svg) | `ui/type` | `— in-house` |
 | ![](ui/underline.svg) | `ui/underline` | `— in-house` |
 | ![](ui/undo.svg) | `ui/undo` | `— in-house` |
 | ![](ui/upload.svg) | `ui/upload` | `— in-house` |
+| ![](ui/usb-drive.svg) | `ui/usb-drive` | `devices/symbolic/drive-removable-media-usb-pendrive-symbolic.svg` |
 | ![](ui/user.svg) | `ui/user` | `— in-house` |
 | ![](ui/video.svg) | `ui/video` | `mimetypes/symbolic/video-x-generic-symbolic.svg` |
 | ![](ui/volume.svg) | `ui/volume` | `— in-house` |

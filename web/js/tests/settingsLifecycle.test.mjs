@@ -117,7 +117,7 @@ globalThis.clearInterval = (timer) => { timers.delete(timer); nativeClearInterva
 
 const { default: settings, selectSettingsSection } = await import('../settingsWindow.js');
 const baseline = window.count();
-const expectedSections = ['account', 'appearance', 'desktop', 'assistant', 'voice', 'images', 'music', 'remote', 'system'];
+const expectedSections = ['account', 'appearance', 'desktop', 'pointer', 'assistant', 'voice', 'images', 'music', 'remote', 'system'];
 for (let mount = 0; mount < 3; mount++) {
   selectSettingsSection('music');
   const element = settings.mount();

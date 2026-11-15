@@ -293,8 +293,8 @@ words rising as they are said, the voice bar's state label, depth's accent aura
 (`#motion-aura`, following `<html data-voice>`) and pointer parallax, and the
 three theme view transitions (`<html data-vt>` while one runs).
 
-Settings keeps its 10 existing section IDs (Touch Bar appears only on hosts that
-expose one) and direct navigation. The surface follows the Installer's
+Settings has 11 section IDs (Touch Bar appears only on hosts that
+expose one; Mouse & touchpad follows Desktop) and direct navigation. The surface follows the Installer's
 three-column grammar: a numbered section rail, the active panel on the middle
 stage, and a live "at a glance" manifest, in the editorial window language
 (`web/css/settings.css`): the window bar carries a mono "SETTINGS" name and one

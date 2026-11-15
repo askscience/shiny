@@ -17,6 +17,12 @@ import {
  * New folder and Upload. Lazy thumbnails (server PNG / PDF.js / video frame /
  * text mini) and AI wiring (`file_*` outcomes) work as before.
  *
+ * Devices: removable drives (USB sticks, SD cards) are listed under the
+ * places with an eject button. A mounted drive is browsed as `@volumes/<id>/…`
+ * (src/volumes.rs); one that is not mounted yet mounts when picked. The
+ * plugin's hud.js polls the list and shares it here (`files:volumes`). A
+ * drive has no Trash, so deleting there is permanent and asked first.
+ *
  * Touch: on a coarse pointer one tap opens an entry (a mouse keeps the
  * double-click), a long press opens the item menu (core contextMenu.js), and
  * "Select" — from the menus — enters a selection mode where taps toggle
@@ -70,6 +76,9 @@ let forward = [];
 let searchMode = false;
 let query = '';
 let mounted = false;
+/** Removable drives (`GET /api/files/volumes`). */
+let volumes = [];
+let volumesInfo = { can_mount: false, automount: true };
 let shownCount = 0;      // entries on screen, for the status line
 let revealNext = false;  // the next render follows a folder load: reveal it
 
@@ -160,6 +169,9 @@ const apiDelete = (path) => apiFetch('/api/files/delete', { method: 'POST', body
 const apiRename = (from, to) => apiFetch('/api/files/rename', { method: 'POST', body: JSON.stringify({ from, to }) });
 const apiRestore = (name) => apiFetch('/api/files/restore', { method: 'POST', body: JSON.stringify({ name }) });
 const apiEmptyTrash = () => apiFetch('/api/files/empty-trash', { method: 'POST' });
+const apiVolumes = () => apiFetch('/api/files/volumes').then((r) => r?.data || null);
+const apiVolume = (action, id) => apiFetch(`/api/files/volumes/${action}`, { method: 'POST', body: JSON.stringify({ id }) });
+const apiAutomount = (enabled) => apiFetch('/api/files/volumes/automount', { method: 'POST', body: JSON.stringify({ enabled }) });
 /** The newest files of the classic home folders, newest first. */
 export async function apiRecent(limit = 40) {
   const res = await apiFetch(`/api/files/recent?limit=${limit}`);
@@ -174,6 +186,17 @@ async function apiSearch(q, path = '') {
 
 function isTrashPath(p) {
   return p === '.Trash' || (p || '').startsWith('.Trash/');
+}
+/** `@volumes/<id>/…`: a path on a removable drive. */
+const VOLUMES = '@volumes';
+function isVolumePath(p) {
+  return (p || '').startsWith(`${VOLUMES}/`);
+}
+function volumeIdOf(p) {
+  return isVolumePath(p) ? p.split('/')[1] || '' : '';
+}
+function volumeRoot(id) {
+  return `${VOLUMES}/${id}`;
 }
 function parentOf(p) {
   const parts = (p || '').split('/').filter(Boolean);
@@ -518,6 +541,107 @@ function renderPlaces() {
   sep.className = 'files-place-sep';
   placesEl.appendChild(sep);
   BOOKMARKS.forEach(addPlace);
+  if (volumes.length) {
+    const devSep = document.createElement('div');
+    devSep.className = 'files-place-sep';
+    placesEl.appendChild(devSep);
+    volumes.forEach(addVolume);
+  }
+}
+
+/** A drive in the places: picking it opens it (mounting it first); the
+ *  eject button unmounts every filesystem of the drive and powers it off. */
+function addVolume(vol) {
+  const root = volumeRoot(vol.id);
+  const active = cwd === root || cwd.startsWith(`${root}/`);
+  const row = document.createElement('div');
+  row.className = 'files-place files-place--volume' + (active ? ' is-active' : '') + (vol.mounted ? '' : ' is-unmounted');
+  row.dataset.path = root;
+  const open = controlButton();
+  open.type = 'button';
+  open.className = 'files-place-open';
+  open.title = vol.drive ? `${vol.label} · ${vol.drive}` : vol.label;
+  const ic = document.createElement('span');
+  ic.className = 'files-place-icon';
+  void setIcon(ic, 'ui/usb-drive', { size: 16 });
+  const label = document.createElement('span');
+  label.className = 'files-place-label';
+  label.textContent = vol.label;
+  open.append(ic, label);
+  open.addEventListener('click', () => void openVolume(vol));
+  row.appendChild(open);
+  if (vol.mounted || vol.can_eject) {
+    const eject = iconButton({
+      icon: 'ui/eject',
+      size: 'sm',
+      label: t('plugin.files.volume.eject', { name: vol.label }, `Eject “${vol.label}”`),
+      onClick: (e) => { e.stopPropagation(); void ejectVolume(vol); },
+    });
+    eject.classList.add('files-place-eject');
+    eject.disabled = !volumesInfo.can_mount;
+    row.appendChild(eject);
+  }
+  placesEl.appendChild(row);
+}
+
+async function openVolume(vol) {
+  if (!vol.mounted) {
+    if (!volumesInfo.can_mount) {
+      toast(t('plugin.files.volume.noUdisks', null, 'Mounting drives needs udisks2 on this machine'), { type: 'error' });
+      return;
+    }
+    try {
+      await apiVolume('mount', vol.id);
+    } catch (e) {
+      toast(e.message || t('plugin.files.volume.mountFailed', null, 'Could not open the drive'), { type: 'error' });
+      return;
+    }
+    await refreshVolumes();
+  }
+  await navigate(volumeRoot(vol.id));
+}
+
+async function ejectVolume(vol) {
+  const onIt = isVolumePath(cwd) && volumeIdOf(cwd) === vol.id;
+  if (onIt) await navigate('');
+  try {
+    await apiVolume('eject', vol.id);
+    toast(t('plugin.files.volume.ejected', { name: vol.label }, `“${vol.label}” can be removed`));
+  } catch (e) {
+    toast(e.message || t('plugin.files.volume.ejectFailed', null, 'Could not eject the drive'), { type: 'error' });
+  }
+  await refreshVolumes();
+}
+
+/** Take a new drive list (from hud.js's poll or our own fetch). */
+function applyVolumes(data) {
+  if (!data) return;
+  const before = JSON.stringify(volumes);
+  volumes = Array.isArray(data.volumes) ? data.volumes : [];
+  volumesInfo = { can_mount: !!data.can_mount, automount: data.automount !== false };
+  if (!mounted || JSON.stringify(volumes) === before) return;
+  // The drive on screen went away (pulled out, ejected elsewhere): go home.
+  const id = volumeIdOf(cwd);
+  if (id && !volumes.some((v) => v.id === id && v.mounted)) {
+    void navigate('', { push: false });
+    return;
+  }
+  renderPlaces();
+  if (isVolumePath(cwd)) renderHeader();
+}
+
+async function refreshVolumes() {
+  try { applyVolumes(await apiVolumes()); } catch (_) { /* no drives then */ }
+}
+
+async function toggleAutomount() {
+  const next = !volumesInfo.automount;
+  try {
+    await apiAutomount(next);
+    volumesInfo.automount = next;
+  } catch (e) {
+    toast(e.message || t('plugin.files.toast.settingFailed', null, 'Could not change the setting'), { type: 'error' });
+  }
 }
 
 /* ── header ─────────────────────────────────────────────────── */
@@ -627,9 +751,18 @@ function renderHeader() {
     pathbarEl.appendChild(crumb(t('plugin.files.place.recent', null, 'Recent'), null));
     return;
   }
-  const segs = cwd.split('/').filter(Boolean);
-  pathbarEl.appendChild(crumb(homeLabel, segs.length ? '' : null));
+  let segs = cwd.split('/').filter(Boolean);
   let acc = '';
+  if (isVolumePath(cwd)) {
+    // A drive's root crumb is its name; the segments follow from there.
+    const id = segs[1] || '';
+    acc = volumeRoot(id);
+    segs = segs.slice(2);
+    const vol = volumes.find((v) => v.id === id);
+    pathbarEl.appendChild(crumb(vol?.label || id, segs.length ? acc : null));
+  } else {
+    pathbarEl.appendChild(crumb(homeLabel, segs.length ? '' : null));
+  }
   segs.forEach((seg, i) => {
     acc = acc ? `${acc}/${seg}` : seg;
     const sep = document.createElement('span');
@@ -879,6 +1012,7 @@ async function refresh() {
 }
 function goUp() {
   if (!cwd) return;
+  if (isVolumePath(cwd) && cwd === volumeRoot(volumeIdOf(cwd))) return;
   void navigate(parentOf(cwd));
 }
 function goBack() {
@@ -1028,6 +1162,7 @@ function openAppMenu(anchor) {
     { type: 'separator' },
     { type: 'item', label: t('plugin.files.menu.showHidden', null, 'Show hidden files'), icon: 'ui/eye', checked: showHidden, onClick: toggleHidden },
     { type: 'item', label: t('plugin.files.menu.view', null, 'View'), icon: view === 'grid' ? 'ui/grid' : 'ui/list', onClick: toggleView },
+    { type: 'item', label: t('plugin.files.menu.automount', null, 'Open drives automatically'), icon: 'ui/usb-drive', checked: volumesInfo.automount, disabled: !volumesInfo.can_mount, onClick: () => void toggleAutomount() },
     { type: 'separator' },
     { type: 'item', label: t('plugin.files.menu.emptyTrash', null, 'Empty Trash'), icon: 'ui/trash', danger: true, disabled: !trashed, onClick: () => void emptyTrash() },
   ], r.left, r.bottom + 6);
@@ -1117,6 +1252,8 @@ async function renameEntry(entry) {
 }
 async function removeEntries(list, permanent) {
   if (!list.length) return;
+  // A drive has no Trash: deleting there is always permanent.
+  permanent = permanent || list.some((entry) => isVolumePath(entry.path));
   const label = list.length === 1
     ? (permanent
       ? t('plugin.files.dialog.deleteOne', { name: list[0].name }, `Permanently delete “${list[0].name}”?`)
@@ -1819,6 +1956,7 @@ export function mountFilesTile() {
   tileEl.tabIndex = 0;
 
   mounted = true;
+  void refreshVolumes();
   if (pendingReveal) {
     const path = pendingReveal;
     pendingReveal = null;
@@ -1918,7 +2056,7 @@ function onKeyDown(e) {
     case 'ArrowLeft': e.preventDefault(); goUp(); return;
     case 'F2': { if (trashed) return; const first = selectionEntries()[0]; if (first) { e.preventDefault(); void renameEntry(first); } return; }
     case 'Delete':
-    case 'Backspace': { if (selection.size) { e.preventDefault(); void removeEntries(selectionEntries(), trashed); } return; }
+    case 'Backspace': { if (selection.size) { e.preventDefault(); void removeEntries(selectionEntries(), trashed || isVolumePath(cwd)); } return; }
     default: break;
   }
 }
@@ -1984,6 +2122,8 @@ export function wireFilesEvents() {
   window.addEventListener('app:notification-action', (e) => {
     if (e.detail?.action === 'restore') void navigate('.Trash');
   });
+  // hud.js polls the drive list for the whole session and shares it.
+  window.addEventListener('files:volumes', (e) => applyVolumes(e.detail));
   // Other apps "reveal" saved files here (web/js/files.js).
   window.addEventListener('plugin:focus', (e) => {
     if (e.detail?.name !== FILES_PLUGIN) return;
@@ -2027,6 +2167,9 @@ export function filesContextMenu(ctx) {
   items.push({ type: 'separator' });
   if (trashed) {
     items.push({ type: 'item', label: t('plugin.files.ctx.restore', null, 'Restore'), icon: 'ui/refresh', disabled: !targets.length, onClick: () => void restoreEntries(targets) });
+    items.push({ type: 'item', label: t('plugin.files.ctx.deletePermanently', null, 'Delete permanently'), icon: 'ui/trash', danger: true, disabled: !targets.length, onClick: () => void removeEntries(targets, true) });
+  } else if (isVolumePath(rel || cwd)) {
+    items.push({ type: 'item', label: t('plugin.files.ctx.rename', null, 'Rename…'), icon: 'ui/pencil', disabled: targets.length !== 1, onClick: () => targets.length === 1 && void renameEntry(targets[0]) });
     items.push({ type: 'item', label: t('plugin.files.ctx.deletePermanently', null, 'Delete permanently'), icon: 'ui/trash', danger: true, disabled: !targets.length, onClick: () => void removeEntries(targets, true) });
   } else {
     items.push({ type: 'item', label: t('plugin.files.ctx.shareLink', null, 'Share link…'), icon: 'ui/link', disabled: targets.length !== 1, onClick: () => targets.length === 1 && void openShareDialog(targets[0]) });

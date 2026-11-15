@@ -6,5 +6,6 @@ pub mod preview;
 pub mod routes;
 pub mod share;
 pub mod tools;
+pub mod volumes;
 
 pub use plugin::FilesPlugin;

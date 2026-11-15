@@ -1,6 +1,6 @@
 [package]
 name = "shiny-files-plugin"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 
 [lib]
@@ -33,3 +33,9 @@ libc = "0.2"
 # both already in the workspace lock (mail, browser).
 ring = "0.17"
 base64 = "0.22"
+tracing = "0.1"
+
+# Removable drives (src/volumes.rs): UDisks2 over the system D-Bus to list,
+# mount, unmount, eject and automount USB sticks. Same version core uses.
+[target.'cfg(target_os = "linux")'.dependencies]
+zbus = "5"
