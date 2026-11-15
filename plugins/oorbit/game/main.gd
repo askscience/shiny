@@ -23,7 +23,7 @@ const CLICK_SLOP := 6.0
 const ZOOM_MIN := 1.0
 const ZOOM_MAX := 5.0
 const ZOOM_STEP := 1.15
-const PIXEL_ZOOM_MAX := 2.4
+const PIXEL_ZOOM_MAX := 1.7
 ## Distance of the camera from the planet's centre at zoom 1.
 const FAR := 4.4
 ## A double click flies to the cell and comes at least this close.
@@ -72,6 +72,11 @@ func _ready() -> void:
 	audio.muted = _load_muted()
 	ui.set_muted(audio.muted)
 	ui.sound_requested.connect(func(name: String): audio.play(name))
+	ui.laura_persona = _load_pref("oorbit.laura", "historian")
+	ui.laura_requested.connect(func(persona: String):
+		_save_pref("oorbit.laura", persona)
+		_laura_tries = 0
+		_ask_laura())
 	ui.mute_toggled.connect(func(on: bool):
 		audio.muted = on
 		_save_muted(on))
@@ -187,11 +192,15 @@ func _on_view(reply: Dictionary) -> void:
 		planet_view.visible = false
 		traffic.visible = false
 	ui.show_view(data)
+	# At the opening, Laura gets to work on her account of what happened.
+	if planet != null and not _laura_asked:
+		_laura_asked = true
+		_ask_laura()
 	# An event that happens somewhere: fly there once.
 	if planet != null and planet.get("pending_event") != null:
 		var e: Dictionary = planet["pending_event"]
 		var key := "%s@%s" % [e.get("id"), e.get("step")]
-		if e.get("tile") != null and key != _event_focused:
+		if e.get("tile") != null and key != _event_focused and planet_view.builder.ready():
 			_event_focused = key
 			planet_view.focus(int(e["tile"]))
 	# Look again right after the next thing finishes, or in a minute.
@@ -238,6 +247,35 @@ func _update_sound(delta: float) -> void:
 		var sites := planet_view.site_points()
 		if not sites.is_empty():
 			audio.play("hammer", _weight_at(sites[randi() % sites.size()]))
+
+
+var _laura_tries := 0
+var _laura_asked := false
+
+
+## Ask Laura for her account; while she is writing, ask again a little
+## later (a few times at most).
+func _ask_laura() -> void:
+	host.post_json("chronicle", {"lang": I18n.language, "persona": ui.laura_persona}, func(reply: Dictionary):
+		if not reply.get("success", false):
+			return
+		var data: Dictionary = reply.get("data", {})
+		ui.set_laura(data)
+		if str(data.get("status", "")) == "writing" and _laura_tries < 12:
+			_laura_tries += 1
+			get_tree().create_timer(6.0).timeout.connect(_ask_laura))
+
+
+func _load_pref(key: String, fallback: String) -> String:
+	if not OS.has_feature("web"):
+		return fallback
+	var v = JavaScriptBridge.eval("(function(){try{return localStorage.getItem('%s')||''}catch(e){return ''}})()" % key)
+	return fallback if str(v) == "" else str(v)
+
+
+func _save_pref(key: String, value: String) -> void:
+	if OS.has_feature("web"):
+		JavaScriptBridge.eval("(function(){try{localStorage.setItem('%s','%s')}catch(e){}})()" % [key, value.replace("'", "")])
 
 
 func _load_muted() -> bool:

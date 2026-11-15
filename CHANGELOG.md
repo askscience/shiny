@@ -59,6 +59,23 @@
   builders work on them. The work sliders are gone: whoever has no crew
   thinks and makes culture. While you play, an hour of the planet lasts a
   minute; while you are away, the planet runs at half speed.
+- Oorbit 0.7.3: Laura and a livelier planet. Laura, the chronicler, tells
+  in a few lines what happened lately, written by the assistant's AI in the
+  voice you pick (historian, village gossip, grumpy grandpa, scientist) at
+  the top of the Chronicle; the game never waits for her, and with the AI
+  switched off the Chronicle reads as before. Wild animals roam the free
+  land (deer and boars in the woods, goats on the mountains, foxes on the
+  ice, camels in the desert) and flocks of birds circle over the forests.
+  Hunters carry spears, then bows, then muskets; gatherers baskets, fishers
+  rods on the beach and nets at sea, woodcutters axes and quarrymen picks.
+  Events that happen somewhere show what they are: a storm cloud with rain,
+  lightning, a burning sun, a traders' cart, an explorers' boat, a falling
+  meteor; the event dialog can be closed to answer later from the cell.
+  Goals and Research open with what the next era takes, step by step
+  (each discovery, the monument and what it still lacks), and every goal
+  says how to reach it. The closest zoom keeps a few more pixels. Fixed
+  the stray streaks across the sky: the window no longer resizes its
+  crowds of little models on every refresh (WebGL drew leftovers).
 - Oorbit 0.7.2: sound and richer models. The planet has sound: the hum of
   space from afar, and coming down to the ground the sea, birds over the
   forests, voices over the towns and crickets on the meadows, mixed by what

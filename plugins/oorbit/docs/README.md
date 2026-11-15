@@ -6,7 +6,7 @@ document covers the plugin as built; the game itself is described in
 [design.md](design.md), and its rules live in
 [`crates/oorbit-sim`](../../../crates/oorbit-sim/README.md).
 
-Status: **0.7.2, an active game with cities.** The user founds a planet (one
+Status: **0.7.3, an active game with cities.** The user founds a planet (one
 per account), and the window shows it as it is now: continents and seas of
 642 cells, crews sent to work by pointing at the land, buildings that rise
 while they are built, colonies linked to the capital by roads and sea routes, research, events, notable people, the Chronicle, and a dock that
@@ -111,10 +111,10 @@ A planet from before the clock starts it where its own time was.
 |---|---|
 | Founding screen | Choose a climate: temperate, arid, frozen or oceanic. The Research panel opens right after. |
 | Top bar | Era, people / housing, mood, each resource with its rate (per minute while playing, per hour while away), and how fast the planet's time runs. |
-| Goals (flag) | Three small goals with their progress and reward, and how many were reached. A toast tells when one is reached, a find brought home, a city founded. |
+| Goals (flag) | What the next era takes (each discovery: known, being studied or to choose; the monument: standing, going up, or what it lacks), then three small goals with their progress and reward, and how many were reached. A toast tells when one is reached, a find brought home, a city founded. |
 | Research (flask) | Discoveries of the eras reached, what is left to leave the era; the icon glows while nothing is studied. |
 | Society (people) | The crews (what each gathers, how fast, how much is left on its cell; Show flies there, Call back frees it), how many people think, the cities (capital, linked or not, Show), notable people, cultural traits. |
-| Chronicle (scroll) | What happened, newest first, with how long ago. |
+| Chronicle (scroll) | Laura's account at the top (see below), then what happened, newest first, with how long ago. The icon glows when Laura has something new. |
 | A cell (click) | Its biome; what is left (trees in %, a deposit in units, or a worked-out quarry), Plant trees on a thinned forest; the crew working it, or a button per resource to send one with what one more crew costs in knowledge (food on meadows, forests, beaches and the shallow sea; wood in forests; stone on mountains; clay and marble once known); its building or construction time left; what can be built there, with cost, time and effects (only within four cells of a city; a colony only where a city may be founded). A double click flies over it. |
 | A city centre (click) | Its name, whether it reaches the capital (an unlinked city's crews work at 60%), its roads and sea routes with their progress, and a button per way that can be opened (road over land, or a boat between two cities that both reach the shore), with cost and time. |
 | Event dialog | Appears when an event waits; each choice lists its consequences. An event with a place puts a marker on its cell and the camera flies there. |
@@ -135,6 +135,27 @@ narrow window (a phone) the panels become one sheet at the bottom and the
 camera moves back so the planet fits the width. Strings come from
 `game/i18n/<lang>.json` (English and Italian; other languages fall back to
 English).
+
+## Laura, the chronicler
+
+`src/laura.rs`, `POST /api/oorbit/chronicle` with `{ lang, persona }`
+(`historian`, `gossip`, `grandpa`, `scientist`):
+
+- The route answers at once: `ready` with Laura's text when it is about the
+  latest Chronicle entries, `writing` (with her previous text, if any) when
+  it has started a new one, `off` when the user switched the AI off (the
+  core's `ai.enabled` preference), `empty` before anything happened.
+- A new text is written in the background (`rt::spawn`) by the assistant's
+  model through `ctx.ollama()` (`OLLAMA_URL`, `OLLAMA_MODEL`), from the last
+  20 entries with catalog names and the planet's era, people and cities,
+  in the window's language. She may add colour but is told never to invent
+  events, names or numbers. Texts are kept in memory per user and per
+  voice; a restart writes them again.
+- The window asks at the opening and when the Chronicle opens, and again
+  every six seconds while she writes (twelve times at most). The voice is
+  kept in the browser (`oorbit.laura`).
+- Tests never call a model. The preview server answers with the text in
+  `OORBIT_LAURA` (or `off`).
 
 ## Sound
 
@@ -190,6 +211,7 @@ library only, fixed seeds; run it again to regenerate them):
 | `POST` | `/api/oorbit/reset` | user | Deletes the user's planet; the window shows the founding screen again. |
 | `POST` | `/api/oorbit/action` | user | One `oorbit_sim::Action` (`{"type":"research","tech":"fire"}`, `build`, `harvest` `{ tile, resource }`, `stop_harvest` `{ tile }`, `plant` `{ tile }`, `collect` `{ id }`, `help` `{ tile }`, `link` `{ kind: "road"\|"sea", from, to }` between two cities, `resolve_event`); `400` with the reason when refused. Acting counts as playing. |
 | `POST` | `/api/oorbit/presence` | user | The window reports that someone is playing: the planet runs at play speed for 45 more seconds. Returns the view. |
+| `POST` | `/api/oorbit/chronicle` | user | Laura's account (`{ lang, persona }` in; `{ status, text }` out, see "Laura, the chronicler"). Never waits for the AI. |
 
 Actions also include `{"type":"send","to":"n1","kind":"gift","resource":"wood","amount":5}` (kinds: gift, idea, visit, prank, message), `accept_offer` / `decline_offer` `{ id }` and `demolish` `{ tile }`.
 

@@ -28,6 +28,7 @@ pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
         "reset" => reset(ctx),
         "dev_skip" => dev_skip(ctx),
         "presence" => presence(ctx),
+        "chronicle" => crate::laura::chronicle(ctx),
         _ => return None,
     })
 }

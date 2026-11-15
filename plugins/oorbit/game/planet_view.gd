@@ -46,7 +46,6 @@ const RESOURCE_COLORS := {
 	"clay": Color("c07a54"), "marble": Color("eae2d6"),
 }
 const WALKER_COLORS := [Color("f2c078"), Color("e08f6c"), Color("eef3f2"), Color("e3c3c6"), Color("c2d69b")]
-var _walkers: MultiMeshInstance3D
 var _walk := []  # per walker: a Dictionary (kind, route or cell, time...)
 var _highlight: MeshInstance3D
 ## Roads and sea routes, drawn on the ground and the water; carts and boats
@@ -105,20 +104,6 @@ func _ready() -> void:
 	_props = MeshInstance3D.new()
 	_props.material_override = _toon(Color.WHITE, true)
 	pivot.add_child(_props)
-	_walkers = MultiMeshInstance3D.new()
-	var walker_mesh := _compose(func():
-		# A person: legs, a body in a tunic, a head.
-		_put(_box(0.022, 0.018, 0.016), Color("6b5a4e"), Vector3.UP, Vector3.ZERO, Vector3(0, -0.018, 0))
-		_put(_box(0.03, 0.03, 0.022), Color.WHITE, Vector3.UP, Vector3.ZERO, Vector3(0, 0.006, 0))
-		_put(_ball(0.012), Color("e8c4a0"), Vector3.UP, Vector3.ZERO, Vector3(0, 0.021, 0))
-		_put(_box(0.016, 0.012, 0.016), Color("e8c4a0"), Vector3.UP, Vector3.ZERO, Vector3(0, 0.024, 0)))
-	var multimesh := MultiMesh.new()
-	multimesh.transform_format = MultiMesh.TRANSFORM_3D
-	multimesh.use_colors = true
-	multimesh.mesh = walker_mesh
-	_walkers.multimesh = multimesh
-	_walkers.material_override = _toon(Color.WHITE, true)
-	pivot.add_child(_walkers)
 	_roads = MeshInstance3D.new()
 	var road_material := _toon(Color.WHITE, true)
 	road_material.cull_mode = BaseMaterial3D.CULL_DISABLED
@@ -136,6 +121,7 @@ func _ready() -> void:
 	vehicles.transform_format = MultiMesh.TRANSFORM_3D
 	vehicles.use_colors = true
 	vehicles.mesh = vehicle_mesh
+	_fixed(vehicles, MAX_RIDES)
 	_vehicles.multimesh = vehicles
 	_vehicles.material_override = _toon(Color.WHITE, true)
 	pivot.add_child(_vehicles)
@@ -149,9 +135,40 @@ func _ready() -> void:
 		_put(_cone(0.013, 0.02, 4), Color("6b5a4e"), Vector3.UP, Vector3.ZERO, Vector3(0.038, 0.0, 0), 1.0, PI / 4.0, -PI / 2.0)
 		_put(_box(0.004, 0.05, 0.004), Color("4a3b33"), Vector3.UP, Vector3.ZERO, Vector3(-0.002, 0.03, 0))
 		_put(_prism(0.004, 0.04, 0.03), Color.WHITE, Vector3.UP, Vector3.ZERO, Vector3(0.008, 0.032, 0), 1.0, PI / 2.0))
+	_fixed(boats, MAX_RIDES)
 	_boats.multimesh = boats
 	_boats.material_override = _toon(Color.WHITE, true)
 	pivot.add_child(_boats)
+	_build_walkers()
+	_animals = MultiMeshInstance3D.new()
+	var animals := MultiMesh.new()
+	animals.transform_format = MultiMesh.TRANSFORM_3D
+	animals.use_colors = true
+	animals.mesh = _compose(func():
+		# A four-legged animal, tinted per kind.
+		var up := Vector3.UP
+		var o := Vector3.ZERO
+		_put(_box(0.05, 0.024, 0.024), Color.WHITE, up, o, Vector3(0, 0.03, 0))
+		_put(_box(0.018, 0.02, 0.016), Color.WHITE, up, o, Vector3(0.03, 0.046, 0))
+		_put(_box(0.008, 0.006, 0.006), Color("4a3b33"), up, o, Vector3(0.042, 0.042, 0))
+		for fx in [-0.018, 0.018]:
+			for fz in [-0.008, 0.008]:
+				_put(_box(0.006, 0.02, 0.006), Color.WHITE.darkened(0.3), up, o, Vector3(fx, 0.01, fz))
+		_put(_box(0.006, 0.01, 0.004), Color.WHITE, up, o, Vector3(-0.027, 0.04, 0)))
+	_fixed(animals, MAX_ANIMALS)
+	_animals.multimesh = animals
+	_animals.material_override = _toon(Color.WHITE, true)
+	pivot.add_child(_animals)
+	_birds = MultiMeshInstance3D.new()
+	var birds := MultiMesh.new()
+	birds.transform_format = MultiMesh.TRANSFORM_3D
+	birds.mesh = _compose(func():
+		_put(_box(0.012, 0.003, 0.03), Color("eef3f2"), Vector3.UP, Vector3.ZERO, Vector3(0, 0, 0.012), 1.0, 0.5)
+		_put(_box(0.012, 0.003, 0.03), Color("eef3f2"), Vector3.UP, Vector3.ZERO, Vector3(0, 0, -0.012), 1.0, -0.5))
+	_fixed(birds, MAX_BIRDS)
+	_birds.multimesh = birds
+	_birds.material_override = _toon(Color.WHITE, true)
+	pivot.add_child(_birds)
 	_highlight = MeshInstance3D.new()
 	var line_material := StandardMaterial3D.new()
 	line_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -180,10 +197,11 @@ var _warned := false
 
 func _move_walkers(delta: float) -> void:
 	_seconds += delta
-	var multimesh := _walkers.multimesh
 	var size := _tile_size() * 1.2
 	for k in _walk.size():
 		var w: Dictionary = _walk[k]
+		var multimesh := _walker_mm(w)
+		var index := int(w.get("index", 0))
 		w["t"] = _seconds + float(w["offset"])
 		var at := Vector3.ZERO
 		var forward := Vector3.FORWARD
@@ -216,7 +234,7 @@ func _move_walkers(delta: float) -> void:
 					# Working: a little bob on the spot.
 					at += normal * absf(sin(t * 12.0)) * 0.003
 					at += forward.cross(normal).normalized() * sin(float(w["phase"])) * 0.01
-				multimesh.set_instance_color(k, route["color"] if t >= walk + WORK_SECONDS else WALKER_COLORS[k % WALKER_COLORS.size()])
+				multimesh.set_instance_color(index, route["color"] if t >= walk + WORK_SECONDS else WALKER_COLORS[k % WALKER_COLORS.size()])
 			_:
 				# Strolling or building: a slow loop around a cell.
 				var cell: int = w["cell"]
@@ -241,8 +259,10 @@ func _move_walkers(delta: float) -> void:
 				push_warning("walker off the planet: %s %s at %s" % [w["kind"], w.get("cell", w.get("route", "")), at])
 			basis = Basis().scaled(Vector3.ZERO)
 			at = Vector3.ZERO
-		multimesh.set_instance_transform(k, Transform3D(basis, at))
+		if index < MAX_WALKERS:
+			multimesh.set_instance_transform(index, _safe(Transform3D(basis, at), "walker %s %s" % [w["kind"], w.get("tool", "")]))
 	_move_vehicles()
+	_move_animals()
 	_bob_marks()
 	# Roads grow cell by cell.
 	for k in mini(_links.size(), _road_built.size()):
@@ -327,12 +347,13 @@ func _place_walkers(planet: Dictionary, rates: Dictionary) -> void:
 		var amount := (float(outputs[k]) if k < outputs.size() else 0.0) * trip_hours
 		var text := "+%s %s" % [_short(amount), I18n.name_of("resource", resource).to_lower()]
 		_routes.append({"points": points, "walk": walk, "text": text, "resource": resource, "color": RESOURCE_COLORS.get(resource, Color("f2c078"))})
+		var tool := _tool_for(resource, str(_biomes[cell]) if cell < _biomes.size() else "", int(planet.get("era", 1)))
 		for m in crew_size:
 			var period := walk * 2.0 + WORK_SECONDS
 			# The crew walks together, a step apart; the first one tells
 			# what they brought.
 			var offset := m * 0.35 + float(k) * 1.7
-			_walk.append({"kind": "crew", "route": _routes.size() - 1, "offset": offset, "t": 0.0, "last": fmod(_seconds + offset, period), "phase": rng.randf() * TAU, "leader": m == 0})
+			_walk.append({"kind": "crew", "route": _routes.size() - 1, "offset": offset, "t": 0.0, "last": fmod(_seconds + offset, period), "phase": rng.randf() * TAU, "leader": m == 0, "tool": tool})
 	for c in planet.get("construction", []):
 		for m in 2:
 			_walk.append({"kind": "builder", "cell": int(c["tile"]), "offset": 0.0, "t": 0.0, "phase": m * PI + rng.randf(), "speed": 0.6, "radius": 0.035 * _tile_size()})
@@ -356,10 +377,21 @@ func _place_walkers(planet: Dictionary, rates: Dictionary) -> void:
 			_walk.append({"kind": "builder", "cell": at, "offset": 0.0, "t": 0.0, "phase": m * PI + rng.randf(), "speed": 0.6, "radius": 0.05 * _tile_size()})
 	if _walk.size() > MAX_WALKERS:
 		_walk.resize(MAX_WALKERS)
-	var multimesh := _walkers.multimesh
-	multimesh.instance_count = _walk.size()
+	# One MultiMesh per tool (and one for empty hands): each walker is an
+	# instance of the set of what it carries.
+	var counts := {}
 	for k in _walk.size():
-		multimesh.set_instance_color(k, WALKER_COLORS[k % WALKER_COLORS.size()])
+		var w: Dictionary = _walk[k]
+		var tool: String = w.get("tool", "")
+		if not _walker_sets.has(tool):
+			tool = ""
+			w["tool"] = ""
+		w["index"] = counts.get(tool, 0)
+		counts[tool] = counts.get(tool, 0) + 1
+	for tool in _walker_sets:
+		(_walker_sets[tool] as MultiMeshInstance3D).multimesh.visible_instance_count = counts.get(tool, 0)
+	for k in _walk.size():
+		_walker_mm(_walk[k]).set_instance_color(int(_walk[k]["index"]), WALKER_COLORS[k % WALKER_COLORS.size()])
 	_move_walkers(0.0)
 
 
@@ -401,11 +433,14 @@ func show_planet(planet: Dictionary, rates := {}) -> void:
 	# changed.
 	_home = int(planet.get("home", 0))
 	_place_walkers(planet, rates)
-	_place_rides()
+	if _wildlife_dirty or buildings != _wild_buildings:
+		_wildlife_dirty = false
+		_wild_buildings = buildings
+		_place_animals(biomes, buildings)
 	var finds: Array = planet.get("finds", [])
 	var event = planet.get("pending_event")
 	var event_tile := int(event["tile"]) if event != null and event.get("tile") != null else -1
-	_place_marks(finds, event_tile)
+	_place_marks(finds, event_tile, str(event["id"]) if event != null else "")
 	_town.clear()
 	for i in tiles.size():
 		_town.append(buildings[i] != "")
@@ -425,6 +460,7 @@ func show_planet(planet: Dictionary, rates := {}) -> void:
 		_biomes = biomes
 		_heights = heights
 		_land.mesh = builder.build(biomes, heights, Palette.BIOMES)
+		_wildlife_dirty = true
 		# The rim only needs the shape: the coarse surface is enough.
 		_outline.mesh = builder.build(biomes, heights, Palette.BIOMES, 1)
 		_ts = _tile_size()
@@ -1268,11 +1304,11 @@ func _place_rides() -> void:
 	var carts := _rides.filter(func(r): return not r["boat"])
 	var sails := _rides.filter(func(r): return r["boat"])
 	_rides = carts + sails
-	_vehicles.multimesh.instance_count = carts.size()
-	for k in carts.size():
+	_vehicles.multimesh.visible_instance_count = mini(carts.size(), MAX_RIDES)
+	for k in mini(carts.size(), MAX_RIDES):
 		_vehicles.multimesh.set_instance_color(k, Color("d9b48f"))
-	_boats.multimesh.instance_count = sails.size() + _fishers.size()
-	for k in _boats.multimesh.instance_count:
+	_boats.multimesh.visible_instance_count = mini(sails.size() + _fishers.size(), MAX_RIDES)
+	for k in _boats.multimesh.visible_instance_count:
 		_boats.multimesh.set_instance_color(k, Color("eef3f2"))
 	_move_vehicles()
 
@@ -1299,18 +1335,20 @@ func _move_vehicles() -> void:
 		var at := points[i].lerp(points[i + 1], f - i)
 		var normal := at.normalized()
 		var forward := (points[i + 1] - points[i]).normalized() * (1.0 if t < 1.0 else -1.0)
+		if r["boat"] and boats >= MAX_RIDES:
+			continue
 		if r["boat"]:
 			at += normal * (0.004 * size + 0.002 * sin(_seconds * 2.0 + boats))
-			_boats.multimesh.set_instance_transform(boats, Transform3D(_ride_basis(forward, normal, size), at))
+			_boats.multimesh.set_instance_transform(boats, _safe(Transform3D(_ride_basis(forward, normal, size), at), "boat"))
 			boats += 1
-		else:
+		elif carts < MAX_RIDES:
 			at += normal * 0.022 * size
-			_vehicles.multimesh.set_instance_transform(carts, Transform3D(_ride_basis(forward, normal, size), at))
+			_vehicles.multimesh.set_instance_transform(carts, _safe(Transform3D(_ride_basis(forward, normal, size), at), "cart"))
 			carts += 1
 	# Fishing boats circle slowly on their cell.
 	for k in _fishers.size():
 		var cell: int = _fishers[k]
-		if boats >= _boats.multimesh.instance_count or cell >= builder.centers.size():
+		if boats >= _boats.multimesh.visible_instance_count or cell >= builder.centers.size():
 			break
 		var n: Vector3 = builder.centers[cell]
 		var tg := _tangents(n)
@@ -1319,7 +1357,7 @@ func _move_vehicles() -> void:
 		var at := n * PlanetMesh.SEA_LEVEL + dir * 0.03 * _ts
 		at = at.normalized() * (PlanetMesh.SEA_LEVEL + 0.004 * size + 0.002 * sin(_seconds * 2.0 + k))
 		var forward: Vector3 = -tg[0] * sin(a) + tg[1] * cos(a)
-		_boats.multimesh.set_instance_transform(boats, Transform3D(_ride_basis(forward, at.normalized(), size), at))
+		_boats.multimesh.set_instance_transform(boats, _safe(Transform3D(_ride_basis(forward, at.normalized(), size), at), "fisher"))
 		boats += 1
 
 
@@ -1383,50 +1421,164 @@ func _find_model(kind: String, normal: Vector3, base: Vector3, rng: RandomNumber
 			_put(_box(0.1, 0.012, 0.03), Color("b0a6ad"), normal, base, Vector3(0, 0.002, 0), 1.0, 0.3)
 
 
-func _marker_mesh(color: Color) -> MeshInstance3D:
-	var mesh := SphereMesh.new()
-	mesh.radius = 0.018
-	mesh.height = 0.05
-	mesh.radial_segments = 4
-	mesh.rings = 2
-	var node := MeshInstance3D.new()
-	node.mesh = mesh
-	var m := StandardMaterial3D.new()
-	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	m.albedo_color = color
-	node.material_override = m
-	return node
-
-
-## One bobbing marker per find, and one over the waiting event's cell.
-func _place_marks(finds: Array, event_tile: int) -> void:
+## A marker over every find (a bobbing gem on a pin) and, over the cell of
+## an event that happens somewhere, the event itself: a storm cloud with
+## rain, lightning, a burning sun, a traders' cart, an explorers' boat, a
+## falling meteor, or a sign.
+func _place_marks(finds: Array, event_tile: int, event_id: String) -> void:
 	for mark in _marks:
 		mark["node"].queue_free()
 	_marks.clear()
 	var wanted := []
 	for f in finds:
-		wanted.append([int(f["tile"]), "find:" + str(f["kind"]), FIND_COLOR])
+		wanted.append([int(f["tile"]), "find:" + str(f["kind"])])
 	if event_tile >= 0:
-		wanted.append([event_tile, "event", EVENT_COLOR])
+		wanted.append([event_tile, "event:" + event_id])
 	for w in wanted:
 		var cell: int = w[0]
 		if cell < 0 or cell >= builder.centers.size():
 			continue
-		var node := _marker_mesh(w[2])
-		node.scale = Vector3.ONE * _tile_size() * 5.0
-		pivot.add_child(node)
+		var kind: String = w[1]
 		var n: Vector3 = builder.centers[cell]
-		_marks.append({"node": node, "tile": cell, "kind": w[1], "base": builder.ground(n, cell) + n.normalized() * 0.09 * _tile_size()})
+		var ground := builder.ground(n, cell)
+		var t := _tangents(n)
+		var node := Node3D.new()
+		node.transform = Transform3D(Basis(t[0], n.normalized(), t[1]).scaled(Vector3.ONE * _tile_size()), ground)
+		pivot.add_child(node)
+		var parts := _mark_parts(kind, node)
+		_marks.append({"node": node, "tile": cell, "kind": "event" if kind.begins_with("event:") else kind, "event": kind.substr(6) if kind.begins_with("event:") else "", "base": ground + n.normalized() * 0.09 * _tile_size(), "parts": parts})
 	_bob_marks()
+
+
+func _mark_mesh(build: Callable, unshaded := false) -> MeshInstance3D:
+	var node := MeshInstance3D.new()
+	node.mesh = _compose(build)
+	if unshaded:
+		var m := StandardMaterial3D.new()
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.vertex_color_use_as_albedo = true
+		node.material_override = m
+	else:
+		node.material_override = _props.material_override
+	return node
+
+
+## The pieces of a mark, as children of `node` (local frame: +Y up, one
+## unit is a cell's size); returns what `_bob_marks` animates.
+func _mark_parts(kind: String, node: Node3D) -> Dictionary:
+	var up := Vector3.UP
+	var o := Vector3.ZERO
+	var parts := {}
+	var event := kind.substr(6) if kind.begins_with("event:") else ""
+	if not kind.begins_with("event:"):
+		var gem := _mark_mesh(func():
+			_put(_cone(0.06, 0.08, 4), FIND_COLOR, up, o, Vector3(0, 0.04, 0))
+			_put(_cone(0.06, 0.08, 4), FIND_COLOR.darkened(0.2), up, o, Vector3(0, -0.04, 0), 1.0, 0.0, PI), true)
+		gem.position = Vector3(0, 0.42, 0)
+		node.add_child(gem)
+		var pin := _mark_mesh(func(): _put(_box(0.006, 0.3, 0.006), Color("eef3f2"), up, o, Vector3(0, 0.15, 0)), true)
+		node.add_child(pin)
+		parts["spin"] = gem
+		return parts
+	match event:
+		"storm", "lightning":
+			var cloud := _mark_mesh(func():
+				for k in 6:
+					var a := k * TAU / 6.0
+					_put(_ball(0.07), Color("5b5466") if k % 2 == 0 else Color("6f6680"), up, o, Vector3(cos(a) * 0.08, 0.0, sin(a) * 0.06), 1.0)
+				_put(_ball(0.09), Color("4a4152"), up, o, Vector3(0, 0.03, 0))
+				for k in 6:
+					var a := k * TAU / 6.0
+					_put(_ball(0.07), Color("4a4152"), up, o, Vector3(cos(a) * 0.08, 0.0, sin(a) * 0.06), 1.0, 0.0, PI))
+			cloud.position = Vector3(0, 0.75, 0)
+			node.add_child(cloud)
+			parts["cloud"] = cloud
+			var drops := []
+			for k in 10:
+				var drop := _mark_mesh(func(): _put(_box(0.014, 0.09, 0.014), Color("c8e0ec"), up, o, Vector3.ZERO), true)
+				drop.position = Vector3(cos(k * 2.4) * 0.12, 0.4, sin(k * 2.4) * 0.09)
+				node.add_child(drop)
+				drops.append(drop)
+			parts["rain"] = drops
+			if event == "lightning":
+				var bolt := _mark_mesh(func():
+					var at := Vector3(0, 0.0, 0)
+					for k in 4:
+						var step := Vector3(0.03 * (1 if k % 2 == 0 else -1), -0.11, 0)
+						_put(_box(0.012, 0.12, 0.012), Color("fff2a0"), up, o, at + step * 0.5, 1.0, 0.0, 0.0)
+						at += step, true)
+				bolt.position = Vector3(0.02, 0.5, 0)
+				node.add_child(bolt)
+				parts["bolt"] = bolt
+		"drought":
+			var sun := _mark_mesh(func():
+				_put(_ball(0.07), Color("f2c078"), up, o, Vector3.ZERO)
+				_put(_ball(0.07), Color("f2c078"), up, o, Vector3.ZERO, 1.0, 0.0, PI)
+				for k in 8:
+					_put(_box(0.03, 0.012, 0.012), Color("e08f6c"), up, o, Vector3(cos(k * TAU / 8.0) * 0.11, 0.0, sin(k * TAU / 8.0) * 0.11), 1.0, -k * TAU / 8.0), true)
+			sun.position = Vector3(0, 0.55, 0)
+			node.add_child(sun)
+			parts["spin"] = sun
+		"traders":
+			var cart := _mark_mesh(func():
+				_put(_box(0.1, 0.03, 0.06), Color("8f6f5a"), up, o, Vector3(0, 0.04, 0))
+				_put(_box(0.08, 0.04, 0.05), Color("e3c3c6"), up, o, Vector3(0, 0.075, 0))
+				for side in [-1.0, 1.0]:
+					_put(_cylinder(0.025, 0.01, 8), Color("4a3b33"), up, o, Vector3(0, 0.025, side * 0.035), 1.0, PI / 2.0, PI / 2.0)
+				_put(_box(0.006, 0.16, 0.006), Color("6b5a4e"), up, o, Vector3(-0.04, 0.12, 0))
+				_put(_box(0.05, 0.03, 0.004), Color("4fa3c7"), up, o, Vector3(-0.015, 0.18, 0)))
+			node.add_child(cart)
+			parts["bob"] = cart
+		"explorers":
+			var boat := _mark_mesh(func():
+				_put(_box(0.14, 0.03, 0.05), Color("6b5a4e"), up, o, Vector3(0, 0.0, 0))
+				_put(_box(0.008, 0.14, 0.008), Color("4a3b33"), up, o, Vector3(0, 0.08, 0))
+				_put(_prism(0.008, 0.11, 0.08), Color("eef3f2"), up, o, Vector3(0.025, 0.09, 0), 1.0, PI / 2.0))
+			node.add_child(boat)
+			parts["bob"] = boat
+		"meteor":
+			var rock := _mark_mesh(func():
+				_put(_ball(0.04), Color("ff9d3b"), up, o, Vector3.ZERO)
+				_put(_ball(0.04), Color("e08f6c"), up, o, Vector3.ZERO, 1.0, 0.0, PI)
+				for k in 3:
+					_put(_cone(0.03 - k * 0.008, 0.06, 5), Color("f2c078"), up, o, Vector3(0, 0.05 + k * 0.05, 0)), true)
+			node.add_child(rock)
+			parts["fall"] = rock
+		_:
+			var sign := _mark_mesh(func():
+				_put(_box(0.012, 0.25, 0.012), Color("6b5a4e"), up, o, Vector3(0, 0.125, 0))
+				_put(_box(0.03, 0.09, 0.03), EVENT_COLOR, up, o, Vector3(0, 0.36, 0))
+				_put(_box(0.03, 0.03, 0.03), EVENT_COLOR, up, o, Vector3(0, 0.28, 0)), true)
+			node.add_child(sign)
+			parts["bob"] = sign
+	return parts
 
 
 func _bob_marks() -> void:
 	for k in _marks.size():
-		var mark: Dictionary = _marks[k]
-		var base: Vector3 = mark["base"]
-		var node: MeshInstance3D = mark["node"]
-		node.position = base + base.normalized() * (0.012 * _tile_size() * sin(_seconds * 3.0 + k))
-		node.rotation = Vector3(0.0, _seconds * 2.0, 0.0)
+		var parts: Dictionary = _marks[k]["parts"]
+		var t := _seconds + k * 1.3
+		if parts.has("spin"):
+			var gem: Node3D = parts["spin"]
+			gem.rotation = Vector3(0.0, t * 1.5, 0.0)
+			if not _marks[k]["kind"].begins_with("event"):
+				gem.position.y = 0.42 + 0.03 * sin(t * 3.0)
+		if parts.has("bob"):
+			(parts["bob"] as Node3D).position.y = 0.02 + 0.015 * absf(sin(t * 2.0))
+		if parts.has("cloud"):
+			(parts["cloud"] as Node3D).position.x = 0.03 * sin(t * 0.6)
+		if parts.has("rain"):
+			var drops: Array = parts["rain"]
+			for i in drops.size():
+				var drop: Node3D = drops[i]
+				drop.position.y = 0.66 - fmod(t * 1.1 + i * 0.137, 0.62)
+		if parts.has("bolt"):
+			(parts["bolt"] as Node3D).visible = fmod(t, 2.6) < 0.18
+		if parts.has("fall"):
+			var f := fmod(t * 0.5, 1.0)
+			var rock: Node3D = parts["fall"]
+			rock.position = Vector3(0.25 * (1.0 - f), 0.05 + 0.6 * (1.0 - f), 0.0)
+			rock.rotation = Vector3(0.0, 0.0, 0.6)
 
 
 ## Where the marks are (world space), for the window's edge markers.
@@ -1533,3 +1685,199 @@ func _facade(n: Vector3, b: Vector3, k: float, z: float, rows: int) -> void:
 	for side in [-1, 1]:
 		for r in rows:
 			_put(_box(0.018 * k, 0.016 * k, 0.005 * k), Color("f2e1a0"), n, b, Vector3(side * (0.04 + r * 0.035) * k, 0.052 * k, z * k))
+
+
+# ---------------------------------------------------------------- tools and wildlife
+
+var _walker_sets := {} # tool ("" for empty hands) -> MultiMeshInstance3D
+var _animals: MultiMeshInstance3D
+var _birds: MultiMeshInstance3D
+var _herd := []        # per animal: {cell, phase, speed, radius}
+var _flocks := []      # per bird: {cell, phase, radius, height}
+var _wildlife_dirty := true
+var _wild_buildings := []
+const ANIMAL_COLORS := {
+	"forest": [Color("8f6f5a"), Color("5b4a42")], "plains": [Color("b58e6b"), Color("d9c8b0")],
+	"mountain": [Color("e8e2d6"), Color("a39aa8")], "ice": [Color("f4f6f8")], "desert": [Color("d9b48f")],
+	"coast": [Color("c8b49a")],
+}
+
+
+## What a crew carries: spears, then bows, then muskets to hunt in the
+## woods; baskets on the meadows; rods on the beach and nets at sea; axes
+## for wood and picks for stone.
+static func _tool_for(resource: String, biome: String, era: int) -> String:
+	if resource == "food":
+		match biome:
+			"forest":
+				return "spear" if era <= 2 else ("bow" if era <= 5 else "musket")
+			"coast":
+				return "rod"
+			"ocean":
+				return "net"
+			_:
+				return "basket"
+	if resource == "wood":
+		return "axe"
+	return "pick"
+
+
+func _build_walkers() -> void:
+	var up := Vector3.UP
+	var o := Vector3.ZERO
+	var wood := Color("8f6f5a")
+	var shapes := {
+		"": func(): pass,
+		"spear": func():
+			_put(_box(0.004, 0.075, 0.004), wood, up, o, Vector3(0.01, 0.02, 0.018), 1.0, 0.0, 0.25)
+			_put(_cone(0.006, 0.014, 4), Color("b0a6ad"), up, o, Vector3(0.01, 0.062, 0.028)),
+		"bow": func():
+			for k in 3:
+				_put(_box(0.003, 0.024, 0.004), wood, up, o, Vector3(0.012 - absf(k - 1) * 0.005, 0.0 + k * 0.022, 0.018))
+			_put(_box(0.001, 0.06, 0.001), Color("eef3f2"), up, o, Vector3(0.002, 0.022, 0.018)),
+		"musket": func():
+			_put(_box(0.004, 0.065, 0.004), Color("4a3b33"), up, o, Vector3(0.006, 0.02, 0.018), 1.0, 0.0, 0.3),
+		"rod": func():
+			_put(_box(0.003, 0.09, 0.003), wood, up, o, Vector3(0.025, 0.04, 0.012), 1.0, PI / 2.0, 0.7)
+			_put(_box(0.001, 0.05, 0.001), Color("eef3f2"), up, o, Vector3(0.06, 0.02, 0.012)),
+		"net": func():
+			_put(_box(0.03, 0.022, 0.006), Color("d9c8b0"), up, o, Vector3(-0.01, 0.02, -0.014))
+			_put(_box(0.032, 0.002, 0.007), Color("8f6f5a"), up, o, Vector3(-0.01, 0.031, -0.014)),
+		"basket": func():
+			_put(_cylinder(0.01, 0.014, 6), Color("c8a46e"), up, o, Vector3(0.0, -0.004, 0.02)),
+		"axe": func():
+			_put(_box(0.003, 0.045, 0.003), wood, up, o, Vector3(0.008, 0.01, 0.018), 1.0, 0.0, 0.3)
+			_put(_box(0.012, 0.01, 0.003), Color("b0a6ad"), up, o, Vector3(0.012, 0.032, 0.024)),
+		"pick": func():
+			_put(_box(0.003, 0.045, 0.003), wood, up, o, Vector3(0.008, 0.01, 0.018), 1.0, 0.0, 0.3)
+			_put(_box(0.024, 0.004, 0.004), Color("857c8a"), up, o, Vector3(0.012, 0.032, 0.024)),
+	}
+	for tool in shapes:
+		var node := MultiMeshInstance3D.new()
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.use_colors = true
+		var tool_shape: Callable = shapes[tool]
+		mm.mesh = _compose(func():
+			# A person (legs, a body in a tunic, a head) and what it carries.
+			_put(_box(0.022, 0.018, 0.016), Color("6b5a4e"), up, o, Vector3(0, -0.018, 0))
+			_put(_box(0.03, 0.03, 0.022), Color.WHITE, up, o, Vector3(0, 0.006, 0))
+			_put(_ball(0.012), Color("e8c4a0"), up, o, Vector3(0, 0.021, 0))
+			_put(_box(0.016, 0.012, 0.016), Color("e8c4a0"), up, o, Vector3(0, 0.024, 0))
+			tool_shape.call())
+		# A fixed number of instances, set once: changing instance_count
+		# every refresh drew stray streaks across the sky (WebGL); only
+		# `visible_instance_count` changes.
+		mm.instance_count = MAX_WALKERS
+		for k in MAX_WALKERS:
+			mm.set_instance_transform(k, Transform3D(Basis().scaled(Vector3.ZERO), Vector3.ZERO))
+		mm.visible_instance_count = 0
+		node.multimesh = mm
+		node.material_override = _toon(Color.WHITE, true)
+		pivot.add_child(node)
+		_walker_sets[tool] = node
+
+
+func _walker_mm(w: Dictionary) -> MultiMesh:
+	return (_walker_sets[w.get("tool", "")] as MultiMeshInstance3D).multimesh
+
+
+## Wild animals on the free land (deer and boars in the woods, goats on the
+## mountains, foxes on the ice...), wandering slowly around their cell, and
+## a few flocks of birds circling over the forests.
+func _place_animals(biomes: Array, buildings: Array) -> void:
+	_herd.clear()
+	_flocks.clear()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 77
+	var chance := {"forest": 0.35, "plains": 0.16, "mountain": 0.22, "ice": 0.1, "desert": 0.08, "coast": 0.05}
+	var colors := []
+	for i in biomes.size():
+		var biome := str(biomes[i])
+		var roll := rng.randf()
+		var tint := rng.randi()
+		if not chance.has(biome) or str(buildings[i]) != "" or roll >= float(chance[biome]):
+			continue
+		if _herd.size() >= MAX_ANIMALS:
+			break
+		var palette: Array = ANIMAL_COLORS[biome]
+		_herd.append({"cell": i, "phase": rng.randf() * TAU, "speed": (0.05 + rng.randf() * 0.08) * (1.0 if rng.randf() < 0.5 else -1.0), "radius": (0.06 + rng.randf() * 0.1)})
+		colors.append(palette[tint % palette.size()])
+	var forests := []
+	for i in biomes.size():
+		if str(biomes[i]) == "forest":
+			forests.append(i)
+	for f in mini(MAX_BIRDS / 5, forests.size()):
+		var cell: int = forests[rng.randi() % forests.size()]
+		for b in 5:
+			_flocks.append({"cell": cell, "phase": f * 1.7 + b * 0.25, "radius": 0.25 + b * 0.02, "height": 0.16 + rng.randf() * 0.05})
+	_animals.multimesh.visible_instance_count = _herd.size()
+	for k in _herd.size():
+		_animals.multimesh.set_instance_color(k, colors[k])
+	_birds.multimesh.visible_instance_count = _flocks.size()
+	_move_animals()
+
+
+func _move_animals() -> void:
+	if _herd.is_empty() and _flocks.is_empty():
+		return
+	var size := _tile_size() * 1.3
+	for k in _herd.size():
+		var a: Dictionary = _herd[k]
+		var cell: int = a["cell"]
+		var n: Vector3 = builder.centers[cell]
+		var tg := _tangents(n)
+		# Graze a while, then amble on.
+		var t := _seconds * float(a["speed"])
+		var angle := float(a["phase"]) + t + 0.6 * sin(t * 3.0)
+		var r := float(a["radius"]) * _ts
+		var at := builder.ground(n + (tg[0] * cos(angle) + tg[1] * sin(angle)) * r, cell)
+		var forward: Vector3 = (-tg[0] * sin(angle) + tg[1] * cos(angle)) * signf(float(a["speed"]))
+		var normal := at.normalized()
+		var side := forward.cross(normal).normalized()
+		if side.length_squared() < 0.5:
+			side = tg[0]
+		_animals.multimesh.set_instance_transform(k, _safe(Transform3D(Basis(side, normal, side.cross(normal)).scaled(Vector3.ONE * size), at), "animal"))
+	for k in _flocks.size():
+		var b: Dictionary = _flocks[k]
+		var cell: int = b["cell"]
+		var n: Vector3 = builder.centers[cell]
+		var tg := _tangents(n)
+		var angle := float(b["phase"]) + _seconds * 0.35
+		var at: Vector3 = n * (builder.ground(n, cell).length() + float(b["height"]) * _ts) + (tg[0] * cos(angle) + tg[1] * sin(angle)) * float(b["radius"]) * _ts
+		var forward: Vector3 = -tg[0] * sin(angle) + tg[1] * cos(angle)
+		var normal := n
+		var side := forward.cross(normal).normalized()
+		var flap := Basis(side.cross(normal), sin(_seconds * 9.0 + k) * 0.5)
+		_birds.multimesh.set_instance_transform(k, _safe(Transform3D((flap * Basis(side, normal, side.cross(normal))).scaled(Vector3.ONE * size), at), "bird"))
+
+
+var _unsafe_warned := {}
+
+
+## Never draw anything far off the planet or stretched out of shape
+## (warn once per kind, for the console).
+func _safe(t: Transform3D, kind: String) -> Transform3D:
+	var scale := t.basis.get_scale()
+	var b := t.basis
+	var skew := maxf(absf(b.x.normalized().dot(b.y.normalized())), maxf(absf(b.y.normalized().dot(b.z.normalized())), absf(b.x.normalized().dot(b.z.normalized()))))
+	if t.origin.length() < 1.3 and b.is_finite() and t.origin.is_finite() and scale.x < 0.6 and scale.y < 0.6 and scale.z < 0.6 and skew < 0.2 and absf(b.determinant()) > 1e-9:
+		return t
+	if not _unsafe_warned.has(kind):
+		_unsafe_warned[kind] = true
+		push_warning("oorbit: %s off the planet or out of shape: %s" % [kind, t])
+	return Transform3D(Basis().scaled(Vector3.ZERO), Vector3.ZERO)
+
+
+const MAX_RIDES := 32
+const MAX_ANIMALS := 140
+const MAX_BIRDS := 20
+
+
+## Give a MultiMesh a fixed number of instances, all hidden: only
+## `visible_instance_count` changes afterwards (see `_build_walkers`).
+static func _fixed(mm: MultiMesh, count: int) -> void:
+	mm.instance_count = count
+	for k in count:
+		mm.set_instance_transform(k, Transform3D(Basis().scaled(Vector3.ZERO), Vector3.ZERO))
+	mm.visible_instance_count = 0

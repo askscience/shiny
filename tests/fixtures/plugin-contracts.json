@@ -1001,6 +1001,11 @@
       {
         "auth": "auth",
         "method": "Post",
+        "path": "/api/oorbit/chronicle"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
         "path": "/api/oorbit/dev/skip"
       },
       {

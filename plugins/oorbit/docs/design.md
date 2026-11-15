@@ -135,9 +135,12 @@ Without friends, three or four simulated neighbour planets keep the sky alive.
 Planets travel over Iroh peer to peer; a ship is a signed message with a
 departure and an arrival time, delivered when the receiver is back online.
 
-## Laura (planned)
+## Laura (built in part)
 
-A short spoken Chronicle at each opening, in a personality the player picks
+Built: a short written account at the top of the Chronicle, in a voice the
+player picks (solemn historian, village gossip, grumpy grandpa, keen
+scientist), written in the background by the assistant's AI from the
+latest entries; catalog text first, AI as colour. Planned: a short spoken Chronicle at each opening, in a personality the player picks
 (solemn historian, village gossip, grumpy grandpa, keen scientist); agent
 tools ("how is my planet?", "send 20 food to Marco"); dictated notes rewritten
 in the era's style. Always asynchronous: catalog text first, AI as colour.

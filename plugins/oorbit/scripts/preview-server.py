@@ -84,6 +84,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self._game("action", body)
         elif self.path.startswith("/api/oorbit/presence"):
             self._game("presence")
+        elif self.path.startswith("/api/oorbit/chronicle"):
+            # The preview never calls an AI: Laura answers with a fixed line.
+            text = os.environ.get("OORBIT_LAURA", "")
+            reply = {"success": True, "data": {"status": "ready" if text else "off", "text": text}}
+            self._send(200, "application/json", json.dumps(reply).encode())
         elif self.path.startswith("/api/oorbit/reset"):
             self._game("reset")
         elif self.path.startswith("/api/oorbit/dev/skip"):

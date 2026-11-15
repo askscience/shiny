@@ -2,6 +2,7 @@
 //! state and rules (routes and agent tools); the window is a Godot web export
 //! framed by the shell (`kind = "hybrid"` in `plugin.toml`).
 
+pub mod laura;
 pub mod plugin;
 pub mod routes;
 pub mod store;

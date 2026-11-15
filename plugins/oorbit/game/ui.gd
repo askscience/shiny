@@ -15,6 +15,8 @@ signal tile_focus_requested(index: int)
 ## An effect to play (see `PlanetAudio`), and the mute button.
 signal sound_requested(name: String)
 signal mute_toggled(on: bool)
+## Ask Laura (the AI chronicler) for her account, in this voice.
+signal laura_requested(persona: String)
 
 const PANEL_WIDTH := 320.0
 const NARROW := 640.0
@@ -500,6 +502,9 @@ func _fill_top() -> void:
 
 func _toggle_panel(id: String) -> void:
 	open_panel = "" if open_panel == id else id
+	if open_panel == "chronicle":
+		_laura_unread = false
+		laura_requested.emit(laura_persona)
 	if _narrow() and open_panel != "":
 		tile_closed.emit()
 	_fill_side()
@@ -513,6 +518,7 @@ func _fill_side() -> void:
 	# The research icon glows while nothing is being studied but could be.
 	var idle: bool = _planet().get("research") == null and view.get("techs", []).any(func(t): return t["status"] == "available")
 	_buttons["research"].modulate = Color("f2c078") if idle else Color.WHITE
+	_buttons["chronicle"].modulate = Color("f2c078") if _laura_unread else Color.WHITE
 	_side.visible = open_panel != "" and not view.is_empty()
 	if not _side.visible:
 		return
@@ -539,15 +545,7 @@ func _fill_research() -> void:
 	if planet.get("eras_done", false):
 		_side_body.add_child(_muted(I18n.t("ui.eras.done")))
 	elif era != null:
-		var names := PackedStringArray()
-		for t in era["requires"]:
-			if not t in planet.get("known", []):
-				names.append(I18n.name_of("tech", t))
-		var monument := I18n.name_of("building", era["monument"])
-		if names.is_empty():
-			_side_body.add_child(_muted(I18n.t("ui.era.monument_only", {"monument": monument})))
-		else:
-			_side_body.add_child(_muted(I18n.t("ui.era.next", {"techs": ", ".join(names), "monument": monument})))
+		_era_card(_side_body)
 	var order := {"researching": 0, "available": 1, "not_affordable": 2, "locked": 3, "known": 4}
 	var techs: Array = view.get("techs", []).duplicate()
 	techs.sort_custom(func(a, b): return order.get(a["status"], 5) < order.get(b["status"], 5))
@@ -650,6 +648,7 @@ func _fill_society() -> void:
 
 func _fill_chronicle() -> void:
 	var planet := _planet()
+	_fill_laura()
 	_side_body.add_child(_label(I18n.t("ui.chronicle"), 15, Color("f2c078")))
 	var entries: Array = planet.get("chronicle", [])
 	var step := int(planet.get("step", 0))
@@ -1062,7 +1061,19 @@ func _fill_event() -> void:
 		return
 	_clear(_dialog_body)
 	var id: String = event["id"]
-	_dialog_body.add_child(_label(I18n.name_of("event", id), 17, Color("f2c078")))
+	var head := HBoxContainer.new()
+	var title := _label(I18n.name_of("event", id), 17, Color("f2c078"))
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(title)
+	# Later: the dialog closes; the event waits on its cell (or until the
+	# window is opened again).
+	var later := _icon_button("res://icons/close.svg", I18n.t("ui.event.later"))
+	later.custom_minimum_size = Vector2(28, 28)
+	later.pressed.connect(func():
+		dismissed_event = id
+		_dialog.visible = false)
+	head.add_child(later)
+	_dialog_body.add_child(head)
 	_dialog_body.add_child(_label(I18n.t("event.%s.text" % id)))
 	for choice in event["choices"]:
 		var cid: String = choice["id"]
@@ -1299,12 +1310,15 @@ func _goal_text(g: Dictionary) -> String:
 
 
 func _fill_goals() -> void:
+	if not _planet().get("eras_done", false) and view.get("era") != null:
+		_era_card(_side_body)
 	_side_body.add_child(_label(I18n.t("ui.goals"), 15, Color("f2c078")))
 	var goals: Array = view.get("goals", [])
 	if goals.is_empty():
 		_side_body.add_child(_muted(I18n.t("ui.goals.none")))
 	for g in goals:
 		_side_body.add_child(_label(_goal_text(g), 14))
+		_side_body.add_child(_muted(I18n.t("goal.hint." + str(g["goal"]["type"]))))
 		var bar := ProgressBar.new()
 		bar.max_value = maxf(1.0, float(g["need"]))
 		bar.value = float(g["have"])
@@ -1359,3 +1373,123 @@ func set_muted(on: bool) -> void:
 	if _mute != null:
 		_mute.icon = load("res://icons/mute.svg" if on else "res://icons/sound.svg")
 		_mute.tooltip_text = I18n.t("ui.sound.off" if on else "ui.sound")
+
+
+func _check(text: String, done: bool, note := "") -> Control:
+	var row := HBoxContainer.new()
+	var box := CheckBox.new()
+	box.button_pressed = done
+	box.disabled = true
+	box.focus_mode = Control.FOCUS_NONE
+	row.add_child(box)
+	var label := _label(text + (" · " + note if note != "" else ""), 13, Color("c2d69b") if done else Color("eef3f2"))
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(label)
+	return row
+
+
+## What the next era takes, step by step: each discovery it needs (known,
+## being studied, or still to choose) and the era's monument (standing,
+## going up, or what is still missing to start it).
+func _era_card(box: VBoxContainer) -> void:
+	var planet := _planet()
+	var era: Dictionary = view["era"]
+	var next := int(era["number"]) + 1
+	box.add_child(_label(I18n.t("ui.era.towards", {"era": _era_name(next)}), 15, Color("f2c078")))
+	box.add_child(_muted(I18n.t("ui.era.how")))
+	var known: Array = planet.get("known", [])
+	var techs := {}
+	for t in view.get("techs", []):
+		techs[t["id"]] = t
+	for id in era["requires"]:
+		var t: Dictionary = techs.get(id, {})
+		var note := ""
+		if id in known:
+			note = ""
+		elif planet.get("research") == id:
+			note = I18n.t("ui.era.studying", {"have": _fmt(minf(live_amount("knowledge"), float(t.get("cost", 0)))), "cost": _fmt(float(t.get("cost", 0)))})
+		else:
+			note = I18n.t("ui.era.to_study", {"cost": _fmt(float(t.get("cost", 0)))})
+		box.add_child(_check(I18n.name_of("tech", id), id in known, note))
+	var monument := str(era["monument"])
+	var name := I18n.t("ui.era.monument", {"monument": I18n.name_of("building", monument)})
+	if monument in _built_ids():
+		box.add_child(_check(name, true))
+		return
+	for c in planet.get("construction", []):
+		if str(c["building"]) == monument:
+			var left := maxf(0.0, float(c["done_step"]) * float(view.get("step_ms", 600000)) - live_now_ms())
+			box.add_child(_check(name, false, I18n.t("ui.era.rising", {"time": I18n.duration(wall_ms(left))})))
+			return
+	var def := _building_def(monument)
+	var missing := PackedStringArray()
+	for r in def.get("cost", {}):
+		var need := float(def["cost"][r])
+		var have := live_amount(r)
+		missing.append("%s %s/%s" % [I18n.name_of("resource", r).to_lower(), _fmt(minf(have, need)), _fmt(need)])
+	var all_known := true
+	for id in era["requires"]:
+		all_known = all_known and id in known
+	box.add_child(_check(name, false, ", ".join(missing)))
+	box.add_child(_muted(I18n.t("ui.era.monument_where" if all_known else "ui.era.monument_after", {"biomes": ", ".join(def.get("biomes", []).map(func(b): return I18n.name_of("biome", b).to_lower()))})))
+
+
+func _built_ids() -> Array:
+	var out := []
+	for t in _planet().get("tiles", []):
+		if t.get("building") != null:
+			out.append(str(t["building"]))
+	return out
+
+
+# ---------------------------------------------------------------- Laura
+
+const PERSONAS := ["historian", "gossip", "grandpa", "scientist"]
+var laura_persona := "historian"
+var _laura := {}
+var _laura_unread := false
+
+
+## Laura's answer (`status`: ready, writing, off, empty).
+func set_laura(reply: Dictionary) -> void:
+	var old := str(_laura.get("text", ""))
+	_laura = reply
+	var text := str(reply.get("text", ""))
+	if text != "" and text != old and open_panel != "chronicle":
+		_laura_unread = true
+	if open_panel == "chronicle":
+		_fill_side()
+	elif _buttons.has("chronicle"):
+		_buttons["chronicle"].modulate = Color("f2c078") if _laura_unread else Color.WHITE
+
+
+func _fill_laura() -> void:
+	var head := HBoxContainer.new()
+	var title := _label(I18n.t("ui.laura"), 15, Color("f2c078"))
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(title)
+	var voices := OptionButton.new()
+	for k in PERSONAS.size():
+		voices.add_item(I18n.t("ui.laura." + PERSONAS[k]), k)
+	voices.selected = maxi(0, PERSONAS.find(laura_persona))
+	voices.item_selected.connect(func(i: int):
+		laura_persona = PERSONAS[i]
+		_laura = {"status": "writing", "text": ""}
+		laura_requested.emit(laura_persona)
+		_fill_side())
+	head.add_child(voices)
+	_side_body.add_child(head)
+	var status := str(_laura.get("status", ""))
+	var text := str(_laura.get("text", ""))
+	if text != "":
+		var body := _label(text, 14, Color("f2e1c8"))
+		_side_body.add_child(body)
+	match status:
+		"writing":
+			_side_body.add_child(_muted(I18n.t("ui.laura.writing")))
+		"off":
+			_side_body.add_child(_muted(I18n.t("ui.laura.off")))
+		"empty":
+			_side_body.add_child(_muted(I18n.t("ui.laura.empty")))
+		"":
+			_side_body.add_child(_muted(I18n.t("ui.laura.writing")))
