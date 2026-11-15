@@ -3,23 +3,24 @@
 ##
 ## From far away only the hum of space and a breath of wind; coming down to
 ## the ground, the sea where the view is on water, birds over forests,
-## voices over towns, crickets on the meadows. Turning the planet changes the
+## voices over towns, crickets on the meadows, rain and gusts under a
+## storm in view. Turning the planet changes the
 ## mix slowly. Effects fade with their distance from the middle of the view
 ## and are silent on the far side; only a few play at once, and the same one
 ## never stacks up. The sounds come from `scripts/synth-sounds.py`.
 class_name PlanetAudio
 extends Node
 
-const AMBIENTS := ["space", "wind", "waves", "birds", "village", "crickets"]
-const EFFECTS := ["tap", "build", "hammer", "done", "discovery", "era", "deliver", "boat", "find", "error", "chop", "splash", "flutter"]
+const AMBIENTS := ["space", "wind", "waves", "birds", "village", "crickets", "rain"]
+const EFFECTS := ["tap", "build", "hammer", "done", "discovery", "era", "deliver", "boat", "find", "error", "chop", "splash", "flutter", "thunder"]
 ## Loudness of each effect (linear), before distance.
 const EFFECT_GAIN := {
 	"tap": 0.35, "build": 0.6, "hammer": 0.3, "done": 0.6, "discovery": 0.7, "era": 0.8,
 	"deliver": 0.18, "boat": 0.45, "find": 0.55, "error": 0.4,
-	"chop": 0.25, "splash": 0.25, "flutter": 0.3,
+	"chop": 0.25, "splash": 0.25, "flutter": 0.3, "thunder": 0.9,
 }
 ## The same effect never plays twice within this many seconds.
-const MIN_GAP := {"deliver": 0.35, "hammer": 0.5, "tap": 0.06, "chop": 0.3, "splash": 0.4, "flutter": 1.5}
+const MIN_GAP := {"deliver": 0.35, "hammer": 0.5, "tap": 0.06, "chop": 0.3, "splash": 0.4, "flutter": 1.5, "thunder": 0.8}
 const VOICES := 4
 const AMBIENT_LEVEL := 0.55
 
@@ -70,12 +71,16 @@ func listen(closeness: float, mix: Dictionary) -> void:
 	var open := float(mix.get("open", 0.0))
 	var rock := float(mix.get("rock", 0.0))
 	var town := float(mix.get("town", 0.0))
+	var storm := float(mix.get("storm", 0.0))
 	_target["space"] = 0.08 + 0.55 * (1.0 - z)
 	_target["wind"] = 0.12 + z * (0.25 * open + 0.55 * rock + 0.1 * ocean)
 	_target["waves"] = z * 0.75 * ocean + 0.05 * ocean
 	_target["birds"] = z * (0.7 * forest + 0.2 * open)
 	_target["village"] = z * 0.8 * town
-	_target["crickets"] = z * 0.25 * open
+	_target["crickets"] = z * 0.25 * open * (1.0 - storm)
+	_target["rain"] = storm * (0.35 + 0.65 * z)
+	_target["wind"] += storm * 0.3
+	_target["birds"] *= 1.0 - 0.8 * storm
 
 
 func _process(delta: float) -> void:

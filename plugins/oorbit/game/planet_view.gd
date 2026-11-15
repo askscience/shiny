@@ -71,6 +71,9 @@ const CITY_COLORS := [Color("e08f6c"), Color("4fa3c7"), Color("c2d69b"), Color("
 ## Finds to pick up and the cell of a waiting event: a model on the
 ## ground and a bobbing marker over it.
 var _marks := []  # [{node, tile, kind, base}]
+var weather: Weather
+## Events that come as a storm rolling in (drawn by `Weather`).
+const STORMY := ["storm", "lightning"]
 const FIND_COLOR := Color("f2c078")
 const EVENT_COLOR := Color("e08f6c")
 var _biomes: Array = []
@@ -163,6 +166,10 @@ func _ready() -> void:
 	_animals.material_override = _toon(Color.WHITE, true)
 	pivot.add_child(_animals)
 	_build_birds_and_fx()
+	weather = Weather.new()
+	pivot.add_child(weather)
+	weather.setup(builder)
+	weather.thunder.connect(func(where: Vector3, power: float): sfx.emit("thunder", where))
 	_highlight = MeshInstance3D.new()
 	var line_material := StandardMaterial3D.new()
 	line_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -224,6 +231,8 @@ func _move_walkers(delta: float) -> void:
 				if t < float(w["last"]) and w.get("leader", false):
 					var where: Vector3 = pivot.to_global(points[0])
 					delivered.emit(where, route["text"], route["color"])
+					if randf() < 0.35 and _closeness >= 0.15:
+						_pop(points[0] + points[0].normalized() * 0.03 * size, "pride" if randf() < 0.6 else "joy")
 				w["last"] = t
 				var f := along * (points.size() - 1)
 				var i := mini(int(f), points.size() - 2)
@@ -276,6 +285,7 @@ func _move_walkers(delta: float) -> void:
 	_move_vehicles()
 	_move_animals()
 	_move_birds(delta)
+	_feel_now_and_then(delta)
 	_update_fx(delta)
 	_bob_marks()
 	# Roads grow cell by cell.
@@ -427,6 +437,7 @@ func show_planet(planet: Dictionary, rates := {}) -> void:
 	if not builder.ready() or tiles.size() != builder.centers.size():
 		return
 	_home = int(planet.get("home", 0))
+	mood = float(planet.get("mood", 0.6))
 	_cities = planet.get("cities", [])
 	_links = planet.get("links", [])
 	var building_at := {}
@@ -461,6 +472,10 @@ func show_planet(planet: Dictionary, rates := {}) -> void:
 	var event = planet.get("pending_event")
 	var event_tile := int(event["tile"]) if event != null and event.get("tile") != null else -1
 	_place_marks(finds, event_tile, str(event["id"]) if event != null else "")
+	if event_tile >= 0 and str(event["id"]) in STORMY:
+		weather.set_storm(builder.centers[event_tile], "%s@%s" % [event["id"], event.get("step", 0)])
+	else:
+		weather.set_storm(Vector3.ZERO, "")
 	_town.clear()
 	for i in tiles.size():
 		_town.append(buildings[i] != "")
@@ -646,6 +661,10 @@ static func _box(x: float, y: float, z: float) -> Array:
 ## Two tangents (u, w) so that (u, normal, w) is a right-handed frame: baked
 ## into the merged mesh, a mirrored frame would turn every face inside out.
 func _tangents(normal: Vector3) -> Array:
+	return _tangents_of(normal)
+
+
+static func _tangents_of(normal: Vector3) -> Array:
 	var up := Vector3.UP if abs(normal.y) < 0.9 else Vector3.RIGHT
 	var n := normal.normalized()
 	var u := n.cross(up).normalized()
@@ -716,25 +735,20 @@ func _place_tile(i: int, biome: String, building: String, rng: RandomNumberGener
 			_put(_box(0.06, 0.035, 0.008), RESOURCE_COLORS.get(_ordered[i], Color("f2c078")), normal, base, Vector3(0.03, 0.14, 0))
 		_on_ground = false
 		return
-	# The footing: the lowest ground under the building, with a plinth
-	# below it so a slope never shows a gap.
-	var footing := base
-	var t := _tangents(normal)
-	for k in 6:
-		var a := k * TAU / 6.0
-		var p := builder.ground(base + (t[0] * cos(a) + t[1] * sin(a)) * 0.05 * _ts, i)
-		if p.length() < footing.length():
-			footing = p
-	footing = footing.normalized() * (footing.length() - 0.002)
-	_put(_box(0.26, 0.08, 0.26), _plinth(biome), normal, footing, Vector3(0, -0.035, 0))
+	# The footing: the plane that best fits the ground under the building,
+	# so it sits on the slope like the land around it, sunk just enough
+	# that no corner floats.
+	var fit := _ground_plane(i, normal, base)
+	var up: Vector3 = fit[0]
+	var footing: Vector3 = fit[1]
 	if building.begins_with("construction:"):
-		_scaffold(normal, footing)
-		_grow_site(i, building.substr(13), normal, footing)
+		_scaffold(up, footing)
+		_grow_site(i, building.substr(13), up, footing)
 	else:
-		_building(building, normal, footing)
+		_building(building, up, footing)
 		if SMOKY.has(building) and _smoke.size() < 40:
-			_smoke.append([footing + normal.normalized() * float(SMOKY[building]) * _ts * BUILDING_SCALE, randf() * 2.0])
-	_flag(i, normal, footing)
+			_smoke.append([footing + up * float(SMOKY[building]) * _ts * BUILDING_SCALE, randf() * 2.0])
+	_flag(i, normal, base)
 	_on_ground = true
 	_nature(normal, base, biome, rng, 2)
 	_on_ground = false
@@ -778,14 +792,42 @@ func _quarry(normal: Vector3, base: Vector3, rng: RandomNumberGenerator) -> void
 		_put(_cone(0.04, 0.03, 5), Color("a39aa8"), normal, base, Vector3(cos(a) * 0.15, 0.012, sin(a) * 0.15), 0.8 + rng.randf() * 0.5)
 
 
-## The plinth under a building: packed earth, sand or stone.
-static func _plinth(biome: String) -> Color:
-	match biome:
-		"desert", "coast":
-			return Color("b58e6b")
-		"mountain", "ice":
-			return Color("857c8a")
-	return Color("8f6f5a")
+## Most a building leans with the slope, in radians: steeper ground would
+## tip it over.
+const MAX_LEAN := 0.42
+
+
+## The ground under a building on cell `cell`: [up, footing]. `up` is the
+## normal of the plane fitted through two rings of ground points around the
+## centre (no more than `MAX_LEAN` off the sphere's up), and `footing` the
+## plane's centre, lowered so the lowest point of the rings is covered.
+func _ground_plane(cell: int, normal: Vector3, base: Vector3) -> Array:
+	var radial := normal.normalized()
+	var t := _tangents(normal)
+	var ring := []
+	for r: float in [0.05, 0.1]:
+		for k in 8:
+			var a: float = k * TAU / 8.0 + r * 3.0
+			ring.append(builder.ground(base + (t[0] * cos(a) + t[1] * sin(a)) * r * _ts * BUILDING_SCALE, cell))
+	var centre := Vector3.ZERO
+	for p in ring:
+		centre += p
+	centre /= ring.size()
+	var up := Vector3.ZERO
+	for k in ring.size():
+		var a: Vector3 = ring[k] - centre
+		var b: Vector3 = ring[(k + 1) % 8 + (8 if k >= 8 else 0)] - centre
+		up += b.cross(a)
+	if up.dot(radial) < 0.0:
+		up = -up
+	up = up.normalized() if up.length_squared() > 1e-12 else radial
+	var lean := up.angle_to(radial)
+	if lean > MAX_LEAN:
+		up = radial.slerp(up, MAX_LEAN / lean).normalized()
+	var low := 0.0
+	for p in ring:
+		low = minf(low, (p - centre).dot(up))
+	return [up, centre + up * (low - 0.003 * _ts)]
 
 
 ## Buildings are drawn larger than life, so they read at the pixel scale.
@@ -1213,10 +1255,13 @@ func _flag(cell: int, normal: Vector3, base: Vector3) -> void:
 	var k := _city_index(cell)
 	if k < 0:
 		return
+	# The pole stands upright on the ground where it is.
+	var t := _tangents(normal)
+	var foot := builder.ground(base + (t[0] * -0.12 + t[1] * -0.06) * _ts, cell) - normal.normalized() * 0.004 * _ts
 	var saved := _on_ground
 	_on_ground = false
-	_put(_box(0.012, 0.24, 0.012), Palette.HUT_WALL, normal, base, Vector3(-0.12, 0.12, -0.06))
-	_put(_box(0.08, 0.045, 0.008), CITY_COLORS[k % CITY_COLORS.size()], normal, base, Vector3(-0.08, 0.215, -0.06))
+	_put(_box(0.012, 0.24, 0.012), Palette.HUT_WALL, normal, foot, Vector3(0, 0.12, 0))
+	_put(_box(0.08, 0.045, 0.008), CITY_COLORS[k % CITY_COLORS.size()], normal, foot, Vector3(0.04, 0.215, 0))
 	_on_ground = saved
 
 
@@ -1445,8 +1490,7 @@ func _find_model(kind: String, normal: Vector3, base: Vector3, rng: RandomNumber
 
 
 ## A marker over every find (a bobbing gem on a pin) and, over the cell of
-## an event that happens somewhere, the event itself: a storm cloud with
-## rain, lightning, a burning sun, a traders' cart, an explorers' boat, a
+## an event that happens somewhere, the event itself: a burning sun, a traders' cart, an explorers' boat, a
 ## falling meteor, or a sign.
 func _place_marks(finds: Array, event_tile: int, event_id: String) -> void:
 	for mark in _marks:
@@ -1505,34 +1549,8 @@ func _mark_parts(kind: String, node: Node3D) -> Dictionary:
 		return parts
 	match event:
 		"storm", "lightning":
-			var cloud := _mark_mesh(func():
-				for k in 6:
-					var a := k * TAU / 6.0
-					_put(_ball(0.07), Color("5b5466") if k % 2 == 0 else Color("6f6680"), up, o, Vector3(cos(a) * 0.08, 0.0, sin(a) * 0.06), 1.0)
-				_put(_ball(0.09), Color("4a4152"), up, o, Vector3(0, 0.03, 0))
-				for k in 6:
-					var a := k * TAU / 6.0
-					_put(_ball(0.07), Color("4a4152"), up, o, Vector3(cos(a) * 0.08, 0.0, sin(a) * 0.06), 1.0, 0.0, PI))
-			cloud.position = Vector3(0, 0.75, 0)
-			node.add_child(cloud)
-			parts["cloud"] = cloud
-			var drops := []
-			for k in 10:
-				var drop := _mark_mesh(func(): _put(_box(0.014, 0.09, 0.014), Color("c8e0ec"), up, o, Vector3.ZERO), true)
-				drop.position = Vector3(cos(k * 2.4) * 0.12, 0.4, sin(k * 2.4) * 0.09)
-				node.add_child(drop)
-				drops.append(drop)
-			parts["rain"] = drops
-			if event == "lightning":
-				var bolt := _mark_mesh(func():
-					var at := Vector3(0, 0.0, 0)
-					for k in 4:
-						var step := Vector3(0.03 * (1 if k % 2 == 0 else -1), -0.11, 0)
-						_put(_box(0.012, 0.12, 0.012), Color("fff2a0"), up, o, at + step * 0.5, 1.0, 0.0, 0.0)
-						at += step, true)
-				bolt.position = Vector3(0.02, 0.5, 0)
-				node.add_child(bolt)
-				parts["bolt"] = bolt
+			# The storm itself is weather (see `Weather`): no model here.
+			pass
 		"drought":
 			var sun := _mark_mesh(func():
 				_put(_ball(0.07), Color("f2c078"), up, o, Vector3.ZERO)
@@ -1588,15 +1606,6 @@ func _bob_marks() -> void:
 				gem.position.y = 0.42 + 0.03 * sin(t * 3.0)
 		if parts.has("bob"):
 			(parts["bob"] as Node3D).position.y = 0.02 + 0.015 * absf(sin(t * 2.0))
-		if parts.has("cloud"):
-			(parts["cloud"] as Node3D).position.x = 0.03 * sin(t * 0.6)
-		if parts.has("rain"):
-			var drops: Array = parts["rain"]
-			for i in drops.size():
-				var drop: Node3D = drops[i]
-				drop.position.y = 0.66 - fmod(t * 1.1 + i * 0.137, 0.62)
-		if parts.has("bolt"):
-			(parts["bolt"] as Node3D).visible = fmod(t, 2.6) < 0.18
 		if parts.has("fall"):
 			var f := fmod(t * 0.5, 1.0)
 			var rock: Node3D = parts["fall"]
@@ -2096,9 +2105,9 @@ func _update_fx(delta: float) -> void:
 			break
 		var p: Vector3 = st["p"]
 		if st.has("dir"):
-			mm.set_instance_transform(i, _stretched(p, st["dir"], float(st["s"])))
+			mm.set_instance_transform(i, _safe(_stretched(p, st["dir"], float(st["s"])), "fx line"))
 		else:
-			mm.set_instance_transform(i, _upright(p, _tangents(p.normalized())[0], float(st["s"])))
+			mm.set_instance_transform(i, _safe(_upright(p, _tangents(p.normalized())[0], float(st["s"])), "fx dot"))
 		mm.set_instance_color(i, st["c"])
 		i += 1
 	var k := 0
@@ -2120,9 +2129,9 @@ func _update_fx(delta: float) -> void:
 		var f := float(part["life"]) / float(part["max"])
 		var size := lerpf(float(part["s0"]), float(part["s1"]), f)
 		if part["stretch"]:
-			mm.set_instance_transform(i, _stretched(p, v.normalized() * size * 3.0, size))
+			mm.set_instance_transform(i, _safe(_stretched(p, v.normalized() * size * 3.0, size), "fx streak"))
 		else:
-			mm.set_instance_transform(i, _upright(p, _tangents(p.normalized())[0], size))
+			mm.set_instance_transform(i, _safe(_upright(p, _tangents(p.normalized())[0], size), "fx puff"))
 		var c: Color = part["c"]
 		mm.set_instance_color(i, c)
 		i += 1
@@ -2395,3 +2404,104 @@ func _safe(t: Transform3D, kind: String) -> Transform3D:
 		_unsafe_warned[kind] = true
 		push_warning("oorbit: %s off the planet or out of shape: %s" % [kind, t])
 	return Transform3D(Basis().scaled(Vector3.ZERO), Vector3.ZERO)
+
+
+# ---------------------------------------------------------------- feelings
+
+## How people feel, shown as a coloured dot that pops out of a head: only
+## for people on screen. Now and then someone shows the planet's mood (and
+## fear under a storm); the player's choices make the people around show
+## what they think of it (see `feel`).
+const FEELINGS := {
+	"joy": Color("f2c94c"), "love": Color("f28bb0"), "pride": Color("8fd16a"),
+	"sad": Color("5b8fd9"), "anger": Color("e0524a"), "fear": Color("a77bd9"), "wonder": Color("6fd6d0"),
+}
+var mood := 0.6
+var _camera: Camera3D
+var _closeness := 0.0
+var _feel_left := 2.0
+var _feel_queue := []   # [seconds left, position, kind]
+
+
+## Where the camera is and how close it has come (0 whole planet, 1 at the
+## ground): the weather and the feelings follow it.
+func set_camera(camera: Camera3D, closeness: float) -> void:
+	_camera = camera
+	_closeness = closeness
+	if weather != null:
+		weather.look(pivot.to_local(camera.global_position), closeness)
+
+
+## The heads on screen right now (planet frame), the ones nearest `near`
+## first when it is given.
+func _heads(near := Vector3.ZERO) -> Array:
+	var out := []
+	if _camera == null:
+		return out
+	var eye := pivot.to_local(_camera.global_position)
+	var lift := 0.03 * _tile_size() * 1.2
+	for p in _people:
+		var head: Vector3 = p + p.normalized() * lift
+		if head.normalized().dot((eye - head).normalized()) < 0.05:
+			continue
+		if not _camera.is_position_in_frustum(pivot.to_global(head)):
+			continue
+		out.append(head)
+	if near != Vector3.ZERO:
+		out.sort_custom(func(a: Vector3, b: Vector3): return a.distance_squared_to(near) < b.distance_squared_to(near))
+	else:
+		out.shuffle()
+	return out
+
+
+## A dot of feeling rising from a head.
+func _pop(head: Vector3, kind: String) -> void:
+	var up := head.normalized()
+	var c: Color = FEELINGS.get(kind, Color.WHITE)
+	_spawn(head + up * 0.006 * _ts, up * 0.07 * _ts + _jitter(0.005 * _ts), c, 1.6, 0.012 * _ts, 0.02 * _ts, 0.06 * _ts)
+
+
+## The people around `cell` (or anyone on screen, with -1) feel `kind`:
+## up to `count` of them, one after the other.
+func feel(kind: String, cell := -1, count := 4) -> void:
+	var near := Vector3.ZERO
+	if cell >= 0 and cell < builder.centers.size():
+		near = builder.ground(builder.centers[cell], cell)
+	var heads := _heads(near)
+	if near != Vector3.ZERO:
+		# Only people close by take part.
+		heads = heads.filter(func(h: Vector3): return h.distance_to(near) < 0.35)
+	for k in mini(count, heads.size()):
+		_feel_queue.append([k * randf_range(0.12, 0.3), heads[k], kind])
+
+
+func _feel_now_and_then(delta: float) -> void:
+	var k := 0
+	while k < _feel_queue.size():
+		_feel_queue[k][0] -= delta
+		if _feel_queue[k][0] <= 0.0:
+			_pop(_feel_queue[k][1], _feel_queue[k][2])
+			_feel_queue.remove_at(k)
+		else:
+			k += 1
+	_feel_left -= delta
+	if _feel_left > 0.0:
+		return
+	_feel_left = randf_range(0.7, 1.6)
+	# From far away nobody could see a face.
+	if _closeness < 0.15:
+		return
+	var heads := _heads()
+	if heads.is_empty():
+		return
+	var head: Vector3 = heads[0]
+	var storm: Array = weather.storm() if weather != null else []
+	var kind := ""
+	if not storm.is_empty() and head.normalized().angle_to(storm[0].normalized()) < 0.35 and randf() < 0.8 * float(storm[1]):
+		kind = "fear"
+	elif randf() < mood:
+		kind = ["joy", "joy", "joy", "love", "pride", "wonder"][randi() % 6]
+	elif randf() < 0.8:
+		kind = "sad" if randf() < 0.6 else "anger"
+	if kind != "":
+		_pop(head, kind)

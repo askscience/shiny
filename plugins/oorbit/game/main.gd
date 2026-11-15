@@ -113,9 +113,12 @@ func _process(delta: float) -> void:
 		if absf(_zoom - _zoom_target) < 0.002:
 			_zoom = _zoom_target
 		_fit()
+	# Ships between the planets sail past the camera: only in the far view.
+	traffic.visible = planet_view.visible and _zoom < 1.35 and not ui.catalog.is_empty()
 	if traffic.visible:
 		traffic.tick(ui.live_now_ms())
 	_update_marks()
+	planet_view.set_camera(camera, clampf((_zoom - 1.0) / (ZOOM_MAX - 1.0), 0.0, 1.0))
 	_update_sound(delta)
 	if not host.available or ui.catalog.is_empty():
 		return
@@ -187,11 +190,9 @@ func _on_view(reply: Dictionary) -> void:
 		planet_view.show_planet(planet, data.get("rates", {}))
 		var era = data.get("era")
 		_set_palette(int(era["number"]) if era != null else 1)
-		traffic.visible = true
 		traffic.show_view(data)
 	else:
 		planet_view.visible = false
-		traffic.visible = false
 	ui.show_view(data)
 	# At the opening, Laura gets to work on her account of what happened.
 	if planet != null and not _laura_asked:
@@ -241,7 +242,12 @@ func _update_sound(delta: float) -> void:
 	if _listen_left <= 0.0:
 		_listen_left = 0.25
 		var closeness := clampf((_zoom - 1.0) / (ZOOM_MAX - 1.0), 0.0, 1.0)
-		audio.listen(closeness, planet_view.view_mix(camera.global_position, closeness))
+		var mix := planet_view.view_mix(camera.global_position, closeness)
+		var storm: Array = planet_view.weather.storm()
+		if not storm.is_empty():
+			var where := planet_view.pivot.to_global(storm[0])
+			mix["storm"] = float(storm[1]) * clampf(0.25 + _weight_at(where) * 1.5, 0.0, 1.0) if _weight_at(where) > 0.0 else 0.0
+		audio.listen(closeness, mix)
 	_hammer_left -= delta
 	if _hammer_left <= 0.0:
 		_hammer_left = randf_range(1.6, 3.2)
@@ -337,7 +343,56 @@ func _set_palette(era: int) -> void:
 
 func _send_action(action: Dictionary) -> void:
 	_busy = true
-	host.post_json("action", action, _on_view)
+	var before: Dictionary = ui.view.get("planet", {}) if ui.view.get("planet") != null else {}
+	host.post_json("action", action, func(reply: Dictionary):
+		_on_view(reply)
+		if reply.get("success", false):
+			_react(action, before, reply.get("data", {}).get("planet", {})))
+
+
+## The people around show what they think of the player's choice: a
+## coloured dot from the heads on screen (see `PlanetView.feel`).
+func _react(action: Dictionary, before: Dictionary, after) -> void:
+	if after == null or before.is_empty():
+		return
+	var moved := float(after.get("mood", 0.0)) - float(before.get("mood", 0.0))
+	var tile := int(action.get("tile", -1))
+	match str(action.get("type", "")):
+		"resolve_event":
+			var e = before.get("pending_event")
+			var cell := int(e["tile"]) if e != null and e.get("tile") != null else -1
+			if moved > 0.004:
+				planet_view.feel("joy", cell, 6)
+			elif moved < -0.004:
+				planet_view.feel("anger", cell, 3)
+				planet_view.feel("sad", cell, 3)
+			else:
+				planet_view.feel("wonder", cell, 4)
+		"build":
+			planet_view.feel("joy", tile, 3)
+		"demolish":
+			planet_view.feel("sad", tile, 4)
+		"help":
+			planet_view.feel("pride", tile, 4)
+		"plant":
+			planet_view.feel("love", tile, 3)
+		"harvest":
+			planet_view.feel("pride", tile, 2)
+		"stop_harvest":
+			planet_view.feel("wonder", tile, 1)
+		"collect":
+			for f in before.get("finds", []):
+				if int(f["id"]) == int(action.get("id", -1)):
+					planet_view.feel("wonder", int(f["tile"]), 2)
+					planet_view.feel("joy", int(f["tile"]), 3)
+		"research":
+			planet_view.feel("wonder", -1, 2)
+		"link", "accept_offer":
+			planet_view.feel("joy", -1, 4)
+		"send":
+			planet_view.feel("love", -1, 3)
+	if int(after.get("era", 0)) > int(before.get("era", 0)):
+		planet_view.feel("joy", -1, 10)
 
 
 func _found(climate: String) -> void:

@@ -161,6 +161,17 @@ def crickets(rng):
     return loop(track, r)
 
 
+def rain(rng):
+    r, n = AMBIENT_RATE, int(8.5 * AMBIENT_RATE)
+    hiss = bandpass(noise(rng, n), 900, 4500, r)
+    track = [a * 0.35 for a in hiss]
+    for _ in range(700):
+        m = int(0.012 * r)
+        drop = [rng.uniform(-1.0, 1.0) * math.exp(-400 * i / r) for i in range(m)]
+        place(track, highpass(drop, 1500, r), rng.uniform(0.0, 8.4), r, rng.uniform(0.2, 0.7))
+    return loop(track, r)
+
+
 # ---------------------------------------------------------------- effects
 
 def tap(rng):
@@ -283,10 +294,24 @@ def flutter(rng):
     return track
 
 
+def thunder(rng):
+    r = EFFECT_RATE
+    n = int(3.2 * r)
+    crack = [a * math.exp(-25 * i / r) for i, a in enumerate(bandpass(noise(rng, int(0.3 * r)), 400, 5000, r))]
+    rumble = lowpass(lowpass(noise(rng, n), 180, r), 220, r)
+    roll = []
+    for i in range(n):
+        t = i / r
+        swell = (0.6 + 0.4 * math.sin(TAU * 1.3 * t + 0.4) * math.sin(TAU * 0.7 * t)) * min(1.0, t / 0.08) * math.exp(-1.1 * t)
+        roll.append(rumble[i] * swell * 6.0)
+    track = mix(roll, [c * 0.9 for c in crack])
+    return track
+
+
 def main():
-    for name, make in [("space", space), ("wind", wind), ("waves", waves), ("birds", birds), ("village", village), ("crickets", crickets)]:
+    for name, make in [("space", space), ("wind", wind), ("waves", waves), ("birds", birds), ("village", village), ("crickets", crickets), ("rain", rain)]:
         write("amb_" + name, make(random.Random(name)), AMBIENT_RATE)
-    for name, make in [("tap", tap), ("build", build), ("hammer", hammer), ("done", done), ("discovery", discovery), ("era", era), ("deliver", deliver), ("boat", boat), ("find", find), ("error", error), ("chop", chop), ("splash", splash), ("flutter", flutter)]:
+    for name, make in [("tap", tap), ("build", build), ("hammer", hammer), ("done", done), ("discovery", discovery), ("era", era), ("deliver", deliver), ("boat", boat), ("find", find), ("error", error), ("chop", chop), ("splash", splash), ("flutter", flutter), ("thunder", thunder)]:
         write("sfx_" + name, make(random.Random(name)), EFFECT_RATE)
     print("sounds written to", os.path.abspath(OUT))
 

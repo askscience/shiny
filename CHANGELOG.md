@@ -87,6 +87,16 @@
   builders work on them. The work sliders are gone: whoever has no crew
   thinks and makes culture. While you play, an hour of the planet lasts a
   minute; while you are away, the planet runs at half speed.
+- Oorbit 0.7.5: weather and feelings. Buildings no longer stand on a
+  platform: each one sits on the slope of the ground under it. Clouds drift
+  around the planet in the far view, form and melt away, and never stick
+  out of its outline. A storm is now a dark thunderhead of stippled
+  particles that rolls in towards a colony, churns over it with rain and
+  lightning, thunder rumbling a moment later, and moves on once the event is
+  answered; rain and gusts are heard while it is in view. People on screen
+  show what they feel with a coloured dot over their heads: the planet's
+  mood, fear under the storm, and their opinion of the player's choices.
+  Ships between the planets show only in the far view.
 - Oorbit 0.7.4: little things alive. Hunters chase a deer across their
   cell (arrows fly, muskets smoke, a spear is thrown), it falls and they
   carry it home; wild animals run off when people come close. Fishers

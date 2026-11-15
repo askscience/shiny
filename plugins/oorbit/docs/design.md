@@ -57,6 +57,12 @@ are brought home with a tap; some events happen on a cell; a building site
 can be helped by the thinkers, at the cost of research; three small goals
 with a reward are always open.
 
+The planet shows what it lives through: a storm is seen rolling in towards
+the threatened colony before the player answers it, and the people on
+screen show with a coloured dot how they feel, now and then from the
+planet's mood and right after a choice from what they think of it, so a
+choice has a face as well as a number.
+
 ## Society (built)
 
 - Population starts at 8. 80% work. Up to nine crews, together at most
