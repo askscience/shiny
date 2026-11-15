@@ -24,6 +24,7 @@ pub mod plugin;
 pub mod odt;
 pub mod ods;
 pub mod odp;
+pub mod odp_spec;
 pub mod upload;
 pub mod db;
 pub mod util;

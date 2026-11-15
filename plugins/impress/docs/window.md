@@ -30,7 +30,9 @@ export default {
   `listReveal` when a deck opens — the 300 ms refresh while typing redraws
   without motion.
 - **Stage**: the current slide in a hairline frame (no float shadow), edited in
-  place; it enters with `cardEnter` when the selected slide changes or a deck
+  place. Slides are drawn from `slide-spec.js` (the .odp writer's own layout
+  description) as fixed boxes, so the stage matches the exported file; a box
+  whose text overflows shrinks (the slide's `fit`). The slide enters with `cardEnter` when the selected slide changes or a deck
   opens.
 - **Inspector**: mono uppercase labels over hairline-underlined selects
   (layout / transition / bullets, with translated option names) and speaker

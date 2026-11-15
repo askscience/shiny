@@ -2748,158 +2748,55 @@ html[data-phone='1'] .impress-anim-apply { width: 44px; height: 44px; min-height
   box-sizing: border-box;
   transform-origin: top left;
   transform: scale(1);
+  overflow: hidden;
+  --im-accent: #6366f1;
+}
+
+/* Every box, size, colour and background comes from slide-spec.js (the
+   .odp writer's own description, see plugins/impress/web/plugin.js): the CSS
+   only lays the boxes out the way an ODF text frame does. */
+.impress-slide-rule { position: absolute; }
+.impress-slide-box {
+  position: absolute;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-  font-family: var(--font-display);
-  --im-accent: #6366f1;
-  --im-dark-a: #1a1a2e;
-  --im-dark-b: #2b2b52;
-  --im-light: #ffffff;
+  justify-content: flex-start;
+  font-kerning: normal;
+  font-synthesis: none;
 }
-
-.impress-slide[data-theme='aurora'] { --im-accent: #6366f1; --im-dark-a: #1a1a2e; --im-dark-b: #2b2b52; --im-light: #ffffff; }
-.impress-slide[data-theme='slate']  { --im-accent: #475569; --im-dark-a: #0f172a; --im-dark-b: #1e293b; --im-light: #f8fafc; }
-.impress-slide[data-theme='ocean']  { --im-accent: #0ea5e9; --im-dark-a: #082f49; --im-dark-b: #0c4a6e; --im-light: #f0f9ff; }
-.impress-slide[data-theme='mono']   { --im-accent: #18181b; --im-dark-a: #111111; --im-dark-b: #1c1c1c; --im-light: #ffffff; }
-.impress-slide[data-theme='ember']  { --im-accent: #f97316; --im-dark-a: #1c1917; --im-dark-b: #2d1f14; --im-light: #fff7ed; }
-
-/* title */
-.impress-slide--title {
-  justify-content: center;
-  padding: 52px 64px;
-  background: linear-gradient(150deg, var(--im-dark-a), var(--im-dark-b));
-  color: #ffffff;
-}
-.impress-slide--title .impress-slide-title {
-  font-size: 46px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  line-height: 1.05;
-}
-.impress-slide--title .impress-slide-title::after {
-  content: '';
-  display: block;
-  width: 64px;
-  height: 6px;
-  margin-top: 18px;
-  border-radius: 3px;
-  background: var(--im-accent);
-}
-.impress-slide--title .impress-slide-subtitle {
-  margin-top: 24px;
-  font-size: 22px;
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.72);
-}
-
-/* section */
-.impress-slide--section {
-  justify-content: center;
-  padding: 0 64px;
-  background: linear-gradient(140deg, var(--im-accent), color-mix(in srgb, var(--im-accent) 55%, #000 45%));
-  color: #ffffff;
-}
-.impress-slide--section .impress-slide-title {
-  font-size: 54px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  line-height: 1.05;
-}
-
-/* content + two-column + blank share a light canvas */
-.impress-slide--content,
-.impress-slide--two-column,
-.impress-slide--blank {
-  background: var(--im-light);
-  color: #0f172a;
-  padding: 36px 52px;
-}
-.impress-slide--content .impress-slide-title,
-.impress-slide--two-column .impress-slide-title {
-  font-size: 32px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  line-height: 1.1;
-}
-.impress-slide--content .impress-slide-title::after,
-.impress-slide--two-column .impress-slide-title::after {
-  content: '';
-  display: block;
-  width: 46px;
-  height: 5px;
-  margin-top: 12px;
-  border-radius: 3px;
-  background: var(--im-accent);
+.impress-slide-box[data-valign='middle'] { justify-content: center; }
+.impress-slide-box[data-valign='bottom'] { justify-content: flex-end; }
+.impress-slide-box > * { flex: none; }
+.impress-slide-title,
+.impress-slide-subtitle,
+.impress-slide-body,
+.impress-slide-attribution,
+.impress-slide-mark {
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
 }
 
 .impress-slide-bullets {
   display: flex;
   flex-direction: column;
-  gap: 9px;
-  margin-top: 22px;
+  gap: var(--im-gap, 0px);
 }
 .impress-slide-bullet {
-  position: relative;
-  padding-left: 24px;
-  font-size: 19px;
-  line-height: 1.35;
-  color: #334155;
+  padding-left: var(--im-bullet-indent);
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
 }
 .impress-slide-bullet::before {
-  content: '';
-  position: absolute;
-  left: 2px;
-  top: 9px;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--im-accent);
-}
-
-.impress-slide-columns {
-  display: flex;
-  gap: 36px;
-  flex: 1;
-  margin-top: 18px;
-}
-.impress-slide-columns .impress-slide-bullets {
-  flex: 1;
-  margin-top: 0;
-}
-
-/* quote */
-.impress-slide--quote {
-  justify-content: center;
-  padding: 0 64px;
-  background: linear-gradient(150deg, var(--im-dark-a), var(--im-dark-b));
-  color: #ffffff;
-}
-.impress-slide--quote .impress-slide-quote {
-  font-size: 30px;
-  line-height: 1.4;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-}
-.impress-slide--quote .impress-slide-quote::before {
-  content: '\201C';
-  display: block;
-  font-size: 54px;
-  line-height: 1;
-  margin-bottom: 8px;
+  content: var(--im-bullet);
+  display: inline-block;
+  width: var(--im-bullet-indent);
+  margin-left: calc(-1 * var(--im-bullet-indent));
+  font-family: var(--im-bullet-font);
+  font-size: var(--im-bullet-size);
+  font-weight: 400;
+  letter-spacing: 0;
   color: var(--im-accent);
-}
-.impress-slide--quote .impress-slide-attribution {
-  margin-top: 18px;
-  font-size: 16px;
-  color: rgba(255, 255, 255, 0.6);
-}
-
-/* blank */
-.impress-slide--blank { justify-content: center; align-items: center; }
-.impress-slide--blank .impress-slide-body {
-  font-size: 24px;
-  color: #334155;
 }
 
 /* Direct on-slide editing: text blocks are contentEditable on the stage. */

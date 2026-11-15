@@ -25,6 +25,12 @@ import {
  * slides in over it from the bar's properties button, closing with Back /
  * Escape. A phone also gets an action bar with "Add slide" at the thumb.
  *
+ * What you see is what the .odp holds: slides are drawn from `slide-spec.js`
+ * (generated from the SDK's `odp_spec.rs`, which the writer uses too) as
+ * fixed boxes on the 640×360 page, with the file's fonts, sizes, line
+ * heights and colours. Text that overflows its box is shrunk (the slide's
+ * `fit`, measured on the stage and written into the file).
+ *
  * AI wiring: `slide_*` tool outcomes arrive via the `agent:actions` event —
  * the window refreshes its deck list and opens what the AI touched.
  */
@@ -33,6 +39,10 @@ import { apiFetch } from '../../js/api.js';
 import { t, tp } from '../../js/i18n.js';
 import { formatMenuDate, formatMenuTime, appendMenuFooter, showDocumentMenu } from '../../js/officeMenu.js';
 import { saveOrDownload, onOpenFromFiles, fileFromHome, pickFiles } from '../../js/files.js';
+// How every layout looks — boxes, type, colours, rules, backgrounds — is the
+// same description the .odp writer uses (generated from the SDK's
+// odp_spec.rs), so the stage shows what the exported file contains.
+import SPEC from './slide-spec.js';
 
 export const IMPRESS_PLUGIN = 'impress';
 
@@ -167,6 +177,7 @@ function newSlide(layout = 'content') {
     notes: '',
     transition: 'none',
     reveal: 'all',
+    fit: 1,
   };
 }
 
@@ -182,7 +193,14 @@ function normalizeSlide(s) {
   slide.body = String(slide.body || '');
   slide.attribution = String(slide.attribution || '');
   slide.notes = String(slide.notes || '');
+  slide.fit = clampFit(slide.fit);
   return slide;
+}
+
+/** The shrink-on-overflow scale, kept within what the writer accepts. */
+function clampFit(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.min(1, Math.max(SPEC.minFit, n)) : 1;
 }
 
 function slideCount() {
@@ -195,66 +213,158 @@ function slideCount() {
  *  `editable` makes the stage slide's text contentEditable so it can be
  *  edited in place; thumbnails and the Present overlay render read-only. */
 function slideEl(slide, theme, editable = false) {
+  const layout = SPEC.layouts[slide.layout] || SPEC.layouts.content;
+  const pal = SPEC.themes[theme] || SPEC.themes.aurora;
   const el = h('div', `impress-slide impress-slide--${slide.layout}`);
   el.dataset.theme = theme;
+  el.style.setProperty('--im-accent', pal.accent);
+  el.style.setProperty('--im-bullet', JSON.stringify(SPEC.bullet.char));
+  el.style.setProperty('--im-bullet-size', `${SPEC.bullet.relative * 100}%`);
+  el.style.setProperty('--im-bullet-indent', `${SPEC.bullet.indent}px`);
+  el.style.setProperty('--im-bullet-font', `'${SPEC.fonts.fallback}', sans-serif`);
+  const bg = layout.background;
+  el.style.background = bg.kind === 'gradient'
+    ? `linear-gradient(${bg.angle}deg, ${pal[bg.from]}, ${pal[bg.to]})`
+    : pal[bg.color];
+  const fit = clampFit(slide.fit);
+  const filled = (field) => String(slide[field] || '').trim() !== '';
 
-  const addText = (field, className, content, multiline = false) => {
-    if (!editable && String(content || '').trim() === '') return;
-    const node = h('div', className, content);
-    if (editable) {
-      node.contentEditable = 'true';
-      node.spellcheck = false;
-      node.dataset.field = field;
-      if (multiline) node.dataset.multiline = '1';
-      node.setAttribute('role', 'textbox');
-      const placeholder = field === 'body'
-        ? (slide.layout === 'blank' ? t('plugin.impress.slide.addText', null, 'Add text') : '')
-        : ({
-          title: t('plugin.impress.slide.addTitle', null, 'Add a title'),
-          subtitle: t('plugin.impress.slide.addSubtitle', null, 'Add a subtitle'),
-          attribution: t('plugin.impress.slide.attribution', null, 'Attribution'),
-        }[field] || '');
-      if (placeholder) node.dataset.placeholder = placeholder;
-      wireTextField(node);
+  // Accent rules: the file draws one only under a filled field; the editor
+  // always does, as part of the empty field it introduces.
+  for (const rule of layout.rules) {
+    if (!editable && !filled(rule.with)) continue;
+    const bar = h('div', 'impress-slide-rule');
+    place(bar, rule);
+    bar.style.borderRadius = `${rule.radius}px`;
+    bar.style.background = pal[rule.color];
+    el.appendChild(bar);
+  }
+
+  for (const box of layout.texts) {
+    if (box.literal) {
+      if (!editable && !filled(box.with)) continue;
+      const mark = textBox(box, pal, fit);
+      mark.appendChild(h('div', 'impress-slide-mark', box.literal));
+      mark.setAttribute('aria-hidden', 'true');
+      el.appendChild(mark);
+      continue;
     }
-    el.appendChild(node);
-  };
-
-  if (slide.layout === 'title') {
-    addText('title', 'impress-slide-title', slide.title);
-    addText('subtitle', 'impress-slide-subtitle', slide.subtitle);
-    return el;
-  }
-
-  if (slide.layout === 'section') {
-    addText('title', 'impress-slide-title', slide.title);
-    return el;
-  }
-
-  if (slide.layout === 'quote') {
-    addText('body', 'impress-slide-quote', slide.body, true);
-    addText('attribution', 'impress-slide-attribution', slide.attribution);
-    return el;
-  }
-
-  if (slide.layout === 'blank') {
-    addText('body', 'impress-slide-body', slide.body, true);
-    return el;
-  }
-
-  // content + two-column share a title block.
-  addText('title', 'impress-slide-title', slide.title);
-
-  if (slide.layout === 'two-column') {
-    const cols = h('div', 'impress-slide-columns');
-    const [left = [], right = []] = slide.columns || [[], []];
-    cols.appendChild(bulletList(left, 'columns', 0, editable));
-    cols.appendChild(bulletList(right, 'columns', 1, editable));
-    el.appendChild(cols);
-  } else {
-    el.appendChild(bulletList(slide.bullets, 'bullets', 0, editable));
+    if (box.list) {
+      const [field, col] = box.field.split('.');
+      const items = field === 'columns' ? (slide.columns || [])[Number(col)] || [] : slide.bullets;
+      if (!editable && !items.some((b) => String(b).trim() !== '')) continue;
+      const wrap = textBox(box, pal, fit);
+      wrap.appendChild(bulletList(items, field, Number(col || 0), editable));
+      el.appendChild(wrap);
+      continue;
+    }
+    const content = slide[box.field];
+    if (!editable && !filled(box.field)) continue;
+    const wrap = textBox(box, pal, fit);
+    wrap.appendChild(textField(slide, box.field, content, editable));
+    el.appendChild(wrap);
   }
   return el;
+}
+
+/** Absolute placement of a spec box on the 640×360 slide. */
+function place(node, b) {
+  node.style.left = `${b.x}px`;
+  node.style.top = `${b.y}px`;
+  node.style.width = `${b.w}px`;
+  node.style.height = `${b.h}px`;
+}
+
+/** A text box: fixed geometry, anchored like the file's frame, with the
+ *  file's typography (`typeset`). */
+function textBox(box, pal, fit) {
+  const wrap = h('div', 'impress-slide-box');
+  place(wrap, box);
+  wrap.dataset.valign = box.valign;
+  wrap.style.fontFamily = `'${box.display ? SPEC.fonts.display : SPEC.fonts.text}', '${SPEC.fonts.fallback}', sans-serif`;
+  wrap.style.fontWeight = String(box.weight);
+  wrap.style.color = pal[box.color];
+  wrap.style.textAlign = box.center ? 'center' : 'left';
+  wrap._box = box;
+  if (box.shrink) wrap.dataset.shrink = '1';
+  typeset(wrap, box, box.shrink ? fit : 1);
+  return wrap;
+}
+
+/** Size, fixed line height, tracking and paragraph gap at a fit scale. */
+function typeset(wrap, box, fit) {
+  const size = box.size * fit;
+  wrap.style.fontSize = `${size}px`;
+  wrap.style.lineHeight = `${size * box.line}px`;
+  wrap.style.letterSpacing = box.tracking ? `${box.tracking}em` : '';
+  wrap.style.setProperty('--im-gap', `${box.gap * fit}px`);
+}
+
+const FIELD_CLASS = {
+  title: 'impress-slide-title',
+  subtitle: 'impress-slide-subtitle',
+  body: 'impress-slide-body',
+  attribution: 'impress-slide-attribution',
+};
+
+function textField(slide, field, content, editable) {
+  const node = h('div', FIELD_CLASS[field] || 'impress-slide-body', content || '');
+  if (!editable) return node;
+  node.contentEditable = 'true';
+  node.spellcheck = false;
+  node.dataset.field = field;
+  if (field === 'body') node.dataset.multiline = '1';
+  node.setAttribute('role', 'textbox');
+  const placeholder = field === 'body'
+    ? (slide.layout === 'blank' ? t('plugin.impress.slide.addText', null, 'Add text') : '')
+    : ({
+      title: t('plugin.impress.slide.addTitle', null, 'Add a title'),
+      subtitle: t('plugin.impress.slide.addSubtitle', null, 'Add a subtitle'),
+      attribution: t('plugin.impress.slide.attribution', null, 'Attribution'),
+    }[field] || '');
+  if (placeholder) node.dataset.placeholder = placeholder;
+  wireTextField(node);
+  return node;
+}
+
+/** Shrink on overflow (after DeckCraft's autofit): the largest scale at
+ *  which every shrinkable box of the stage slide holds its text. Stored on
+ *  the slide, so the thumbnails, the show and the .odp use it too. */
+let fitFrame = 0;
+function scheduleFit() {
+  if (fitFrame) cancelAnimationFrame(fitFrame);
+  fitFrame = requestAnimationFrame(() => { fitFrame = 0; measureFit(); });
+}
+
+function measureFit() {
+  const slide = currentSlide();
+  if (!slide || !stageSlideNode?.isConnected) return;
+  const boxes = [...stageSlideNode.querySelectorAll('.impress-slide-box[data-shrink]')];
+  if (!boxes.length) return;
+  const apply = (fit) => boxes.forEach((b) => typeset(b, b._box, fit));
+  const overflows = () => boxes.some((b) => {
+    const child = b.firstElementChild;
+    return child && child.offsetHeight > b._box.h + 0.5;
+  });
+  let best = 1;
+  apply(1);
+  if (overflows()) {
+    let lo = SPEC.minFit;
+    let hi = 1;
+    best = lo;
+    for (let i = 0; i < 9; i++) {
+      const mid = (lo + hi) / 2;
+      apply(mid);
+      if (overflows()) hi = mid; else { lo = mid; best = mid; }
+    }
+    best = Math.floor(best * 100) / 100;
+  }
+  apply(best);
+  if (Math.abs(best - clampFit(slide.fit)) > 0.004) {
+    slide.fit = best;
+    markDirty();
+    scheduleThumbRefresh();
+  }
 }
 
 function bulletList(items, field, colIdx, editable) {
@@ -311,6 +421,7 @@ function syncBullets(containerEl) {
   }
   markDirty();
   scheduleThumbRefresh();
+  scheduleFit();
 }
 
 function wireTextField(node) {
@@ -320,6 +431,7 @@ function wireTextField(node) {
     slide[node.dataset.field] = node.innerText;
     markDirty();
     scheduleThumbRefresh();
+    scheduleFit();
   });
   if (!node.dataset.multiline) {
     node.addEventListener('keydown', (e) => {
@@ -337,6 +449,9 @@ function renderStage() {
     stageSlideNode = slideEl(slide, current.theme, true);
     stageEl.appendChild(stageSlideNode);
     fitSlide(stageEl, stageSlideNode);
+    // Fonts may still be loading: measure again once they are in.
+    measureFit();
+    document.fonts?.ready?.then(() => scheduleFit());
   } else {
     stageSlideNode = null;
   }
@@ -1352,6 +1467,11 @@ export function impressContextMenu(ctx) {
     { type: 'separator' },
     { type: 'item', label: t('plugin.impress.ctx.deleteDeck', null, 'Delete presentation'), icon: 'ui/trash', danger: true, disabled: !hasDeck, onClick: () => void removeCurrent() },
   ];
+}
+
+/** Read-only slide drawing, for tests and previews. */
+export function renderSlide(slide, theme = 'aurora') {
+  return slideEl(normalizeSlide(slide), theme);
 }
 
 export default {

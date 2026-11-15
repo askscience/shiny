@@ -98,6 +98,7 @@ fn coerce_slide(v: &Value) -> Slide {
         notes: str_field(&get("notes")),
         transition: normalize_transition(get("transition").as_str().unwrap_or("none")),
         reveal: normalize_reveal(get("reveal").as_str().unwrap_or("all")),
+        fit: get("fit").as_f64().filter(|f| f.is_finite()).map_or(1.0, |f| f.clamp(0.4, 1.0)),
     }
 }
 

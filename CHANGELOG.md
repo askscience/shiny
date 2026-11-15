@@ -4,6 +4,18 @@
 
 ### Added
 
+- Impress 0.1.2: what you see is what the .odp holds. The stage, the
+  thumbnails and the show now draw each slide from the same description the
+  .odp writer uses (`odp_spec.rs`): the same boxes on the 16:9 page, fonts,
+  sizes, line heights, colours, accent rules and backgrounds, so a deck
+  opened in LibreOffice looks like it did in the editor. Text that does not
+  fit its box shrinks, and the file gets the same size. The .odp itself is
+  more complete: `styles.xml` with the page size and master page, background
+  gradients as page fills, bullets as real lists in the theme's colour,
+  speaker notes, and bodies with several lines. Editing works as before. The
+  approach (one fixed page geometry for editing and export, shrink on
+  overflow) follows DeckCraft (MIT/Apache).
+
 - Settings has a **Mouse & touchpad** section: tap to click, natural
   scrolling, pointer speed, disable while typing, secondary click (two
   fingers or corner) and scrolling (two fingers or edge) for touchpads;

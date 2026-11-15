@@ -10,7 +10,8 @@ Presentations are just JSON to you. A presentation is a deck of **slides**; each
 - `columns` — array of arrays of strings, one array per column (`two-column` layout).
 - `body` — free text (`quote`/`blank` layouts).
 - `attribution` — byline (`quote` layout).
-- `notes` — speaker notes (shown in the editor; not written to .odp yet).
+- `notes` — speaker notes (shown in the editor and written to the .odp).
+- Keep text short: a box whose text does not fit shrinks it, down to 40 %. About six bullets of one line each is what a content slide holds at full size.
 - `transition` — how the slide animates in during Present mode: `none` (default), `fade`, `slide`, `push`, `zoom`.
 - `reveal` — `all` (default: bullets arrive with the slide) or `bullets` (one bullet per advance — a build). Editor/Present-mode only; not written to .odp.
 
