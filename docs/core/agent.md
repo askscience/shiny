@@ -576,6 +576,18 @@ tools that change the user's files or send something in their name:
 shows a one-line account of the call instead of a command, and "allow for
 this chat" covers them like it covers commands.
 
+**Spoken turns.** A voice turn (speech in, speech out) has no card to show,
+so consent is spoken too. When a gated call comes up, the gate answers
+`Authorization::AskAloud`: the call is parked with its exact parameters
+(`ApprovalRegistry::park_voice_ask`, one per conversation, two minutes) and
+the model is told to ask the user aloud. If the **next spoken message** in
+that conversation is a plain yes (`approval::spoken_answer`: a short
+utterance that starts with an agreement, in the common languages), the stored
+call runs first in that turn, before the model says anything; a no, or
+anything else, drops it. A typed message never answers a spoken question, and
+the text chat keeps its card. The shell guard and the remote-terminal rule
+still apply to a call approved this way.
+
 A turn from a remote client without `remote.allow_terminal` is refused
 `terminal_exec` outright (`AgentRunInput::remote_shell_blocked`).
 

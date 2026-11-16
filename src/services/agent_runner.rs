@@ -284,6 +284,9 @@ pub struct AgentRunInput {
     /// The turn came from a remote client that has not been given the Terminal
     /// (`remote.allow_terminal`): `terminal_exec` is refused outright.
     pub remote_shell_blocked: bool,
+    /// The user just said yes, aloud, to the gated call a previous spoken turn
+    /// asked about: that exact call runs first, without asking again.
+    pub voice_consent: Option<crate::services::approval::VoiceAsk>,
     /// The wearable face is on: no window is ever shown (`WEARABLE_BLOCK`).
     pub wearable: bool,
 }
@@ -404,74 +407,86 @@ where
     let mut on_screen: std::collections::BTreeSet<String> = input.craft_open.clone();
     let mut hinted: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
 
+    let mut voice_consent = input.voice_consent.clone();
     for iteration in 0..MAX_TOOL_STEPS {
         if turn_stopped(&cancel) {
             interrupted = true;
             break;
         }
 
-        let messages = if completed_steps.is_empty() && iteration == 0 {
-            planning_messages.clone()
+        // A spoken yes to the call the previous turn asked about: run that
+        // stored call as it was described to the user, before the model says
+        // anything. It skips the question (it was just answered), not the
+        // shell guard or the remote-terminal rule.
+        let consented = if iteration == 0 { voice_consent.take() } else { None };
+        let preapproved = consented.is_some();
+        let actions = if let Some(ask) = consented {
+            vec![(ask.action, ask.params)]
         } else {
-            continuation_messages.clone()
-        };
+            let messages = if completed_steps.is_empty() && iteration == 0 {
+                planning_messages.clone()
+            } else {
+                continuation_messages.clone()
+            };
 
-        let size = messages_char_count(&messages);
-        tracing::debug!("Agent AI call #{iteration}: ~{size} chars");
-        if size > 200_000 {
-            tracing::warn!("Agent prompt very large ({size} chars), continuing with slim context");
-        }
+            let size = messages_char_count(&messages);
+            tracing::debug!("Agent AI call #{iteration}: ~{size} chars");
+            if size > 200_000 {
+                tracing::warn!("Agent prompt very large ({size} chars), continuing with slim context");
+            }
 
-        // Dropping the in-flight request is the point of the whole feature: a
-        // local model that keeps generating blocks the *next* question, so a
-        // stopped turn must abandon the call, not just ignore its answer.
-        let outcome = match &cancel {
-            Some(handle) => tokio::select! {
-                biased;
-                _ = handle.cancelled() => {
-                    interrupted = true;
-                    break;
+            // Dropping the in-flight request is the point of the whole feature: a
+            // local model that keeps generating blocks the *next* question, so a
+            // stopped turn must abandon the call, not just ignore its answer.
+            let outcome = match &cancel {
+                Some(handle) => tokio::select! {
+                    biased;
+                    _ = handle.cancelled() => {
+                        interrupted = true;
+                        break;
+                    }
+                    result = ai.chat_ex(messages, model, input.think) => result?,
+                },
+                None => ai.chat_ex(messages, model, input.think).await?,
+            };
+            // A thinking model narrates before it answers: keep every block of the
+            // tool loop, hand each one to the UI as it arrives.
+            if let Some(trace) = outcome.thinking.as_deref() {
+                if !thinking_log.is_empty() {
+                    thinking_log.push_str("\n\n");
                 }
-                result = ai.chat_ex(messages, model, input.think) => result?,
-            },
-            None => ai.chat_ex(messages, model, input.think).await?,
-        };
-        // A thinking model narrates before it answers: keep every block of the
-        // tool loop, hand each one to the UI as it arrives.
-        if let Some(trace) = outcome.thinking.as_deref() {
-            if !thinking_log.is_empty() {
-                thinking_log.push_str("\n\n");
+                thinking_log.push_str(trace);
+                on_thinking(trace);
             }
-            thinking_log.push_str(trace);
-            on_thinking(trace);
-        }
-        let response = outcome.content;
-        // Full transparency: log what the model actually emitted so failures
-        // (e.g. "the AI isn't writing to calc") are visible in data/shiny.log.
-        tracing::info!(
-            "Agent response #{iteration}: {}",
-            response.chars().take(1200).collect::<String>()
-        );
-        let actions = parse_actions(&response);
+            let response = outcome.content;
+            // Full transparency: log what the model actually emitted so failures
+            // (e.g. "the AI isn't writing to calc") are visible in data/shiny.log.
+            tracing::info!(
+                "Agent response #{iteration}: {}",
+                response.chars().take(1200).collect::<String>()
+            );
+            let actions = parse_actions(&response);
 
-        if actions.is_empty() {
-            // The model replied in plain language — that IS the final reply
-            // (tool results already reached it via the [Done] step notes).
-            final_reply = strip_action_blocks(&response);
-            if final_reply.is_empty() {
-                let trimmed = response.trim();
-                // If the whole response was (malformed) JSON, don't leak the
-                // raw tool call into the chat — fall back to a neutral ack.
-                let markup = trimmed.starts_with('<')
-                    && (trimmed.contains("DSML") || trimmed.contains("invoke") || trimmed.contains("tool_call"));
-                final_reply = if trimmed.starts_with('{') || trimmed.starts_with('[') || markup {
-                    "Done.".into()
-                } else {
-                    trimmed.to_string()
-                };
+            if actions.is_empty() {
+                // The model replied in plain language — that IS the final reply
+                // (tool results already reached it via the [Done] step notes).
+                final_reply = strip_action_blocks(&response);
+                if final_reply.is_empty() {
+                    let trimmed = response.trim();
+                    // If the whole response was (malformed) JSON, don't leak the
+                    // raw tool call into the chat — fall back to a neutral ack.
+                    let markup = trimmed.starts_with('<')
+                        && (trimmed.contains("DSML") || trimmed.contains("invoke") || trimmed.contains("tool_call"));
+                    final_reply = if trimmed.starts_with('{') || trimmed.starts_with('[') || markup {
+                        "Done.".into()
+                    } else {
+                        trimmed.to_string()
+                    };
+                }
+                break;
             }
-            break;
-        }
+            actions
+        };
 
         // Execute EVERY tool call the model emitted this turn, in order, so
         // multi-step intents ("close all plugins", "create then fill a doc")
@@ -588,6 +603,7 @@ where
                 }
 
                 let authorization = match &input.approval {
+                    _ if preapproved => Authorization::Allow,
                     Some(gate) => {
                         if gate.will_ask() {
                             let step = UiText::keyed(
@@ -603,10 +619,32 @@ where
                     ),
                 };
 
+                // A spoken turn has no card: park the call exactly as it
+                // would run and have the assistant ask. The user's next spoken
+                // message answers it (`approval::spoken_answer`).
+                if matches!(authorization, Authorization::AskAloud) {
+                    if let Some(gate) = &input.approval {
+                        gate.park_voice_ask(&action, params.clone());
+                    }
+                    on_step(
+                        &UiText::keyed("step.awaitingApproval", "Waiting for your approval…"),
+                        Some(action.as_str()),
+                    );
+                    let note = format!(
+                        "{tool} needs the user's spoken consent and was NOT run yet. Ask the \
+                         user now, in one short spoken sentence in their language, whether to \
+                         go ahead with exactly this: {command}. Then stop: do not call the tool \
+                         again. They answer yes or no by voice, and it runs when they say yes."
+                    );
+                    continuation_messages.push(("user".to_string(), format!("[Done] {note}")));
+                    completed_steps.push(note);
+                    continue;
+                }
+
                 let decision = match &authorization {
                     Authorization::Allow => "allow",
                     Authorization::Denied(_) => "deny",
-                    Authorization::Unavailable(_) => "unavailable",
+                    Authorization::Unavailable(_) | Authorization::AskAloud => "unavailable",
                 };
                 turn_events.push((
                     "approval".into(),
@@ -623,6 +661,8 @@ where
                         "Command needs approval in the chat",
                         reason,
                     )),
+                    // Handled above; never reaches here.
+                    Authorization::AskAloud => None,
                 };
                 if let Some((key, text, reason)) = denial {
                     on_step(&UiText::keyed(key, text), Some(action.as_str()));

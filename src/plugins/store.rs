@@ -1725,7 +1725,6 @@ mod tests {
     #[test]
     fn the_cli_is_pulled_out_of_the_linux_package() {        use flate2::write::GzEncoder;
         use flate2::Compression;
-        use std::io::Write as _;
 
         let encoder = GzEncoder::new(Vec::new(), Compression::default());
         let mut builder = tar::Builder::new(encoder);

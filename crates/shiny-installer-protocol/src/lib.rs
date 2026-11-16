@@ -417,6 +417,26 @@ impl InstallPlan {
             }
         }
 
+        // These three are written into files the installed system reads back
+        // (`/etc/default/keyboard` is sourced by a shell; the timezone names a
+        // path under zoneinfo), and the password into `chpasswd`'s line
+        // format: nothing in them may break out of its field.
+        if !self.locale.is_empty() && !valid_locale(&self.locale) {
+            errors.push("locale is not a valid locale name (e.g. en_US.UTF-8)".into());
+        }
+        if !self.keyboard.is_empty() && !valid_keyboard(&self.keyboard) {
+            errors.push("keyboard is not a valid layout name (e.g. us, it)".into());
+        }
+        if !self.timezone.is_empty() && !valid_timezone(&self.timezone) {
+            errors.push("timezone is not a valid zone name (e.g. Europe/Rome)".into());
+        }
+        if self.full_name.chars().any(|c| c.is_control() || c == ':') {
+            errors.push("full name cannot contain ':' or control characters".into());
+        }
+        if self.password.chars().any(char::is_control) {
+            errors.push("the account password cannot contain control characters".into());
+        }
+
         if self.password.is_empty() {
             errors.push("an account password is required".into());
         } else if self.password.len() < 8 {
@@ -593,6 +613,33 @@ impl InstallPlan {
 
         errors
     }
+}
+
+/// `en_US.UTF-8`, `sr_RS@latin`: letters, digits, `_ . @ -`.
+fn valid_locale(value: &str) -> bool {
+    value.len() <= 64
+        && value
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '@' | '-'))
+}
+
+/// An XKB layout name (`us`, `de`, `latam`), possibly a comma-separated list.
+fn valid_keyboard(value: &str) -> bool {
+    value.len() <= 64
+        && value
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | ','))
+}
+
+/// A zoneinfo name: `Area/City` segments, never `.`/`..` or an absolute path.
+fn valid_timezone(value: &str) -> bool {
+    value.len() <= 64
+        && value.split('/').all(|part| {
+            !part.is_empty()
+                && part
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '+'))
+        })
 }
 
 fn valid_username(value: &str) -> bool {
@@ -951,5 +998,17 @@ mod tests {
         let decoded: RpcResponse = serde_json::from_str(&encoded).unwrap();
         assert!(decoded.ok);
         assert_eq!(decoded.data.unwrap()["hello"], "world");
+    }
+
+    #[test]
+    fn system_option_names_cannot_break_out_of_their_files() {
+        assert!(super::valid_locale("en_US.UTF-8") && super::valid_locale("sr_RS.UTF-8@latin"));
+        assert!(!super::valid_locale("en_US\nLC_ALL=x") && !super::valid_locale("a b"));
+        assert!(super::valid_keyboard("us") && super::valid_keyboard("us,it"));
+        assert!(!super::valid_keyboard("us\"; rm -rf /; \"") && !super::valid_keyboard("$(id)"));
+        assert!(super::valid_timezone("Europe/Rome") && super::valid_timezone("Etc/GMT+1"));
+        for bad in ["../../etc/shadow", "/etc/passwd", "Europe//Rome", "Europe/..", ""] {
+            assert!(!super::valid_timezone(bad), "{bad}");
+        }
     }
 }

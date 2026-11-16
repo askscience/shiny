@@ -10,4 +10,3 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 shiny-plugin-sdk = { path = "../../crates/shiny-plugin-sdk" }
 async-trait = "0.1"
-semver = { version = "1", features = ["serde"] }

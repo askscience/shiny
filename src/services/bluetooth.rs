@@ -325,9 +325,13 @@ impl BluetoothService {
         let _command = self.inner.command.lock().await;
         let connection = self.connection().await?;
         let proxy = device_proxy(&connection, &path).await?;
+        // The agent confirms pairing for this device only while this call is
+        // in flight (see `PairingAgent`).
+        let pairing = PairingInProgress::begin(&path);
         call_with_timeout(&proxy, "Pair").await?;
         let _ = proxy.set_property("Trusted", true).await;
         let _ = call_with_timeout(&proxy, "Connect").await;
+        drop(pairing);
         drop(_command);
         self.refresh().await;
         Ok(())
@@ -584,10 +588,61 @@ fn friendly(message: String) -> String {
     }
 }
 
-/// BlueZ `Agent1`: auto-confirm "just works" pairing, which is all a kiosk
-/// needs. PIN and passkey entry are not offered.
+/// Devices the user is pairing right now, by BlueZ object path.
 #[cfg(target_os = "linux")]
-struct PairingAgent;
+static PAIRING: std::sync::LazyLock<std::sync::Mutex<std::collections::HashSet<String>>> =
+    std::sync::LazyLock::new(Default::default);
+
+/// Marks a device as being paired by the user for as long as it lives.
+#[cfg(target_os = "linux")]
+struct PairingInProgress(String);
+
+#[cfg(target_os = "linux")]
+impl PairingInProgress {
+    fn begin(path: &str) -> Self {
+        PAIRING.lock().unwrap_or_else(|e| e.into_inner()).insert(path.to_string());
+        Self(path.to_string())
+    }
+}
+
+#[cfg(target_os = "linux")]
+impl Drop for PairingInProgress {
+    fn drop(&mut self) {
+        PAIRING.lock().unwrap_or_else(|e| e.into_inner()).remove(&self.0);
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn user_is_pairing(device: &str) -> bool {
+    PAIRING.lock().unwrap_or_else(|e| e.into_inner()).contains(device)
+}
+
+#[cfg(target_os = "linux")]
+fn rejected() -> zbus::fdo::Error {
+    zbus::fdo::Error::AccessDenied("pairing was not started on this machine".into())
+}
+
+/// BlueZ `Agent1`: auto-confirm "just works" pairing, which is all a kiosk
+/// needs — but only for a device the user chose to pair in the Bluetooth
+/// panel. As the default agent it is also asked about pairings a nearby
+/// device starts on its own; confirming those let anything in range pair
+/// (and a keyboard-class device then type) with nobody at the screen
+/// agreeing. PIN and passkey entry are not offered.
+#[cfg(target_os = "linux")]
+struct PairingAgent {
+    connection: zbus::Connection,
+}
+
+#[cfg(target_os = "linux")]
+impl PairingAgent {
+    /// Has BlueZ already bonded with this device?
+    async fn is_paired(&self, device: &str) -> bool {
+        match device_proxy(&self.connection, device).await {
+            Ok(proxy) => proxy.get_property::<bool>("Paired").await.unwrap_or(false),
+            Err(_) => false,
+        }
+    }
+}
 
 #[cfg(target_os = "linux")]
 #[zbus::interface(name = "org.bluez.Agent1")]
@@ -596,25 +651,39 @@ impl PairingAgent {
 
     async fn request_confirmation(
         &self,
-        _device: zbus::zvariant::ObjectPath<'_>,
+        device: zbus::zvariant::ObjectPath<'_>,
         _passkey: u32,
     ) -> zbus::fdo::Result<()> {
-        Ok(())
+        if user_is_pairing(device.as_str()) {
+            Ok(())
+        } else {
+            Err(rejected())
+        }
     }
 
     async fn request_authorization(
         &self,
-        _device: zbus::zvariant::ObjectPath<'_>,
+        device: zbus::zvariant::ObjectPath<'_>,
     ) -> zbus::fdo::Result<()> {
-        Ok(())
+        if user_is_pairing(device.as_str()) {
+            Ok(())
+        } else {
+            Err(rejected())
+        }
     }
 
+    /// A service connection from a device that is not trusted yet: fine for
+    /// one the user is pairing or has paired before, refused for a stranger.
     async fn authorize_service(
         &self,
-        _device: zbus::zvariant::ObjectPath<'_>,
+        device: zbus::zvariant::ObjectPath<'_>,
         _uuid: String,
     ) -> zbus::fdo::Result<()> {
-        Ok(())
+        if user_is_pairing(device.as_str()) || self.is_paired(device.as_str()).await {
+            Ok(())
+        } else {
+            Err(rejected())
+        }
     }
 
     async fn cancel(&self) {}
@@ -662,7 +731,7 @@ async fn register_agent(connection: &zbus::Connection) -> Result<(), String> {
     const AGENT_PATH: &str = "/org/shiny/BluetoothAgent";
     connection
         .object_server()
-        .at(AGENT_PATH, PairingAgent)
+        .at(AGENT_PATH, PairingAgent { connection: connection.clone() })
         .await
         .map_err(|err| err.to_string())?;
     let path = zbus::zvariant::ObjectPath::try_from(AGENT_PATH).map_err(|err| err.to_string())?;

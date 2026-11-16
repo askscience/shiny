@@ -4,15 +4,14 @@
 
 use std::sync::Arc;
 
-use axum::extract::{FromRequest, FromRequestParts};
-use serde::de::DeserializeOwned;
+use axum::extract::FromRequest;
 use serde::Deserialize;
 use serde_json::{json, Value as Json};
 
 use shiny_plugin_sdk::db::Value;
 use shiny_plugin_sdk::errors::AppError;
-use shiny_plugin_sdk::util::{as_text};
-use shiny_plugin_sdk::routes::{bridged_route, RouteHandler, ok, user_id};
+use shiny_plugin_sdk::util::as_text;
+use shiny_plugin_sdk::routes::{bridged_route, RouteHandler, ok, user_id, take_query};
 use shiny_plugin_sdk::services::PluginCtx;
 
 use crate::eval::{evaluate, format_number};
@@ -26,16 +25,6 @@ pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
         _ => return None,
     })
 }
-async fn take_query<T: DeserializeOwned + Send + 'static>(
-    req: axum::extract::Request,
-) -> Result<(T, axum::extract::Request), AppError> {
-    let (mut parts, body) = req.into_parts();
-    let query = axum::extract::Query::<T>::from_request_parts(&mut parts, &())
-        .await
-        .map_err(|e| AppError::BadRequest(format!("invalid query: {e}")))?;
-    Ok((query.0, axum::extract::Request::from_parts(parts, body)))
-}
-
 fn eval(ctx: Arc<PluginCtx>) -> RouteHandler {
     #[derive(Deserialize, Default)]
     #[serde(default)]

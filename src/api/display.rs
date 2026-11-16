@@ -17,6 +17,9 @@ use serde_json::Value;
 use crate::api::AppState;
 use crate::errors::AppError;
 
+/// Refusal for a caller that is not the machine itself.
+const LOCAL_ONLY: &str = "display changes are only allowed from the local machine";
+
 /// GET /api/display
 pub async fn status(State(state): State<AppState>, headers: axum::http::HeaderMap) -> Json<Value> {
     let data = crate::api::remote::gate_host_status(
@@ -32,22 +35,11 @@ pub async fn set_scale(
     ConnectInfo(remote): ConnectInfo<SocketAddr>,
     Json(body): Json<Value>,
 ) -> Result<Json<Value>, AppError> {
-    require_local(&remote)?;
+    crate::api::remote::require_loopback(&remote, LOCAL_ONLY)?;
     let value = body.get("scale").cloned().unwrap_or(Value::Null);
     let data = state
         .display
         .set_scale(&value)
         .map_err(AppError::BadRequest)?;
     Ok(Json(serde_json::json!({ "success": true, "data": data })))
-}
-
-/// The scale is a host-level capability and the server is reachable on the LAN,
-/// so anything that changes it must come from the machine itself.
-fn require_local(remote: &SocketAddr) -> Result<(), AppError> {
-    if remote.ip().is_loopback() {
-        return Ok(());
-    }
-    Err(AppError::Unauthorized(
-        "display changes are only allowed from the local machine".into(),
-    ))
 }

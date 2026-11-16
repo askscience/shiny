@@ -20,6 +20,9 @@ use serde_json::Value;
 use crate::api::AppState;
 use crate::errors::AppError;
 
+/// Refusal for a caller that is not the machine itself.
+const LOCAL_ONLY: &str = "network changes are only allowed from the local machine";
+
 /// GET /api/network/status
 pub async fn status(State(state): State<AppState>, headers: axum::http::HeaderMap) -> Json<Value> {
     let data = crate::api::remote::gate_host_status(
@@ -45,7 +48,7 @@ pub async fn scan(
     State(state): State<AppState>,
     ConnectInfo(remote): ConnectInfo<SocketAddr>,
 ) -> Result<Json<Value>, AppError> {
-    require_local(&remote)?;
+    crate::api::remote::require_loopback(&remote, LOCAL_ONLY)?;
     state.network.scan().await.map_err(AppError::Internal)?;
     Ok(Json(serde_json::json!({ "success": true })))
 }
@@ -65,7 +68,7 @@ pub async fn connect(
     ConnectInfo(remote): ConnectInfo<SocketAddr>,
     Json(body): Json<ConnectBody>,
 ) -> Result<Json<Value>, AppError> {
-    require_local(&remote)?;
+    crate::api::remote::require_loopback(&remote, LOCAL_ONLY)?;
     state
         .network
         .connect(&body.ssid, body.interface.as_deref(), body.password.as_deref())
@@ -79,7 +82,7 @@ pub async fn disconnect(
     State(state): State<AppState>,
     ConnectInfo(remote): ConnectInfo<SocketAddr>,
 ) -> Result<Json<Value>, AppError> {
-    require_local(&remote)?;
+    crate::api::remote::require_loopback(&remote, LOCAL_ONLY)?;
     state
         .network
         .disconnect()
@@ -99,7 +102,7 @@ pub async fn forget(
     ConnectInfo(remote): ConnectInfo<SocketAddr>,
     Json(body): Json<ForgetBody>,
 ) -> Result<Json<Value>, AppError> {
-    require_local(&remote)?;
+    crate::api::remote::require_loopback(&remote, LOCAL_ONLY)?;
     state
         .network
         .forget(&body.uuid)
@@ -119,7 +122,7 @@ pub async fn wifi_power(
     ConnectInfo(remote): ConnectInfo<SocketAddr>,
     Json(body): Json<WifiPowerBody>,
 ) -> Result<Json<Value>, AppError> {
-    require_local(&remote)?;
+    crate::api::remote::require_loopback(&remote, LOCAL_ONLY)?;
     state
         .network
         .set_wifi_enabled(body.enabled)
@@ -127,16 +130,3 @@ pub async fn wifi_power(
         .map_err(AppError::BadRequest)?;
     Ok(Json(serde_json::json!({ "success": true })))
 }
-
-/// Wi-Fi management is a host-level capability and the server is reachable on
-/// the LAN, so anything that changes connectivity must come from the machine
-/// itself.
-fn require_local(remote: &SocketAddr) -> Result<(), AppError> {
-    if remote.ip().is_loopback() {
-        return Ok(());
-    }
-    Err(AppError::Unauthorized(
-        "network changes are only allowed from the local machine".into(),
-    ))
-}
-

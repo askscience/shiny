@@ -6851,14 +6851,11 @@ dependencies = [
 name = "shiny-browser-plugin"
 version = "0.2.4"
 dependencies = [
- "aes-gcm",
- "argon2",
  "async-trait",
  "axum",
  "base64 0.22.1",
  "chrono",
  "futures",
- "getrandom 0.2.17",
  "parking_lot",
  "reqwest 0.12.28",
  "semver",
@@ -6880,7 +6877,6 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "axum",
- "semver",
  "serde",
  "serde_json",
  "shiny-plugin-sdk",
@@ -6895,7 +6891,6 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "axum",
- "semver",
  "serde",
  "serde_json",
  "shiny-plugin-sdk",
@@ -6909,7 +6904,6 @@ dependencies = [
  "async-trait",
  "axum",
  "chrono",
- "semver",
  "serde",
  "serde_json",
  "shiny-plugin-sdk",
@@ -6926,7 +6920,6 @@ dependencies = [
  "futures",
  "jpeg-encoder",
  "libc",
- "semver",
  "serde",
  "serde_json",
  "shiny-dsp",
@@ -6955,7 +6948,6 @@ dependencies = [
  "photon-rs",
  "reqwest 0.12.28",
  "ring",
- "semver",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -7002,7 +6994,6 @@ name = "shiny-hello-plugin"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "semver",
  "serde_json",
  "shiny-plugin-sdk",
 ]
@@ -7015,7 +7006,6 @@ dependencies = [
  "axum",
  "image 0.24.9",
  "photon-rs",
- "semver",
  "serde",
  "serde_json",
  "shiny-plugin-sdk",
@@ -7030,7 +7020,6 @@ version = "0.1.2"
 dependencies = [
  "async-trait",
  "axum",
- "semver",
  "serde",
  "serde_json",
  "shiny-plugin-sdk",
@@ -7091,7 +7080,6 @@ dependencies = [
  "hex",
  "iroh-base",
  "postcard",
- "serde",
  "serde_json",
 ]
 
@@ -7100,7 +7088,6 @@ name = "shiny-keyboard-plugin"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "semver",
  "shiny-plugin-sdk",
 ]
 
@@ -7120,7 +7107,6 @@ dependencies = [
  "pimalaya-stream",
  "ring",
  "secrecy",
- "semver",
  "serde",
  "serde_json",
  "shiny-plugin-sdk",
@@ -7137,7 +7123,6 @@ dependencies = [
  "async-trait",
  "axum",
  "oorbit-sim",
- "semver",
  "serde",
  "serde_json",
  "shiny-plugin-sdk",
@@ -7168,7 +7153,6 @@ dependencies = [
  "pdfcraft-edit",
  "pdfcraft-organize",
  "pdfcraft-render",
- "semver",
  "serde",
  "serde_json",
  "shiny-plugin-sdk",
@@ -7208,7 +7192,6 @@ dependencies = [
  "axum",
  "futures",
  "reqwest 0.12.28",
- "semver",
  "serde",
  "serde_json",
  "shiny-plugin-sdk",
@@ -7232,7 +7215,6 @@ dependencies = [
  "async-trait",
  "axum",
  "rustysynth",
- "semver",
  "serde",
  "serde_json",
  "shiny-dsp",
@@ -7266,14 +7248,12 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "chrono",
- "reqwest 0.12.28",
  "semver",
  "serde",
  "serde_json",
  "shiny-osm",
  "shiny-plugin-sdk",
  "sqlx",
- "tokio",
  "uuid",
 ]
 
@@ -7311,7 +7291,6 @@ dependencies = [
  "async-trait",
  "axum",
  "image 0.25.10",
- "semver",
  "serde",
  "serde_json",
  "shiny-plugin-sdk",
@@ -7335,7 +7314,6 @@ dependencies = [
  "axum",
  "futures",
  "reqwest 0.12.28",
- "semver",
  "serde",
  "serde_json",
  "shiny-plugin-sdk",

@@ -50,6 +50,17 @@ pub fn is_local(peer: &std::net::SocketAddr, headers: &HeaderMap) -> bool {
     peer.ip().is_loopback() && !is_remote(headers)
 }
 
+/// Refuse a caller whose TCP peer is not loopback, with `message`. For the
+/// host-panel mutations, which already sit behind `host_remote_gate` (that
+/// turns away tunnelled clients): this is the LAN half of "local only".
+pub fn require_loopback(peer: &std::net::SocketAddr, message: &str) -> Result<(), AppError> {
+    if peer.ip().is_loopback() {
+        Ok(())
+    } else {
+        Err(AppError::Unauthorized(message.into()))
+    }
+}
+
 /// Middleware: only the machine itself may call the wrapped routes. Used for
 /// everything that changes what code runs on the host (plugin install, store,
 /// rescan): a signed-in remote or LAN client must not be able to load native

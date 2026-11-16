@@ -140,7 +140,11 @@ async fn dispatch(state: &Arc<AppState>, request: RpcRequest) -> RpcResponse {
                 let plan = apply.plan;
                 match probe::validate(&plan) {
                     Ok(validation) if validation.ok => {
-                        if state.dry_run {
+                        if install_running(state) {
+                            // Two engines on one disk and one mount point
+                            // would destroy each other's work.
+                            RpcResponse::err(id, "an install is already running")
+                        } else if state.dry_run {
                             start_dry_run(state, id, plan)
                         } else if live_session_available() {
                             start_apply(state, id, plan)
@@ -258,6 +262,16 @@ fn start_dry_run(state: &Arc<AppState>, id: String, plan: InstallPlan) -> RpcRes
     });
 
     RpcResponse::ok(id, json!({ "job": job_id, "dry_run": true }))
+}
+
+/// Is a job still in progress?
+fn install_running(state: &AppState) -> bool {
+    state
+        .jobs
+        .lock()
+        .unwrap()
+        .values()
+        .any(|job| !job.status.lock().unwrap().done)
 }
 
 fn start_apply(state: &Arc<AppState>, id: String, plan: InstallPlan) -> RpcResponse {

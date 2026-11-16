@@ -22,6 +22,9 @@ use crate::api::AppState;
 use crate::errors::AppError;
 use crate::services::audio::AudioTarget;
 
+/// Refusal for a caller that is not the machine itself.
+const LOCAL_ONLY: &str = "sound changes are only allowed from the local machine";
+
 /// GET /api/audio/status
 pub async fn status(State(state): State<AppState>, headers: axum::http::HeaderMap) -> Json<Value> {
     let data = crate::api::remote::gate_host_status(
@@ -57,7 +60,7 @@ pub async fn volume(
     ConnectInfo(remote): ConnectInfo<SocketAddr>,
     Json(body): Json<VolumeBody>,
 ) -> Result<Json<Value>, AppError> {
-    require_local(&remote)?;
+    crate::api::remote::require_loopback(&remote, LOCAL_ONLY)?;
     state
         .audio
         .set_volume(body.target, body.id, body.percent)
@@ -82,7 +85,7 @@ pub async fn mute(
     ConnectInfo(remote): ConnectInfo<SocketAddr>,
     Json(body): Json<MuteBody>,
 ) -> Result<Json<Value>, AppError> {
-    require_local(&remote)?;
+    crate::api::remote::require_loopback(&remote, LOCAL_ONLY)?;
     state
         .audio
         .set_mute(body.target, body.id, body.muted)
@@ -104,7 +107,7 @@ pub async fn default_device(
     ConnectInfo(remote): ConnectInfo<SocketAddr>,
     Json(body): Json<DefaultBody>,
 ) -> Result<Json<Value>, AppError> {
-    require_local(&remote)?;
+    crate::api::remote::require_loopback(&remote, LOCAL_ONLY)?;
     state
         .audio
         .set_default(body.target, body.id)
@@ -112,16 +115,3 @@ pub async fn default_device(
         .map_err(AppError::BadRequest)?;
     Ok(Json(serde_json::json!({ "success": true })))
 }
-
-/// Volume, mute and routing are host-level capabilities and the server is
-/// reachable on the LAN, so anything that changes them must come from the
-/// machine itself.
-fn require_local(remote: &SocketAddr) -> Result<(), AppError> {
-    if remote.ip().is_loopback() {
-        return Ok(());
-    }
-    Err(AppError::Unauthorized(
-        "sound changes are only allowed from the local machine".into(),
-    ))
-}
-

@@ -2,13 +2,11 @@
 
 use std::sync::Arc;
 
-use axum::extract::FromRequestParts;
-use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde_json::{json, Value};
 
 use shiny_plugin_sdk::errors::AppError;
-use shiny_plugin_sdk::routes::{bridged_route, RouteHandler, ok, user_id};
+use shiny_plugin_sdk::routes::{bridged_route, RouteHandler, ok, user_id, take_query};
 use shiny_plugin_sdk::services::PluginCtx;
 
 pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
@@ -21,16 +19,6 @@ pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
         _ => None,
     }
 }
-async fn take_query<T: DeserializeOwned + Send + 'static>(
-    req: axum::extract::Request,
-) -> Result<(T, axum::extract::Request), AppError> {
-    let (mut parts, body) = req.into_parts();
-    let query = axum::extract::Query::<T>::from_request_parts(&mut parts, &())
-        .await
-        .map_err(|e| AppError::BadRequest(format!("invalid query: {e}")))?;
-    Ok((query.0, axum::extract::Request::from_parts(parts, body)))
-}
-
 fn yt_search(_ctx: Arc<PluginCtx>) -> RouteHandler {
     #[derive(Deserialize)]
     struct SearchQuery {

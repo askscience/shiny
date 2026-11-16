@@ -3,10 +3,9 @@
 
 use std::sync::Arc;
 
-use axum::extract::{FromRequest, FromRequestParts};
+use axum::extract::FromRequest;
 use axum::http::header::{CONTENT_DISPOSITION, CONTENT_TYPE};
 use axum::response::Response;
-use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde_json::{json, Value as Json};
 
@@ -14,7 +13,7 @@ use shiny_plugin_sdk::db::Value;
 use shiny_plugin_sdk::errors::AppError;
 use shiny_plugin_sdk::util::{as_text, clean_title, filename_for_title};
 use shiny_plugin_sdk::odp;
-use shiny_plugin_sdk::routes::{bridged_route, RouteHandler, path_params_from_request, ok, user_id};
+use shiny_plugin_sdk::routes::{bridged_route, RouteHandler, ok, user_id, take_query, take_path};
 use shiny_plugin_sdk::services::PluginCtx;
 use shiny_plugin_sdk::Slide;
 
@@ -39,25 +38,6 @@ pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
 }
 
 /* ── helpers ────────────────────────────────────────────────── */
-fn take_path(req: &axum::extract::Request) -> Result<String, AppError> {
-    let mut params = path_params_from_request(req)
-        .ok_or_else(|| AppError::BadRequest("no path parameter found".into()))?;
-    if params.len() != 1 {
-        return Err(AppError::BadRequest("expected exactly one path parameter".into()));
-    }
-    Ok(params.remove(0).1)
-}
-
-async fn take_query<T: DeserializeOwned + Send + 'static>(
-    req: axum::extract::Request,
-) -> Result<(T, axum::extract::Request), AppError> {
-    let (mut parts, body) = req.into_parts();
-    let query = axum::extract::Query::<T>::from_request_parts(&mut parts, &())
-        .await
-        .map_err(|e| AppError::BadRequest(format!("invalid query: {e}")))?;
-    Ok((query.0, axum::extract::Request::from_parts(parts, body)))
-}
-
 /// Force the app-only animation fields to their canonical values, so a deck
 /// saved by an older client (or an API caller that omits them) never stores
 /// `""` where the model means `none`/`all`.

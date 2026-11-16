@@ -789,6 +789,21 @@ async fn prepare_agent(
     if auto_approve != 0 {
         state.approvals.set_auto_chat(&conversation_id, true);
     }
+    // A spoken turn may be the answer to a gated call the assistant asked
+    // about aloud. Only speech answers it — a typed message leaves the
+    // question parked — and only a plain yes runs the stored call; taking the
+    // question drops it for any other answer.
+    let voice_consent = if voice {
+        state
+            .approvals
+            .take_voice_ask(&conversation_id, &traveler.id)
+            .filter(|_| {
+                crate::services::approval::spoken_answer(&body.message)
+                    == crate::services::approval::SpokenAnswer::Yes
+            })
+    } else {
+        None
+    };
     let history_block = if history.is_empty() {
         String::new()
     } else {
@@ -879,6 +894,7 @@ async fn prepare_agent(
             // Attached by the transport handler: it needs the SSE sink.
             approval: None,
             remote_shell_blocked: remote_shell_blocked(state, &traveler.id, headers).await,
+            voice_consent,
         },
     })
 }
@@ -930,7 +946,7 @@ pub async fn handle_agent(
         conversation_id.clone(),
         false,
         Box::new(|_| {}),
-    ));
+    ).spoken(prepared.input.voice));
     // Honor the model the client asked for on this request (Ollama only); the
     // OpenAI client bakes its configured model in.
     let model: Option<String> = if ai.client.is_openai() {
@@ -1220,7 +1236,7 @@ pub async fn handle_agent_stream(
                     command: prompt.command,
                 })
             }),
-        ));
+        ).spoken(input.voice));
 
         match run_agent(
             &state,

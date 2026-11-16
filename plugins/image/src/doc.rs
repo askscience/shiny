@@ -18,7 +18,7 @@ use serde_json::{Map, Value as Json};
 
 use shiny_plugin_sdk::db::{Db, Value};
 use shiny_plugin_sdk::errors::AppError;
-use shiny_plugin_sdk::util::{as_opt_text, as_text};
+use shiny_plugin_sdk::util::{as_opt_text, as_text, as_int};
 
 /// The dial keys, in render order. Unknown keys in a settings update are
 /// ignored; the window's dial specs mirror these units exactly.
@@ -82,13 +82,6 @@ pub struct EditResult {
     /// The full effective dial settings after the run ({} = neutral).
     pub adjust: Json,
 }
-fn as_int(v: &Value) -> i64 {
-    match v {
-        Value::Int(n) => *n,
-        _ => 0,
-    }
-}
-
 fn as_blob(v: &Value) -> Vec<u8> {
     match v {
         Value::Blob(b) => b.clone(),

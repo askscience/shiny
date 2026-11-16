@@ -208,26 +208,30 @@ impl Plugin for WebAppPlugin {
     fn register(&self, _ctx: Arc<PluginCtx>, _builder: &mut RegistryBuilder<'_>) {}
 }
 
-/// Validate that a plugin name is a single safe path component. It comes from
-/// `plugin.toml` (attacker-controlled on upload) and is joined into the
-/// plugins directory, so it must not be able to escape it.
+/// Validate a plugin name. It comes from `plugin.toml` (attacker-controlled on
+/// upload) and is used as a directory name, as a URL path segment
+/// (`/plugins/<name>/…`, where `*` or `:` would be read by the router as a
+/// wildcard or a parameter and panic it) and in the install log (one line per
+/// event). So it is a plain identifier: ASCII letters, digits, `.`, `_`, `-`,
+/// starting with a letter or digit, and never ending in `.bak` — the suffix
+/// the installer gives the previous copy during an upgrade.
 pub fn validate_plugin_name(name: &str) -> Result<(), AppError> {
     const MAX: usize = 64;
     let valid = !name.is_empty()
         && name.len() <= MAX
-        && name != "."
-        && name != ".."
-        && !name.starts_with('.')
-        && !name.starts_with('_')
-        && !name.contains('/')
-        && !name.contains('\\')
-        && !name.contains('\0');
+        && name.chars().next().is_some_and(|c| c.is_ascii_alphanumeric())
+        && name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
+        && !name.contains("..")
+        && !name.to_ascii_lowercase().ends_with(".bak");
     if valid {
         Ok(())
     } else {
         Err(AppError::BadRequest(format!(
-            "Invalid plugin name '{name}': must be 1..={MAX} chars, a single path component, \
-             and must not start with '.' or '_'"
+            "Invalid plugin name '{}': must be 1..={MAX} ASCII letters, digits, '.', '_' or '-', \
+             start with a letter or digit, and not end in '.bak'",
+            name.escape_debug()
         )))
     }
 }
@@ -830,6 +834,10 @@ mod tests {
             assert!(validate_plugin_name(bad).is_err(), "{bad:?} should be rejected");
         }
         assert!(validate_plugin_name(&"a".repeat(65)).is_err());
+        // Router metacharacters, log-line breaks and the upgrade backup suffix.
+        for bad in ["*", "a*b", ":id", "a b", "a\nb", "files.bak", "a..b", "-x", "名前"] {
+            assert!(validate_plugin_name(bad).is_err(), "{bad:?} should be rejected");
+        }
     }
 
     /// `capabilities` is a host-side hint parsed from the same toml as

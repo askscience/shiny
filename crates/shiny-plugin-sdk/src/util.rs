@@ -2,6 +2,14 @@
 
 use crate::db::Value;
 
+/// An integer column value, or 0 when the cell holds anything else.
+pub fn as_int(v: &crate::db::Value) -> i64 {
+    match v {
+        crate::db::Value::Int(n) => *n,
+        _ => 0,
+    }
+}
+
 /// Text from an SDK database value (`TEXT` or `INTEGER`).
 pub fn as_text(v: &Value) -> String {
     match v {

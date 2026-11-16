@@ -136,6 +136,33 @@ Iroh itself is a build feature (`--features iroh`); Tailscale uses the
 | `PROBE_DEBUG` | — | K | Verbose probing. |
 | `HOME` / `XDG_DATA_HOME` | — | K | Standard dirs. |
 
+## Plugins, updates and the installer
+
+Read directly by the code named, not through `Config`.
+
+| Variable | Default | Read by | Meaning |
+|---|---|---|---|
+| `PLUGIN_WATCH_SECS` | `10` | `src/application/plugin_watch.rs` | How often the server looks for plugins changed on disk. |
+| `SHINY_LOOKS_DIR` | `/var/lib/shiny/looks` | `src/services/greeter_look.rs` | Where each account publishes its look for the login screen. |
+| `LITEAURA_POINTER_FILE` | `~/.config/liteaura/pointer.json` | `src/services/pointer.rs` | Mouse and touchpad settings file. |
+| `LITEAURA_AI_TIER` | — | `src/services/ai_switch.rs` | Set by the session: `none` / `off` stop the client fetching speech models on its own. |
+| `SHINY_BOOT_TOKEN` | — | K | The kiosk auto-login token, handed to the shell through the environment (never argv). |
+| `SEARXNG_URL` | — | Browser plugin | A SearXNG instance for the Browser's searches. |
+| `SHINY_GOKAPI_DIR` | `~/.shiny/gokapi` | Files plugin | State directory of the file-sharing server. |
+| `SHINY_GOKAPI_BUNDLE_DIR` | `/usr/libexec/shiny/gokapi` | Files plugin | Where the bundled file-sharing binaries are installed. |
+| `LITEAURA_CAPTURE_RENDER` | — | Capture plugin | Path to `liteaura-capture-render` (default: next to the server, then `PATH`). |
+| `OLLAMA_BIN` | — | Updates plugin | Path to the `ollama` binary for a non-standard install. |
+| `OLLAMA_INSTALL_URL` | Ollama's install script | Updates plugin | Script URL used to update Ollama. |
+| `OLLAMA_UPDATE_CMD` | — | Updates plugin | Replaces the whole Ollama update command. **Run as root through `sh -c`**: set it only in an environment you control. |
+| `SHINY_LIVE_INSTALLER` (`=1`) | — | Installer plugin | Marks a live session; the installer is inert without it. |
+| `SHINY_INSTALLER_SOCKET` | `/run/shiny/installer.sock` | Installer plugin | Socket of the root installer helper. |
+| `LITEAURA_ENGINE_SQUASHFS` | `/run/live/medium/live/filesystem.squashfs` | installer helper | System image the installer copies. |
+| `LITEAURA_ENGINE_MEDIUM` | `/run/live/medium/live` | installer helper | The live medium's directory. |
+| `LITEAURA_ENGINE_SOURCE` | — | installer helper | An already-mounted source tree to copy instead of the squashfs. |
+
+`ADFILTER_DIR`, `SHINY_CRAFT_CLI` and the `*_TEST_*` / `*_DEBUG` variables are
+read only by examples and tests.
+
 ## Auth helper build/systemd
 
 `LISTEN_FDS` / `LISTEN_PID` are set by systemd socket activation for

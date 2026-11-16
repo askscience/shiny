@@ -137,6 +137,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // taken for the running build, and the update never offered.
     shiny::api::system::build_id();
 
+    // Before binding: the launcher checks this to know the answer on the port
+    // comes from the server it started (api::health::publish_instance).
+    shiny::api::health::publish_instance(config.server_port);
+
     let addr = format!("{}:{}", config.server_host, config.server_port);
     tracing::info!("Server listening on http://{}", addr);
     tracing::info!("Web UI served from / (static files in {})", config.web_dir);

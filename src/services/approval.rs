@@ -29,6 +29,9 @@ pub enum Decision {
 /// What the runner may do with the command.
 pub enum Authorization {
     Allow,
+    /// A spoken turn: there is no card to show, so the assistant asks aloud
+    /// and the user's next spoken answer decides (see [`VoiceAsk`]).
+    AskAloud,
     /// The user answered "Deny".
     Denied(&'static str),
     /// This turn cannot ask the user (no interactive transport), so the
@@ -64,6 +67,77 @@ impl Drop for PendingGuard<'_> {
     }
 }
 
+/// A gated call waiting for the user's spoken yes or no.
+///
+/// A voice turn cannot show the allow/deny card, so the call is parked here
+/// with its exact parameters and the assistant asks aloud. If the very next
+/// spoken message in that conversation is a plain yes, that stored call — not
+/// a new one the model writes — is what runs. Anything else drops it. Typed
+/// messages never answer it: consent for a spoken request is spoken.
+#[derive(Debug, Clone)]
+pub struct VoiceAsk {
+    pub traveler_id: String,
+    /// The action name the model used, and its parameters as they would run.
+    pub action: String,
+    pub params: serde_json::Value,
+    asked_at: std::time::Instant,
+}
+
+/// How long a spoken question stays answerable.
+const VOICE_ASK_TTL: std::time::Duration = std::time::Duration::from_secs(120);
+
+/// What a spoken answer to a parked question means.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SpokenAnswer {
+    Yes,
+    No,
+    /// Not an answer: the question is dropped and the message handled as usual.
+    Other,
+}
+
+/// Read a short spoken reply as yes or no. Deliberately strict: the whole
+/// utterance has to be an agreement (at most a few words, starting with one),
+/// so "yes but send it to Anna instead" is not taken as consent to the
+/// original call.
+pub fn spoken_answer(message: &str) -> SpokenAnswer {
+    const YES: &[&str] = &[
+        "yes", "yeah", "yep", "ok", "okay", "sure", "confirm", "confirmed", "go ahead", "do it",
+        "please do", "si", "sì", "certo", "va bene", "procedi", "conferma", "confermo", "fallo",
+        "d'accordo", "oui", "d'accord", "vas-y", "ja", "klar", "mach das", "sí", "claro", "vale",
+        "adelante", "hazlo", "sim", "pode", "da", "tak", "evet", "да", "давай", "はい", "是", "好",
+        "네", "نعم",
+    ];
+    const NO: &[&str] = &[
+        "no", "nope", "don't", "do not", "cancel", "stop", "annulla", "non farlo", "lascia stare",
+        "non", "annule", "nein", "abbrechen", "nao", "não", "cancela", "nie", "hayır", "нет",
+        "いいえ", "不", "아니", "لا",
+    ];
+    let cleaned: String = message
+        .trim()
+        .to_lowercase()
+        .chars()
+        .map(|c| if matches!(c, '.' | ',' | '!' | '?' | ';' | ':' | '。' | '、') { ' ' } else { c })
+        .collect();
+    let words: Vec<&str> = cleaned.split_whitespace().collect();
+    if words.is_empty() || words.len() > 4 {
+        return SpokenAnswer::Other;
+    }
+    let text = words.join(" ");
+    let starts = |list: &[&str]| {
+        list.iter().any(|word| {
+            text == *word || text.strip_prefix(word).is_some_and(|rest| rest.starts_with(' '))
+        })
+    };
+    // "no" first: "no, don't" must never be read through a later "ok".
+    if starts(NO) {
+        SpokenAnswer::No
+    } else if starts(YES) {
+        SpokenAnswer::Yes
+    } else {
+        SpokenAnswer::Other
+    }
+}
+
 /// Live approval requests + the conversations that no longer ask.
 #[derive(Clone, Default)]
 pub struct ApprovalRegistry {
@@ -72,6 +146,8 @@ pub struct ApprovalRegistry {
     /// copy lives in `chat_conversations.terminal_auto_approve`; this set makes
     /// the choice effective for the rest of the current turn immediately.
     auto_chat: Arc<RwLock<HashSet<String>>>,
+    /// One parked spoken question per conversation.
+    voice_asks: Arc<Mutex<HashMap<String, VoiceAsk>>>,
 }
 
 impl ApprovalRegistry {
@@ -86,6 +162,40 @@ impl ApprovalRegistry {
 
     pub fn is_auto_chat(&self, conversation_id: &str) -> bool {
         self.auto_chat.read().contains(conversation_id)
+    }
+
+    /// Park a gated call until the user answers aloud. A newer question in the
+    /// same conversation replaces an older one.
+    pub fn park_voice_ask(
+        &self,
+        conversation_id: &str,
+        traveler_id: &str,
+        action: &str,
+        params: serde_json::Value,
+    ) {
+        let mut asks = self.voice_asks.lock().unwrap_or_else(|e| e.into_inner());
+        asks.retain(|_, ask| ask.asked_at.elapsed() < VOICE_ASK_TTL);
+        asks.insert(
+            conversation_id.to_string(),
+            VoiceAsk {
+                traveler_id: traveler_id.to_string(),
+                action: action.to_string(),
+                params,
+                asked_at: std::time::Instant::now(),
+            },
+        );
+    }
+
+    /// Take the question the next spoken message answers, if one is parked,
+    /// still fresh and asked of this same account. Taking removes it: whatever
+    /// the answer turns out to be, the question is answered once.
+    pub fn take_voice_ask(&self, conversation_id: &str, traveler_id: &str) -> Option<VoiceAsk> {
+        let ask = self
+            .voice_asks
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(conversation_id)?;
+        (ask.traveler_id == traveler_id && ask.asked_at.elapsed() < VOICE_ASK_TTL).then_some(ask)
     }
 
     fn request(
@@ -150,10 +260,24 @@ pub struct ApprovalGate {
     /// turn before the text chat is open): the command is then refused rather
     /// than run unapproved.
     interactive: bool,
+    /// A spoken turn: ask aloud instead of refusing when no card can be shown.
+    voice: bool,
     emit: Box<dyn Fn(ApprovalPrompt) + Send + Sync>,
 }
 
 impl ApprovalGate {
+    /// Mark the turn as spoken (speech in, speech out).
+    pub fn spoken(mut self, voice: bool) -> Self {
+        self.voice = voice;
+        self
+    }
+
+    /// Park this call for the user's spoken answer (after [`Authorization::AskAloud`]).
+    pub fn park_voice_ask(&self, action: &str, params: serde_json::Value) {
+        self.registry
+            .park_voice_ask(&self.conversation_id, &self.traveler_id, action, params);
+    }
+
     pub fn new(
         registry: ApprovalRegistry,
         turn_id: String,
@@ -168,6 +292,7 @@ impl ApprovalGate {
             traveler_id,
             conversation_id,
             interactive,
+            voice: false,
             emit,
         }
     }
@@ -181,6 +306,9 @@ impl ApprovalGate {
     ) -> Authorization {
         if self.registry.is_auto_chat(&self.conversation_id) {
             return Authorization::Allow;
+        }
+        if !self.interactive && self.voice {
+            return Authorization::AskAloud;
         }
         if !self.interactive {
             return Authorization::Unavailable(
@@ -332,5 +460,44 @@ mod tests {
             .resolve("turn-1", &request_id, "user-1", true, false)
             .is_some());
         assert_eq!(receiver.try_recv(), Ok(Decision::Allow));
+    }
+
+    #[test]
+    fn spoken_answers_are_read_strictly() {
+        for yes in ["Yes.", "sì", "Si, procedi", "ok", "Va bene!", "go ahead", "oui"] {
+            assert_eq!(spoken_answer(yes), SpokenAnswer::Yes, "{yes}");
+        }
+        for no in ["No", "no, don't", "annulla", "No ok", "nein"] {
+            assert_eq!(spoken_answer(no), SpokenAnswer::No, "{no}");
+        }
+        for other in ["", "yes but send it to Anna instead please", "what time is it", "note", "sicuro?"] {
+            assert_eq!(spoken_answer(other), SpokenAnswer::Other, "{other}");
+        }
+    }
+
+    #[tokio::test]
+    async fn a_spoken_turn_asks_aloud_and_the_question_is_answered_once() {
+        let registry = ApprovalRegistry::default();
+        let gate = ApprovalGate::new(
+            registry.clone(),
+            "turn-1".into(),
+            "user-1".into(),
+            "chat-1".into(),
+            false,
+            Box::new(|_| {}),
+        )
+        .spoken(true);
+        assert!(matches!(
+            gate.authorize("mail_send", "mail_send: to a@b.c", None).await,
+            Authorization::AskAloud
+        ));
+        gate.park_voice_ask("mail_send", serde_json::json!({ "to": ["a@b.c"] }));
+        // Another account cannot answer it, and asking consumed it.
+        assert!(registry.take_voice_ask("chat-1", "user-2").is_none());
+        assert!(registry.take_voice_ask("chat-1", "user-1").is_none());
+        gate.park_voice_ask("mail_send", serde_json::json!({ "to": ["a@b.c"] }));
+        let ask = registry.take_voice_ask("chat-1", "user-1").expect("parked");
+        assert_eq!(ask.action, "mail_send");
+        assert!(registry.take_voice_ask("chat-1", "user-1").is_none());
     }
 }

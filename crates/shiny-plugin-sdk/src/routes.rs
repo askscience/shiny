@@ -251,6 +251,29 @@ pub type RouteHandler = Arc<
         + Sync,
 >;
 
+/// The single path parameter of a route such as `/api/x/:id`.
+pub fn take_path(req: &axum::extract::Request) -> Result<String, crate::errors::AppError> {
+    use crate::errors::AppError;
+    let mut params = path_params_from_request(req)
+        .ok_or_else(|| AppError::BadRequest("no path parameter found".into()))?;
+    if params.len() != 1 {
+        return Err(AppError::BadRequest("expected exactly one path parameter".into()));
+    }
+    Ok(params.remove(0).1)
+}
+
+/// Deserialize the query string, handing the request back for its body.
+pub async fn take_query<T: serde::de::DeserializeOwned + Send + 'static>(
+    req: axum::extract::Request,
+) -> Result<(T, axum::extract::Request), crate::errors::AppError> {
+    use axum::extract::FromRequestParts;
+    let (mut parts, body) = req.into_parts();
+    let query = axum::extract::Query::<T>::from_request_parts(&mut parts, &())
+        .await
+        .map_err(|e| crate::errors::AppError::BadRequest(format!("invalid query: {e}")))?;
+    Ok((query.0, axum::extract::Request::from_parts(parts, body)))
+}
+
 /// Wrap an async `(Request) -> Result<Response, AppError>` handler so it runs
 /// on the plugin-owned runtime. Use exactly like `bridged(...)` for tools.
 /// `AppError` is converted to its HTTP response inside the bridge.

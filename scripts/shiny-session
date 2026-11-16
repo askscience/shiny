@@ -35,11 +35,20 @@ set -u
 # how this log came out empty the first time.
 SESSION_LOG_DIR="${SHINY_SESSION_LOG_DIR:-/var/log/shiny}"
 SESSION_LOG="$SESSION_LOG_DIR/session-$(id -un).log"
-if ! mkdir -p "$SESSION_LOG_DIR" 2>/dev/null || ! touch "$SESSION_LOG" 2>/dev/null; then
+# The directory is shared with every other account. A log that is a symlink, or
+# a file somebody else put there under this account's name, is never written
+# to: the kiosk's stderr goes into this file, and part of that is text a web
+# page controls. New logs are private to the account (and root).
+umask_before=$(umask)
+umask 077
+if [ -L "$SESSION_LOG" ] || { [ -e "$SESSION_LOG" ] && [ ! -O "$SESSION_LOG" ]; } \
+    || ! mkdir -p "$SESSION_LOG_DIR" 2>/dev/null || ! touch "$SESSION_LOG" 2>/dev/null \
+    || [ -L "$SESSION_LOG" ] || [ ! -O "$SESSION_LOG" ]; then
     # Fall back to the account's own data dir rather than lose the log.
     SESSION_LOG="$HOME/.local/share/shiny/session.log"
     mkdir -p "$(dirname -- "$SESSION_LOG")" 2>/dev/null || true
 fi
+umask "$umask_before"
 log() {
     line="[$(date '+%Y-%m-%d %H:%M:%S')] [$$] shiny-session: $*"
     echo "$line" >&2
@@ -161,6 +170,29 @@ for _ in $(seq 1 60); do
 done
 
 RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+
+# The per-account port is predictable, so another local account could be
+# sitting on it: the probe above would then have been answered by its process,
+# which would be shown as this user's desktop and be handed the session token.
+# Only this account's own server can answer a challenge with the secret it
+# wrote into the private runtime directory. A server too old to write one is
+# not checked.
+verify_server() {
+    instance_file="$RUNTIME_DIR/shiny-instance-$PORT"
+    [ -f "$instance_file" ] || return 0
+    challenge=$(cat /proc/sys/kernel/random/uuid 2>/dev/null) || return 1
+    want=$(printf '%s:%s' "$(cat "$instance_file")" "$challenge" | sha256sum | cut -d' ' -f1)
+    got=$(curl -sf "http://127.0.0.1:$PORT/api/health/instance?c=$challenge" 2>/dev/null)
+    # Nothing listening yet (a slow start) is not an impostor: 7 is curl's
+    # "could not connect".
+    [ $? -eq 7 ] && return 0
+    [ -n "$got" ] && [ "$got" = "$want" ]
+}
+if ! verify_server; then
+    log "port $PORT is answered by another process, not this account's server — refusing to open it"
+    exit 1
+fi
+
 TOKEN_FILE="$RUNTIME_DIR/shiny-session-token"
 STATE_FILE="$RUNTIME_DIR/shiny-remote.state"
 

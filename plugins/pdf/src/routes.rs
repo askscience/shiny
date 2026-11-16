@@ -6,7 +6,7 @@
 
 use std::sync::Arc;
 
-use axum::extract::{FromRequest, FromRequestParts};
+use axum::extract::FromRequest;
 use axum::http::header::{CACHE_CONTROL, CONTENT_DISPOSITION, CONTENT_TYPE};
 use axum::response::Response;
 use serde::de::DeserializeOwned;
@@ -15,8 +15,8 @@ use serde_json::{json, Value as Json};
 
 use shiny_plugin_sdk::db::Value;
 use shiny_plugin_sdk::errors::AppError;
-use shiny_plugin_sdk::util::{as_text, clean_title, filename_for_title};
-use shiny_plugin_sdk::routes::{bridged_route, path_params_from_request, RouteHandler, ok, user_id};
+use shiny_plugin_sdk::util::{as_text, clean_title, filename_for_title, as_int};
+use shiny_plugin_sdk::routes::{bridged_route, path_params_from_request, RouteHandler, ok, user_id, take_query};
 use shiny_plugin_sdk::services::PluginCtx;
 
 use crate::ops;
@@ -66,13 +66,6 @@ pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
 }
 
 /* ── helpers ────────────────────────────────────────────────── */
-fn as_int(v: &Value) -> i64 {
-    match v {
-        Value::Int(n) => *n,
-        _ => 0,
-    }
-}
-
 fn as_blob(v: &Value) -> Vec<u8> {
     match v {
         Value::Blob(b) => b.clone(),
@@ -104,16 +97,6 @@ fn take_id_page(req: &axum::extract::Request) -> Result<(String, usize), AppErro
         .parse()
         .map_err(|_| AppError::BadRequest("invalid page number".into()))?;
     Ok((p[0].clone(), page))
-}
-
-async fn take_query<T: DeserializeOwned + Send + 'static>(
-    req: axum::extract::Request,
-) -> Result<(T, axum::extract::Request), AppError> {
-    let (mut parts, body) = req.into_parts();
-    let query = axum::extract::Query::<T>::from_request_parts(&mut parts, &())
-        .await
-        .map_err(|e| AppError::BadRequest(format!("invalid query: {e}")))?;
-    Ok((query.0, axum::extract::Request::from_parts(parts, body)))
 }
 
 async fn take_json<T: DeserializeOwned>(

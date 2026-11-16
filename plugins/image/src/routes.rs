@@ -8,7 +8,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use axum::extract::{FromRequest, FromRequestParts};
+use axum::extract::FromRequest;
 use axum::http::header::{CACHE_CONTROL, CONTENT_TYPE};
 use axum::response::Response;
 use photon_rs::transform::SamplingFilter;
@@ -19,8 +19,8 @@ use serde_json::{json, Map, Value as Json};
 
 use shiny_plugin_sdk::db::Value;
 use shiny_plugin_sdk::errors::AppError;
-use shiny_plugin_sdk::util::{as_opt_text, as_text, clean_title};
-use shiny_plugin_sdk::routes::{bridged_route, path_params_from_request, RouteHandler, ok, user_id};
+use shiny_plugin_sdk::util::{as_opt_text, as_text, clean_title, as_int};
+use shiny_plugin_sdk::routes::{bridged_route, path_params_from_request, RouteHandler, ok, user_id, take_query};
 use shiny_plugin_sdk::services::PluginCtx;
 
 use crate::{doc, ops};
@@ -42,12 +42,6 @@ pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
         _ => return None,
     })
 }
-fn as_int(v: &Value) -> i64 {
-    match v {
-        Value::Int(n) => *n,
-        _ => 0,
-    }
-}
 fn path_params(req: &axum::extract::Request) -> HashMap<String, String> {
     path_params_from_request(req)
         .map(|p| p.into_iter().collect())
@@ -65,16 +59,6 @@ fn path_param(req: &axum::extract::Request, name: &str) -> Result<String, AppErr
         .and_then(|p| p.into_iter().next().map(|(_, v)| v))
         .filter(|v| !v.is_empty())
         .ok_or_else(|| AppError::BadRequest(format!("missing path parameter '{name}'")))
-}
-
-async fn take_query<T: DeserializeOwned + Send + 'static>(
-    req: axum::extract::Request,
-) -> Result<(T, axum::extract::Request), AppError> {
-    let (mut parts, body) = req.into_parts();
-    let query = axum::extract::Query::<T>::from_request_parts(&mut parts, &())
-        .await
-        .map_err(|e| AppError::BadRequest(format!("invalid query: {e}")))?;
-    Ok((query.0, axum::extract::Request::from_parts(parts, body)))
 }
 
 async fn take_json<T: DeserializeOwned>(req: axum::extract::Request) -> Result<T, AppError> {

@@ -1112,9 +1112,17 @@ IpcBridge::IpcBridge(liteaura_ipc_cb callback, void *userdata, bool privileged, 
     : QObject(parent), callback_(callback), userdata_(userdata), privileged_(privileged) {}
 
 void IpcBridge::postMessage(const QString &body) {
-    // A non-privileged view (a browsing page) may only ask to leave the kiosk.
+    // A non-privileged view (a browsing page) may only ask to leave the kiosk,
+    // and only as the Alt+Q / Cmd+Q shortcut does: with the modifier actually
+    // held on the keyboard. The page's own script shares this bridge, so
+    // without that check any site (or ad) could end the user's session by
+    // posting the message itself; it cannot fake the keyboard's state.
     if (!privileged_) {
         if (body != QLatin1String("liteaura:exit")) {
+            return;
+        }
+        const Qt::KeyboardModifiers held = QGuiApplication::queryKeyboardModifiers();
+        if (!held.testFlag(Qt::AltModifier) && !held.testFlag(Qt::MetaModifier)) {
             return;
         }
     } else {

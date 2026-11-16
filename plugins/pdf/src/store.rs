@@ -8,19 +8,13 @@
 
 use serde_json::{json, Value as Json};
 
+use shiny_plugin_sdk::util::as_int;
 use shiny_plugin_sdk::db::Value;
 use shiny_plugin_sdk::errors::AppError;
 use shiny_plugin_sdk::services::PluginCtx;
 
 /// Revisions kept per document and direction.
 pub const KEEP: i64 = 25;
-
-fn as_int(v: &Value) -> i64 {
-    match v {
-        Value::Int(n) => *n,
-        _ => 0,
-    }
-}
 
 fn snapshot(ctx: &PluginCtx, uid: &str, id: &str, kind: &str, label: &str) -> Result<(), AppError> {
     ctx.db().execute(

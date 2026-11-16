@@ -129,6 +129,13 @@ list) contains the desktop user **and** the greeter account;
 The greeter's server is a child of the session launcher, on its own port and
 data directory, with an empty plugin directory and both speech sidecars off.
 
+Both launchers (`shiny-greeter`, `shiny-session`) verify the server before
+opening the kiosk on it. The ports are predictable, so another local account
+could already be listening there; the server therefore writes a random secret
+to `$XDG_RUNTIME_DIR/shiny-instance-<port>` (mode 0600) before it binds, and
+`GET /api/health/instance?c=<challenge>` answers `sha256(secret:challenge)`.
+A launcher that gets any other answer refuses to show the page.
+
 ## Sign-in is per-session
 
 A *user* session's server runs as that user, and every plugin executes as that

@@ -5,13 +5,12 @@
 
 use std::sync::Arc;
 
-use axum::extract::{FromRequest, FromRequestParts};
-use serde::de::DeserializeOwned;
+use axum::extract::FromRequest;
 use serde::Deserialize;
 use serde_json::json;
 
 use shiny_plugin_sdk::errors::AppError;
-use shiny_plugin_sdk::routes::{bridged_route, os_home_from_request, RouteHandler, path_params_from_request, ok, user_id};
+use shiny_plugin_sdk::routes::{bridged_route, os_home_from_request, RouteHandler, ok, user_id, take_query, take_path};
 use shiny_plugin_sdk::services::PluginCtx;
 
 use crate::attach;
@@ -42,25 +41,6 @@ pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
 }
 
 /* ── helpers ────────────────────────────────────────────────── */
-async fn take_query<T: DeserializeOwned + Send + 'static>(
-    req: axum::extract::Request,
-) -> Result<(T, axum::extract::Request), AppError> {
-    let (mut parts, body) = req.into_parts();
-    let query = axum::extract::Query::<T>::from_request_parts(&mut parts, &())
-        .await
-        .map_err(|e| AppError::BadRequest(format!("invalid query: {e}")))?;
-    Ok((query.0, axum::extract::Request::from_parts(parts, body)))
-}
-
-fn take_path(req: &axum::extract::Request) -> Result<String, AppError> {
-    let mut params = path_params_from_request(req)
-        .ok_or_else(|| AppError::BadRequest("no path parameter found".into()))?;
-    if params.len() != 1 {
-        return Err(AppError::BadRequest("expected exactly one path parameter".into()));
-    }
-    Ok(params.remove(0).1)
-}
-
 fn now_iso() -> String {
     chrono::Utc::now().to_rfc3339()
 }

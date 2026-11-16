@@ -24,6 +24,8 @@ and the remote-access crates.
 | `shiny-iroh-client` | [`crates/shiny-iroh-client`](../../crates/shiny-iroh-client) | bin + lib | Local proxy that dials a remote Iroh endpoint and serves the app on a loopback port. |
 | `shiny-iroh-proto` | [`crates/shiny-iroh-proto`](../../crates/shiny-iroh-proto) | lib | Shared protocol types for Iroh remote access (built behind the `iroh` feature). |
 | `shiny-server-mode` | [`crates/shiny-server-mode`](../../crates/shiny-server-mode) | bin | The kiosk window shown while the server is in Iroh server mode (link + controls). |
+| `shiny-installer-protocol` | [`crates/shiny-installer-protocol`](../../crates/shiny-installer-protocol) | lib | The install plan and the RPC messages shared by the Installer plugin and its root helper, with the plan's validation. |
+| `shiny-installer-helper` | [`crates/shiny-installer-helper`](../../crates/shiny-installer-helper) | bin | Root helper of the live image's installer: probes disks and writes the system to the chosen target, over a Unix socket. |
 
 ## Plugin crates
 
@@ -52,6 +54,9 @@ ecosystem. See the plugin's `docs/` folder and
 | `plugins/studio` | `libshiny_studio_plugin` | Media |
 | `plugins/radio` | `libshiny_radio_plugin` | Media |
 | `plugins/youtube` | `libshiny_youtube_plugin` | Media |
+| `plugins/updates` | `libshiny_updates_plugin` | System |
+| `plugins/installer` | `libshiny_installer_plugin` | System |
+| `plugins/oorbit` | `libshiny_oorbit_plugin` | Games |
 
 ## Inherited dependency highlights
 

@@ -13,6 +13,9 @@ use serde_json::{json, Value};
 use crate::api::AppState;
 use crate::errors::AppError;
 
+/// Refusal for a caller that is not the machine itself.
+const LOCAL_ONLY: &str = "keyboard backlight changes are only allowed from the local machine";
+
 /// GET /api/keyboard/backlight
 pub async fn status(State(state): State<AppState>, headers: axum::http::HeaderMap) -> Json<Value> {
     let data = crate::api::remote::gate_host_status(
@@ -28,7 +31,7 @@ pub async fn set(
     ConnectInfo(remote): ConnectInfo<SocketAddr>,
     Json(body): Json<Value>,
 ) -> Result<Json<Value>, AppError> {
-    require_local(&remote)?;
+    crate::api::remote::require_loopback(&remote, LOCAL_ONLY)?;
 
     let data = if let Some(delta) = body.get("delta").and_then(Value::as_i64) {
         state
@@ -47,15 +50,4 @@ pub async fn set(
     };
 
     Ok(Json(json!({ "success": true, "data": data })))
-}
-
-/// The backlight is a host-level capability and the server is reachable on the
-/// LAN, so a write must come from the machine itself.
-fn require_local(remote: &SocketAddr) -> Result<(), AppError> {
-    if remote.ip().is_loopback() {
-        return Ok(());
-    }
-    Err(AppError::Unauthorized(
-        "keyboard backlight changes are only allowed from the local machine".into(),
-    ))
 }

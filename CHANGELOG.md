@@ -31,6 +31,34 @@
 - Login throttling: tunnelled traffic has its own bucket and can no longer
   lock the local kiosk out; oversized usernames cannot grow the limiter.
 
+- Voice: a gated call in a spoken turn is asked aloud and runs when the next
+  spoken message is a plain yes (it used to be refused). Typed messages do not
+  answer a spoken question.
+- Login screen and sessions: the launchers check that the port is answered by
+  the server they started (a challenge against a secret in the account's
+  private runtime directory) before showing it. Another local account sitting
+  on the port could otherwise pose as the login screen.
+- `/var/log/shiny` is sticky, and a session never writes to a log that is a
+  symlink or belongs to someone else; new session logs are private.
+- Bluetooth: the agent confirms only pairings started from the Bluetooth
+  panel. It used to accept any pairing a nearby device asked for.
+- Kiosk: a browsed page can no longer end the session by posting the exit
+  message; the Alt+Q / Cmd+Q shortcut still works there.
+- Installer: locale, keyboard, timezone, full name and password are checked
+  before they are written into the new system, and only one install runs at
+  a time.
+- Plugin names are plain identifiers (letters, digits, `.`, `_`, `-`); a name
+  such as `*` could stop the server from starting.
+
+### Changed
+
+- `take_query`, `take_path` and `as_int`, copied into ten plugins, live in
+  the plugin SDK; the seven copies of the host panels' loopback check are one
+  helper. Unused dependencies dropped (`semver` in 16 plugins; `argon2`,
+  `aes-gcm`, `getrandom` in Browser; `tokio`, `reqwest` in Traveler).
+- Docs: the environment-variable reference and the crate map list what was
+  missing.
+
 ### Fixed
 
 - The Vosk model download no longer blocks a server worker for its whole

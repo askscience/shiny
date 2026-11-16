@@ -6,14 +6,12 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
-use axum::extract::FromRequestParts;
 use axum::response::IntoResponse;
-use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use shiny_plugin_sdk::errors::AppError;
-use shiny_plugin_sdk::routes::{bridged_route, RouteHandler, user_id};
+use shiny_plugin_sdk::routes::{bridged_route, RouteHandler, user_id, take_query};
 use shiny_plugin_sdk::services::PluginCtx;
 
 const MAX_METADATA_READ: usize = 64 * 1024 + 4080;
@@ -25,16 +23,6 @@ pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
         _ => None,
     }
 }
-async fn take_query<T: DeserializeOwned + Send + 'static>(
-    req: axum::extract::Request,
-) -> Result<(T, axum::extract::Request), AppError> {
-    let (mut parts, body) = req.into_parts();
-    let query = axum::extract::Query::<T>::from_request_parts(&mut parts, &())
-        .await
-        .map_err(|e| AppError::BadRequest(format!("invalid query: {e}")))?;
-    Ok((query.0, axum::extract::Request::from_parts(parts, body)))
-}
-
 #[derive(Deserialize)]
 struct NowPlayingQuery {
     url: String,

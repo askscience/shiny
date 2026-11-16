@@ -104,18 +104,6 @@ impl PluginManager {
     pub fn tools(&self) -> ToolRegistry { self.inner.tools.clone() }
     pub fn loader(&self) -> &Loader { &self.inner.loader }
 
-    /// Synchronously read a single user's disabled plugin names.
-    pub async fn disabled_for(&self, user_id: &str) -> BTreeSet<String> {
-        let rows: Vec<String> = sqlx::query_scalar(
-            "SELECT plugin_name FROM user_plugin_states WHERE user_id = ?1 AND enabled = 0",
-        )
-        .bind(user_id)
-        .fetch_all(&self.inner.pool)
-        .await
-        .unwrap_or_default();
-        rows.into_iter().collect()
-    }
-
     /// Check whether `user_id` has `plugin_name` enabled. A plugin is enabled
     /// by default (no row = enabled).
     pub async fn is_enabled_for(&self, user_id: &str, plugin_name: &str) -> bool {

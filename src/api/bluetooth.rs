@@ -20,6 +20,9 @@ use serde_json::Value;
 use crate::api::AppState;
 use crate::errors::AppError;
 
+/// Refusal for a caller that is not the machine itself.
+const LOCAL_ONLY: &str = "Bluetooth changes are only allowed from the local machine";
+
 /// GET /api/bluetooth/status
 pub async fn status(State(state): State<AppState>, headers: axum::http::HeaderMap) -> Json<Value> {
     let data = crate::api::remote::gate_host_status(
@@ -49,7 +52,7 @@ pub async fn power(
     ConnectInfo(remote): ConnectInfo<SocketAddr>,
     Json(body): Json<PowerBody>,
 ) -> Result<Json<Value>, AppError> {
-    require_local(&remote)?;
+    crate::api::remote::require_loopback(&remote, LOCAL_ONLY)?;
     state
         .bluetooth
         .set_power(body.enabled)
@@ -63,7 +66,7 @@ pub async fn scan(
     State(state): State<AppState>,
     ConnectInfo(remote): ConnectInfo<SocketAddr>,
 ) -> Result<Json<Value>, AppError> {
-    require_local(&remote)?;
+    crate::api::remote::require_loopback(&remote, LOCAL_ONLY)?;
     state.bluetooth.scan().await.map_err(AppError::BadRequest)?;
     Ok(Json(serde_json::json!({ "success": true })))
 }
@@ -79,7 +82,7 @@ pub async fn pair(
     ConnectInfo(remote): ConnectInfo<SocketAddr>,
     Json(body): Json<DeviceBody>,
 ) -> Result<Json<Value>, AppError> {
-    require_local(&remote)?;
+    crate::api::remote::require_loopback(&remote, LOCAL_ONLY)?;
     state
         .bluetooth
         .pair(&body.id)
@@ -94,7 +97,7 @@ pub async fn connect(
     ConnectInfo(remote): ConnectInfo<SocketAddr>,
     Json(body): Json<DeviceBody>,
 ) -> Result<Json<Value>, AppError> {
-    require_local(&remote)?;
+    crate::api::remote::require_loopback(&remote, LOCAL_ONLY)?;
     state
         .bluetooth
         .connect(&body.id)
@@ -109,7 +112,7 @@ pub async fn disconnect(
     ConnectInfo(remote): ConnectInfo<SocketAddr>,
     Json(body): Json<DeviceBody>,
 ) -> Result<Json<Value>, AppError> {
-    require_local(&remote)?;
+    crate::api::remote::require_loopback(&remote, LOCAL_ONLY)?;
     state
         .bluetooth
         .disconnect(&body.id)
@@ -124,7 +127,7 @@ pub async fn forget(
     ConnectInfo(remote): ConnectInfo<SocketAddr>,
     Json(body): Json<DeviceBody>,
 ) -> Result<Json<Value>, AppError> {
-    require_local(&remote)?;
+    crate::api::remote::require_loopback(&remote, LOCAL_ONLY)?;
     state
         .bluetooth
         .forget(&body.id)
@@ -145,7 +148,7 @@ pub async fn trust(
     ConnectInfo(remote): ConnectInfo<SocketAddr>,
     Json(body): Json<TrustBody>,
 ) -> Result<Json<Value>, AppError> {
-    require_local(&remote)?;
+    crate::api::remote::require_loopback(&remote, LOCAL_ONLY)?;
     state
         .bluetooth
         .set_trusted(&body.id, body.trusted)
@@ -153,16 +156,3 @@ pub async fn trust(
         .map_err(AppError::BadRequest)?;
     Ok(Json(serde_json::json!({ "success": true })))
 }
-
-/// Bluetooth management is a host-level capability and the server is reachable
-/// on the LAN, so anything that changes what is paired must come from the
-/// machine itself.
-fn require_local(remote: &SocketAddr) -> Result<(), AppError> {
-    if remote.ip().is_loopback() {
-        return Ok(());
-    }
-    Err(AppError::Unauthorized(
-        "Bluetooth changes are only allowed from the local machine".into(),
-    ))
-}
-

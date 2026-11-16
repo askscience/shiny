@@ -142,6 +142,28 @@ start_server() {
 
 start_server
 
+# The port is fixed, so another local account could be sitting on it and the
+# probe above would have been answered by its process — which would then be
+# shown as this machine's login screen and be handed every password. Only the
+# server started here can answer a challenge with the secret it wrote into
+# this account's private runtime directory. A server too old to write one is
+# not checked.
+verify_server() {
+    instance_file="$XDG_RUNTIME_DIR/shiny-instance-$PORT"
+    [ -f "$instance_file" ] || return 0
+    challenge=$(cat /proc/sys/kernel/random/uuid 2>/dev/null) || return 1
+    want=$(printf '%s:%s' "$(cat "$instance_file")" "$challenge" | sha256sum | cut -d' ' -f1)
+    got=$(curl -sf "http://127.0.0.1:$PORT/api/health/instance?c=$challenge" 2>/dev/null)
+    # Nothing listening yet (a slow start) is not an impostor: 7 is curl's
+    # "could not connect".
+    [ $? -eq 7 ] && return 0
+    [ -n "$got" ] && [ "$got" = "$want" ]
+}
+if ! verify_server; then
+    echo "shiny-greeter: port $PORT is answered by another process, not the login server — refusing to show it" >&2
+    exit 1
+fi
+
 # A kiosk does not blank or sleep the panel.
 xset s off     >/dev/null 2>&1 || true
 xset s noblank >/dev/null 2>&1 || true

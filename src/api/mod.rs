@@ -854,6 +854,7 @@ pub fn build_router(state: AppState) -> Router {
     let shell = Router::new()
         .route("/api/health/live", get(health::live))
         .route("/api/health/ready", get(health::ready))
+        .route("/api/health/instance", get(health::instance))
         .merge(public_routes)
         .merge(protected_routes)
         .merge(build_plugin_routes(&state))
