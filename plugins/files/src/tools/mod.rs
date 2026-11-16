@@ -92,12 +92,26 @@ impl Tool for FileRead {
         if meta.is_dir() {
             return Err(AppError::BadRequest("path is a folder — use file_list".into()));
         }
-        let bytes = tokio::fs::read(&path).await?;
+        // Only a regular file, and only the part that is returned: reading
+        // the whole file first exhausted memory on a multi-GB one, and a FIFO
+        // or device in the home blocked the turn forever.
+        if !meta.is_file() {
+            return Err(AppError::BadRequest("not a regular file".into()));
+        }
+        let truncated = meta.len() > MAX_AGENT_READ as u64;
+        let mut bytes = Vec::new();
+        {
+            use tokio::io::AsyncReadExt;
+            tokio::fs::File::open(&path)
+                .await?
+                .take(MAX_AGENT_READ as u64)
+                .read_to_end(&mut bytes)
+                .await?;
+        }
         if bytes.iter().take(8192).any(|&b| b == 0) {
             return Err(AppError::BadRequest("binary file — not readable as text".into()));
         }
-        let truncated = bytes.len() > MAX_AGENT_READ;
-        let content = String::from_utf8_lossy(&bytes[..bytes.len().min(MAX_AGENT_READ)]).into_owned();
+        let content = String::from_utf8_lossy(&bytes).into_owned();
         Ok(ActionOutcome::ok(
             "file_read",
             json!({

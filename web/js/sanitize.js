@@ -38,6 +38,13 @@ const DROP_TAGS = new Set([
 // (`javascript:`, `data:`, `vbscript:`, …) is stripped.
 const SAFE_URL = /^(https?:|mailto:|#|\/)/i;
 
+// Images load without a click, so an image URL is a way OUT: a prompt-injected
+// reply can put what it read (the conversation, a file) in the query string of
+// `![](https://elsewhere/?d=…)` and the browser delivers it. Only images this
+// server itself serves — or inline data — are rendered; a remote one becomes
+// an ordinary link the user may choose to open.
+const LOCAL_IMAGE = /^(\/(?!\/)|data:image\/(png|jpe?g|gif|webp|avif);|blob:)/i;
+
 export function sanitizeHtml(html) {
   const doc = new DOMParser().parseFromString(String(html ?? ''), 'text/html');
   sanitizeChildren(doc.body);
@@ -64,13 +71,27 @@ function sanitizeChildren(node) {
         child.removeAttribute(attr.name);
         continue;
       }
-      if ((name === 'href' || name === 'src') && !SAFE_URL.test(attr.value.trim())) {
+      const value = attr.value.trim();
+      const safe = SAFE_URL.test(value) || (tag === 'img' && name === 'src' && LOCAL_IMAGE.test(value));
+      if ((name === 'href' || name === 'src') && !safe) {
         child.removeAttribute(attr.name);
       }
     }
-    if (tag === 'img' && !child.hasAttribute('src')) {
-      child.remove();
-      continue;
+    if (tag === 'img') {
+      const src = (child.getAttribute('src') || '').trim();
+      if (!src) {
+        child.remove();
+        continue;
+      }
+      if (!LOCAL_IMAGE.test(src)) {
+        const link = child.ownerDocument.createElement('a');
+        link.setAttribute('href', src);
+        link.setAttribute('rel', 'noopener noreferrer');
+        link.setAttribute('target', '_blank');
+        link.textContent = child.getAttribute('alt') || src;
+        child.replaceWith(link);
+        continue;
+      }
     }
     if (tag === 'a') {
       // Never navigate the privileged shell frame away from the app.

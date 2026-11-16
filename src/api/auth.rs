@@ -217,15 +217,27 @@ fn session_uid() -> u32 {
     0
 }
 
-/// Listing OS accounts is a host capability; the server is reachable on the
-/// LAN, so only the machine itself may enumerate it.
-fn require_local(remote: &SocketAddr) -> Result<(), AppError> {
-    if remote.ip().is_loopback() {
+/// Listing OS accounts is a host capability: only the machine itself may
+/// enumerate it — not the LAN, and not a client behind Iroh or Tailscale
+/// Funnel (whose requests arrive from a loopback peer).
+fn require_local(remote: &SocketAddr, headers: &HeaderMap) -> Result<(), AppError> {
+    if crate::api::remote::is_local(remote, headers) {
         return Ok(());
     }
     Err(AppError::Unauthorized(
         "the Linux user list is only available from the local machine".into(),
     ))
+}
+
+/// The rate-limit bucket for a request's source. Every Iroh/Funnel request
+/// arrives from 127.0.0.1, so tunnelled traffic gets a bucket of its own:
+/// remote attempts must not be able to lock the local kiosk out of signing in.
+fn limiter_source(remote: &SocketAddr, headers: &HeaderMap) -> String {
+    if crate::api::remote::is_remote(headers) {
+        "remote".into()
+    } else {
+        remote.ip().to_string()
+    }
 }
 
 /// `GET /api/auth/unix-users` — the real Linux accounts the login picker can
@@ -234,8 +246,9 @@ fn require_local(remote: &SocketAddr) -> Result<(), AppError> {
 pub async fn unix_users(
     State(state): State<AppState>,
     ConnectInfo(remote): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
 ) -> Result<Response, AppError> {
-    require_local(&remote)?;
+    require_local(&remote, &headers)?;
     let enabled = state.config.linux_users;
     let mut users: Vec<serde_json::Value> = if enabled {
         crate::services::unix_user::list_human_users()
@@ -302,7 +315,7 @@ pub async fn session_bootstrap(
     headers: HeaderMap,
     Query(query): Query<SessionQuery>,
 ) -> Result<Response, AppError> {
-    if !remote.ip().is_loopback() {
+    if !crate::api::remote::is_local(&remote, &headers) {
         return Err(AppError::Unauthorized("this endpoint is local-only".into()));
     }
     if let Err(retry) = BOOTSTRAP_LIMITER.check(&remote.ip().to_string(), 10, Duration::from_secs(60))
@@ -550,6 +563,14 @@ pub async fn register(
     headers: HeaderMap,
     Json(req): Json<RegisterRequest>,
 ) -> Result<Response, AppError> {
+    // Creating an account is done at the machine (or on its own network), never
+    // through a tunnel: anyone who learns the Funnel URL or the Iroh link could
+    // otherwise mint themselves a signed-in session.
+    if crate::api::remote::is_remote(&headers) {
+        return Ok(crate::api::remote::local_only_response(
+            "accounts can only be created from the local machine",
+        ));
+    }
     // Account creation is unauthenticated and each call costs an Argon2 hash;
     // throttle per source address.
     if let Err(retry) = REGISTER_LIMITER.check(&remote.ip().to_string(), 5, Duration::from_secs(3600)) {
@@ -579,9 +600,14 @@ pub async fn register(
     let token = Uuid::new_v4().to_string();
     let traveler = Traveler::new(username.clone(), username.clone(), hash_password(&req.password)?);
 
-    sqlx::query(
-        "INSERT INTO travelers (id, name, email, password_hash, auth_token, username, avatar, created_at, updated_at) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, datetime('now'), datetime('now'))",
+    // One statement decides who is the admin: the first registered traveler,
+    // so the Plugins UI is usable out of the box without ADMIN_TOKEN. Counting
+    // in the INSERT itself is atomic — two first sign-ups racing each other
+    // can no longer both (or neither) end up admin.
+    let inserted = sqlx::query_scalar::<_, bool>(
+        "INSERT INTO travelers (id, name, email, password_hash, auth_token, username, avatar, is_admin, created_at, updated_at) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, (SELECT COUNT(*) = 0 FROM travelers), datetime('now'), datetime('now')) \
+         RETURNING is_admin",
     )
     .bind(&traveler.id)
     .bind(&traveler.name)
@@ -590,24 +616,16 @@ pub async fn register(
     .bind(&token)
     .bind(&username)
     .bind(&req.avatar)
-    .execute(&state.pool)
-    .await
-    .map_err(AppError::Database)?;
-
-    // First registered traveler becomes admin automatically. This makes the
-    // Plugins UI usable out of the box without setting ADMIN_TOKEN env.
-    let user_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM travelers")
-        .fetch_one(&state.pool)
-        .await
-        .unwrap_or(0);
-    let is_first_user = user_count == 1;
-    if is_first_user {
-        sqlx::query("UPDATE travelers SET is_admin = 1 WHERE id = ?1")
-            .bind(&traveler.id)
-            .execute(&state.pool)
-            .await
-            .ok();
-    }
+    .fetch_one(&state.pool)
+    .await;
+    let is_first_user = match inserted {
+        Ok(is_admin) => is_admin,
+        // Lost a race for the same name against the check above.
+        Err(sqlx::Error::Database(e)) if e.is_unique_violation() => {
+            return Err(AppError::BadRequest("Username already taken".into()));
+        }
+        Err(e) => return Err(AppError::Database(e)),
+    };
 
     let mut public = traveler.to_public();
     public.avatar = req.avatar;
@@ -633,11 +651,15 @@ pub async fn login(
     // Throttle before any password work. Per (source, account) first, then a
     // coarser per-source budget so one host cannot spray many accounts; each
     // Argon2 verify costs ~19 MiB, so this also removes the memory-DoS path.
-    let ip = remote.ip().to_string();
-    if let Err(retry) = LOGIN_LIMITER.check(&format!("{ip}|{username}"), 10, Duration::from_secs(60)) {
+    // The per-source budget goes first, so a flood of made-up usernames is cut
+    // off before each one can add a key; and the key holds a bounded prefix of
+    // the name, so an oversized username cannot grow the map either.
+    let ip = limiter_source(&remote, &headers);
+    if let Err(retry) = LOGIN_LIMITER.check(&format!("{ip}|*"), 40, Duration::from_secs(60)) {
         return Ok(too_many_attempts(retry));
     }
-    if let Err(retry) = LOGIN_LIMITER.check(&format!("{ip}|*"), 40, Duration::from_secs(60)) {
+    let key_name: String = username.chars().take(64).collect();
+    if let Err(retry) = LOGIN_LIMITER.check(&format!("{ip}|{key_name}"), 10, Duration::from_secs(60)) {
         return Ok(too_many_attempts(retry));
     }
 

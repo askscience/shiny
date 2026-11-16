@@ -236,6 +236,7 @@ pub async fn events(
     AppError,
 > {
     let stream = page_events(&state, query.app.trim(), None).await?;
+    let stream = stream.take_until(crate::api::sse::draining());
     Ok(Sse::new(stream.map(Ok)).keep_alive(KeepAlive::default()))
 }
 

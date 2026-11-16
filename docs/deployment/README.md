@@ -121,7 +121,7 @@ root `README.md`. Deployment-relevant ones:
 
 | Variable | Default | Used by |
 |---|---|---|
-| `SERVER_HOST` | `0.0.0.0` | server bind address; the per-user unit sets `127.0.0.1`. |
+| `SERVER_HOST` | `127.0.0.1` | server bind address (loopback by default; `0.0.0.0` serves the LAN). |
 | `SERVER_PORT` | `8080` | server bind port; the per-user unit reads `~/.config/shiny/env`. |
 | `SHINY_LINUX_USERS` | `false` | bind Shiny accounts to real Linux accounts. |
 | `SHINY_HOME_MODE` | `virtual` | `real` makes the Files plugin use `$HOME`. |

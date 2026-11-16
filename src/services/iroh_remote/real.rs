@@ -341,8 +341,12 @@ async fn proxy(
     };
     let (mut tcp_r, mut tcp_w) = tcp.into_split();
 
+    // The remote marker is stamped HERE, on the trusted side. The client proxy
+    // also sets it, but a modified client can simply leave it out — and this
+    // connection reaches axum from loopback, so without the marker it would be
+    // indistinguishable from the local kiosk.
     let up = async {
-        let n = tokio::io::copy(&mut recv, &mut tcp_w).await.unwrap_or(0);
+        let n = forward_marked(&mut recv, &mut tcp_w).await.unwrap_or(0);
         bytes.fetch_add(n, Ordering::Relaxed);
         let _ = tcp_w.shutdown().await;
     };
@@ -352,4 +356,98 @@ async fn proxy(
         let _ = send.finish();
     };
     tokio::join!(up, down);
+}
+
+/// Largest request head accepted from a remote client.
+const MAX_HEAD: usize = 128 * 1024;
+
+/// Forward one HTTP/1.1 request with the remote marker forced on. The head is
+/// rewritten (any client-supplied marker dropped, ours appended) and the
+/// connection is closed after this request, so a second, unmarked request can
+/// never be pipelined behind it on the same local connection. A stream that
+/// does not carry a complete head is dropped without reaching the server.
+async fn forward_marked<R, W>(reader: &mut R, writer: &mut W) -> std::io::Result<u64>
+where
+    R: tokio::io::AsyncRead + Unpin,
+    W: tokio::io::AsyncWrite + Unpin,
+{
+    use tokio::io::AsyncReadExt;
+    let mut buf = Vec::new();
+    let mut tmp = [0u8; 8192];
+    let head_end = loop {
+        let n = reader.read(&mut tmp).await?;
+        if n == 0 {
+            return Ok(0);
+        }
+        buf.extend_from_slice(&tmp[..n]);
+        if let Some(pos) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
+            break pos + 4;
+        }
+        if buf.len() > MAX_HEAD {
+            return Ok(0);
+        }
+    };
+    writer.write_all(&mark_remote(&buf[..head_end])).await?;
+    writer.write_all(&buf[head_end..]).await?;
+    let rest = tokio::io::copy(reader, writer).await?;
+    Ok(buf.len() as u64 + rest)
+}
+
+/// Rewrite a request head: drop client-supplied `x-shiny-remote`/`Connection`
+/// lines and append our own.
+fn mark_remote(head: &[u8]) -> Vec<u8> {
+    let text = String::from_utf8_lossy(head);
+    let mut out = String::with_capacity(text.len() + 48);
+    let mut lines = text.split("\r\n");
+    if let Some(request_line) = lines.next() {
+        out.push_str(request_line);
+        out.push_str("\r\n");
+    }
+    for line in lines {
+        if line.is_empty() {
+            continue;
+        }
+        let name = line.split(':').next().unwrap_or("").trim().to_ascii_lowercase();
+        if name == crate::api::remote::REMOTE_HEADER || name == "connection" {
+            continue;
+        }
+        out.push_str(line);
+        out.push_str("\r\n");
+    }
+    out.push_str(crate::api::remote::REMOTE_HEADER);
+    out.push_str(": 1\r\nConnection: close\r\n\r\n");
+    out.into_bytes()
+}
+
+#[cfg(test)]
+mod marker_tests {
+    use super::*;
+
+    #[test]
+    fn marker_is_forced_and_client_copy_dropped() {
+        let head = b"GET /api/x HTTP/1.1\r\nHost: a\r\nX-Shiny-Remote : 0\r\nConnection: keep-alive\r\n\r\n";
+        let out = String::from_utf8(mark_remote(head)).unwrap();
+        assert!(out.starts_with("GET /api/x HTTP/1.1\r\nHost: a\r\n"));
+        assert_eq!(out.to_ascii_lowercase().matches("x-shiny-remote").count(), 1);
+        assert!(out.ends_with("x-shiny-remote: 1\r\nConnection: close\r\n\r\n"));
+        assert!(!out.contains("keep-alive"));
+    }
+
+    #[tokio::test]
+    async fn unmarked_request_gains_the_marker() {
+        let mut input: &[u8] = b"POST /api/y HTTP/1.1\r\nHost: a\r\nContent-Length: 2\r\n\r\nhi";
+        let mut out = Vec::new();
+        forward_marked(&mut input, &mut out).await.unwrap();
+        let text = String::from_utf8(out).unwrap();
+        assert!(text.contains("x-shiny-remote: 1\r\n"));
+        assert!(text.ends_with("\r\n\r\nhi"));
+    }
+
+    #[tokio::test]
+    async fn headless_stream_never_reaches_the_server() {
+        let mut input: &[u8] = b"garbage without a head";
+        let mut out = Vec::new();
+        forward_marked(&mut input, &mut out).await.unwrap();
+        assert!(out.is_empty());
+    }
 }

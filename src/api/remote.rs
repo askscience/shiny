@@ -42,6 +42,148 @@ pub fn is_remote(headers: &HeaderMap) -> bool {
         || headers.contains_key(FORWARDED_HOST)
 }
 
+/// Is this request from the machine itself? Both halves are needed: Iroh and
+/// Tailscale Funnel deliver remote traffic from a loopback peer (so the peer
+/// address alone proves nothing), and a LAN peer carries no remote marker (so
+/// the marker alone proves nothing either).
+pub fn is_local(peer: &std::net::SocketAddr, headers: &HeaderMap) -> bool {
+    peer.ip().is_loopback() && !is_remote(headers)
+}
+
+/// Middleware: only the machine itself may call the wrapped routes. Used for
+/// everything that changes what code runs on the host (plugin install, store,
+/// rescan): a signed-in remote or LAN client must not be able to load native
+/// code into the server.
+pub async fn local_only_gate(
+    req: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    let local = req
+        .extensions()
+        .get::<axum::extract::ConnectInfo<std::net::SocketAddr>>()
+        .is_some_and(|peer| is_local(&peer.0, req.headers()));
+    if !local {
+        return local_only_response("this action is only allowed from the local machine");
+    }
+    next.run(req).await
+}
+
+/// `403` in the API's error shape. Not `401`: the caller *is* signed in, and the
+/// page treats a 401 as "the session expired" and starts recovering from it.
+pub fn local_only_response(message: &str) -> axum::response::Response {
+    use axum::response::IntoResponse;
+    (
+        axum::http::StatusCode::FORBIDDEN,
+        Json(json!({
+            "success": false,
+            "data": null,
+            "error": shiny_plugin_sdk::errors::translate(message),
+        })),
+    )
+        .into_response()
+}
+
+/// Is `host` (a `Host` header value) a name this server may be addressed by?
+///
+/// The defence against DNS rebinding: a hostile page that rebinds its own
+/// domain to `127.0.0.1` reaches this server as a same-origin caller, but its
+/// requests still carry the attacker's domain in `Host`. IP literals,
+/// `localhost`, single-label and `.local` machine names and Tailscale names
+/// can never be an attacker's public domain; anything else must be listed in
+/// `SHINY_ALLOWED_HOSTS` (comma-separated, for a custom reverse-proxy domain).
+pub fn host_allowed(host: &str, extra: &[String]) -> bool {
+    let host = host.trim().to_ascii_lowercase();
+    // Strip the port; a bracketed IPv6 literal keeps its brackets.
+    let name = if let Some(rest) = host.strip_prefix('[') {
+        match rest.split_once(']') {
+            Some((addr, _)) => return addr.parse::<std::net::Ipv6Addr>().is_ok(),
+            None => return false,
+        }
+    } else {
+        host.rsplit_once(':').map_or(host.as_str(), |(name, port)| {
+            if port.chars().all(|c| c.is_ascii_digit()) { name } else { host.as_str() }
+        })
+    };
+    let name = name.trim_end_matches('.');
+    if name.is_empty() {
+        return false;
+    }
+    name.parse::<std::net::IpAddr>().is_ok()
+        || !name.contains('.')
+        || name.ends_with(".localhost")
+        || name.ends_with(".local")
+        || name.ends_with(".ts.net")
+        || extra.iter().any(|allowed| allowed == name)
+}
+
+static EXTRA_HOSTS: std::sync::LazyLock<Vec<String>> = std::sync::LazyLock::new(|| {
+    std::env::var("SHINY_ALLOWED_HOSTS")
+        .unwrap_or_default()
+        .split(',')
+        .map(|h| h.trim().trim_end_matches('.').to_ascii_lowercase())
+        .filter(|h| !h.is_empty())
+        .collect()
+});
+
+/// Middleware: refuse requests addressed to a host name this server does not
+/// answer to (see [`host_allowed`]). A request without a `Host` header
+/// (HTTP/1.0, in-process tests) is let through — a browser always sends one.
+pub async fn host_gate(
+    req: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    use axum::response::IntoResponse;
+    let host = req
+        .headers()
+        .get(axum::http::header::HOST)
+        .map(|v| v.to_str().unwrap_or(""));
+    if let Some(host) = host {
+        if !host_allowed(host, &EXTRA_HOSTS) {
+            tracing::warn!("refused a request for an unknown host name");
+            return (
+                axum::http::StatusCode::MISDIRECTED_REQUEST,
+                "this server does not answer to that host name (see SHINY_ALLOWED_HOSTS)",
+            )
+                .into_response();
+        }
+    }
+    next.run(req).await
+}
+
+#[cfg(test)]
+mod locality_tests {
+    use super::*;
+
+    #[test]
+    fn local_needs_loopback_peer_and_no_marker() {
+        let loopback: std::net::SocketAddr = "127.0.0.1:5000".parse().unwrap();
+        let lan: std::net::SocketAddr = "192.168.1.9:5000".parse().unwrap();
+        let mut marked = HeaderMap::new();
+        marked.insert(REMOTE_HEADER, "1".parse().unwrap());
+        let mut funnel = HeaderMap::new();
+        funnel.insert(FORWARDED_FOR, "203.0.113.4".parse().unwrap());
+        assert!(is_local(&loopback, &HeaderMap::new()));
+        assert!(!is_local(&loopback, &marked));
+        assert!(!is_local(&loopback, &funnel));
+        assert!(!is_local(&lan, &HeaderMap::new()));
+    }
+
+    #[test]
+    fn rebinding_hosts_are_refused() {
+        let extra = vec!["desk.example.org".to_string()];
+        for ok in [
+            "localhost", "localhost:8080", "127.0.0.1:8080", "192.168.1.5", "[::1]:8080",
+            "mybox", "mybox.local:8080", "box.tail1234.ts.net", "app.localhost:8080",
+            "desk.example.org", "DESK.example.org.:443",
+        ] {
+            assert!(host_allowed(ok, &extra), "{ok} should be allowed");
+        }
+        for bad in ["evil.example.com", "evil.example.com:8080", "127.0.0.1.evil.com", "", "[nope]", "ts.net.evil.com"] {
+            assert!(!host_allowed(bad, &extra), "{bad} should be refused");
+        }
+    }
+}
+
 /// `$XDG_RUNTIME_DIR/shiny-remote.state` — the `on`/`off` flag `shiny-session`
 /// reads to pick between the kiosk and the server-mode window.
 fn state_path() -> Option<std::path::PathBuf> {

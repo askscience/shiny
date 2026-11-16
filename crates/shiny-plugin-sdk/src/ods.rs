@@ -245,13 +245,18 @@ pub fn ods_to_cells(ods: &[u8]) -> Result<BTreeMap<String, String>, AppError> {
             if !cell.has_tag_name((NS_TABLE, "table-cell")) {
                 continue;
             }
-            let cell_repeats = repeat_count(&cell, "number-columns-repeated").max(1) as u32;
+            // Clamped to the columns that can still be kept: a hostile
+            // `number-columns-repeated="4294967295"` would otherwise push
+            // billions of copies of the value before the column check below.
+            let cell_repeats = repeat_count(&cell, "number-columns-repeated")
+                .max(1)
+                .min(MAX_COLS + 2 - col);
             if let Some(value) = cell_value(&cell) {
                 for i in 0..cell_repeats {
                     row_cells.push((col + i, value.clone()));
                 }
             }
-            col += cell_repeats;
+            col = col.saturating_add(cell_repeats);
             if col > MAX_COLS + 1 {
                 break;
             }
@@ -259,7 +264,7 @@ pub fn ods_to_cells(ods: &[u8]) -> Result<BTreeMap<String, String>, AppError> {
 
         // …then stamp it into every repeated row.
         for r in 0..repeats {
-            let this_row = row + r;
+            let this_row = row.saturating_add(r);
             if this_row > MAX_ROWS {
                 break;
             }
@@ -269,7 +274,7 @@ pub fn ods_to_cells(ods: &[u8]) -> Result<BTreeMap<String, String>, AppError> {
                 }
             }
         }
-        row += repeats;
+        row = row.saturating_add(repeats);
         if row > MAX_ROWS + 1 {
             break;
         }
@@ -574,5 +579,36 @@ mod tests {
         assert_eq!(back.get("D1").map(String::as_str), Some("7"));
         assert_eq!(back.get("A2").map(String::as_str), Some("1.5"));
         assert_eq!(back.get("A3").map(String::as_str), Some("1.5"));
+    }
+
+    #[test]
+    fn huge_repeat_counts_are_clamped() {
+        // u32::MAX repeats on a valued cell used to push ~4 billion strings.
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0"
+  xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" office:version="1.2">
+ <office:body><office:spreadsheet>
+  <table:table table:name="Sheet1">
+   <table:table-row table:number-rows-repeated="4294967295">
+    <table:table-cell office:value-type="string" table:number-columns-repeated="4294967295"><text:p>x</text:p></table:table-cell>
+    <table:table-cell office:value-type="string" table:number-columns-repeated="4294967295"><text:p>y</text:p></table:table-cell>
+   </table:table-row>
+   <table:table-row><table:table-cell office:value-type="string"><text:p>after</text:p></table:table-cell></table:table-row>
+  </table:table>
+ </office:spreadsheet></office:body></office:document-content>"#;
+        let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        let stored = zip::write::FileOptions::default()
+            .compression_method(zip::CompressionMethod::Stored);
+        zip.start_file("mimetype", stored).unwrap();
+        zip.write_all(MIMETYPE.as_bytes()).unwrap();
+        zip.start_file("content.xml", stored).unwrap();
+        zip.write_all(xml.as_bytes()).unwrap();
+        let ods = zip.finish().unwrap().into_inner();
+
+        let back = ods_to_cells(&ods).expect("read");
+        assert_eq!(back.len(), MAX_CELLS);
+        assert_eq!(back.get("A1").map(String::as_str), Some("x"));
+        assert!(back.values().all(|v| v == "x"));
     }
 }

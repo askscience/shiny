@@ -35,11 +35,11 @@ pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
     let ctx = ctx.clone();
     Some(match tag {
         "sessions" => create_session(ctx),
-        "stream" => stream(),
-        "events" => events(),
-        "input" => input(),
-        "resize" => resize(),
-        "close" => close(),
+        "stream" => stream(ctx.clone()),
+        "events" => events(ctx.clone()),
+        "input" => input(ctx.clone()),
+        "resize" => resize(ctx.clone()),
+        "close" => close(ctx.clone()),
         _ => return None,
     })
 }
@@ -60,6 +60,19 @@ fn remote_allowed(ctx: &PluginCtx, uid: &str, req: &Request) -> bool {
         Some(shiny_plugin_sdk::db::Value::Text(v)) if v == "true"
     )
 }
+/// Refuse a remote client that was not given the Terminal. Every route checks
+/// this, not only `create`: the sessions of the local user are listed by
+/// `events` and take keystrokes through `input`, so a remote client signed in
+/// as the same account could otherwise type into a shell it never opened.
+fn check_remote(ctx: &PluginCtx, uid: &str, req: &Request) -> Result<(), AppError> {
+    if remote_allowed(ctx, uid, req) {
+        return Ok(());
+    }
+    Err(AppError::Unauthorized(
+        "the Terminal is disabled for remote clients — enable it in Remote settings".into(),
+    ))
+}
+
 /// Look up a session and check it belongs to the caller.
 fn owned(uid: &str, id: &str) -> Result<Arc<Session>, AppError> {
     let session =
@@ -97,11 +110,7 @@ fn create_session(ctx: Arc<PluginCtx>) -> RouteHandler {
         let ctx = ctx.clone();
         async move {
             let uid = user_id(&req)?;
-            if !remote_allowed(&ctx, &uid, &req) {
-                return Err(AppError::Unauthorized(
-                    "the Terminal is disabled for remote clients — enable it in Remote settings".into(),
-                ));
-            }
+            check_remote(&ctx, &uid, &req)?;
             let body: CreateBody = json_body(req).await?;
             let session = pty::create(&uid, body.cols.unwrap_or(80), body.rows.unwrap_or(24))?;
             Ok(ok(session.meta()))
@@ -116,9 +125,12 @@ struct StreamQuery {
 }
 
 /// `GET /api/terminal/stream?session=...` — SSE: `ready`, `out`, `exit`, `ping`.
-fn stream() -> RouteHandler {
-    bridged_route(move |req: Request| async move {
+fn stream(ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req: Request| {
+        let ctx = ctx.clone();
+        async move {
         let uid = user_id(&req)?;
+        check_remote(&ctx, &uid, &req)?;
         let query: StreamQuery = take_query(req).await?;
         let id = query
             .session
@@ -150,6 +162,7 @@ fn stream() -> RouteHandler {
             .header("x-accel-buffering", "no")
             .body(Body::from_stream(stream))
             .map_err(|e| AppError::Internal(format!("sse response failed: {e}")))
+        }
     })
 }
 
@@ -211,9 +224,12 @@ struct EventsQuery {
 /// stream queued behind the limit — no output — and its input POSTs queued
 /// behind it. One tagged stream per window keeps the terminal at a single
 /// connection no matter how many tabs are open.
-fn events() -> RouteHandler {
-    bridged_route(move |req: Request| async move {
+fn events(ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req: Request| {
+        let ctx = ctx.clone();
+        async move {
         let uid = user_id(&req)?;
+        check_remote(&ctx, &uid, &req)?;
         let query: EventsQuery = take_query(req).await?;
 
         // Watch before listing: a session created in between is then either in
@@ -287,6 +303,7 @@ fn events() -> RouteHandler {
             .header("x-accel-buffering", "no")
             .body(Body::from_stream(stream))
             .map_err(|e| AppError::Internal(format!("sse response failed: {e}")))
+        }
     })
 }
 
@@ -298,9 +315,12 @@ struct InputBody {
 }
 
 /// `POST /api/terminal/input` — write keystrokes to the shell.
-fn input() -> RouteHandler {
-    bridged_route(move |req: Request| async move {
+fn input(ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req: Request| {
+        let ctx = ctx.clone();
+        async move {
         let uid = user_id(&req)?;
+        check_remote(&ctx, &uid, &req)?;
         let body: InputBody = json_body(req).await?;
         let id = body
             .session
@@ -309,6 +329,7 @@ fn input() -> RouteHandler {
         let session = owned(&uid, &id)?;
         session.write_input(data.as_bytes())?;
         Ok(ok(json!({ "written": data.len() })))
+        }
     })
 }
 
@@ -321,9 +342,12 @@ struct ResizeBody {
 }
 
 /// `POST /api/terminal/resize` — keep the PTY window size in step with xterm.
-fn resize() -> RouteHandler {
-    bridged_route(move |req: Request| async move {
+fn resize(ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req: Request| {
+        let ctx = ctx.clone();
+        async move {
         let uid = user_id(&req)?;
+        check_remote(&ctx, &uid, &req)?;
         let body: ResizeBody = json_body(req).await?;
         let id = body
             .session
@@ -331,6 +355,7 @@ fn resize() -> RouteHandler {
         let session = owned(&uid, &id)?;
         session.resize(body.cols.unwrap_or(80), body.rows.unwrap_or(24))?;
         Ok(ok(json!({ "cols": body.cols, "rows": body.rows })))
+        }
     })
 }
 
@@ -341,9 +366,12 @@ struct CloseBody {
 }
 
 /// `POST /api/terminal/close` — kill the shell and forget the session.
-fn close() -> RouteHandler {
-    bridged_route(move |req: Request| async move {
+fn close(ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req: Request| {
+        let ctx = ctx.clone();
+        async move {
         let uid = user_id(&req)?;
+        check_remote(&ctx, &uid, &req)?;
         let body: CloseBody = json_body(req).await?;
         let id = body
             .session
@@ -351,5 +379,6 @@ fn close() -> RouteHandler {
         let session = owned(&uid, &id)?;
         session.close()?;
         Ok(ok(json!({ "closed": true })))
+        }
     })
 }

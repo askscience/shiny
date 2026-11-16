@@ -132,6 +132,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initial router.
     router_handle.swap(api::build_router(router_state.clone()));
 
+    // Fingerprint the running binary now, not on the first version request: a
+    // package upgrade that replaced the file before anyone asked would be
+    // taken for the running build, and the update never offered.
+    shiny::api::system::build_id();
+
     let addr = format!("{}:{}", config.server_host, config.server_port);
     tracing::info!("Server listening on http://{}", addr);
     tracing::info!("Web UI served from / (static files in {})", config.web_dir);
@@ -171,6 +176,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             swap_requested = true;
             tracing::info!("Swapping to the new server binary: draining requests for up to 10 seconds");
             state.agent_turns.cancel_all();
+            shiny::api::sse::begin_drain();
             let _ = shutdown_tx.send(true);
             match tokio::time::timeout(std::time::Duration::from_secs(10), &mut server).await {
                 Ok(result) => result,
@@ -183,6 +189,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         _ = shiny::application::lifecycle::shutdown_signal() => {
             tracing::info!("Shutting down: draining requests for up to 10 seconds");
             state.agent_turns.cancel_all();
+            shiny::api::sse::begin_drain();
             let _ = shutdown_tx.send(true);
             match tokio::time::timeout(std::time::Duration::from_secs(10), &mut server).await {
                 Ok(result) => result,

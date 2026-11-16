@@ -4,7 +4,7 @@
 //! clients and agent tools poll [`Job::snapshot`] with a `from` cursor. The
 //! job thread never touches SQLite — see `history.rs`.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex, OnceLock};
 
 use serde::Serialize;
@@ -27,7 +27,11 @@ struct Inner {
     state: State,
     success: Option<bool>,
     error: Option<String>,
-    lines: Vec<String>,
+    /// The newest `MAX_LINES` lines. A long upgrade that fails says why at
+    /// the END of its output, so the oldest lines are the ones given up.
+    lines: VecDeque<String>,
+    /// Lines dropped from the front; cursors stay absolute line numbers.
+    dropped: usize,
     progress: Progress,
 }
 
@@ -57,9 +61,11 @@ impl Job {
 
     pub fn log(&self, line: impl AsRef<str>) {
         if let Ok(mut g) = self.inner.lock() {
-            if g.lines.len() < MAX_LINES {
-                g.lines.push(line.as_ref().to_string());
+            if g.lines.len() >= MAX_LINES {
+                g.lines.pop_front();
+                g.dropped += 1;
             }
+            g.lines.push_back(line.as_ref().to_string());
         }
     }
 
@@ -75,11 +81,12 @@ impl Job {
     pub fn snapshot(&self, from: usize) -> Snapshot {
         match self.inner.lock() {
             Ok(g) => Snapshot {
-                lines: if from < g.lines.len() {
-                    g.lines[from..].to_vec()
-                } else {
-                    Vec::new()
-                },
+                lines: g
+                    .lines
+                    .iter()
+                    .skip(from.saturating_sub(g.dropped))
+                    .cloned()
+                    .collect(),
                 done: g.state != State::Running,
                 success: g.success,
                 error: g.error.clone(),
@@ -96,7 +103,7 @@ impl Job {
     }
 
     pub fn total(&self) -> usize {
-        self.inner.lock().map(|g| g.lines.len()).unwrap_or(0)
+        self.inner.lock().map(|g| g.dropped + g.lines.len()).unwrap_or(0)
     }
 
     pub fn state(&self) -> (bool, Option<bool>, Option<String>) {
@@ -109,7 +116,7 @@ impl Job {
     pub fn full_log(&self) -> String {
         self.inner
             .lock()
-            .map(|g| g.lines.join("\n"))
+            .map(|g| g.lines.iter().map(String::as_str).collect::<Vec<_>>().join("\n"))
             .unwrap_or_default()
     }
 }
@@ -153,7 +160,8 @@ pub fn start(
             state: State::Running,
             success: None,
             error: None,
-            lines: Vec::new(),
+            lines: VecDeque::new(),
+            dropped: 0,
             progress: Progress::default(),
         }),
     });

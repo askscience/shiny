@@ -156,7 +156,10 @@ async function openMessages(c) {
       try {
         const record = JSON.parse(m.content);
         if (m.role === 'approval') {
-          text = `$ ${record.command || ''}`;
+          // A shell command reads as a prompt line; a gated file or mail
+          // action already says what it is.
+          const shell = !record.action || record.action === 'terminal_exec';
+          text = shell ? `$ ${record.command || ''}` : (record.command || '');
         } else if (record.kind === 'song') {
           text = `${t('chat.song', null, 'Song')}: ${record.title || record.file || ''}`;
         } else {

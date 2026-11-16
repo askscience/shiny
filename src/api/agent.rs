@@ -1,4 +1,5 @@
 use axum::extract::{Extension, State};
+use axum::http::HeaderMap;
 use axum::response::{IntoResponse, Sse};
 use axum::response::sse::{Event, KeepAlive};
 use axum::Json;
@@ -451,9 +452,29 @@ struct PreparedAgent {
     can_approve: bool,
 }
 
+/// Should this turn be refused a shell? A remote (Iroh/Funnel) client only gets
+/// the Terminal after the user opted in with `remote.allow_terminal` — the same
+/// preference the Terminal plugin's own routes check — and the assistant's
+/// `terminal_exec` is that same shell by another door.
+async fn remote_shell_blocked(state: &AppState, traveler_id: &str, headers: &HeaderMap) -> bool {
+    if !crate::api::remote::is_remote(headers) {
+        return false;
+    }
+    let allowed: Option<String> = sqlx::query_scalar(
+        "SELECT value FROM user_preferences WHERE user_id = ?1 AND key = 'remote.allow_terminal'",
+    )
+    .bind(traveler_id)
+    .fetch_optional(&state.pool)
+    .await
+    .ok()
+    .flatten();
+    allowed.as_deref() != Some("true")
+}
+
 async fn prepare_agent(
     state: &AppState,
     traveler: &Traveler,
+    headers: &HeaderMap,
     body: AgentRequest,
 ) -> Result<PreparedAgent, AppError> {
     // Every agent turn (streamed or not) passes through here.
@@ -857,6 +878,7 @@ async fn prepare_agent(
             wearable: body.desktop.as_ref().is_some_and(|d| d.wearable),
             // Attached by the transport handler: it needs the SSE sink.
             approval: None,
+            remote_shell_blocked: remote_shell_blocked(state, &traveler.id, headers).await,
         },
     })
 }
@@ -889,9 +911,10 @@ fn to_response(result: AgentRunResult) -> AgentResponse {
 pub async fn handle_agent(
     State(state): State<AppState>,
     Extension(traveler): Extension<Traveler>,
+    headers: HeaderMap,
     Json(body): Json<AgentRequest>,
 ) -> Result<Json<AgentResponse>, AppError> {
-    let mut prepared = prepare_agent(&state, &traveler, body).await?;
+    let mut prepared = prepare_agent(&state, &traveler, &headers, body).await?;
     let ai = state.resolve_ai(&traveler.id).await;
     let trip_id = prepared.trip_id.clone();
     let conversation_id = prepared.conversation_id.clone();
@@ -1123,9 +1146,10 @@ pub async fn handle_agent_approve(
 pub async fn handle_agent_stream(
     State(state): State<AppState>,
     Extension(traveler): Extension<Traveler>,
+    headers: HeaderMap,
     Json(body): Json<AgentRequest>,
 ) -> Result<Sse<impl stream::Stream<Item = Result<Event, Infallible>>>, AppError> {
-    let prepared = prepare_agent(&state, &traveler, body).await?;
+    let prepared = prepare_agent(&state, &traveler, &headers, body).await?;
     let ai = state.resolve_ai(&traveler.id).await;
     // Honor the model the client asked for on this request (Ollama only).
     let model: Option<String> = if ai.client.is_openai() {
@@ -1271,13 +1295,14 @@ pub async fn handle_agent_stream(
 pub async fn handle_agent_dispatch(
     State(state): State<AppState>,
     Extension(traveler): Extension<Traveler>,
+    headers: HeaderMap,
     Json(body): Json<AgentRequest>,
 ) -> Result<axum::response::Response, AppError> {
     if body.stream.unwrap_or(false) {
-        let sse = handle_agent_stream(State(state), Extension(traveler), Json(body)).await?;
+        let sse = handle_agent_stream(State(state), Extension(traveler), headers, Json(body)).await?;
         Ok(sse.into_response())
     } else {
-        let json = handle_agent(State(state), Extension(traveler), Json(body)).await?;
+        let json = handle_agent(State(state), Extension(traveler), headers, Json(body)).await?;
         Ok(json.into_response())
     }
 }

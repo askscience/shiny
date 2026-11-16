@@ -19,7 +19,11 @@ A remote request may arrive with a loopback TCP peer (Iroh's local proxy) or
 through a TLS reverse proxy (Tailscale). Two markers identify it
 ([`is_remote`](../../src/api/remote.rs)):
 
-- `x-shiny-remote` — set and overwritten by the Iroh client proxy.
+- `x-shiny-remote` — stamped on every request by the **server-side** Iroh
+  proxy (`forward_marked` in `iroh_remote/real.rs`), which also forces
+  `Connection: close` so one stream carries one marked request. The client
+  proxy sets it too, but the server never relies on that: a modified client
+  cannot leave the marker out.
 - `x-forwarded-for` / `x-forwarded-proto` / `x-forwarded-host` — added by
   Tailscale Serve/Funnel (and other reverse proxies).
 
@@ -27,9 +31,19 @@ Remote host-panel **reads** get `available:false` via `gate_host_status`;
 remote **mutations** are rejected by `host_remote_gate`. Local callers are
 trusted, so spoofing a marker only lowers the caller's own privileges.
 
+"Local" means **both** a loopback TCP peer **and** no remote marker
+([`is_local`](../../src/api/remote.rs)): tunnelled traffic arrives from
+loopback, and a LAN peer carries no marker, so neither test is enough alone.
+Routes that change what code runs on the machine sit behind
+`local_only_gate` and answer `403` to anyone else.
+
+Requests addressed to a host name the server does not answer to are refused
+with `421` before any handler (`host_gate`): this is the DNS-rebinding
+defence. A custom reverse-proxy domain is added with `SHINY_ALLOWED_HOSTS`.
+
 The loopback session token (`$XDG_RUNTIME_DIR/shiny-session-token`, mode `0600`)
-logs the local kiosk in without a password and is **never** accepted over Iroh
-or the LAN.
+logs the local kiosk in without a password and is **never** accepted over
+Iroh, Tailscale or the LAN.
 
 ---
 
@@ -115,9 +129,12 @@ browser can open — phone included — with no client app and no port forwardin
 ## What a remote client cannot do
 
 A remote client cannot change the machine's **audio, network, Bluetooth, power,
-display scale or brightness/backlight**, and the **Terminal** is refused unless
-*Allow Terminal from remote clients* is on. Your microphone, speakers and
-location are the client's own.
+display scale or brightness/backlight**. It cannot **install, remove, rescan
+or store-install plugins** (a plugin is native code loaded into the server),
+**create an account**, or list the machine's Linux accounts. The **Terminal**
+— every one of its routes, and the assistant's `terminal_exec` — is refused
+unless *Allow Terminal from remote clients* is on. Your microphone, speakers
+and location are the client's own.
 
 ---
 

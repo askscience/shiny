@@ -565,8 +565,21 @@ on_step(&ui_done_label(state, &outcome.action, &outcome.result, &outcome.data));
 `terminal_exec` is a plugin tool, but its consent lives in the core **before**
 dispatch, so it cannot be sidestepped by an alias or a namespaced tool name
 (`terminal`, `shell`, `run_command`, `terminal.terminal_exec` all resolve through
-the registry to the canonical tool). For every model action that is the
-Terminal's exec tool, `run_agent` does, in order:
+the registry to the canonical tool). The gate reads the command the same way
+the tool does (`command`, else `cmd`) and then hands the tool exactly the
+string that was shown, so the two can never disagree about what runs.
+
+The same approval gate (step 2 below, not the shell guard) also covers the
+tools that change the user's files or send something in their name:
+`file_write`, `file_move`, `file_delete`, `mail_send` and
+`mail_save_attachment` (`describe_gated` in `agent_runner.rs`). Their card
+shows a one-line account of the call instead of a command, and "allow for
+this chat" covers them like it covers commands.
+
+A turn from a remote client without `remote.allow_terminal` is refused
+`terminal_exec` outright (`AgentRunInput::remote_shell_blocked`).
+
+For every gated action, `run_agent` does, in order:
 
 1. **Hard-coded guard** — `services::terminal_guard::block_reason(command)`
    refuses commands that destroy the system: removing `/` or a system directory,
@@ -605,7 +618,7 @@ handler drops its disconnect watcher's sender when the turn ends, so the SSE
 response really closes. See `web/js/agent.js` and `web/js/eventBus.js`.
 
 Every prompt is recorded with its outcome as an `approval` row
-(`{command, decision}`) between the user message and the reply, and each
+(`{action, command, decision}`) between the user message and the reply, and each
 successful `generate_image` / `generate_song` outcome becomes a `media` row
 (`{kind, url, file, path, title?}`). The reply's generated-media markdown is
 stripped (`services::media::strip_generated_media`) and the picture/track is

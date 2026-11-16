@@ -216,7 +216,7 @@ where
                 Some(p) => state.session.matches(p).await,
                 None => false,
             };
-            if valid && is_loopback(&req) {
+            if valid && is_loopback(&req) && !crate::api::remote::is_remote(req.headers()) {
                 traveler = sqlx::query_as::<_, Traveler>("SELECT * FROM travelers WHERE id = ?1")
                     .bind(user_id)
                     .fetch_optional(&state.pool)

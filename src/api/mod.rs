@@ -32,7 +32,7 @@ pub mod screen_brightness;
 pub mod remote;
 pub mod events;
 pub mod system;
-mod sse;
+pub mod sse;
 
 use axum::http::{header, HeaderValue, StatusCode};
 use axum::response::IntoResponse;
@@ -660,11 +660,6 @@ pub fn build_router(state: AppState) -> Router {
     let protected_routes = Router::new()
         .route("/api/plugins", get(crate::plugins::admin_api::list))
         .route("/api/plugins/active", get(crate::plugins::admin_api::active))
-        // Plugin archives are multi-MB zip/tar.gz uploads (cdylib inside) —
-        // lift axum's 2MB default body limit on this route only.
-        .route("/api/plugins/install", post(crate::plugins::admin_api::install)
-            .layer(axum::extract::DefaultBodyLimit::max(64 * 1024 * 1024)))
-        .route("/api/plugins/uninstall", post(crate::plugins::admin_api::uninstall))
         .route("/api/plugins/activate", post(crate::plugins::admin_api::activate))
         .route("/api/plugins/deactivate", post(crate::plugins::admin_api::deactivate))
         // Fresh-session reset (session.remember off) and the shell's "window
@@ -673,8 +668,6 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/plugins/session/reset", post(crate::plugins::admin_api::reset_session))
         .route("/api/plugins/window/closed", post(crate::plugins::admin_api::window_closed))
         .route("/api/plugins/install.log", get(crate::plugins::admin_api::install_log))
-        // Plugins changed on disk (a package upgrade, a copied build): load them again.
-        .route("/api/plugins/rescan", post(crate::plugins::admin_api::rescan))
         // What runs, for the page to notice an update; the swap to a new binary.
         .route("/api/system/version", get(system::version))
         .route("/api/system/reexec", post(system::reexec))
@@ -682,8 +675,6 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/plugins/store", get(crate::plugins::store::store_list))
         .route("/api/plugins/store/refresh", post(crate::plugins::store::store_refresh))
         .route("/api/plugins/store/icon", get(crate::plugins::store::store_icon))
-        .route("/api/plugins/store/install", post(crate::plugins::store::store_install))
-        .route("/api/plugins/store/mcp", post(crate::plugins::store::store_mcp))
         // Craft control-channel proxy: the page's side of a live app link.
         .route("/api/plugins/craft/control/events", get(crate::plugins::craft_control::events))
         .route("/api/plugins/craft/control/reply", post(crate::plugins::craft_control::reply))
@@ -823,8 +814,25 @@ pub fn build_router(state: AppState) -> Router {
         )
         .layer(axum::middleware::from_fn(host_remote_gate));
 
+    // Routes that change what code runs on this machine. A plugin is a native
+    // library loaded into this process (and a store app ships a CLI the server
+    // executes), so only the machine itself may install, remove or reload one:
+    // a signed-in Iroh/Funnel/LAN client must not be able to.
+    let plugin_admin_routes = Router::new()
+        // Plugin archives are multi-MB zip/tar.gz uploads (cdylib inside) —
+        // lift axum's 2MB default body limit on this route only.
+        .route("/api/plugins/install", post(crate::plugins::admin_api::install)
+            .layer(axum::extract::DefaultBodyLimit::max(64 * 1024 * 1024)))
+        .route("/api/plugins/uninstall", post(crate::plugins::admin_api::uninstall))
+        // Plugins changed on disk (a package upgrade, a copied build): load them again.
+        .route("/api/plugins/rescan", post(crate::plugins::admin_api::rescan))
+        .route("/api/plugins/store/install", post(crate::plugins::store::store_install))
+        .route("/api/plugins/store/mcp", post(crate::plugins::store::store_mcp))
+        .layer(axum::middleware::from_fn(remote::local_only_gate));
+
     let protected_routes = protected_routes
         .merge(host_routes)
+        .merge(plugin_admin_routes)
         .layer(axum::middleware::from_fn_with_state(state.clone(), auth_middleware));
 
     let index_service = ServeFile::new(format!("{}/index.html", web_dir));
@@ -920,6 +928,9 @@ pub fn build_router(state: AppState) -> Router {
 
     shell
         .merge(web_apps)
+        // Outermost check: a request addressed to a foreign host name (DNS
+        // rebinding) never reaches a handler.
+        .layer(axum::middleware::from_fn(remote::host_gate))
         .layer(axum::middleware::from_fn(diagnostics::trace))
         .with_state(state)
 }

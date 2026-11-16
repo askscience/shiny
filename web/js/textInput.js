@@ -204,6 +204,13 @@ function showThinking(text) {
 
 const approvalCards = new Set();
 
+/** The question a card asks: a shell command, or a gated file/mail action. */
+function approvalTitle(action) {
+  return !action || action === 'terminal_exec'
+    ? t('chat.approval.title', null, 'Run this command?')
+    : t('chat.approval.titleAction', null, 'Allow this action?');
+}
+
 function makeApprovalStatus(tone, label) {
   const status = document.createElement('span');
   status.className = `compose-approval-status is-${tone}`;
@@ -235,8 +242,8 @@ function announceApproval(approval) {
     icon: 'ui/shield',
     title: t('chat.approval.waiting', null, 'The assistant is waiting for you'),
     body: approval?.command
-      ? `${t('chat.approval.title', null, 'Run this command?')} ${approval.command}`
-      : t('chat.approval.title', null, 'Run this command?'),
+      ? `${approvalTitle(approval?.action)} ${approval.command}`
+      : approvalTitle(approval?.action),
     actions: [{ label: t('chat.approval.open', null, 'Open chat'), action: OPEN_FOR_APPROVAL }],
   });
 }
@@ -262,7 +269,7 @@ function makeApprovalCard(approval) {
   const card = document.createElement('div');
   card.className = 'compose-approval';
   card.setAttribute('role', 'group');
-  card.setAttribute('aria-label', t('chat.approval.title', null, 'Run this command?'));
+  card.setAttribute('aria-label', approvalTitle(approval.action));
 
   const command = document.createElement('code');
   command.className = 'compose-approval-command';
@@ -346,7 +353,7 @@ function renderApprovalRecord(raw) {
   const card = document.createElement('div');
   card.className = `compose-approval is-resolved is-${tone}`;
   card.setAttribute('role', 'group');
-  card.setAttribute('aria-label', t('chat.approval.title', null, 'Run this command?'));
+  card.setAttribute('aria-label', approvalTitle(record.action));
 
   const command = document.createElement('code');
   command.className = 'compose-approval-command';

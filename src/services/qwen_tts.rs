@@ -151,7 +151,9 @@ impl QwenClient {
         let pids = tts_server_pids();
         if !pids.is_empty() {
             for pid in pids {
-                let _ = Command::new("kill").arg(pid.to_string()).spawn();
+                // `status()`, not `spawn()`: a spawned-and-dropped child is
+                // never reaped and stays a zombie for the server's lifetime.
+                let _ = Command::new("kill").arg(pid.to_string()).status();
             }
             tokio::time::sleep(std::time::Duration::from_millis(600)).await;
         }

@@ -107,6 +107,7 @@
   "chat.stopAnswer": "Ferma la risposta",
   "chat.thinkingPending": "Sto pensando…",
   "chat.approval.title": "Eseguire questo comando?",
+  "chat.approval.titleAction": "Consentire questa azione?",
   "chat.approval.allow": "Consenti",
   "chat.approval.deny": "Nega",
   "chat.approval.allowChat": "Consenti per questa chat",

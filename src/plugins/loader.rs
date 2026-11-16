@@ -163,6 +163,18 @@ pub struct Loader {
 static LIBRARY_GRAVEYARD: parking_lot::Mutex<Vec<Library>> = parking_lot::Mutex::new(Vec::new());
 const MAX_RETIRED_LIBRARIES: usize = 100;
 
+/// A freshly opened library that is not owned by a [`LoadedPlugin`] yet. If the
+/// load fails half-way it is retired to the graveyard rather than closed.
+struct RetireOnDrop(Option<Library>);
+
+impl Drop for RetireOnDrop {
+    fn drop(&mut self) {
+        if let Some(library) = self.0.take() {
+            LIBRARY_GRAVEYARD.lock().push(library);
+        }
+    }
+}
+
 /// Retire a loaded plugin: keep its library mapped (see `LIBRARY_GRAVEYARD`)
 /// and drop the rest of the handle.
 fn retire(loaded: LoadedPlugin) {
@@ -446,6 +458,13 @@ impl Loader {
             (boxed.into(), Some(library))
         };
 
+        // From here on an early return must not unmap the library while
+        // `plugin` (and the tools it registers) still point into it: locals
+        // drop in reverse order, so a bare `Option<Library>` would be
+        // dlclosed first and the plugin then dropped through a vtable in
+        // unmapped memory. The guard retires the library instead.
+        let mut library = RetireOnDrop(library);
+
         // Sanity: the plugin's manifest matches what's on disk.
         let plugin_manifest = plugin.manifest().clone();
         if plugin_manifest.name != manifest.name {
@@ -492,7 +511,7 @@ impl Loader {
             kind: extras.kind,
             plugin,
             ctx: ctx.clone(),
-            library,
+            library: library.0.take(),
             install_dir: install_dir.to_path_buf(),
             digest: crate::plugins::digest::PluginDigest::of(install_dir),
         };

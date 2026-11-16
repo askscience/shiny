@@ -53,6 +53,11 @@ const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(8);
 /// One `tools/call` may run an app command; long ones use the app's own
 /// `wait:false` + job tools, so this is a backstop.
 const CALL_TIMEOUT: Duration = Duration::from_secs(120);
+/// Longest a single message may take to be written to a CLI's stdin.
+const WRITE_TIMEOUT: Duration = Duration::from_secs(10);
+/// Most `tools/list` pages followed: a server that keeps returning a cursor
+/// (the same one, or a new one each time) cannot keep the listing going.
+const MAX_TOOL_PAGES: usize = 50;
 /// How long a stopped server gets to answer the MCP `shutdown` request.
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(1);
 /// How long it gets to exit on its own after `exit` + stdin EOF before it is
@@ -205,12 +210,24 @@ impl McpClient {
         let Some(stdin) = guard.as_mut() else {
             return Err(AppError::Internal(format!("{} MCP is stopped", self.label)));
         };
-        stdin.write_all(line.as_bytes()).await.map_err(|error| {
-            AppError::Internal(format!("{} MCP write failed: {error}", self.label))
-        })?;
-        stdin.flush().await.map_err(|error| {
-            AppError::Internal(format!("{} MCP write failed: {error}", self.label))
-        })
+        // Bounded: a CLI that stopped reading its stdin would otherwise park
+        // this write forever while holding the lock, and every later call for
+        // the same app would queue behind it.
+        let write = async {
+            stdin.write_all(line.as_bytes()).await?;
+            stdin.flush().await
+        };
+        match tokio::time::timeout(WRITE_TIMEOUT, write).await {
+            Ok(Ok(())) => Ok(()),
+            Ok(Err(error)) => Err(AppError::Internal(format!(
+                "{} MCP write failed: {error}",
+                self.label
+            ))),
+            Err(_) => Err(AppError::Internal(format!(
+                "{} MCP is not reading its input",
+                self.label
+            ))),
+        }
     }
 
     async fn notify(&self, method: &str, params: Value) -> Result<(), AppError> {
@@ -251,7 +268,7 @@ impl McpClient {
     async fn list_tools(&self) -> Result<Vec<McpToolInfo>, AppError> {
         let mut out = Vec::new();
         let mut cursor: Option<String> = None;
-        loop {
+        for _ in 0..MAX_TOOL_PAGES {
             let params = match &cursor {
                 Some(cursor) => json!({ "cursor": cursor }),
                 None => json!({}),

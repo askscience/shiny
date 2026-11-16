@@ -10,7 +10,8 @@ use std::sync::Arc;
 use axum::body::Body;
 use axum::extract::{FromRequest, FromRequestParts, Request};
 use axum::http::header::{
-    ACCEPT_RANGES, CONTENT_DISPOSITION, CONTENT_LENGTH, CONTENT_RANGE, CONTENT_TYPE, RANGE,
+    ACCEPT_RANGES, CONTENT_DISPOSITION, CONTENT_LENGTH, CONTENT_RANGE, CONTENT_SECURITY_POLICY,
+    CONTENT_TYPE, RANGE,
 };
 use axum::response::{IntoResponse, Response};
 use serde::de::DeserializeOwned;
@@ -471,6 +472,20 @@ fn odp_slides(bytes: &[u8]) -> Result<Json, AppError> {
     Ok(json!(out))
 }
 
+/// The type to serve an inline file with. HTML, scripts and XML would be
+/// *executed* by a browser that navigates to (or includes) the URL; they are
+/// only ever read as text by the app, so that is what they are served as.
+/// SVG stays an image: it runs no script inside `<img>`, and the sandbox policy
+/// covers a direct navigation.
+fn inert_content_type(mime: &'static str) -> &'static str {
+    match mime {
+        "text/html" | "text/javascript" | "application/xml" | "application/xhtml+xml" => {
+            "text/plain; charset=utf-8"
+        }
+        other => other,
+    }
+}
+
 /// Inline bytes with range support — powers `<img>`, `<video>`, `<audio>` and
 /// the PDF.js fetch. Auth comes from the same-origin session cookie.
 fn raw(ctx: Arc<PluginCtx>) -> RouteHandler {
@@ -489,7 +504,13 @@ fn raw(ctx: Arc<PluginCtx>) -> RouteHandler {
                 return Err(AppError::BadRequest("not a file".into()));
             }
             let len = meta.len();
-            let ct = preview::mime_for(&path);
+            // A file in the home is untrusted content on the app's own origin:
+            // it may have come from a download, a mail attachment or the
+            // assistant. Active types are served as plain text, and every
+            // response is sandboxed, so a navigation to this URL can never run
+            // script with the user's session (images, media, PDF.js and text
+            // fetches are unaffected).
+            let ct = inert_content_type(preview::mime_for(&path));
             let filename = sanitize_filename(
                 path.file_name()
                     .map(|n| n.to_string_lossy().into_owned())
@@ -527,6 +548,7 @@ fn raw(ctx: Arc<PluginCtx>) -> RouteHandler {
                     .header(CONTENT_LENGTH, buf.len().to_string())
                     .header(CONTENT_RANGE, format!("bytes {start}-{end}/{len}"))
                     .header(ACCEPT_RANGES, "bytes")
+                    .header(CONTENT_SECURITY_POLICY, "sandbox")
                     .body(Body::from(buf))
                     .map_err(|e| AppError::Internal(format!("response: {e}")))?);
             }
@@ -543,6 +565,7 @@ fn raw(ctx: Arc<PluginCtx>) -> RouteHandler {
                 .header(CONTENT_LENGTH, bytes.len().to_string())
                 .header(ACCEPT_RANGES, "bytes")
                 .header(CONTENT_DISPOSITION, format!("inline; filename=\"{filename}\""))
+                .header(CONTENT_SECURITY_POLICY, "sandbox")
                 .body(Body::from(bytes))
                 .map_err(|e| AppError::Internal(format!("response: {e}")))?)
         }

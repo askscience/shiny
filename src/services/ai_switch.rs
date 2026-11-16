@@ -150,13 +150,19 @@ fn start_ollama() {
     else {
         return;
     };
-    if let Err(e) = std::process::Command::new(helper)
+    match std::process::Command::new(helper)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .spawn()
     {
-        tracing::warn!("could not start Ollama: {e}");
+        // Reap the helper when it exits so it never lingers as a zombie.
+        Ok(mut child) => {
+            std::thread::spawn(move || {
+                let _ = child.wait();
+            });
+        }
+        Err(e) => tracing::warn!("could not start Ollama: {e}"),
     }
 }
 

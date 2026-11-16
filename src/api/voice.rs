@@ -1,5 +1,4 @@
 use std::path::PathBuf;
-use std::process::Command;
 
 use axum::extract::{Query, State};
 use axum::http::{header, StatusCode};
@@ -198,6 +197,9 @@ pub async fn voice_status(
     }))
 }
 
+/// Longest a Vosk model download may run before it is abandoned.
+const VOSK_DOWNLOAD_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30 * 60);
+
 pub async fn voice_download(
     State(state): State<AppState>,
     Json(body): Json<VoiceDownloadBody>,
@@ -205,11 +207,19 @@ pub async fn voice_download(
     let dir = models_dir(&state.config);
     fs::create_dir_all(&dir).await.map_err(|e| AppError::Internal(e.to_string()))?;
 
-    let output = Command::new("python3")
+    // Async, and bounded: a model download takes minutes, and a blocking
+    // `output()` here pinned a runtime worker for all of it (a few parallel
+    // requests stalled the whole server).
+    let download = tokio::process::Command::new("python3")
         .arg("voice/download_vosk.py")
         .arg(&body.lang)
         .env("VOSK_MODELS_DIR", &state.config.vosk_models_dir)
-        .output()
+        .stdin(std::process::Stdio::null())
+        .kill_on_drop(true)
+        .output();
+    let output = tokio::time::timeout(VOSK_DOWNLOAD_TIMEOUT, download)
+        .await
+        .map_err(|_| AppError::Internal("Vosk download timed out".into()))?
         .map_err(|e| AppError::Internal(format!("Failed to run download script: {}", e)))?;
 
     if !output.status.success() {

@@ -16,7 +16,8 @@ the kiosk shell and the auth helper.
 
 | Variable | Default | Read by | Meaning |
 |---|---|---|---|
-| `SERVER_HOST` | `0.0.0.0` | ✓ | HTTP bind address. |
+| `SERVER_HOST` | `127.0.0.1` | ✓ | HTTP bind address. Loopback by default; set `0.0.0.0` to serve the LAN. |
+| `SHINY_ALLOWED_HOSTS` | *(empty)* | `src/api/remote.rs` | Extra host names (comma-separated) accepted in `Host`, for a custom reverse-proxy domain. IP addresses, `localhost`, single-label and `.local` names and `*.ts.net` are always accepted. |
 | `SERVER_PORT` | `8080` | ✓ | HTTP port. Per-user installs use `8080 + uid − 1000`. |
 | `DATABASE_URL` | `sqlite://data/traveler.db` | ✓ | SQLite URL/path. |
 | `SYSTEM_PLUGINS_DIR` | — | — | Read-only system plugin baseline; a same-named plugin in `PLUGINS_DIR` overrides it. |

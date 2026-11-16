@@ -91,7 +91,7 @@ The lock file for installs is `PLUGINS_DIR/.install.lock`.
 
 ---
 
-## Signature verification (optional, not enforced)
+## Signature verification (not implemented)
 
 The manifest has an optional `signature` field: a hex-encoded ed25519 signature
 of `plugin.toml + lib<name>.{so|dylib|dll}`. Intended flow:
@@ -103,18 +103,23 @@ of `plugin.toml + lib<name>.{so|dylib|dll}`. Intended flow:
 3. The installer rejects a plugin whose signature is present but doesn't verify,
    unless `--insecure` is passed via the `X-Shiny-Insecure` header.
 
-> This is **off by default**: the decoder is not yet wired into the loader. The
-> field exists so plugins can prepare; enforcement is expected to flip on at
-> `api_level 2`.
+> **None of this exists in code yet.** The `signature` field is parsed and
+> ignored; `TRUSTED_PUBKEYS` and `X-Shiny-Insecure` are not read anywhere. An
+> uploaded plugin is trusted as-is, which is why installing one is restricted
+> to the local machine (see below).
 
 ---
 
 ## Remote clients
 
 A remote client (Iroh/Tailscale) cannot change host state; see
-[remote access](../deployment/remote-access.md). Plugin routes are mounted with
-auth middleware unless the spec declares `public`; the Terminal plugin is
-additionally refused for remote clients unless explicitly allowed.
+[remote access](../deployment/remote-access.md). In particular
+`/api/plugins/install`, `/uninstall`, `/rescan`, `/store/install` and
+`/store/mcp` are **local-only** (`local_only_gate`: loopback peer and no
+remote marker), since a plugin is native code loaded into the server process.
+Plugin routes are mounted with auth middleware unless the spec declares
+`public`; every Terminal route is additionally refused for remote clients
+unless explicitly allowed.
 
 ---
 

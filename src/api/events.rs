@@ -108,5 +108,6 @@ pub async fn events(
     } else {
         futures::stream::select_all(streams).boxed()
     };
+    let merged = merged.take_until(crate::api::sse::draining());
     Sse::new(merged.map(Ok)).keep_alive(KeepAlive::default())
 }

@@ -2,6 +2,53 @@
 
 ## [Unreleased]
 
+### Security
+
+- Iroh: the remote marker (`x-shiny-remote`) is now stamped by the server-side
+  proxy. It used to be added only by the client proxy, so a modified client
+  that left it out was treated as the local machine.
+- Plugin install, uninstall, rescan and store install are local-only
+  (loopback peer and no remote marker): a signed-in remote or LAN client can
+  no longer load native code into the server. Accounts cannot be created
+  through a tunnel, and the Linux account list and the kiosk session token
+  are refused over Iroh/Funnel as well as the LAN.
+- The server refuses requests for a foreign `Host` (DNS rebinding) and binds
+  `127.0.0.1` by default. **Set `SERVER_HOST=0.0.0.0` to keep serving the
+  LAN, and `SHINY_ALLOWED_HOSTS` for a custom reverse-proxy domain.**
+- Assistant approval: a call such as `{"command": 1, "cmd": "…"}` skipped both
+  the safety guard and the prompt while the Terminal still ran `cmd`. The
+  gate and the tool now use the same command. `file_write`, `file_move`,
+  `file_delete`, `mail_send` and `mail_save_attachment` ask for approval too
+  ("allow for this chat" covers them).
+- Terminal: `remote.allow_terminal` is checked on every Terminal route (it
+  was only checked when a session was created) and for the assistant's
+  `terminal_exec` on a remote turn.
+- Files: `/api/files/raw` is sandboxed and serves HTML, scripts and XML as
+  plain text, so a file in the home can no longer run script on the app's
+  origin.
+- Chat: a remote image in an assistant reply becomes a link instead of
+  loading on its own (it could carry data out in its URL).
+- Login throttling: tunnelled traffic has its own bucket and can no longer
+  lock the local kiosk out; oversized usernames cannot grow the limiter.
+
+### Fixed
+
+- The Vosk model download no longer blocks a server worker for its whole
+  duration.
+- Live update: the page's event streams end when the server starts draining,
+  so a swap no longer waits out the ten-second deadline for them.
+- The running binary is fingerprinted at startup, so an upgrade installed
+  before the first version check is still offered.
+- Registration decides the first admin in one statement; a lost username
+  race is a 400, not a 500.
+- A plugin that fails to load half-way no longer has its library unmapped
+  under it.
+- ODS import clamps `number-columns-repeated` / `number-rows-repeated`.
+- `file_read` reads only the part it returns and refuses non-regular files.
+- Updates: a long job keeps the end of its log (where the error is).
+- Craft MCP: writes to a CLI are bounded, and `tools/list` paging is capped.
+- Child processes started to stop TTS and to start Ollama are reaped.
+
 ## [0.2.8] - 2026-11-16
 
 ### Added

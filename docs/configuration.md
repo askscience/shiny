@@ -36,7 +36,8 @@ All values parsed by the binary live in
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `SERVER_HOST` | `0.0.0.0` | HTTP bind address. |
+| `SERVER_HOST` | `127.0.0.1` | HTTP bind address. Loopback by default; set `0.0.0.0` to serve the LAN. |
+| `SHINY_ALLOWED_HOSTS` | *(empty)* | Extra host names (comma-separated) the server answers to, for a custom reverse-proxy domain. IP addresses, `localhost`, single-label and `.local` names and `*.ts.net` are always accepted; any other `Host` is refused with `421` (DNS-rebinding defence). |
 | `SERVER_PORT` | `8080` | HTTP port. Per-user installs use `8080 + uid − 1000`. |
 | `LOG_LEVEL` | `info` | Filter used when `RUST_LOG` is unset. |
 | `LOG_FILE` | `data/shiny.log` | File the tracer tees to. |

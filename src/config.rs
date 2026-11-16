@@ -120,7 +120,7 @@ impl Config {
             Err(_) => linux_users,
         };
         Self {
-            server_host: env::var("SERVER_HOST").unwrap_or_else(|_| "0.0.0.0".into()),
+            server_host: env::var("SERVER_HOST").unwrap_or_else(|_| "127.0.0.1".into()),
             server_port: env::var("SERVER_PORT")
                 .unwrap_or_else(|_| "8080".into())
                 .parse()

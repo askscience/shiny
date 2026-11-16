@@ -14,6 +14,26 @@ use serde::Serialize;
 use tokio::sync::broadcast;
 use tokio_stream::wrappers::BroadcastStream;
 
+/// Set once, when the server starts draining (a stop, or the swap to a new
+/// binary). The long-lived streams end on it; without that an open page kept
+/// its stream until the drain deadline, so every live update stalled for the
+/// full ten seconds.
+static DRAINING: std::sync::LazyLock<tokio::sync::watch::Sender<bool>> =
+    std::sync::LazyLock::new(|| tokio::sync::watch::channel(false).0);
+
+/// Tell every long-lived SSE stream to end. The page reconnects on its own.
+pub fn begin_drain() {
+    DRAINING.send_replace(true);
+}
+
+/// Resolves when [`begin_drain`] was called.
+pub fn draining() -> impl std::future::Future<Output = ()> + Send + 'static {
+    let mut rx = DRAINING.subscribe();
+    async move {
+        let _ = rx.wait_for(|on| *on).await;
+    }
+}
+
 /// How a snapshot is turned into the frame's `data:` (the combined stream
 /// gates host panels for remote clients, the per-panel streams do not).
 type Shape = fn(serde_json::Value) -> serde_json::Value;
@@ -54,6 +74,7 @@ where
     T: Serialize + Clone + Send + 'static,
 {
     let stream = snapshot_events(event, receiver, initial, |value| value)
+        .take_until(draining())
         .map(Ok::<Event, Infallible>);
     Sse::new(stream).keep_alive(KeepAlive::default())
 }
