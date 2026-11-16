@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.2.8] - 2026-11-16
+
 ### Added
 
 - Impress 0.1.2: what you see is what the .odp holds. The stage, the
