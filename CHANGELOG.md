@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.2.9] - 2026-11-17
+
 ### Security
 
 - Iroh: the remote marker (`x-shiny-remote`) is now stamped by the server-side
