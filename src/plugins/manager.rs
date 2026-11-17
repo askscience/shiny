@@ -314,60 +314,48 @@ impl PluginManager {
     /// not live plugins.
     pub async fn discover_and_install(&self, base_ctx: Arc<PluginCtx>) -> Vec<String> {
         let mut installed: Vec<String> = Vec::new();
-        let mut roots: Vec<PathBuf> = Vec::new();
-        if let Some(system) = &self.inner.system_plugins_dir {
-            if system != &self.inner.plugins_dir {
-                roots.push(system.clone());
-            }
+        let user = plugin_dirs(&self.inner.plugins_dir);
+        let system = match &self.inner.system_plugins_dir {
+            Some(system) if system != &self.inner.plugins_dir => plugin_dirs(system),
+            _ => Vec::new(),
+        };
+        let dir_name = |path: &PathBuf| path.file_name().map(|n| n.to_string_lossy().to_lowercase());
+        let user_names: std::collections::BTreeSet<String> = user.iter().filter_map(dir_name).collect();
+        // A system plugin the user directory overrides is not loaded at all:
+        // loading it first and replacing it a moment later ran its `on_load`
+        // twice, and for a process plugin started (and killed) a process.
+        for path in system.iter().filter(|p| dir_name(p).is_some_and(|n| !user_names.contains(&n))) {
+            self.install_one(path, base_ctx.clone(), &mut installed).await;
         }
-        roots.push(self.inner.plugins_dir.clone());
-        for root in roots {
-            self.install_tree(&root, base_ctx.clone(), &mut installed).await;
+        for path in &user {
+            if self.install_one(path, base_ctx.clone(), &mut installed).await {
+                continue;
+            }
+            // The user's copy does not load: fall back to the system one.
+            if let Some(fallback) = system.iter().find(|p| dir_name(p) == dir_name(path)) {
+                self.install_one(fallback, base_ctx.clone(), &mut installed).await;
+            }
         }
         installed
     }
 
-    async fn install_tree(
+    /// Load one plugin directory; false (logged) when it does not load.
+    async fn install_one(
         &self,
-        root: &std::path::Path,
+        path: &std::path::Path,
         base_ctx: Arc<PluginCtx>,
         installed: &mut Vec<String>,
-    ) {
-        let Some(entries) = std::fs::read_dir(root).ok() else {
-            return;
-        };
-        // Directory order is filesystem-defined; sort so an override always
-        // wins deterministically and startup logs are stable.
-        let mut dirs: Vec<PathBuf> = entries.flatten().map(|e| e.path()).collect();
-        dirs.sort();
-        for path in dirs {
-            if !path.is_dir() {
-                continue;
-            }
-            let dir_name = path
-                .file_name()
-                .map(|n| n.to_string_lossy().to_lowercase())
-                .unwrap_or_default();
-            if dir_name.ends_with(".bak")
-                || dir_name.starts_with('.')
-                || dir_name.starts_with("_staging")
-            {
-                continue;
-            }
-            if !path.join("plugin.toml").exists() {
-                continue;
-            }
-            match self.install_dir_static(&path, base_ctx.clone()).await {
-                Ok(n) => {
-                    if !installed.contains(&n) {
-                        installed.push(n);
-                    }
+    ) -> bool {
+        match self.install_dir_static(path, base_ctx).await {
+            Ok(n) => {
+                if !installed.contains(&n) {
+                    installed.push(n);
                 }
-                Err(e) => tracing::warn!(
-                    "Plugin discovery failed for {}: {}",
-                    path.display(),
-                    e
-                ),
+                true
+            }
+            Err(e) => {
+                tracing::warn!("Plugin discovery failed for {}: {}", path.display(), e);
+                false
             }
         }
     }
@@ -605,4 +593,30 @@ impl PluginManager {
     pub fn pool(&self) -> &sqlx::SqlitePool {
         &self.inner.pool
     }
+}
+
+/// The plugin directories under `root`, sorted (directory order is
+/// filesystem-defined; sorting keeps start-up deterministic). Backups,
+/// hidden and staging directories are skipped.
+fn plugin_dirs(root: &std::path::Path) -> Vec<PathBuf> {
+    let Some(entries) = std::fs::read_dir(root).ok() else {
+        return Vec::new();
+    };
+    let mut dirs: Vec<PathBuf> = entries
+        .flatten()
+        .map(|e| e.path())
+        .filter(|path| {
+            let name = path
+                .file_name()
+                .map(|n| n.to_string_lossy().to_lowercase())
+                .unwrap_or_default();
+            path.is_dir()
+                && !name.ends_with(".bak")
+                && !name.starts_with('.')
+                && !name.starts_with("_staging")
+                && path.join("plugin.toml").exists()
+        })
+        .collect();
+    dirs.sort();
+    dirs
 }

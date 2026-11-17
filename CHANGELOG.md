@@ -124,6 +124,12 @@
 
 ### Fixed
 
+- Start-up: a system plugin overridden by a copy in the user's plugin
+  directory is no longer loaded first and replaced a moment later. That ran
+  its `on_load` twice and, for a process plugin, started a process only to
+  stop it. If the user's copy does not load, the system copy is still the
+  fallback.
+
 - Oorbit: the seasons' colours on trees and bushes were drawn from a
   pattern fixed in space, so they changed while the planet turned; they now
   belong to the planet. Before the server has the calendar the window shows

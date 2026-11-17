@@ -67,6 +67,14 @@ pub fn ensure_executable(path: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
+/// Plugin processes started since the server began (restarts included).
+static STARTED: AtomicU64 = AtomicU64::new(0);
+
+/// How many plugin processes this server has started, for diagnostics.
+pub fn started_processes() -> u64 {
+    STARTED.load(Ordering::SeqCst)
+}
+
 const HELLO_TIMEOUT: Duration = Duration::from_secs(20);
 const HOOK_TIMEOUT: Duration = Duration::from_secs(120);
 const TOOL_TIMEOUT: Duration = Duration::from_secs(15 * 60);
@@ -246,6 +254,7 @@ impl Supervisor {
                 self.binary.display()
             ))
         })?;
+        STARTED.fetch_add(1, Ordering::SeqCst);
         let pid = child.id().unwrap_or(0);
         if let Some(out) = child.stdout.take() {
             forward_output(self.name.clone(), out);
