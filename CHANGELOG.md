@@ -78,6 +78,17 @@
   food, makes culture and lifts the mood while it lasts; without enough food
   it is called off, and the people are sad. The top bar shows the season,
   year, time and the next festival.
+- Oorbit 0.7.8: villagers with a name. A small cast (three, up to eight as
+  the planet grows) with a trade and a character arrive, fall in love,
+  marry under a flower arch with the village dancing, have children, grow
+  old and die; the ones with a story to tell, and the notable people, leave
+  a stone or a statue near the home. Now and then the Chronicle tells a
+  little story about them, picked by their character (a goat on the roof, a
+  burnt pie, a snoring neighbour, a quarrel and the peace after it). On the
+  planet they stroll among the houses with their trade's hat and their name
+  over their head; clicking one, or their name in the Society panel, opens
+  their card with their family and latest stories. The cast is only story:
+  the economy and its pacing are unchanged.
 
 ### Changed
 

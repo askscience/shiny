@@ -42,6 +42,14 @@ choice can throw one too (`celebrate` outcome). `Planet::celebration` holds
 the one under way; the view adds `calendar` (season, its start and length,
 day length, year, next festival).
 
+`cast.rs` keeps the villagers with a name (`people`, at most eight): they
+arrive or are born to a couple, fall in love and marry (`wedding`, a
+celebration that does not lift the mood), tell little stories (`anecdote`
+entries with a `story` id), and die, the remembered ones leaving a
+`memorials` entry. It draws from its own generator (the seed mixed with a
+salt) and never changes resources or mood, so it leaves the economy as it
+was.
+
 ## Rules in brief
 
 | Part | How it works |

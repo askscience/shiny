@@ -173,6 +173,17 @@ pub struct Planet {
     /// A festival under way (see `calendar`): the window draws it.
     #[serde(default)]
     pub celebration: Option<Celebration>,
+    /// The villagers with a name (see `cast`).
+    #[serde(default)]
+    pub people: Vec<crate::cast::Person>,
+    #[serde(default)]
+    pub next_person: u64,
+    /// Stones and statues for those remembered.
+    #[serde(default)]
+    pub memorials: Vec<crate::cast::Memorial>,
+    /// Two people to be married at a step.
+    #[serde(default)]
+    pub wedding: Option<(u64, u64, i64)>,
     /// The cities, the capital first (see `cities`).
     #[serde(default)]
     pub cities: Vec<crate::cities::City>,
@@ -236,6 +247,10 @@ impl Planet {
             goals_done: BTreeSet::new(),
             helping_until: 0,
             celebration: None,
+            people: Vec::new(),
+            next_person: 0,
+            memorials: Vec::new(),
+            wedding: None,
             cities: Vec::new(),
             links: Vec::new(),
             clock_offset_ms: 0,

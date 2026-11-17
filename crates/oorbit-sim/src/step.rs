@@ -95,8 +95,9 @@ fn rates_at(planet: &Planet, catalog: &Catalog, step: i64) -> Rates {
     if planet
         .celebration
         .as_ref()
-        .is_some_and(|c| step >= c.from_step && step < c.until_step)
+        .is_some_and(|c| step >= c.from_step && step < c.until_step && c.id != "wedding")
     {
+        // (A wedding is the cast's story: it leaves the economy alone.)
         mood_push += crate::calendar::CELEBRATION_MOOD;
     }
     // Ideas travel along roads and sea routes.
@@ -339,6 +340,7 @@ fn run_step(planet: &mut Planet, catalog: &Catalog, step: i64) {
     check_era(planet, catalog, step);
     run_events(planet, catalog, step, &mut rng);
     run_notables(planet, catalog, step, &mut rng);
+    crate::cast::run(planet, catalog, step);
     crate::neighbors::run_neighbors(planet, catalog, step, &mut rng);
     crate::finds::run_finds(planet, catalog, step);
     crate::goals::run_goals(planet, catalog, step);
@@ -486,7 +488,7 @@ const SYLLABLES: [&str; 16] = [
     "ka", "lu", "mi", "ra", "to", "ne", "sa", "do", "ul", "ia", "ve", "bo", "ri", "an", "zu", "el",
 ];
 
-fn notable_name(rng: &mut Rng) -> String {
+pub(crate) fn notable_name(rng: &mut Rng) -> String {
     let count = 2 + rng.below(2);
     let mut name: String = (0..count)
         .map(|_| SYLLABLES[rng.below(SYLLABLES.len())])

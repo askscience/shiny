@@ -41,7 +41,7 @@ f.dataset.shinyLocale = params.get('lang') || 'it';
 // `?stats` makes the game print what it draws every few seconds, and
 // `?look=whale` flies over a wonder, `?hour=21&season=2.5&fest=sun` set
 // the time, the season and a festival: all are passed to the game's frame.
-const own = ['stats', 'look', 'hour', 'season', 'fest', 'lapse'].filter((k) => params.has(k)).map((k) => params.get(k) ? `${k}=${params.get(k)}` : k);
+const own = ['stats', 'look', 'hour', 'season', 'fest', 'lapse', 'person'].filter((k) => params.has(k)).map((k) => params.get(k) ? `${k}=${params.get(k)}` : k);
 if (own.length) f.src = '/plugins/oorbit/?' + own.join('&');
 const after = Number(params.get('light') || 0);
 if (after) f.addEventListener('load', () => setTimeout(() => f.contentWindow.postMessage(

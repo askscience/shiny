@@ -12,6 +12,8 @@ signal reset_requested
 signal skip_requested(hours: float)
 signal tile_closed
 signal tile_focus_requested(index: int)
+## Show a named villager: fly home and open their card.
+signal person_requested(id: int)
 ## An effect to play (see `PlanetAudio`), and the mute button.
 signal sound_requested(name: String)
 signal mute_toggled(on: bool)
@@ -27,6 +29,8 @@ var selected_tile := -1
 ## The planet's hidden wonders (cell -> kind) and the kinds found.
 var wonders := {}
 var found_wonders := {}
+## The villager whose card is open (-1: none).
+var person_id := -1
 var open_panel := ""
 var dismissed_event := ""
 var _was_founding := false
@@ -661,11 +665,17 @@ func _fill_society() -> void:
 		var bonus := float(view.get("link_bonus", 0.0))
 		if bonus > 0.0:
 			_side_body.add_child(_muted(I18n.t("ui.city.bonus", {"n": roundi(bonus * 100.0)})))
-	var notables: Array = planet.get("notables", [])
-	if notables.size() > 0:
+	var people: Array = planet.get("people", [])
+	if people.size() > 0:
 		_side_body.add_child(_label(I18n.t("ui.notables"), 14, Color("f2c078")))
-		for n in notables:
-			_side_body.add_child(_label("%s · %s" % [n["name"], I18n.name_of("category", n["category"])]))
+		for p in people:
+			var b := Button.new()
+			var female := bool(p.get("female", false))
+			b.text = "%s · %s" % [p["name"], _gendered("role." + str(p.get("role", "food")), female)]
+			b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+			var pid := int(p["id"])
+			b.pressed.connect(func(): person_requested.emit(pid))
+			_side_body.add_child(b)
 	var traits: Dictionary = planet.get("traits", {})
 	if traits.size() > 0:
 		_side_body.add_child(_label(I18n.t("ui.traits"), 14, Color("f2c078")))
@@ -872,7 +882,82 @@ func describe(entry: Dictionary) -> String:
 				params[k] = v
 	if raw.has("choice") and raw.has("event"):
 		params["choice"] = I18n.t("choice.%s.%s" % [raw["event"], raw["choice"]]).to_lower()
+	# The villagers' stories: words that depend on who they are about.
+	var female := str(raw.get("female", "0")) == "1"
+	match str(entry["key"]):
+		"anecdote":
+			return I18n.t("story." + str(raw.get("story", "")), params)
+		"person_arrived":
+			params["role"] = _gendered("role." + str(raw.get("role", "food")), female)
+			params["quirk"] = _gendered("quirk." + str(raw.get("quirk", "cheerful")), female)
+		"person_born":
+			params["child"] = _gendered("person.son", female)
+		"person_died":
+			if str(raw.get("remembered", "0")) == "1":
+				return I18n.t("log.person_died.remembered", params)
 	return I18n.t("log." + str(entry["key"]), params)
+
+
+func _person(id: int) -> Dictionary:
+	for p in _planet().get("people", []):
+		if int(p["id"]) == id:
+			return p
+	return {}
+
+
+## "contadina" or "contadino": a word that depends on who it is about.
+static func _gendered(key: String, female: bool) -> String:
+	return I18n.t(key + (".f" if female else ".m"))
+
+
+## A villager's card: name, trade and character, family, and the latest
+## stories told about them.
+func _fill_person(p: Dictionary) -> void:
+	var female := bool(p.get("female", false))
+	var head := HBoxContainer.new()
+	var title := _label(str(p["name"]), 15, Color("f5d76e") if p.get("famous", false) else Color("f2c078"))
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(title)
+	var close := _icon_button("res://icons/close.svg", "")
+	close.custom_minimum_size = Vector2(28, 28)
+	close.pressed.connect(func(): tile_closed.emit())
+	head.add_child(close)
+	_tile_body.add_child(head)
+	var age := float(view.get("planet", {}).get("step", 0)) - float(p.get("born_step", 0))
+	var child := age < 3.0 * 144.0
+	var line := "%s · %s" % [_gendered("person.child" if child else "role." + str(p.get("role", "food")), female).capitalize(),
+		_gendered("quirk." + str(p.get("quirk", "cheerful")), female)]
+	_tile_body.add_child(_label(line, 14))
+	if p.get("famous", false):
+		_tile_body.add_child(_muted(I18n.t("person.famous")))
+	var names := {}
+	for q in _planet().get("people", []):
+		names[int(q["id"])] = str(q["name"])
+	if p.get("partner") != null and names.has(int(p["partner"])):
+		_tile_body.add_child(_muted(I18n.t("person.partner", {"name": names[int(p["partner"])]})))
+	var parents: Array = p.get("parents", [])
+	var known := parents.filter(func(x): return names.has(int(x))).map(func(x): return names[int(x)])
+	if not known.is_empty():
+		_tile_body.add_child(_muted(_gendered("person.parents", female).replace("{names}", " e ".join(known) if I18n.language == "it" else " and ".join(known))))
+	var kids := []
+	for q in _planet().get("people", []):
+		if int(p["id"]) in (q.get("parents", []) as Array).map(func(x): return int(x)):
+			kids.append(str(q["name"]))
+	if not kids.is_empty():
+		_tile_body.add_child(_muted(I18n.t("person.children", {"names": ", ".join(kids)})))
+	# The latest stories with their name in them.
+	var told := 0
+	var chronicle: Array = _planet().get("chronicle", [])
+	for k in range(chronicle.size() - 1, -1, -1):
+		var e: Dictionary = chronicle[k]
+		var params: Dictionary = e.get("params", {})
+		if str(p["name"]) in [str(params.get("name", "")), str(params.get("other", "")), str(params.get("a", "")), str(params.get("b", ""))]:
+			_tile_body.add_child(_muted("· " + describe(e)))
+			told += 1
+			if told >= 4:
+				break
+	if told == 0:
+		_tile_body.add_child(_muted(I18n.t("person.quiet")))
 
 
 ## Whether a cell has a building (or one going up).
@@ -888,7 +973,19 @@ func building_at(cell: int) -> bool:
 	return false
 
 
+## Open a named villager's card in the cell panel.
+func show_person(id: int) -> void:
+	person_id = id
+	selected_tile = -1
+	if _narrow():
+		open_panel = ""
+		_fill_side()
+	_fill_tile()
+	_layout.call_deferred()
+
+
 func select_tile(index: int) -> void:
+	person_id = -1
 	selected_tile = index
 	if _narrow() and index >= 0:
 		open_panel = ""
@@ -900,10 +997,14 @@ func select_tile(index: int) -> void:
 func _fill_tile() -> void:
 	var planet := _planet()
 	var tiles: Array = planet.get("tiles", [])
-	_tile.visible = selected_tile >= 0 and selected_tile < tiles.size() and not (_narrow() and open_panel != "")
+	var person := _person(person_id)
+	_tile.visible = (not person.is_empty() or selected_tile >= 0 and selected_tile < tiles.size()) and not (_narrow() and open_panel != "")
 	if not _tile.visible:
 		return
 	_clear(_tile_body)
+	if not person.is_empty():
+		_fill_person(person)
+		return
 	var tile: Dictionary = tiles[selected_tile]
 	var head := HBoxContainer.new()
 	var title := _label(I18n.name_of("biome", tile["biome"]), 15, Color("f2c078"))
@@ -917,7 +1018,7 @@ func _fill_tile() -> void:
 
 	var wonder: String = str(wonders.get(selected_tile, ""))
 	if wonder != "" and found_wonders.has(wonder) and not building_at(selected_tile):
-		_tile_body.add_child(_label("✦ " + I18n.name_of("wonder", wonder), 14, Color("f5d76e")))
+		_tile_body.add_child(_label(I18n.name_of("wonder", wonder), 14, Color("f5d76e")))
 		_tile_body.add_child(_muted(I18n.t("wonder.%s.desc" % wonder)))
 		_tile_body.add_child(_muted(I18n.t("ui.wonder.count", {"count": found_wonders.size(), "total": wonders.size()})))
 	var city := _city_at(selected_tile)
@@ -1398,7 +1499,7 @@ func _announce(planet: Dictionary) -> void:
 		if int(e["step"]) * 1000 + (k + 1) % 1000 <= _seen_entries:
 			break
 		var key := str(e["key"])
-		if not said and key in ["goal_done", "find_collected", "city_founded", "era_reached", "deposit_exhausted", "festival", "festival_called_off", "anniversary"]:
+		if not said and key in ["goal_done", "find_collected", "city_founded", "era_reached", "deposit_exhausted", "festival", "festival_called_off", "anniversary", "wedding", "person_born", "love"]:
 			toast(describe(e))
 			said = true
 		var sound: String = ANNOUNCE_SOUNDS.get(key, "")
@@ -1409,7 +1510,7 @@ func _announce(planet: Dictionary) -> void:
 
 const ANNOUNCE_SOUNDS := {
 	"building_done": "done", "goal_done": "done", "road_done": "done", "tech_done": "discovery",
-	"era_reached": "era", "city_founded": "era", "festival": "festival", "anniversary": "festival", "find_collected": "find", "sea_done": "boat",
+	"era_reached": "era", "city_founded": "era", "festival": "festival", "anniversary": "festival", "wedding": "festival", "find_collected": "find", "sea_done": "boat",
 	"sea_started": "boat", "building_started": "build", "road_started": "build", "site_helped": "build",
 	"trees_planted": "build",
 }

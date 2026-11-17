@@ -183,6 +183,9 @@ var _tick := 0
 
 ## Someone beyond the horizon: not drawn.
 func _hide_walker(mm: MultiMesh, index: int) -> void:
+	for label in _name_labels.values():
+		if label.get_meta("index", -1) == index and label.get_meta("mm") == mm:
+			label.visible = false
 	if index < MAX_WALKERS:
 		mm.set_instance_transform(index, Transform3D(Basis().scaled(Vector3.ZERO), Vector3.ZERO))
 
@@ -270,7 +273,9 @@ func _move_walkers(delta: float) -> void:
 					w["at"] = Vector3.ZERO
 					_hide_walker(multimesh, index)
 					continue
-				motion = 0.6 if w["kind"] == "stroll" else 0.0
+				motion = 0.6 if w["kind"] in ["stroll", "villager"] else 0.0
+				if w.has("tunic"):
+					tint = w["tunic"]
 				if w["kind"] == "dance":
 					tint = FEST_COLORS[k % FEST_COLORS.size()]
 					motion = 1.0
@@ -281,6 +286,14 @@ func _move_walkers(delta: float) -> void:
 				forward = (-tg[0] * sin(angle) + tg[1] * cos(angle)) * signf(float(w["speed"]))
 				if w["kind"] == "builder":
 					at += normal * absf(sin(float(w["t"]) * 10.0)) * 0.004
+				elif w["kind"] == "groom":
+					# Under the arch, facing each other.
+					var c: Vector3 = _fest_at
+					var cn := c.normalized()
+					var ct := _tangents(cn)
+					var side := 1.0 if float(w["phase"]) == 0.0 else -1.0
+					at = builder.ground(c + ct[0] * side * 0.018 * _ts, cell)
+					forward = -ct[0] * side
 				elif w["kind"] == "dance":
 					# Round the bonfire, hopping.
 					var c: Vector3 = w["centre"]
@@ -294,10 +307,13 @@ func _move_walkers(delta: float) -> void:
 		var side := basis.x
 		if tilt != 0.0:
 			basis = basis.rotated(side, tilt)
-		basis = basis.scaled(Vector3(size, size * crouch, size))
+		var grow := 0.7 if w.get("small", false) else 1.0
+		basis = basis.scaled(Vector3(size, size * crouch, size) * grow)
 		if not hide:
 			_people.append(at)
 			w["at"] = at
+			if w.has("pid"):
+				_place_name(w, at, size)
 		else:
 			basis = Basis().scaled(Vector3.ZERO)
 			w["at"] = Vector3.ZERO
@@ -437,6 +453,33 @@ func _place_walkers(planet: Dictionary, rates: Dictionary) -> void:
 		var at := int(cells[mini(cells.size() - 1, int(_link_progress(l) * (cells.size() - 1)) + 1)])
 		for m in 2:
 			_walk.append({"kind": "builder", "cell": at, "offset": 0.0, "t": 0.0, "phase": m * PI + rng.randf(), "speed": 0.6, "radius": 0.05 * _tile_size()})
+	# The villagers with a name stroll round the home, couples side by
+	# side, children smaller; at their wedding the couple stands under the
+	# arch.
+	var step_now := int(planet.get("step", 0))
+	# Their haunts: the home and the built cells around it.
+	var haunts := [_home]
+	if _home >= 0 and _home < builder.neighbors.size():
+		for n in builder.neighbors[_home]:
+			if n < _town.size() and _town[n]:
+				haunts.append(n)
+	var tunics := [Color("e3c3c6"), Color("c2d69b"), Color("eef3f2"), Color("f2c078"), Color("9fb3c8"), Color("e08f6c")]
+	for p in planet.get("people", []):
+		var pid := int(p["id"])
+		var pair := mini(pid, int(p["partner"])) if p.get("partner") != null else pid
+		var seed := float(pair) * 2.39
+		var role := str(p.get("role", "food"))
+		var w := {"kind": "villager", "cell": haunts[pair % haunts.size()], "offset": 0.0, "t": 0.0, "phase": seed + (0.35 if pid != pair else 0.0),
+			"speed": (0.1 + fmod(seed * 0.37, 0.12)) * (1.0 if pair % 2 == 0 else -1.0),
+			"radius": (0.08 + fmod(seed * 0.53, 0.16)) * _tile_size(), "tool": "hat_" + role,
+			"pid": pid, "name": str(p["name"]), "famous": bool(p.get("famous", false)), "tunic": tunics[pid % tunics.size()],
+			"small": step_now - int(p.get("born_step", 0)) < CHILD_STEPS}
+		if festival == "wedding" and str(p["name"]) in _wedding_names and _fest_cell >= 0:
+			w["kind"] = "groom"
+			w["cell"] = _fest_cell
+			w["phase"] = 0.0 if str(p["name"]) == _wedding_names[0] else PI
+		_walk.push_front(w)
+	_name_labels_for(_walk)
 	# A festival: people dance around the bonfire.
 	if _fest_cell >= 0:
 		var dancers := clampi(roundi(population / 6.0), 6, 12)
@@ -500,6 +543,13 @@ func show_planet(planet: Dictionary, rates := {}) -> void:
 	# changed.
 	_home = int(planet.get("home", 0))
 	_last_view = [planet, rates]
+	_wedding_names = []
+	var chronicle: Array = planet.get("chronicle", [])
+	for k in range(chronicle.size() - 1, maxi(-1, chronicle.size() - 40), -1):
+		if str(chronicle[k]["key"]) == "wedding":
+			var wp: Dictionary = chronicle[k].get("params", {})
+			_wedding_names = [str(wp.get("name", "")), str(wp.get("other", ""))]
+			break
 	_place_walkers(planet, rates)
 	if _wildlife_dirty or buildings != _wild_buildings:
 		_wildlife_dirty = false
@@ -523,7 +573,14 @@ func show_planet(planet: Dictionary, rates := {}) -> void:
 	_finds_at = {}
 	for f in finds:
 		_finds_at[int(f["tile"])] = str(f["kind"])
-	var signature := JSON.stringify([biomes, buildings, planet.get("orders", []), stocks, _cities, dug, _finds_at])
+	_memorials_at = {}
+	var memorials: Array = planet.get("memorials", [])
+	for k in memorials.size():
+		var m: Dictionary = memorials[k]
+		var list: Array = _memorials_at.get(int(m["tile"]), [])
+		list.append([k * 1.9 + 0.7, bool(m.get("famous", false))])
+		_memorials_at[int(m["tile"])] = list
+	var signature := JSON.stringify([biomes, buildings, planet.get("orders", []), stocks, _cities, dug, _finds_at, memorials.size()])
 	_build_roads()
 	if signature == _signature:
 		return
@@ -929,6 +986,8 @@ func _place_tile(i: int, biome: String, building: String, rng: RandomNumberGener
 				_put_model("stump", normal, base, Vector3(cos(a) * r, 0.0, sin(a) * r), 0.9 + rng.randf() * 0.3, rng.randf() * TAU)
 		if _finds_at.has(i):
 			_find_model(_finds_at[i], normal, base, rng)
+		for m in _memorials_at.get(i, []):
+			_put_model("statue" if m[1] else "memorial_stone", normal, base, Vector3(cos(m[0]) * 0.12, 0.0, sin(m[0]) * 0.12), 1.0, -m[0] + PI / 2.0)
 		if wonders.has(i) and wonders[i] != "whale":
 			_put_model(wonders[i], normal, base, Vector3(0.03, 0.0, -0.02), 1.4, rng.randf() * TAU, [LEAVES[0]])
 		if _ordered.has(i):
@@ -953,6 +1012,9 @@ func _place_tile(i: int, biome: String, building: String, rng: RandomNumberGener
 	_flag(i, normal, base)
 	_on_ground = true
 	_nature(normal, base, biome, rng, 2)
+	# A memorial stays when a building goes up: at the cell's edge.
+	for m in _memorials_at.get(i, []):
+		_put_model("statue" if m[1] else "memorial_stone", normal, base, Vector3(cos(m[0]) * 0.22, 0.0, sin(m[0]) * 0.22), 0.9, -m[0] + PI / 2.0)
 	_on_ground = false
 
 
@@ -1093,6 +1155,8 @@ func _scatter(name: String, normal: Vector3, base: Vector3, rng: RandomNumberGen
 
 var _stocks := []
 var _finds_at := {}
+## cell -> [[angle, famous]] of the memorials there.
+var _memorials_at := {}
 var _dug := []
 var _ordered := {}
 var _site_times := {}
@@ -2092,6 +2156,19 @@ func _build_walkers() -> void:
 			_put(_box(0.032, 0.002, 0.007), Color("8f6f5a"), up, o, Vector3(-0.01, 0.031, -0.014)),
 		"basket": func():
 			_put(_cylinder(0.01, 0.014, 6), Color("c8a46e"), up, o, Vector3(0.0, -0.004, 0.02)),
+		# The named villagers' hats, by trade.
+		"hat_food": func():
+			_put(_cylinder(0.021, 0.003, 8), Color("f2c078"), up, o, Vector3(0, 0.037, 0))
+			_put(_cone(0.011, 0.012, 6), Color("d9b48f"), up, o, Vector3(0, 0.044, 0)),
+		"hat_materials": func():
+			_put(_box(0.021, 0.008, 0.021), Color("a35d5d"), up, o, Vector3(0, 0.038, 0))
+			_put(_box(0.014, 0.002, 0.012), Color("7a4f4f"), up, o, Vector3(0, 0.035, 0.014)),
+		"hat_knowledge": func():
+			_put(_cone(0.013, 0.03, 6), Color("3f6e9e"), up, o, Vector3(0, 0.046, 0))
+			_put(_ball(0.003), Color("f5d76e"), up, o, Vector3(0, 0.061, 0)),
+		"hat_culture": func():
+			_put(_cylinder(0.012, 0.007, 7), Color("e08f6c"), up, o, Vector3(0, 0.039, 0))
+			_put(_box(0.003, 0.022, 0.007), Color("eef3f2"), up, o, Vector3(0.008, 0.05, -0.004), 1.0, 0.0, -0.4),
 		"axe": func():
 			_put(_box(0.003, 0.045, 0.003), wood, up, o, Vector3(0.008, 0.01, 0.018), 1.0, 0.0, 0.3)
 			_put(_box(0.012, 0.01, 0.003), Color("b0a6ad"), up, o, Vector3(0.012, 0.032, 0.024)),
@@ -2769,6 +2846,7 @@ const FEST_PROPS := {
 	"harvest_grand": ["feast_table", "feast_table", "bunting", "lantern_pole"],
 	"games": ["bunting", "bunting"],
 	"games_grand": ["bunting", "bunting", "lantern_pole", "lantern_pole"],
+	"wedding": ["bunting", "feast_table", "bunting", "lantern_pole"],
 }
 ## Festivals with fireworks once it is dark.
 const FIREWORKS := ["sun", "stars", "anniversary", "harvest_grand", "games_grand"]
@@ -2828,7 +2906,7 @@ func set_festival(id: String) -> void:
 	_colors = PackedColorArray()
 	_indices = PackedInt32Array()
 	_lod = false
-	_put_model("bonfire", up, footing, Vector3.ZERO, 1.2)
+	_put_model("wedding_arch" if id == "wedding" else "bonfire", up, footing, Vector3.ZERO, 1.2)
 	var props: Array = FEST_PROPS.get(id, ["bunting"])
 	for k in props.size():
 		var a := k * TAU / props.size() + 0.4
@@ -2858,7 +2936,7 @@ func _festival_fx(delta: float) -> void:
 	if _fest_cell >= 0 and _seen(_fest_at):
 		var n := _fest_at.normalized()
 		var top := _fest_at + n * 0.03 * _ts
-		if randf() < 0.5:
+		if randf() < 0.5 and festival != "wedding":
 			_spawn(top + _jitter(0.006 * _ts), n * 0.05 * _ts + _jitter(0.01 * _ts), Color("f5d76e") if randf() < 0.5 else Color("e08f6c"), 1.2, 0.004 * _ts, 0.0)
 		_fest_next -= delta
 		var dark := night_at(_fest_at)
@@ -2871,7 +2949,7 @@ func _festival_fx(delta: float) -> void:
 					var t := _tangents(n)
 					var at: Vector3 = _fest_at + (t[0] * randf_range(-1, 1) + t[1] * randf_range(-1, 1)) * 0.1 * _ts
 					_spawn(at + n * 0.02 * _ts, n * 0.03 * _ts + _jitter(0.004 * _ts), Color("f2c078"), 6.0, 0.006 * _ts, 0.004 * _ts)
-			elif festival == "flowers":
+			elif festival in ["flowers", "wedding"]:
 				for k in 6:
 					var t := _tangents(n)
 					var at: Vector3 = _fest_at + (t[0] * randf_range(-1, 1) + t[1] * randf_range(-1, 1)) * 0.15 * _ts + n * 0.12 * _ts
@@ -2918,6 +2996,78 @@ func _launch_bursts() -> void:
 			_parts_later.remove_at(k)
 		else:
 			k += 1
+
+
+# ---------------------------------------------------------------- villagers
+
+## A villager is a child this many steps (three planet days).
+const CHILD_STEPS := 3 * 144
+## The couple being married (from the Chronicle), while a wedding is on.
+var _wedding_names := []
+## Name labels over the villagers, by person id.
+var _name_labels := {}
+
+
+## One label per named villager (made or dropped as the cast changes).
+func _name_labels_for(walk: Array) -> void:
+	var wanted := {}
+	for k in walk.size():
+		var w: Dictionary = walk[k]
+		if not w.has("pid"):
+			continue
+		wanted[w["pid"]] = true
+		var label: Label3D = _name_labels.get(w["pid"])
+		if label == null:
+			label = Label3D.new()
+			label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+			label.fixed_size = true
+			label.pixel_size = 0.0007
+			label.font_size = 22
+			label.outline_size = 6
+			label.outline_modulate = Palette.OUTLINE
+			label.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+			label.no_depth_test = false
+			label.visible = false
+			pivot.add_child(label)
+			_name_labels[w["pid"]] = label
+		label.text = str(w["name"])
+		label.modulate = Color("f5d76e") if w["famous"] else Color("eef3f2")
+	for pid in _name_labels.keys():
+		if not wanted.has(pid):
+			_name_labels[pid].queue_free()
+			_name_labels.erase(pid)
+
+
+## Keep a villager's name over their head, only up close.
+func _place_name(w: Dictionary, at: Vector3, size: float) -> void:
+	var label: Label3D = _name_labels.get(w["pid"])
+	if label == null:
+		return
+	# Only up close, and at three heights so neighbours' names do not sit
+	# on top of each other.
+	label.visible = _closeness > 0.7
+	label.position = at + at.normalized() * (0.07 + 0.035 * (int(w["pid"]) % 3)) * size
+	label.set_meta("index", int(w.get("index", -1)))
+	label.set_meta("mm", _walker_mm(w))
+
+
+## The named villager under a click (screen point of the low-resolution
+## view), or -1.
+func pick_person(camera: Camera3D, point: Vector2) -> int:
+	var best := -1
+	var nearest := 9.0
+	for w in _walk:
+		if not w.has("pid") or not w.has("at") or w["at"] == Vector3.ZERO:
+			continue
+		var at: Vector3 = w["at"]
+		var head := pivot.to_global(at + at.normalized() * 0.02 * _ts)
+		if camera.is_position_behind(head):
+			continue
+		var d := camera.unproject_position(head).distance_to(point)
+		if d < nearest:
+			nearest = d
+			best = int(w["pid"])
+	return best
 
 
 # ---------------------------------------------------------------- wonders

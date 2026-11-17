@@ -87,6 +87,11 @@ func _ready() -> void:
 		_busy = true
 		host.post_json("dev/skip", {"hours": hours}, _on_view))
 	ui.tile_closed.connect(func(): _select(-1))
+	ui.person_requested.connect(func(pid: int):
+		planet_view.focus(int(ui.view.get("planet", {}).get("home", 0)))
+		_zoom_target = ZOOM_MAX
+		planet_view.select(-1)
+		ui.show_person(pid))
 	ui.tile_focus_requested.connect(func(cell: int):
 		planet_view.focus(cell)
 		_zoom_target = maxf(_zoom_target, FOCUS_ZOOM)
@@ -224,7 +229,7 @@ func _on_view(reply: Dictionary) -> void:
 		_load_wonders(str(planet.get("seed", "")))
 		planet_view.show_planet(planet, data.get("rates", {}))
 		ui.wonders = planet_view.wonders
-		_look_once()
+		_look_once(planet)
 		var era = data.get("era")
 		_set_palette(int(era["number"]) if era != null else 1)
 		traffic.show_view(data)
@@ -538,19 +543,33 @@ func _update_sky() -> void:
 # ---------------------------------------------------------------- wonders
 
 ## `?look=<wonder>` in the window's address (the preview server's
-## `/?look=whale`): fly close over that wonder once, for screenshots.
+## `/?look=whale`, or `?look=cell:181`): fly close over that wonder or cell
+## once, for screenshots.
 var _look_done := false
 
 
-func _look_once() -> void:
+func _look_once(planet: Dictionary) -> void:
 	if _look_done or not OS.has_feature("web"):
 		return
 	_look_done = true
 	var query := str(JavaScriptBridge.eval("location.search"))
+	# `?person`: fly home and open the first villager's card.
+	if query.contains("person"):
+		var people: Array = planet.get("people", [])
+		if not people.is_empty():
+			planet_view.focus(int(planet.get("home", 0)), true)
+			_zoom_target = ZOOM_MAX
+			var pid := int(people[0]["id"])
+			# The card needs the view the window is about to show.
+			(func(): ui.show_person(pid)).call_deferred()
 	var at := query.find("look=")
 	if at < 0:
 		return
 	var kind := query.substr(at + 5).get_slice("&", 0)
+	if kind.begins_with("cell:"):
+		planet_view.focus(kind.substr(5).to_int(), true)
+		_zoom_target = ZOOM_MAX
+		return
 	for cell in planet_view.wonders:
 		if planet_view.wonders[cell] == kind:
 			planet_view.focus(cell, true)
@@ -629,6 +648,14 @@ func _gui_input(event: InputEvent) -> void:
 		else:
 			_pressing = false
 			if not _dragged:
+				# A named villager under the click opens their card.
+				var who := planet_view.pick_person(camera, event.position / float(container.stretch_shrink))
+				if who >= 0 and not _double_click:
+					planet_view.select(-1)
+					ui.show_person(who)
+					audio.play("tap")
+					_double_click = false
+					return
 				var tile := planet_view.pick(camera, event.position / float(container.stretch_shrink))
 				if _double_click and tile >= 0:
 					# A double click (or tap) flies over the cell.

@@ -6,7 +6,7 @@ document covers the plugin as built; the game itself is described in
 [design.md](design.md), and its rules live in
 [`crates/oorbit-sim`](../../../crates/oorbit-sim/README.md).
 
-Status: **0.7.7, an active game with cities.** The user founds a planet (one
+Status: **0.7.8, an active game with cities.** The user founds a planet (one
 per account), and the window shows it as it is now: continents and seas of
 642 cells, crews sent to work by pointing at the land, buildings that rise
 while they are built, colonies linked to the capital by roads and sea routes, research, events, notable people, the Chronicle, and a dock that
@@ -202,6 +202,33 @@ founding.
 - Preview: `/?hour=21&season=2.5&fest=sun` sets the hour, the season
   (0 spring to 4) and a festival (flying over it), `&lapse=40` runs a whole
   day in 40 seconds.
+
+## Villagers
+
+A few villagers have a name (`crates/oorbit-sim/src/cast.rs`, the planet's
+`people`): three, and one more for every 25 people, up to eight. Each has a
+trade (one of the categories), a character (cheerful, grumpy, curious, shy,
+a dreamer, brave, clumsy, a glutton), and a life of 16 to 30 planet days.
+Newcomers arrive grown up; a couple's children take after a parent's trade
+and grow up in three days. Two grown-ups without a partner fall in love and
+marry the next evening (a `wedding` celebration: a flower arch, bunting,
+dancers); now and then someone is the subject of a little story picked by
+their character (a goat on the roof, a burnt pie, a quarrel and the peace
+after it). The planet's notable people are part of the cast, in gold.
+Someone with two stories or more, or a notable person, leaves a memorial
+near the home when they die: a stone, or a statue (`memorials`, kept even
+when a building goes up on the cell). The cast draws on its own random
+stream and never touches resources or mood, so the economy (and the
+balance tests) run as without it.
+
+In the window they stroll round the home and the built cells next to it,
+couples side by side, children smaller, each with their trade's hat (straw
+for food, a cap for materials, a pointed hood for knowledge, a feathered cap
+for culture) and their name over their head up close. Clicking one, or a
+name in the Society panel, opens their card: trade and character, partner,
+parents and children, and their latest stories from the Chronicle. Preview:
+`/?person` opens the first villager's card, `/?look=cell:181` flies over a
+cell.
 
 ## Time
 
