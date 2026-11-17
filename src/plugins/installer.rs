@@ -13,7 +13,7 @@ use shiny_plugin_sdk::manifest::Manifest;
 use shiny_plugin_sdk::services::PluginCtx;
 
 use crate::plugins::loader::{
-    find_cdylib, parse_extras, validate_plugin_name, validate_relative_path, HostExtras, PluginKind,
+    find_cdylib, parse_extras, validate_plugin_name, validate_relative_path, HostExtras, PluginKind, PluginRuntime,
 };
 use crate::plugins::manager::PluginManager;
 
@@ -93,7 +93,7 @@ pub async fn install_archive(
     let install_dir = find_install_root(&staging);
 
     let (manifest, extras) = read_staged_manifest(&install_dir, plugins_dir)?;
-    require_installable(&install_dir, &manifest, extras.kind, plugins_dir)?;
+    require_installable(&install_dir, &manifest, extras.kind, extras.runtime, plugins_dir)?;
     finish_install(&install_dir, &manifest.name, &staging, plugins_dir, manager, base_ctx).await
 }
 
@@ -160,7 +160,7 @@ pub async fn install_web_app(
             "install_web_app needs a web-app manifest for '{}'", manifest.name
         )));
     }
-    require_installable(&install_dir, &manifest, extras.kind, plugins_dir)?;
+    require_installable(&install_dir, &manifest, extras.kind, extras.runtime, plugins_dir)?;
     finish_install(&install_dir, &manifest.name, &staging, plugins_dir, manager, base_ctx).await
 }
 
@@ -200,9 +200,9 @@ fn read_staged_manifest(
 
     let extras = parse_extras(&manifest_text);
     log_event(plugins_dir, &format!(
-        "manifest-ok name={} version={} api_level={} kind={}",
+        "manifest-ok name={} version={} api_level={} kind={} runtime={}",
         manifest.name, manifest.version, manifest.api_level,
-        extras.kind.as_str()
+        extras.kind.as_str(), extras.runtime.as_str()
     ));
 
     if manifest.api_level > shiny_plugin_sdk::CORE_API_LEVEL {
@@ -223,6 +223,7 @@ fn require_installable(
     install_dir: &Path,
     manifest: &Manifest,
     kind: PluginKind,
+    runtime: PluginRuntime,
     plugins_dir: &Path,
 ) -> Result<(), AppError> {
     if kind.is_framed() && !install_dir.join(&manifest.web_dir).join("index.html").is_file() {
@@ -233,6 +234,16 @@ fn require_installable(
         )));
     }
     if !kind.loads_library() {
+        return Ok(());
+    }
+    if runtime == PluginRuntime::Process {
+        let Some(binary) = crate::plugins::process::find_executable(install_dir, &manifest.name) else {
+            log_event(plugins_dir, &format!("executable-missing name={}", manifest.name));
+            return Err(AppError::BadRequest(format!(
+                "Archive does not contain bin/{} for process plugin '{}'", manifest.name, manifest.name
+            )));
+        };
+        crate::plugins::process::ensure_executable(&binary)?;
         return Ok(());
     }
     if find_cdylib(install_dir, &manifest.name).is_none() {

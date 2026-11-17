@@ -226,6 +226,9 @@ pub struct AppState {
     /// Craft store: installs and updates the Craft App Suite's web builds as
     /// web-app plugins (`/api/plugins/store`).
     pub store: crate::plugins::store::Store,
+    /// LiteAura plugin catalogue: process plugins published as signed
+    /// archives (`/api/plugins/catalog`).
+    pub catalog: crate::plugins::catalog::Catalog,
     /// Craft app MCP servers: one runs per open Craft app, and focus mode
     /// narrows that to the focused apps (see `plugins::craft_mcp`).
     pub craft_mcp: crate::plugins::craft_mcp::CraftMcp,
@@ -672,6 +675,8 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/system/version", get(system::version))
         .route("/api/system/reexec", post(system::reexec))
         // Craft store: the Craft App Suite's web builds as web-app plugins.
+        .route("/api/plugins/catalog", get(crate::plugins::catalog::catalog_list))
+        .route("/api/plugins/catalog/refresh", post(crate::plugins::catalog::catalog_refresh))
         .route("/api/plugins/store", get(crate::plugins::store::store_list))
         .route("/api/plugins/store/refresh", post(crate::plugins::store::store_refresh))
         .route("/api/plugins/store/icon", get(crate::plugins::store::store_icon))
@@ -815,8 +820,8 @@ pub fn build_router(state: AppState) -> Router {
         .layer(axum::middleware::from_fn(host_remote_gate));
 
     // Routes that change what code runs on this machine. A plugin is a native
-    // library loaded into this process (and a store app ships a CLI the server
-    // executes), so only the machine itself may install, remove or reload one:
+    // library loaded into this process or an executable it starts (and a store
+    // app ships a CLI the server executes), so only the machine itself may install, remove or reload one:
     // a signed-in Iroh/Funnel/LAN client must not be able to.
     let plugin_admin_routes = Router::new()
         // Plugin archives are multi-MB zip/tar.gz uploads (cdylib inside) —
@@ -826,6 +831,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/plugins/uninstall", post(crate::plugins::admin_api::uninstall))
         // Plugins changed on disk (a package upgrade, a copied build): load them again.
         .route("/api/plugins/rescan", post(crate::plugins::admin_api::rescan))
+        .route("/api/plugins/catalog/install", post(crate::plugins::catalog::catalog_install))
         .route("/api/plugins/store/install", post(crate::plugins::store::store_install))
         .route("/api/plugins/store/mcp", post(crate::plugins::store::store_mcp))
         .layer(axum::middleware::from_fn(remote::local_only_gate));

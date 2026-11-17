@@ -1,6 +1,7 @@
 name = "word"
-version = "0.1.1"
+version = "0.1.2"
 api_level = 1
+runtime = "process"
 entry_symbol = "shiny_plugin_entry"
 description = "Word processor — open .odt documents with Word (.docx) and PDF export"
 summary = "Word processor: write .odt documents, import Word files, export polished .docx and PDF"

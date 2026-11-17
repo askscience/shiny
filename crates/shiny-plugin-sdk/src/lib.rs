@@ -21,6 +21,7 @@ pub mod routes;
 pub mod crons;
 pub mod migrations;
 pub mod plugin;
+pub mod process;
 pub mod odt;
 pub mod ods;
 pub mod odp;

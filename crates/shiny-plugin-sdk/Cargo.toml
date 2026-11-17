@@ -27,3 +27,9 @@ bytes = "1"
 zip = "0.6"
 roxmltree = "0.20"
 libsqlite3-sys = "0.30"
+# Out-of-process plugins (`process` module): the wire contract, and an
+# HTTP/1.1 server on the host-provided Unix socket.
+shiny-plugin-protocol = { path = "../shiny-plugin-protocol" }
+hyper = { version = "1", features = ["server", "http1"] }
+hyper-util = { version = "0.1", features = ["tokio", "service"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }

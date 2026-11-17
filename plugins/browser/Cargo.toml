@@ -6,7 +6,11 @@ description = "The Browser window — a filtered viewport powered by the same ad
 
 [lib]
 name = "shiny_browser_plugin"
-crate-type = ["cdylib", "rlib"]
+crate-type = ["rlib"]
+
+[[bin]]
+name = "shiny-plugin-browser"
+path = "src/main.rs"
 
 [dependencies]
 shiny-plugin-sdk = { path = "../../crates/shiny-plugin-sdk" }

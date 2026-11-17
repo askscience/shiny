@@ -1,6 +1,7 @@
 name = "calculator"
-version = "0.1.0"
+version = "0.1.1"
 api_level = 1
+runtime = "process"
 entry_symbol = "shiny_plugin_entry"
 description = "Scientific calculator — evaluate arithmetic and scientific expressions in the Calculator window"
 summary = "Calculator: basic and scientific math"

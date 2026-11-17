@@ -5,7 +5,11 @@ edition = "2021"
 
 [lib]
 name = "shiny_calculator_plugin"
-crate-type = ["cdylib", "rlib"]
+crate-type = ["rlib"]
+
+[[bin]]
+name = "shiny-plugin-calculator"
+path = "src/main.rs"
 
 [dependencies]
 shiny-plugin-sdk = { path = "../../crates/shiny-plugin-sdk" }

@@ -25,6 +25,10 @@ pub struct LoadedPlugin {
     /// `web` for a plugin that is only a static web app (no cdylib). The shell
     /// mounts those in an iframe instead of importing a `web/plugin.js`.
     pub kind: PluginKind,
+    /// Library in this process, or a process of its own.
+    pub runtime: PluginRuntime,
+    /// The process behind a `runtime = "process"` plugin.
+    pub supervisor: Option<Arc<crate::plugins::process::Supervisor>>,
     /// `Arc` (not `Box`) so lifecycle hooks (`on_load`/`on_unload`) can be
     /// awaited without holding the loader lock.
     pub plugin: Arc<dyn Plugin>,
@@ -88,6 +92,27 @@ pub(crate) struct HostExtras {
     pub category: Option<String>,
     pub capabilities: Vec<String>,
     pub kind: PluginKind,
+    pub runtime: PluginRuntime,
+}
+
+/// How a plugin's code runs: a library loaded into the server (`dylib`, the
+/// default) or an executable the server starts and talks to over a socket
+/// (`process`, see `process.rs`). Only meaningful when the kind loads code.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PluginRuntime {
+    #[default]
+    Dylib,
+    Process,
+}
+
+impl PluginRuntime {
+    /// The `runtime` value as written in `plugin.toml`.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            PluginRuntime::Dylib => "dylib",
+            PluginRuntime::Process => "process",
+        }
+    }
 }
 
 /// Only the host-side hint keys of a plugin.toml — parsed independently so
@@ -100,6 +125,8 @@ struct ManifestExtras {
     capabilities: Vec<String>,
     #[serde(default)]
     kind: Option<String>,
+    #[serde(default)]
+    runtime: Option<String>,
 }
 
 /// Optional diagnostics only. Legacy archives remain accepted without this
@@ -137,6 +164,8 @@ pub(crate) fn parse_extras(manifest_text: &str) -> HostExtras {
         Some("hybrid") => PluginKind::Hybrid,
         _ => PluginKind::Native,
     };
+    let extras_runtime_owned = extras.as_ref().and_then(|e| e.runtime.clone());
+    let extras_runtime = extras_runtime_owned.as_deref().map(str::trim);
     let capabilities = extras
         .map(|e| e.capabilities)
         .unwrap_or_default()
@@ -144,7 +173,11 @@ pub(crate) fn parse_extras(manifest_text: &str) -> HostExtras {
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
         .collect();
-    HostExtras { category, capabilities, kind }
+    let runtime = match extras_runtime {
+        Some("process") => PluginRuntime::Process,
+        _ => PluginRuntime::Dylib,
+    };
+    HostExtras { category, capabilities, kind, runtime }
 }
 
 pub struct Loader {
@@ -306,6 +339,21 @@ impl Loader {
             .unwrap_or_default()
     }
 
+    /// How a loaded plugin's code runs.
+    pub fn runtime_for(&self, name: &str) -> PluginRuntime {
+        self.loaded.read().iter()
+            .find(|p| p.manifest.name == name)
+            .map(|p| p.runtime)
+            .unwrap_or_default()
+    }
+
+    /// The process behind a loaded process plugin.
+    pub fn supervisor_for(&self, name: &str) -> Option<Arc<crate::plugins::process::Supervisor>> {
+        self.loaded.read().iter()
+            .find(|p| p.manifest.name == name)
+            .and_then(|p| p.supervisor.clone())
+    }
+
     /// Fingerprint of the files a loaded plugin came from.
     pub fn digest_for(&self, name: &str) -> Option<crate::plugins::digest::PluginDigest> {
         self.loaded.read().iter()
@@ -385,9 +433,29 @@ impl Loader {
             )));
         }
 
+        let process = extras.kind.loads_library() && extras.runtime == PluginRuntime::Process;
+        if process {
+            // The process registers as soon as it says hello, so its tables
+            // must exist before it starts.
+            let migrations_dir = install_dir.join(&manifest.migrations_dir);
+            if migrations_dir.exists() {
+                shiny_plugin_sdk::migrations::run_plugin_migrations(pool, &manifest.name, &migrations_dir).await?;
+            }
+        }
+        let mut supervisor = None;
         let (plugin, library): (Arc<dyn Plugin>, Option<Library>) = if !extras.kind.loads_library() {
             // A web-app plugin is a static site with no code to dlopen.
             (Arc::new(WebAppPlugin { manifest: manifest.clone() }), None)
+        } else if process {
+            // An executable of its own, spoken to over a socket.
+            let started = crate::plugins::process::ProcessPlugin::start(
+                install_dir,
+                manifest.clone(),
+                &base_ctx.config,
+            )
+            .await?;
+            supervisor = Some(started.supervisor().clone());
+            (Arc::new(started), None)
         } else {
             // Never grow the retired-library graveyard without bound: each
             // entry is a mapped cdylib we cannot safely dlclose. Fail the load
@@ -486,7 +554,7 @@ impl Loader {
         // Run plugin migrations — with the HOST pool, in the host process
         // (migrations run core-side by design).
         let migrations_dir = install_dir.join(&manifest.migrations_dir);
-        if migrations_dir.exists() {
+        if !process && migrations_dir.exists() {
             shiny_plugin_sdk::migrations::run_plugin_migrations(pool, &manifest.name, &migrations_dir).await?;
         }
 
@@ -513,6 +581,8 @@ impl Loader {
             category: extras.category,
             capabilities: extras.capabilities,
             kind: extras.kind,
+            runtime: extras.runtime,
+            supervisor,
             plugin,
             ctx: ctx.clone(),
             library: library.0.take(),

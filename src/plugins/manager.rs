@@ -585,6 +585,17 @@ impl PluginManager {
         self.inner.loader.unload(name).await
     }
 
+    /// Stop every process plugin (server exit or re-exec). Library plugins
+    /// end with the server; processes would outlive an exec.
+    pub async fn stop_processes(&self) {
+        let names: Vec<String> = self.inner.loader.snapshot().into_iter().map(|m| m.name).collect();
+        let stops = names
+            .iter()
+            .filter_map(|name| self.inner.loader.supervisor_for(name))
+            .map(|supervisor| async move { supervisor.shutdown().await });
+        futures::future::join_all(stops).await;
+    }
+
     pub fn is_installed(&self, name: &str) -> bool {
         self.inner.loader.has(name)
     }

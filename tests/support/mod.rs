@@ -87,15 +87,28 @@ impl TestApp {
             .join(name);
         let destination = Path::new(&self.state.config.plugins_dir).join(name);
         copy_dir(&source, &destination);
+        let fixture_dir = std::env::var_os("SHINY_TEST_LIB_DIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("target/debug"));
+        let manifest = std::fs::read_to_string(source.join("plugin.toml")).unwrap();
+        if manifest
+            .lines()
+            .any(|line| line.replace(' ', "") == "runtime=\"process\"")
+        {
+            // A process plugin: its executable goes to bin/<name>.
+            let artifact = fixture_dir.join(format!("shiny-plugin-{name}"));
+            assert!(artifact.is_file(), "Missing fixture {}. Run scripts/test-rust.sh first; tests never use installed plugins.", artifact.display());
+            std::fs::create_dir_all(destination.join("bin")).unwrap();
+            std::fs::copy(artifact, destination.join("bin").join(name))
+                .expect("copy built plugin executable");
+            return;
+        }
         let library = format!(
             "{}shiny_{}_plugin{}",
             std::env::consts::DLL_PREFIX,
             name.replace('-', "_"),
             std::env::consts::DLL_SUFFIX
         );
-        let fixture_dir = std::env::var_os("SHINY_TEST_LIB_DIR")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("target/debug"));
         let artifact = fixture_dir.join(&library);
         assert!(artifact.is_file(), "Missing fixture {}. Run scripts/test-rust.sh first; tests never use installed plugins.", artifact.display());
         std::fs::copy(artifact, destination.join(library)).expect("copy built plugin fixture");

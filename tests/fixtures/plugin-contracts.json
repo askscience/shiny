@@ -634,6 +634,11 @@
       },
       {
         "auth": "auth",
+        "method": "Get",
+        "path": "/api/files/volumes"
+      },
+      {
+        "auth": "auth",
         "method": "Post",
         "path": "/api/files/delete"
       },
@@ -686,6 +691,26 @@
         "auth": "auth",
         "method": "Post",
         "path": "/api/files/upload"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/files/volumes/automount"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/files/volumes/eject"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/files/volumes/mount"
+      },
+      {
+        "auth": "auth",
+        "method": "Post",
+        "path": "/api/files/volumes/unmount"
       },
       {
         "auth": "auth",

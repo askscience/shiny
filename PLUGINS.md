@@ -6,6 +6,8 @@ This document explains the architecture, the trait surface, the installer workfl
 
 > **One-line summary:** drop a `.zip` or `.tar.gz` containing `plugin.toml` + `lib<my_plugin>.so` onto `POST /api/plugins/install` and the plugin's tools become callable by the live AI assistant — no restart needed.
 
+> **Process plugins:** most plugins now ship an executable (`bin/<name>`, `runtime = "process"`) instead of a library and are installed from the signed plugin catalogue. See [docs/plugins/process-plugins.md](docs/plugins/process-plugins.md).
+
 ---
 
 ## 1. Architecture

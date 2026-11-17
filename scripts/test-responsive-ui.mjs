@@ -51,6 +51,11 @@ const server=http.createServer(async(req,res)=>{
     if(u.pathname==='/api/mail/list') data={messages:[{id:1,uid:1,subject:'A message with a long subject for mobile layouts',from:'person@example.test',date:'2026-10-17',seen:false}]};
     if(u.pathname==='/api/plugins') data=['word','calc','mail','browser'].map(name=>({name,description:'A useful plugin with a long description to exercise wrapping.',category:'Productivity',version:'1.0',api_level:1,surface:true}));
     if(u.pathname==='/api/plugins/active') data=['word','calc','mail','browser','keyboard'];
+    // Plugin catalogue: one to get, one installed with an update, one downloading.
+    if(u.pathname==='/api/plugins/catalog') data={refreshing:false,release:'0.2.9',error:null,plugins:[
+      {name:'studio',version:'0.1.3',description:'Record, arrange and mix music with instruments and effects.',category:'Media',size:21*1024**2,installed_version:null,update_available:false,system:false,state:'idle',progress:0,error:null},
+      {name:'word',version:'0.1.3',description:'A useful plugin with a long description to exercise wrapping.',category:'Productivity',size:9*1024**2,installed_version:'1.0',update_available:true,system:false,state:'idle',progress:0,error:null},
+      {name:'radio',version:'0.1.1',description:'Internet radio stations from around the world.',category:'Media',size:6*1024**2,installed_version:null,update_available:false,system:false,state:'downloading',progress:42,error:null}]};
     if(u.pathname==='/api/documents') data=[{id:'test',title:'Example document'}];
     if(u.pathname==='/api/documents/test') data={id:'test',title:'Example document',html:'<h1>Example document</h1><p>A paragraph to edit on a phone.</p>'};
     if(u.pathname==='/api/spreadsheets') data=[{id:'test',title:'Example spreadsheet'}];

@@ -1,6 +1,7 @@
 name = "oorbit"
-version = "0.7.8"
+version = "0.7.9"
 api_level = 1
+runtime = "process"
 entry_symbol = "shiny_plugin_entry"
 kind = "hybrid"
 description = "Oorbit: a tiny planet whose society grows from the stone age to space, in real time, beside your friends' planets"

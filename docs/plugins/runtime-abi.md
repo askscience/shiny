@@ -1,6 +1,11 @@
 # Runtime & ABI
 
-A plugin is a native Rust `cdylib` loaded into the server process. This brings
+> Most plugins now run as their own process (`runtime = "process"`), which has
+> none of the constraints below: see [process-plugins.md](process-plugins.md).
+> This page describes the library runtime that terminal, updates and
+> installer still use.
+
+A library plugin is a native Rust `cdylib` loaded into the server process. This brings
 two hard constraints: the **SDK ABI** across `dlopen`, and the fact that a
 plugin statically links its **own copies** of Tokio, sqlx/libsqlite3 and
 reqwest/hyper.

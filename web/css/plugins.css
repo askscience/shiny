@@ -490,6 +490,9 @@ html[data-motion='depth'] .pw-object-body { transition-timing-function: var(--sp
     border-inline-end: 0;
     border-bottom: 1px solid var(--pw-line);
     scrollbar-width: none;
+    /* A full stage on a short (landscape phone) window must not squeeze the
+       strip: it keeps its height and the stage scrolls. */
+    flex: none;
   }
   .pw-rail::-webkit-scrollbar { display: none; }
   .pw-rail-head { display: none; }

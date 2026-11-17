@@ -1,0 +1,20 @@
+# Plugins every LiteAura account gets from the plugin catalogue the first
+# time its server runs (src/plugins/catalog.rs). One name per line. A plugin
+# the user removes later is not installed again.
+browser
+calc
+calculator
+calendar
+capture
+files
+image
+impress
+keyboard
+mail
+oorbit
+pdf
+radio
+studio
+traveler
+word
+youtube

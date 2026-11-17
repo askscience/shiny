@@ -6,7 +6,7 @@
 //! rebuilt plugin or an edited stylesheet all change at least one of those.
 //!
 //! Two digests exist per plugin because they trigger different work:
-//! - **code** (`plugin.toml`, the cdylib, `migrations/`, `skills/`) means the
+//! - **code** (`plugin.toml`, the cdylib or `bin/`, `migrations/`, `skills/`) means the
 //!   server has to load the plugin again;
 //! - **web** (`web/`) only means a window shows stale code until it reloads
 //!   its module, which the page does on its own.
@@ -33,7 +33,7 @@ impl PluginDigest {
             let top = rel.split('/').next().unwrap_or("");
             match top {
                 "web" => false,
-                "plugin.toml" | "migrations" | "skills" => true,
+                "plugin.toml" | "migrations" | "skills" | "bin" => true,
                 _ => rel.ends_with(".so") || rel.ends_with(".dylib") || rel.ends_with(".dll"),
             }
         });

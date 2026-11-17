@@ -1,5 +1,5 @@
 [workspace]
-members = [".", "crates/shiny-plugin-sdk", "crates/shiny-osm", "crates/liteaura-core", "crates/shiny-filter", "crates/shiny-filter-core", "crates/shiny-installer-protocol", "crates/shiny-installer-helper", "crates/liteaura", "crates/liteaura-mac", "crates/shiny-auth", "crates/shiny-iroh-client", "crates/shiny-iroh-proto", "crates/shiny-server-mode", "crates/shiny-dsp", "crates/shiny-vault", "crates/capture-render", "plugins/traveler", "plugins/hello", "plugins/radio", "plugins/word", "plugins/keyboard", "plugins/youtube", "plugins/calc", "plugins/impress", "plugins/mail", "plugins/calendar", "plugins/calculator", "plugins/image", "plugins/studio", "plugins/pdf", "plugins/browser", "plugins/files", "plugins/terminal", "plugins/updates", "plugins/installer", "plugins/capture", "plugins/oorbit", "crates/oorbit-sim"]
+members = [".", "crates/shiny-plugin-sdk", "crates/shiny-plugin-protocol", "crates/shiny-osm", "crates/liteaura-core", "crates/shiny-filter", "crates/shiny-filter-core", "crates/shiny-installer-protocol", "crates/shiny-installer-helper", "crates/liteaura", "crates/liteaura-mac", "crates/shiny-auth", "crates/shiny-iroh-client", "crates/shiny-iroh-proto", "crates/shiny-server-mode", "crates/shiny-dsp", "crates/shiny-vault", "crates/capture-render", "plugins/traveler", "plugins/hello", "plugins/radio", "plugins/word", "plugins/keyboard", "plugins/youtube", "plugins/calc", "plugins/impress", "plugins/mail", "plugins/calendar", "plugins/calculator", "plugins/image", "plugins/studio", "plugins/pdf", "plugins/browser", "plugins/files", "plugins/terminal", "plugins/updates", "plugins/installer", "plugins/capture", "plugins/oorbit", "crates/oorbit-sim"]
 resolver = "2"
 
 # Vendored libsqlite3-sys, patched to link the SYSTEM SQLite (one shared
@@ -81,6 +81,11 @@ tokio-stream = { version = "0.1", features = ["sync"] }
 async-trait = "0.1"
 bytes = "1.11.1"
 shiny-plugin-sdk = { path = "crates/shiny-plugin-sdk" }
+# Process plugins: the wire contract and an HTTP/1.1 client on Unix sockets.
+shiny-plugin-protocol = { path = "crates/shiny-plugin-protocol" }
+hyper = { version = "1", features = ["client", "http1"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+http-body-util = "0.1"
 shiny-osm = { path = "crates/shiny-osm" }
 libloading = "0.8"
 toml = "0.8"

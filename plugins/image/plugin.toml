@@ -1,6 +1,7 @@
 name = "image"
-version = "0.1.0"
+version = "0.1.1"
 api_level = 1
+runtime = "process"
 entry_symbol = "shiny_plugin_entry"
 description = "Photo editor — tone and colour adjustments, blur/sharpen/vignette and one-tap film looks in the Image window"
 summary = "Photo editor: adjustments and film looks"

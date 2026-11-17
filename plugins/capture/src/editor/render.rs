@@ -153,10 +153,15 @@ pub fn renderer() -> Option<PathBuf> {
             return Some(p);
         }
     }
+    // Next to the server: as a process plugin our own executable lives in the
+    // plugin's bin/, so the server's path comes from SHINY_HOST_EXE.
+    let host_dir = std::env::var_os("SHINY_HOST_EXE")
+        .map(PathBuf::from)
+        .and_then(|e| e.parent().map(Path::to_path_buf));
     let exe_dir = std::env::current_exe()
         .ok()
         .and_then(|e| e.parent().map(Path::to_path_buf));
-    for d in exe_dir.into_iter().chain(
+    for d in host_dir.into_iter().chain(exe_dir).chain(
         std::env::var_os("PATH")
             .into_iter()
             .flat_map(|p| std::env::split_paths(&p).collect::<Vec<_>>()),

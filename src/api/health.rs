@@ -111,7 +111,9 @@ pub async fn instance(
     }
     let challenge = query.c.unwrap_or_default();
     let valid = (16..=128).contains(&challenge.len())
-        && challenge.chars().all(|c| c.is_ascii_alphanumeric() || c == '-');
+        && challenge
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-');
     match (valid, INSTANCE_SECRET.get()) {
         (true, Some(secret)) => instance_proof(secret, &challenge).into_response(),
         _ => StatusCode::BAD_REQUEST.into_response(),

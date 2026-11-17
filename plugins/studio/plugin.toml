@@ -1,6 +1,7 @@
 name = "studio"
-version = "0.1.1"
+version = "0.1.2"
 api_level = 1
+runtime = "process"
 entry_symbol = "shiny_plugin_entry"
 description = "Music studio — a DAW-grade step sequencer, polysynth, drum machine and modular Grid that renders arrangements to audio in the Studio window"
 summary = "Music studio: polyphonic synth + drum machine + modular Grid, rendered offline by a self-contained DSP engine"

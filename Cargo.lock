@@ -6804,6 +6804,9 @@ dependencies = [
  "futures",
  "hex",
  "http",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
  "if-addrs",
  "iroh",
  "libc",
@@ -6821,6 +6824,7 @@ dependencies = [
  "sha2 0.10.9",
  "shiny-iroh-proto",
  "shiny-osm",
+ "shiny-plugin-protocol",
  "shiny-plugin-sdk",
  "sqlx",
  "tar",
@@ -7161,6 +7165,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "shiny-plugin-protocol"
+version = "1.0.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "shiny-plugin-sdk"
 version = "0.1.0"
 dependencies = [
@@ -7169,6 +7181,8 @@ dependencies = [
  "bytes",
  "futures",
  "http",
+ "hyper",
+ "hyper-util",
  "libsqlite3-sys",
  "multer",
  "reqwest 0.12.28",
@@ -7176,10 +7190,12 @@ dependencies = [
  "semver",
  "serde",
  "serde_json",
+ "shiny-plugin-protocol",
  "sqlx",
  "tokio",
  "toml 0.8.2",
  "tracing",
+ "tracing-subscriber",
  "uuid",
  "zip 0.6.6",
 ]

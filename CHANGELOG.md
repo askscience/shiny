@@ -52,6 +52,22 @@
 
 ### Added
 
+- Process plugins: a plugin can run as its own process (`runtime = "process"`
+  in `plugin.toml`, `bin/<name>` instead of a library). It talks to the server
+  over a private socket with a versioned protocol
+  (`crates/shiny-plugin-protocol`), so a plugin built for an earlier release
+  keeps working with later servers, and a crash costs only that plugin: the
+  server restarts it, and leaves it stopped after repeated crashes. The same
+  `impl Plugin` serves both runtimes; `shiny_plugin_sdk::process::run` is the
+  whole `main`. About 5 MB of memory per idle process, 13 ms to start.
+- Plugin catalogue: every release publishes one `.tar.gz` per process plugin
+  and a signed `index.json` (Pages, `/plugins/`). The Plugin manager's new
+  **Apps** section installs, updates and removes them; archives are checked
+  against the SHA-256 in the index, the index against the archive key with
+  `gpgv`. The server installs this account's default plugins once and keeps
+  catalogue plugins up to date in the background (`SHINY_PLUGIN_AUTO_UPDATE=0`
+  turns that off). Details in `docs/plugins/process-plugins.md`.
+
 - Oorbit 0.7.6: models made in Blender, a planet that draws only what you
   can see, and wonders to find. Trees, rocks, bushes, ice, cacti, the
   buildings of the first three eras, people, eight kinds of animal (deer,
@@ -91,6 +107,13 @@
   the economy and its pacing are unchanged.
 
 ### Changed
+
+- Every plugin except terminal, updates and installer is a process plugin,
+  and the Debian package ships only those three: the others come from the
+  catalogue (`/usr/share/shiny/default-plugins` lists what a new account gets,
+  installed on first run). Plugin versions bumped accordingly.
+- `scripts/stage-plugin.sh` lays out one plugin for the package, the archives
+  and `scripts/install-plugin-dev.sh` alike.
 
 - `take_query`, `take_path` and `as_int`, copied into ten plugins, live in
   the plugin SDK; the seven copies of the host panels' loopback check are one

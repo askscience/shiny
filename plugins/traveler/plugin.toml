@@ -1,6 +1,7 @@
 name = "traveler"
-version = "0.1.0"
+version = "0.1.1"
 api_level = 1
+runtime = "process"
 entry_symbol = "shiny_plugin_entry"
 description = "Trip tracking, GPS, diary, map and navigation tools for the AI assistant"
 summary = "Trip tracking, GPS, diary, map tools, navigation"

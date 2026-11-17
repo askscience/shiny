@@ -154,7 +154,7 @@ stage_app() {
     for dir in "$REPO"/data/plugins/*/; do
         name=$(basename "$dir")
         case "$name" in
-            browser.bak|hello) continue ;;
+            *.bak|hello) continue ;;
         esac
         [ -f "$dir/plugin.toml" ] || continue
         cp -a "$dir" "$ROOTFS/usr/lib/shiny/plugins/$name"
@@ -173,8 +173,8 @@ stage_app() {
     copy_missing_libs "$ROOTFS/usr/bin/liteaura"
     copy_missing_libs "$ROOTFS/usr/libexec/shiny/shiny-installer-helper"
     local so
-    for so in "$ROOTFS"/usr/lib/shiny/plugins/*/*.so; do
-        copy_missing_libs "$so"
+    for so in "$ROOTFS"/usr/lib/shiny/plugins/*/*.so "$ROOTFS"/usr/lib/shiny/plugins/*/bin/*; do
+        [ -f "$so" ] && copy_missing_libs "$so"
     done
 }
 

@@ -13,6 +13,11 @@ root `PLUGINS.md` while preserving its hard-won operational detail.
 
 ## What a plugin is
 
+> Most plugins run as **their own process** and are published as archives the
+> Plugin manager installs from a signed catalogue: see
+> [process-plugins.md](process-plugins.md). The library form below is what
+> terminal, updates and installer use.
+
 A plugin is a Rust `cdylib` that implements the
 [`Plugin`](reference.md#the-plugin-trait) trait from the
 [`shiny-plugin-sdk`](../../crates/shiny-plugin-sdk/src/lib.rs) crate. The core
@@ -47,6 +52,7 @@ opt-in.
 | [Architecture](architecture.md) | Core vs plugin split, load/register lifecycle, hot router swap, discovery, uninstall. |
 | [Authoring](authoring.md) | Step-by-step authoring with a complete worked `hello` example, build, package, install. |
 | [API reference](reference.md) | Every trait, struct, field, method, and helper in the SDK. |
+| [Process plugins](process-plugins.md) | Plugins as their own process, the protocol, the catalogue and its archives. |
 | [Runtime & ABI](runtime-abi.md) | The dlopen boundary, `api_level`, `bridged()`, the SQLite caveat, accessor rules. |
 | [Migrations](migrations.md) | Per-plugin schema, `plugin_schema_versions`, immutability, idempotency, repair patterns. |
 | [Security](security.md) | Trust model, missing admin role, planned signatures, install log format. |
@@ -55,21 +61,17 @@ opt-in.
 ## Quick start
 
 ```bash
-# Build the whole workspace (binary + every plugin cdylib).
+# Build the whole workspace (server + every plugin executable or library).
 cargo build --release --workspace
 
-# Package the reference plugin.
-mkdir -p /tmp/pkg/hello/skills /tmp/pkg/hello/migrations
-cp plugins/hello/plugin.toml          /tmp/pkg/hello/
-cp plugins/hello/skills/hello.md      /tmp/pkg/hello/skills/
-cp plugins/hello/migrations/001_init.sql /tmp/pkg/hello/migrations/
-cp target/release/libshiny_hello_plugin.so /tmp/pkg/hello/
-( cd /tmp/pkg && zip -r hello.zip hello )
+# Package the reference plugin (a process plugin: bin/hello inside).
+scripts/stage-plugin.sh hello /tmp/pkg/hello
+( cd /tmp/pkg && tar czf hello.tar.gz hello )
 
 # Install on a running server (any logged-in user's bearer token).
 curl -X POST http://localhost:8080/api/plugins/install \
   -H "Authorization: Bearer $TOKEN" \
-  -F "file=@/tmp/pkg/hello.zip"
+  -F "file=@/tmp/pkg/hello.tar.gz"
 # {"success":true,"data":{"installed":"hello"}}
 
 # Verify.

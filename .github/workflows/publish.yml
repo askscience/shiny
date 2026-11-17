@@ -78,6 +78,18 @@ jobs:
           LITEAURA_KEYRING: ${{ github.workspace }}/packaging/liteaura-archive.gpg
         run: ./scripts/build-deb.sh
 
+      # One archive per process plugin plus the catalogue the Plugin manager
+      # reads; the catalogue is signed in the publish job.
+      - name: Build plugin archives
+        env:
+          LITEAURA_VERSION: ${{ steps.meta.outputs.version }}
+          PLUGIN_BASE_URL: https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          export SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)
+          ./scripts/build-plugin-archives.sh deb-out/out/plugins
+
       - name: Upload Debian packages
         uses: actions/upload-artifact@v4
         with:
@@ -135,11 +147,45 @@ jobs:
           LITEAURA_APT_SUITE: liteaura
         run: ./scripts/build-apt-repo.sh
 
+      - name: Sign the plugin catalogue
+        env:
+          GNUPGHOME: ${{ runner.temp }}/gnupg
+        run: |
+          set -euo pipefail
+          index=deb-out/out/plugins/index.json
+          gpg --batch --yes --detach-sign --output "$index.sig" "$index"
+          gpgv --keyring packaging/liteaura-archive.gpg "$index.sig" "$index"
+
+      # Before Pages: the catalogue published there points at these assets.
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="${{ needs.build.outputs.version }}"
+          tag="${GITHUB_REF_NAME}"
+          shopt -s nullglob
+          # Gokapi's Corresponding Source rides on the same Release as the
+          # .deb that bundles its binaries (AGPL-3.0 §6(d)).
+          files=(deb-out/out/*.deb deb-out/out/gokapi-*-source.tar.gz deb-out/out/SHA256SUMS deb-out/out/plugins/*.tar.gz)
+          [ "${#files[@]}" -gt 0 ] || { echo "no release assets" >&2; exit 1; }
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" "${files[@]}" --clobber
+          else
+            gh release create "$tag" "${files[@]}" \
+              --title "LiteAura ${tag}" \
+              --notes "Package version \`${version}\`." \
+              --verify-tag
+          fi
+
       - name: Assemble Pages site
         run: |
           set -euo pipefail
           mkdir -p site
           cp -a liteaura-web/www/. site/
+          # The plugin catalogue (archives live on the Release).
+          mkdir -p site/plugins
+          cp deb-out/out/plugins/index.json deb-out/out/plugins/index.json.sig site/plugins/
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
@@ -154,24 +200,3 @@ jobs:
       - name: Deploy Pages
         id: deployment
         uses: actions/deploy-pages@v4
-
-      - name: Publish GitHub Release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          version="${{ needs.build.outputs.version }}"
-          tag="${GITHUB_REF_NAME}"
-          shopt -s nullglob
-          # Gokapi's Corresponding Source rides on the same Release as the
-          # .deb that bundles its binaries (AGPL-3.0 §6(d)).
-          files=(deb-out/out/*.deb deb-out/out/gokapi-*-source.tar.gz deb-out/out/SHA256SUMS)
-          [ "${#files[@]}" -gt 0 ] || { echo "no release assets" >&2; exit 1; }
-          if gh release view "$tag" >/dev/null 2>&1; then
-            gh release upload "$tag" "${files[@]}" --clobber
-          else
-            gh release create "$tag" "${files[@]}" \
-              --title "LiteAura ${tag}" \
-              --notes "Package version \`${version}\`." \
-              --verify-tag
-          fi

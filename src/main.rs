@@ -132,6 +132,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initial router.
     router_handle.swap(api::build_router(router_state.clone()));
 
+    // Plugin catalogue: install this account's default plugins once and keep
+    // catalogue plugins up to date, in the background.
+    router_state.catalog.spawn_maintenance(router_state.clone());
+
     // Fingerprint the running binary now, not on the first version request: a
     // package upgrade that replaced the file before anyone asked would be
     // taken for the running build, and the update never offered.
@@ -206,6 +210,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     state.agent_turns.cancel_all();
     workers.shutdown().await;
+    // Process plugins are children: stop them before exiting or exec'ing,
+    // or a swapped-in server would find the old ones still running.
+    if tokio::time::timeout(
+        std::time::Duration::from_secs(8),
+        state.plugins.stop_processes(),
+    )
+    .await
+    .is_err()
+    {
+        tracing::warn!("Plugin process stop deadline reached");
+    }
     // Long-lived SSE streams may hold a pool clone; never wait indefinitely.
     if tokio::time::timeout(std::time::Duration::from_secs(2), pool.close())
         .await

@@ -1,6 +1,7 @@
 name = "radio"
-version = "0.1.0"
+version = "0.1.1"
 api_level = 1
+runtime = "process"
 entry_symbol = "shiny_plugin_entry"
 description = "Internet radio via Radio Browser — search stations and play them in the Radio window"
 summary = "Internet radio: search and play stations (Radio Browser)"

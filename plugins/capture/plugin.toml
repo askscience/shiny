@@ -1,6 +1,7 @@
 name = "capture"
-version = "0.1.5"
+version = "0.1.6"
 api_level = 1
+runtime = "process"
 entry_symbol = "shiny_plugin_entry"
 description = "Screen recording, live streaming and an AI video editor"
 summary = "Capture: record the screen or a window with a webcam bubble, go live, edit with AI"

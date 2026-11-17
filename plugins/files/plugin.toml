@@ -1,6 +1,7 @@
 name = "files"
-version = "0.1.1"
+version = "0.1.2"
 api_level = 1
+runtime = "process"
 entry_symbol = "shiny_plugin_entry"
 description = "File browser — browse, preview and manage your home folders"
 summary = "GNOME-style file browser: grid/list, thumbnails, quick preview, upload and a trash"

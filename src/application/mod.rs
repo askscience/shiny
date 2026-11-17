@@ -96,6 +96,9 @@ impl AppState {
             store: crate::plugins::store::Store::in_plugins_dir(std::path::PathBuf::from(
                 &config.plugins_dir,
             )),
+            catalog: crate::plugins::catalog::Catalog::new(
+                crate::plugins::catalog::Settings::from_env(),
+            ),
             craft_mcp: crate::plugins::craft_mcp::CraftMcp::new(),
             craft_control: crate::plugins::craft_control::CraftControl::new(),
             iroh: crate::services::iroh_remote::IrohRemote::new(),

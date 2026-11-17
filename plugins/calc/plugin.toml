@@ -1,6 +1,7 @@
 name = "calc"
-version = "0.1.2"
+version = "0.1.3"
 api_level = 1
+runtime = "process"
 entry_symbol = "shiny_plugin_entry"
 description = "Spreadsheet calculator — sheets stored as open cell grids, editable in the Calc window"
 summary = "Calc: create, edit and compute with spreadsheets"

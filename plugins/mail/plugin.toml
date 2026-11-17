@@ -1,6 +1,7 @@
 name = "mail"
-version = "0.1.1"
+version = "0.1.2"
 api_level = 1
+runtime = "process"
 entry_symbol = "shiny_plugin_entry"
 description = "Mail client — IMAP inbox + SMTP compose, backed by io-email"
 summary = "Mail client: configure mail accounts, read the inbox and send email"
