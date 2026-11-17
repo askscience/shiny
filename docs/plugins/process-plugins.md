@@ -157,6 +157,11 @@ cargo build --release -p shiny-word-plugin
 scripts/install-plugin-dev.sh word        # copies bin/word and the rest
 ```
 
+To move a development machine from library plugins to process plugins in
+one step (install every rebuilt plugin, turn off catalogue auto-updates,
+restart, report what started), run `scripts/switch-to-process-plugins.sh`
+from a terminal outside LiteAura after a release build.
+
 A running server loads the new executable when it rescans the plugin
 (`POST /api/plugins/rescan`, or the next start). To try the whole catalogue
 locally:
