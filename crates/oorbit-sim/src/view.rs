@@ -170,6 +170,7 @@ pub fn planet_view(planet: &Planet, catalog: &Catalog, now_ms: i64) -> Json {
         "link_bonus": crate::cities::link_bonus(planet),
         "now_ms": now_ms,
         "step_ms": STEP_MS,
+        "calendar": crate::calendar::view(planet, catalog),
         "planet": planet,
         "rates": rates(planet, catalog),
         "era": era.map(|e| json!({

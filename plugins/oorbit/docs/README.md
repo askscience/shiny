@@ -6,7 +6,7 @@ document covers the plugin as built; the game itself is described in
 [design.md](design.md), and its rules live in
 [`crates/oorbit-sim`](../../../crates/oorbit-sim/README.md).
 
-Status: **0.7.6, an active game with cities.** The user founds a planet (one
+Status: **0.7.7, an active game with cities.** The user founds a planet (one
 per account), and the window shows it as it is now: continents and seas of
 642 cells, crews sent to work by pointing at the land, buildings that rise
 while they are built, colonies linked to the capital by roads and sea routes, research, events, notable people, the Chronicle, and a dock that
@@ -168,6 +168,41 @@ story. The kinds found are kept in the browser per planet
 (`oorbit.wonders.<seed>`). A building put up on the cell covers it. The
 preview server's `/?look=whale` flies over a wonder.
 
+## Day, seasons and festivals
+
+The planet keeps a calendar (`crates/oorbit-sim/src/calendar.rs`, sent to
+the window as `calendar`): a day is 24 planet hours (24 minutes while you
+play), a season lasts `season_days`, a year four seasons counted from the
+founding.
+
+- **Day and night.** The sun goes round the planet once a planet day, noon
+  over the home, a little higher in summer (`_update_sky` in
+  `game/main.gd`). The side away from it is lit only by the ambient light,
+  and lit windows, fires, lanterns and the cave's eyes glow there
+  (`game/planet.gdshader`: vertex alpha below 0.75; Blender materials named
+  `glow_<colour>`). Fireflies rise over meadows and woods on summer nights.
+- **Seasons** show on the land without rebuilding a mesh: blossom in
+  spring, gold and red leaves in autumn, bare brown trees and snow in
+  winter, coming down from the poles as far as the climate allows
+  (`SNOW_BY_CLIMATE`). The ground's meadows turn ochre rather than red.
+- **Festivals.** Halfway through each season, at six in the evening, the
+  people hold its festival for eight planet hours: flowers (spring), the
+  sun (summer), lanterns (autumn), the stars (winter). It eats half a unit
+  of food per person, makes culture, and lifts the mood while it lasts; it
+  is called off (and the mood drops a little) when the stores hold less
+  than three times its food. The planet's birthday is a party too, and the
+  harvest festival and the games (event answers, `celebrate` outcomes)
+  throw their own. The planet's `celebration` says which is under way.
+- In the window a festival puts a bonfire on the first free meadow near the
+  home, with what it calls for (a maypole, bunting, feast tables, lantern
+  poles: `FEST_PROPS`), people dancing round the fire, sparks, petals,
+  lanterns rising, and fireworks after dark (`FIREWORKS`). It starts with a
+  tune and a toast, and the Chronicle tells it. The top bar shows the
+  season, the year, the planet's time and the next festival.
+- Preview: `/?hour=21&season=2.5&fest=sun` sets the hour, the season
+  (0 spring to 4) and a festival (flying over it), `&lapse=40` runs a whole
+  day in 40 seconds.
+
 ## Time
 
 The simulation runs on planet time; every duration in the catalog is planet
@@ -275,6 +310,7 @@ library only, fixed seeds; run it again to regenerate them):
 | `blender/build.py`, `blender/lib.py`, `blender/models/` | The models, one script each (see [Models](#models)). |
 | `game/models.gd`, `game/models/` | Loads the exported models into vertex arrays (near and far, tints, swinging parts). |
 | `game/creature.gdshader` | People, animals, birds and vehicles: tints and swinging parts per instance. |
+| `game/planet.gdshader` | The ground and the props: night, lights, seasons and snow. |
 | `web/index.html` | The window: boots the export and exposes `window.oorbitHost`. |
 | `web/game/` | Export output, **not committed** (`.gitignore`); rebuild it with the script. |
 

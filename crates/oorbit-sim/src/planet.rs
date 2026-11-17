@@ -85,6 +85,16 @@ pub struct Notable {
     pub until_step: i64,
 }
 
+/// A festival: the season's own (`flowers`, `sun`, `lanterns`, `stars`),
+/// the planet's birthday (`anniversary`), or one an event's answer threw
+/// (`harvest`, `harvest_grand`, `games`, `games_grand`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Celebration {
+    pub id: String,
+    pub from_step: i64,
+    pub until_step: i64,
+}
+
 /// One line of the Chronicle: a key the window (or Laura) turns into words,
 /// with its parameters.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -160,6 +170,9 @@ pub struct Planet {
     /// knowledge meanwhile.
     #[serde(default)]
     pub helping_until: i64,
+    /// A festival under way (see `calendar`): the window draws it.
+    #[serde(default)]
+    pub celebration: Option<Celebration>,
     /// The cities, the capital first (see `cities`).
     #[serde(default)]
     pub cities: Vec<crate::cities::City>,
@@ -222,6 +235,7 @@ impl Planet {
             trees_planted: 0,
             goals_done: BTreeSet::new(),
             helping_until: 0,
+            celebration: None,
             cities: Vec::new(),
             links: Vec::new(),
             clock_offset_ms: 0,

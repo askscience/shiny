@@ -12,7 +12,7 @@ def build():
         blob("crown%d" % k, "tint1", r, loc=(x, y, z), squash=0.8, subdiv=1, seed=40 + k, rough=0.16)
     box("door", "a35d5d", (0.22, 0.05, 0.3), loc=(0, -0.34, 0))
     box("detail_knob", "f2c078", (0.03, 0.03, 0.03), loc=(0.06, -0.37, 0.13))
-    box("detail_window", "f2e1a0", (0.1, 0.05, 0.1), loc=(0.0, -0.3, 0.6))
+    box("detail_window", "glow_f2e1a0", (0.1, 0.05, 0.1), loc=(0.0, -0.3, 0.6))
     box("detail_rope1", "d9c8b0", (0.015, 0.015, 0.6), loc=(0.62, -0.12, 0.38))
     box("detail_rope2", "d9c8b0", (0.015, 0.015, 0.6), loc=(0.62, 0.12, 0.38))
     box("detail_seat", "8f6f5a", (0.12, 0.3, 0.03), loc=(0.62, 0, 0.36))

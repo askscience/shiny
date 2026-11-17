@@ -1339,11 +1339,11 @@ if_known = "farming"
 
 [[events.choices]]
 id = "modest_feast"
-outcomes = [{ type = "resource", id = "food", amount = -10.0 }, { type = "mood", amount = 0.08 }]
+outcomes = [{ type = "resource", id = "food", amount = -10.0 }, { type = "mood", amount = 0.08 }, { type = "celebrate", id = "harvest", hours = 5.0 }]
 
 [[events.choices]]
 id = "great_feast"
-outcomes = [{ type = "resource", id = "food", amount = -30.0 }, { type = "resource", id = "culture", amount = 15.0 }, { type = "mood", amount = 0.15 }]
+outcomes = [{ type = "resource", id = "food", amount = -30.0 }, { type = "resource", id = "culture", amount = 15.0 }, { type = "mood", amount = 0.15 }, { type = "celebrate", id = "harvest_grand", hours = 10.0 }]
 
 [[events]]
 id = "traders"
@@ -1396,11 +1396,11 @@ weight = 3
 
 [[events.choices]]
 id = "modest_games"
-outcomes = [{ type = "resource", id = "coins", amount = -10.0 }, { type = "mood", amount = 0.06 }]
+outcomes = [{ type = "resource", id = "coins", amount = -10.0 }, { type = "mood", amount = 0.06 }, { type = "celebrate", id = "games", hours = 5.0 }]
 
 [[events.choices]]
 id = "grand_games"
-outcomes = [{ type = "resource", id = "coins", amount = -40.0 }, { type = "resource", id = "culture", amount = 80.0 }, { type = "mood", amount = 0.12 }]
+outcomes = [{ type = "resource", id = "coins", amount = -40.0 }, { type = "resource", id = "culture", amount = 80.0 }, { type = "mood", amount = 0.12 }, { type = "celebrate", id = "games_grand", hours = 10.0 }]
 
 [[events]]
 id = "knight"

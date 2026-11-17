@@ -66,6 +66,18 @@
   the dark, a totem, a whale that surfaces and blows, a stone head, an
   igloo, a giant's bones and a fallen star. They glint when you come close,
   and a click finds them and tells their story.
+- Oorbit 0.7.7: a living planet. The sun goes round once a planet day: the
+  far side is night, where windows, fires and lanterns glow and fireflies
+  rise over summer meadows. The seasons show: blossom in spring, gold and
+  red leaves in autumn, bare trees and snow coming down from the poles in
+  winter. Each season has its festival halfway through, at six in the
+  evening: flowers, sun, lanterns and stars, plus the planet's birthday and
+  the harvest and games the events throw. The people light a bonfire on a
+  meadow near the home, dance round it, put up a maypole, bunting, feast
+  tables and lanterns, and set off fireworks after dark. A festival eats
+  food, makes culture and lifts the mood while it lasts; without enough food
+  it is called off, and the people are sad. The top bar shows the season,
+  year, time and the next festival.
 
 ### Changed
 

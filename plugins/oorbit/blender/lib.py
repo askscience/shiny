@@ -10,6 +10,8 @@ Conventions every model follows, read back by `game/models.gd`:
   `tint1`, `tint2`... takes a colour the game picks (a tree's leaves, a
   building's walls in a later era); any other material's base colour is
   baked into the game's vertex colours.
+- Lights: a material named `glow_<colour>` (`glow_f2e1a0`, a lit window)
+  glows on the night side of the planet.
 - Levels of detail: objects whose name starts with `detail` are small parts
   the far view drops (a window, a fence post); objects whose name starts with
   `far` replace everything else in the far view (a tree as a single cone).
@@ -43,7 +45,8 @@ def material(color):
     if color.startswith("tint"):
         rgb = (1.0, 1.0, 1.0)
     else:
-        rgb = tuple(srgb_to_linear(int(color[i:i + 2], 16) / 255.0) for i in (0, 2, 4))
+        hexa = color[5:] if color.startswith("glow_") else color
+        rgb = tuple(srgb_to_linear(int(hexa[i:i + 2], 16) / 255.0) for i in (0, 2, 4))
     m.diffuse_color = (*rgb, 1.0)
     m.use_nodes = True
     bsdf = m.node_tree.nodes.get("Principled BSDF")

@@ -31,6 +31,17 @@ Everything here runs on planet time. `clock.rs` turns wall time into it for
 the plugin: 60 times faster while someone plays (`Clock::present`), half as
 fast otherwise, counted in half milliseconds so it is exact in pieces.
 
+`calendar.rs` cuts planet time into days (144 steps), seasons
+(`season_days`) and years (four seasons from the founding). Halfway
+through each season, at 18:00, the season's festival (`flowers`, `sun`,
+`lanterns`, `stars`) eats half a unit of food per person, makes 0.3 culture
+per person and, while it lasts (eight hours), pushes the mood target up by
+0.15; with less than three times its food in store it is called off and the
+mood drops 0.03. The founding's anniversary is a six-hour party. An event
+choice can throw one too (`celebrate` outcome). `Planet::celebration` holds
+the one under way; the view adds `calendar` (season, its start and length,
+day length, year, next festival).
+
 ## Rules in brief
 
 | Part | How it works |

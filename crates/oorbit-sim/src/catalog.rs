@@ -104,6 +104,11 @@ pub enum Outcome {
     Grant {
         tech: String,
     },
+    /// A festival the people throw for this many (planet) hours.
+    Celebrate {
+        id: String,
+        hours: f64,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

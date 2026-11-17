@@ -308,10 +308,38 @@ def thunder(rng):
     return track
 
 
+def firework(rng):
+    """A rising whistle, a soft pop and a crackle."""
+    r = EFFECT_RATE
+    rise = int(0.5 * r)
+    track = [0.18 * math.sin(TAU * (900 + 1400 * i / rise) * i / r) * (i / rise) for i in range(rise)]
+    n = int(1.6 * r)
+    pop = [a * math.exp(-18 * i / r) for i, a in enumerate(lowpass(noise(rng, n), 900, r))]
+    place(track, [p * 2.5 for p in pop], 0.5, r)
+    for k in range(18):
+        m = int(0.02 * r)
+        click = [a * math.exp(-200 * i / r) for i, a in enumerate(highpass(noise(rng, m), 2500, r))]
+        place(track, click, 0.65 + rng.random() * 0.8, r, 0.5 * rng.random())
+    return track
+
+
+def festival(rng):
+    """A merry little tune: a bell melody over a drum."""
+    r = EFFECT_RATE
+    notes = [0, 4, 7, 12, 7, 9, 7, 4, 5, 7, 4, 0]
+    beat = 0.17
+    track = [0.0] * int((len(notes) * beat + 1.2) * r)
+    for k, step in enumerate(notes):
+        place(track, bell(523.25 * 2 ** (step / 12), 0.6, r, decay=6.0), k * beat, r, 0.35)
+        if k % 2 == 0:
+            place(track, knock(rng, 90, 0.2), k * beat, r, 0.6)
+    return track
+
+
 def main():
     for name, make in [("space", space), ("wind", wind), ("waves", waves), ("birds", birds), ("village", village), ("crickets", crickets), ("rain", rain)]:
         write("amb_" + name, make(random.Random(name)), AMBIENT_RATE)
-    for name, make in [("tap", tap), ("build", build), ("hammer", hammer), ("done", done), ("discovery", discovery), ("era", era), ("deliver", deliver), ("boat", boat), ("find", find), ("error", error), ("chop", chop), ("splash", splash), ("flutter", flutter), ("thunder", thunder)]:
+    for name, make in [("tap", tap), ("build", build), ("hammer", hammer), ("done", done), ("discovery", discovery), ("era", era), ("deliver", deliver), ("boat", boat), ("find", find), ("error", error), ("chop", chop), ("splash", splash), ("flutter", flutter), ("thunder", thunder), ("firework", firework), ("festival", festival)]:
         write("sfx_" + name, make(random.Random(name)), EFFECT_RATE)
     print("sounds written to", os.path.abspath(OUT))
 

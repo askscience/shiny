@@ -501,6 +501,32 @@ func _fill_top() -> void:
 	# How fast the planet's time runs: quick while you play, slow while away.
 	var present: bool = view.get("clock", {}).get("present", false)
 	_top_row.add_child(_label(I18n.t("ui.speed.fast" if present else "ui.speed.slow"), 13, Color("f2c078") if present else Color("9fb3c8"), false))
+	var when := _calendar_text()
+	if when[0] != "":
+		_top_row.add_child(_label(when[0], 13, Color("f5d76e") if when[1] else Color("9fb3c8"), false))
+
+
+## "Spring, year 2, 18:40, the Sun festival in 3h" (or the festival under
+## way), and whether a festival is on.
+func _calendar_text() -> Array:
+	var cal: Dictionary = view.get("calendar", {})
+	if cal.is_empty():
+		return ["", false]
+	var now := live_now_ms()
+	var day := float(cal.get("day_ms", 86400000.0))
+	var minutes := int(fmod(now, day) / day * 1440.0)
+	var parts := [I18n.t("season.%d" % int(cal.get("season", 0))), I18n.t("ui.year", {"n": int(cal.get("year", 1))}),
+		"%02d:%02d" % [minutes / 60, minutes % 60]]
+	var c = _planet().get("celebration")
+	var step := now / float(view.get("step_ms", 600000))
+	if c is Dictionary and step >= float(c.get("from_step", 0)) and step < float(c.get("until_step", 0)):
+		parts.append(I18n.t("ui.festival.now", {"name": I18n.name_of("festival", str(c["id"]))}))
+		return [" · ".join(parts), true]
+	var left := float(cal.get("next_festival_ms", 0)) - now
+	if left > 0.0:
+		parts.append(I18n.t("ui.festival.next", {"name": I18n.name_of("festival", str(cal.get("next_festival", ""))),
+			"time": I18n.duration(wall_ms(left))}))
+	return [" · ".join(parts), false]
 
 
 func _toggle_panel(id: String) -> void:
@@ -833,6 +859,8 @@ func describe(entry: Dictionary) -> String:
 				params[k] = I18n.t("prank." + v)
 			"find":
 				params[k] = I18n.name_of("find", v).to_lower()
+			"festival":
+				params[k] = I18n.name_of("festival", v)
 			"goal":
 				params[k] = v
 				for g in catalog.get("goals", []):
@@ -1370,7 +1398,7 @@ func _announce(planet: Dictionary) -> void:
 		if int(e["step"]) * 1000 + (k + 1) % 1000 <= _seen_entries:
 			break
 		var key := str(e["key"])
-		if not said and key in ["goal_done", "find_collected", "city_founded", "era_reached", "deposit_exhausted"]:
+		if not said and key in ["goal_done", "find_collected", "city_founded", "era_reached", "deposit_exhausted", "festival", "festival_called_off", "anniversary"]:
 			toast(describe(e))
 			said = true
 		var sound: String = ANNOUNCE_SOUNDS.get(key, "")
@@ -1381,7 +1409,7 @@ func _announce(planet: Dictionary) -> void:
 
 const ANNOUNCE_SOUNDS := {
 	"building_done": "done", "goal_done": "done", "road_done": "done", "tech_done": "discovery",
-	"era_reached": "era", "city_founded": "era", "find_collected": "find", "sea_done": "boat",
+	"era_reached": "era", "city_founded": "era", "festival": "festival", "anniversary": "festival", "find_collected": "find", "sea_done": "boat",
 	"sea_started": "boat", "building_started": "build", "road_started": "build", "site_helped": "build",
 	"trees_planted": "build",
 }

@@ -65,7 +65,7 @@ fn effects<'a>(planet: &'a Planet, catalog: &'a Catalog) -> Vec<Effect> {
     list
 }
 
-fn season_of(step: i64, catalog: &Catalog) -> usize {
+pub(crate) fn season_of(step: i64, catalog: &Catalog) -> usize {
     let season_steps = (catalog.tuning.season_days * 24.0 * STEPS_PER_HOUR as f64) as i64;
     (step.div_euclid(season_steps.max(1)) % 4) as usize
 }
@@ -90,6 +90,14 @@ fn rates_at(planet: &Planet, catalog: &Catalog, step: i64) -> Rates {
             Effect::Mood { amount } => mood_push += amount,
             Effect::Convert { .. } => {}
         }
+    }
+    // A festival under way lifts the mood while it lasts.
+    if planet
+        .celebration
+        .as_ref()
+        .is_some_and(|c| step >= c.from_step && step < c.until_step)
+    {
+        mood_push += crate::calendar::CELEBRATION_MOOD;
     }
     // Ideas travel along roads and sea routes.
     let linked = crate::cities::link_bonus(planet);
@@ -287,6 +295,8 @@ fn run_step(planet: &mut Planet, catalog: &Catalog, step: i64) {
     planet.mood += (rates.mood_target - planet.mood) * t.mood_approach_per_hour * STEP_HOURS;
     planet.mood = planet.mood.clamp(0.0, 1.0);
 
+    crate::calendar::run(planet, catalog, step);
+
     crate::orders::run_orders(planet, catalog, step, &rates.orders, &rates.extracted);
 
     // Buildings that are finished now.
@@ -451,6 +461,13 @@ pub(crate) fn resolve(
             }
             Outcome::Trait { id, amount } => {
                 *planet.traits.entry(id.clone()).or_insert(0) += amount
+            }
+            Outcome::Celebrate { id, hours } => {
+                planet.celebration = Some(crate::planet::Celebration {
+                    id: id.clone(),
+                    from_step: step,
+                    until_step: step + crate::hours_to_steps(*hours),
+                });
             }
             Outcome::Grant { tech } => {
                 if planet.known.insert(tech.clone()) {

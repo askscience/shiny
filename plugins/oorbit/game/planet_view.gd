@@ -25,7 +25,8 @@ var _outline: MeshInstance3D
 ## vertex colours: one patch of the planet per mesh (see `_chunks`), in two
 ## levels of detail, so the far side of the planet and the details too
 ## small to see cost nothing.
-var _props_material: Material
+var _props_material: ShaderMaterial
+var _land_material: ShaderMaterial
 var _verts := PackedVector3Array()
 var _normals := PackedVector3Array()
 var _colors := PackedColorArray()
@@ -63,7 +64,7 @@ var _culled_from := Vector3.INF
 ## Little people, all in one MultiMesh (one draw call): crews walking
 ## between the village and the cell they work and back with their load,
 ## builders on building sites, and a few people strolling at home.
-const MAX_WALKERS := 48
+const MAX_WALKERS := 64
 ## Walking speed (planet radii per second) and time spent working a cell.
 const WALK_SPEED := 0.05
 const WORK_SECONDS := 5.0
@@ -127,7 +128,9 @@ func _ready() -> void:
 	pivot.rotation = Vector3(deg_to_rad(14.0), 0.0, deg_to_rad(-12.0))
 	add_child(pivot)
 	_land = MeshInstance3D.new()
-	_land.material_override = _toon(Color.WHITE, true)
+	_land_material = _planet_material(0.6, 0.0)
+	_land_material.set_shader_parameter("ground", true)
+	_land.material_override = _land_material
 	pivot.add_child(_land)
 	_outline = MeshInstance3D.new()
 	_outline.scale = Vector3.ONE * 1.025
@@ -137,7 +140,7 @@ func _ready() -> void:
 	outline_material.albedo_color = Palette.OUTLINE
 	_outline.material_override = outline_material
 	pivot.add_child(_outline)
-	_props_material = _toon(Color.WHITE, true)
+	_props_material = _planet_material(1.0, 1.0)
 	_roads = MeshInstance3D.new()
 	var road_material := _toon(Color.WHITE, true)
 	road_material.cull_mode = BaseMaterial3D.CULL_DISABLED
@@ -268,6 +271,9 @@ func _move_walkers(delta: float) -> void:
 					_hide_walker(multimesh, index)
 					continue
 				motion = 0.6 if w["kind"] == "stroll" else 0.0
+				if w["kind"] == "dance":
+					tint = FEST_COLORS[k % FEST_COLORS.size()]
+					motion = 1.0
 				var tg := _tangents(normal)
 				var angle := float(w["phase"]) + float(w["t"]) * float(w["speed"])
 				var r := float(w["radius"])
@@ -275,6 +281,14 @@ func _move_walkers(delta: float) -> void:
 				forward = (-tg[0] * sin(angle) + tg[1] * cos(angle)) * signf(float(w["speed"]))
 				if w["kind"] == "builder":
 					at += normal * absf(sin(float(w["t"]) * 10.0)) * 0.004
+				elif w["kind"] == "dance":
+					# Round the bonfire, hopping.
+					var c: Vector3 = w["centre"]
+					var cn := c.normalized()
+					var ct := _tangents(cn)
+					at = builder.ground(c + (ct[0] * cos(angle) + ct[1] * sin(angle)) * r, cell)
+					forward = (-ct[0] * sin(angle) + ct[1] * cos(angle))
+					at += cn * absf(sin(float(w["t"]) * 7.0 + float(w["phase"]))) * 0.006 * _ts
 		at += normal * (0.026 * size + absf(sin(float(w["t"]) * 9.0)) * 0.002)
 		var basis := _ride_basis(forward, normal, 1.0)
 		var side := basis.x
@@ -301,6 +315,8 @@ func _move_walkers(delta: float) -> void:
 	_move_animals()
 	_move_birds(delta)
 	_move_wonders(delta)
+	_festival_fx(delta)
+	_launch_bursts()
 	_feel_now_and_then(delta)
 	_update_fx(delta)
 	_bob_marks()
@@ -421,6 +437,12 @@ func _place_walkers(planet: Dictionary, rates: Dictionary) -> void:
 		var at := int(cells[mini(cells.size() - 1, int(_link_progress(l) * (cells.size() - 1)) + 1)])
 		for m in 2:
 			_walk.append({"kind": "builder", "cell": at, "offset": 0.0, "t": 0.0, "phase": m * PI + rng.randf(), "speed": 0.6, "radius": 0.05 * _tile_size()})
+	# A festival: people dance around the bonfire.
+	if _fest_cell >= 0:
+		var dancers := clampi(roundi(population / 6.0), 6, 12)
+		for m in dancers:
+			_walk.push_front({"kind": "dance", "cell": _fest_cell, "offset": 0.0, "t": 0.0, "phase": m * TAU / dancers,
+				"speed": 0.7, "radius": 0.14 * _tile_size(), "centre": _fest_at})
 	if _walk.size() > MAX_WALKERS:
 		_walk.resize(MAX_WALKERS)
 	# One MultiMesh per tool (and one for empty hands): each walker is an
@@ -477,6 +499,7 @@ func show_planet(planet: Dictionary, rates := {}) -> void:
 	# People move on every view; the props only when something they show
 	# changed.
 	_home = int(planet.get("home", 0))
+	_last_view = [planet, rates]
 	_place_walkers(planet, rates)
 	if _wildlife_dirty or buildings != _wild_buildings:
 		_wildlife_dirty = false
@@ -792,6 +815,8 @@ static func _tangents_of(normal: Vector3) -> Array:
 ## are built (`_lod`), a shape big enough to show from afar also goes into
 ## the far mesh; smaller ones (a window, a flower) only into the near one.
 func _put(shape: Array, color: Color, normal: Vector3, base: Vector3, offset: Vector3, size := 1.0, turn := 0.0, roll := 0.0) -> void:
+	if color in GLOWING:
+		color.a = 0.5
 	var xform := _place(normal, base, offset, size, turn, roll)
 	var rotation := xform.basis.orthonormalized()
 	var verts: PackedVector3Array = shape[Mesh.ARRAY_VERTEX]
@@ -846,6 +871,10 @@ func _put_model(name: String, normal: Vector3, base: Vector3, offset: Vector3, s
 		_far_c.append(part.colors[k] if slot < 0 else (tints[slot] if slot < tints.size() else Color.WHITE))
 	for index in part.indices:
 		_far_i.append(start + index)
+
+
+## Colours drawn as lights (lit windows, neon): they glow at night.
+const GLOWING := [Color("f2e1a0"), Color("4fe3ff"), Color("ff4fd8"), Color("f5d76e")]
 
 
 ## Where `_put` puts a shape: the transform from the shape's frame to the
@@ -2684,6 +2713,211 @@ func _safe(t: Transform3D, kind: String) -> Transform3D:
 		_unsafe_warned[kind] = true
 		push_warning("oorbit: %s off the planet or out of shape: %s" % [kind, t])
 	return Transform3D(Basis().scaled(Vector3.ZERO), Vector3.ZERO)
+
+
+# ---------------------------------------------------------------- sky and festivals
+
+## The planet's material (planet.gdshader): `leaf` and `bloom` say how much
+## the season shows on it.
+static func _planet_material(leaf: float, bloom: float) -> ShaderMaterial:
+	var m := ShaderMaterial.new()
+	m.shader = load("res://planet.gdshader")
+	m.set_shader_parameter("leaf_strength", leaf)
+	m.set_shader_parameter("bloom_strength", bloom)
+	return m
+
+
+## The sun in the planet's frame, and night where it is down.
+var sun_local := Vector3(0, 0, 1)
+var _night_at_fest := 0.0
+
+
+## Time of day and season: `sun` points at the sun in the planet's frame,
+## `season` holds the amounts the shader mixes in (snow, autumn, bare,
+## bloom).
+func set_sky(sun: Vector3, season: Dictionary) -> void:
+	sun_local = sun.normalized()
+	var sun_world := pivot.global_basis * sun_local
+	for m in [_props_material, _land_material]:
+		if m == null:
+			continue
+		m.set_shader_parameter("sun_dir", sun_world)
+		m.set_shader_parameter("axis", pivot.global_basis.y)
+		m.set_shader_parameter("centre", pivot.global_position)
+		for k in season:
+			m.set_shader_parameter(k, season[k])
+	_summer = float(season.get("summer", 0.0))
+
+
+var _summer := 0.0
+
+
+## How dark it is at a point of the planet (0 day, 1 night).
+func night_at(p: Vector3) -> float:
+	return clampf((0.12 - p.normalized().dot(sun_local)) / 0.3, 0.0, 1.0)
+
+
+const FEST_COLORS := [Color("e08f6c"), Color("f2c078"), Color("4a7a8c"), Color("e3c3c6"), Color("c2d69b"), Color("9b8ec4")]
+## What each festival puts up around the bonfire.
+const FEST_PROPS := {
+	"flowers": ["maypole", "bunting", "feast_table"],
+	"sun": ["bunting", "feast_table", "lantern_pole"],
+	"lanterns": ["lantern_pole", "lantern_pole", "feast_table"],
+	"stars": ["lantern_pole", "bunting", "lantern_pole"],
+	"anniversary": ["bunting", "feast_table", "maypole"],
+	"harvest": ["feast_table", "bunting"],
+	"harvest_grand": ["feast_table", "feast_table", "bunting", "lantern_pole"],
+	"games": ["bunting", "bunting"],
+	"games_grand": ["bunting", "bunting", "lantern_pole", "lantern_pole"],
+}
+## Festivals with fireworks once it is dark.
+const FIREWORKS := ["sun", "stars", "anniversary", "harvest_grand", "games_grand"]
+
+## The festival being drawn ("" for none), where, and its node.
+var festival := ""
+var _fest_cell := -1
+var _fest_at := Vector3.ZERO
+var _fest_node: MeshInstance3D
+var _fest_next := 0.0
+var _last_view := []
+var _firefly_next := 0.0
+
+
+## The cell of the festival under way, or -1.
+func fest_cell() -> int:
+	return _fest_cell
+
+
+## Start or end the festival `id` ("" for none): the bonfire, the
+## decorations and the dancers go up on a free cell next to the home.
+func set_festival(id: String) -> void:
+	if id == festival:
+		return
+	festival = id
+	if _fest_node != null:
+		_fest_node.queue_free()
+		_fest_node = null
+	_fest_cell = -1
+	if id == "" or _home < 0 or _home >= builder.centers.size():
+		_dance()
+		return
+	# The village green: the first free meadow (or any free land) one or
+	# two cells from the home.
+	_fest_cell = _home
+	var ring := Array(builder.neighbors[_home])
+	for n in builder.neighbors[_home]:
+		for m in builder.neighbors[n]:
+			if m != _home and not m in ring:
+				ring.append(m)
+	var best := 99
+	for n in ring:
+		if n >= _biomes.size() or n >= _town.size() or _town[n] or str(_biomes[n]) in ["ocean", "mountain"]:
+			continue
+		var rank := 0 if str(_biomes[n]) == "plains" else 1
+		if rank < best:
+			best = rank
+			_fest_cell = n
+	var normal: Vector3 = builder.centers[_fest_cell]
+	var fit := _ground_plane(_fest_cell, normal, builder.ground(normal, _fest_cell))
+	var up: Vector3 = fit[0]
+	var footing: Vector3 = fit[1]
+	_fest_at = footing
+	var saved := [_verts, _normals, _colors, _indices, _lod, _top]
+	_verts = PackedVector3Array()
+	_normals = PackedVector3Array()
+	_colors = PackedColorArray()
+	_indices = PackedInt32Array()
+	_lod = false
+	_put_model("bonfire", up, footing, Vector3.ZERO, 1.2)
+	var props: Array = FEST_PROPS.get(id, ["bunting"])
+	for k in props.size():
+		var a := k * TAU / props.size() + 0.4
+		_put_model(props[k], up, footing, Vector3(cos(a) * 0.24, 0.0, sin(a) * 0.24), 1.0, -a + PI / 2.0)
+	_fest_node = MeshInstance3D.new()
+	_fest_node.mesh = _mesh_of(_verts, _normals, _colors, _indices)
+	_fest_node.material_override = _props_material
+	pivot.add_child(_fest_node)
+	_verts = saved[0]
+	_normals = saved[1]
+	_colors = saved[2]
+	_indices = saved[3]
+	_lod = saved[4]
+	_top = saved[5]
+	_dance()
+
+
+## The dancers join (or leave) the walkers.
+func _dance() -> void:
+	if _last_view.size() == 2:
+		_place_walkers(_last_view[0], _last_view[1])
+
+
+## Sparks from the bonfire; after dark fireworks, lanterns rising or
+## petals in the air; fireflies over the meadows on summer nights.
+func _festival_fx(delta: float) -> void:
+	if _fest_cell >= 0 and _seen(_fest_at):
+		var n := _fest_at.normalized()
+		var top := _fest_at + n * 0.03 * _ts
+		if randf() < 0.5:
+			_spawn(top + _jitter(0.006 * _ts), n * 0.05 * _ts + _jitter(0.01 * _ts), Color("f5d76e") if randf() < 0.5 else Color("e08f6c"), 1.2, 0.004 * _ts, 0.0)
+		_fest_next -= delta
+		var dark := night_at(_fest_at)
+		if _fest_next <= 0.0:
+			_fest_next = randf_range(0.6, 1.4)
+			if festival in FIREWORKS and dark > 0.5:
+				_firework(n)
+			elif festival in ["lanterns", "stars"]:
+				for k in 2:
+					var t := _tangents(n)
+					var at: Vector3 = _fest_at + (t[0] * randf_range(-1, 1) + t[1] * randf_range(-1, 1)) * 0.1 * _ts
+					_spawn(at + n * 0.02 * _ts, n * 0.03 * _ts + _jitter(0.004 * _ts), Color("f2c078"), 6.0, 0.006 * _ts, 0.004 * _ts)
+			elif festival == "flowers":
+				for k in 6:
+					var t := _tangents(n)
+					var at: Vector3 = _fest_at + (t[0] * randf_range(-1, 1) + t[1] * randf_range(-1, 1)) * 0.15 * _ts + n * 0.12 * _ts
+					_spawn(at, _jitter(0.01 * _ts) - n * 0.012 * _ts, Color("e3c3c6") if randf() < 0.6 else Color("eef3f2"), 4.0, 0.004 * _ts, 0.003 * _ts)
+	# Fireflies: summer nights, close up, over the green land in view.
+	_firefly_next -= delta
+	if _firefly_next > 0.0 or _closeness < 0.35 or _summer < 0.3:
+		return
+	_firefly_next = 0.15
+	var look := _eye_dir
+	var cell := builder.cell_at(look)
+	if cell < 0 or cell >= _biomes.size() or not str(_biomes[cell]) in ["plains", "forest"]:
+		return
+	var t := _tangents(look)
+	var at: Vector3 = builder.ground(look + (t[0] * randf_range(-1, 1) + t[1] * randf_range(-1, 1)) * 0.06)
+	if night_at(at) < 0.6:
+		return
+	_spawn(at + at.normalized() * randf_range(0.004, 0.02), _jitter(0.004), Color("e8f59a"), 1.6, 0.0025, 0.0)
+
+
+## One rocket: a streak up, then a burst of colour falling back.
+func _firework(n: Vector3) -> void:
+	var t := _tangents(n)
+	var at: Vector3 = _fest_at + (t[0] * randf_range(-1, 1) + t[1] * randf_range(-1, 1)) * 0.12 * _ts + n * randf_range(0.2, 0.3) * _ts
+	var c: Color = FEST_COLORS[randi() % FEST_COLORS.size()].lightened(0.25)
+	_spawn(_fest_at + n * 0.03 * _ts, (at - _fest_at) * 1.4, Color("f5d76e"), 0.6, 0.003 * _ts, 0.002 * _ts, 0.0, true)
+	for k in 22:
+		var d := _jitter(1.0).normalized()
+		var v := d * randf_range(0.07, 0.11) * _ts
+		_parts_later.append([_seconds + 0.6, at, v, c])
+	sfx.emit("firework", pivot.to_global(at))
+
+
+## Bursts waiting for their rocket to arrive: [time, at, velocity, colour].
+var _parts_later := []
+
+
+func _launch_bursts() -> void:
+	var k := 0
+	while k < _parts_later.size():
+		var b: Array = _parts_later[k]
+		if _seconds >= float(b[0]):
+			_spawn(b[1], b[2], b[3], 1.4, 0.005 * _ts, 0.001 * _ts, 0.05 * _ts)
+			_parts_later.remove_at(k)
+		else:
+			k += 1
 
 
 # ---------------------------------------------------------------- wonders

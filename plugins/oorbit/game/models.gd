@@ -116,6 +116,9 @@ static func get_model(name: String) -> Model:
 					slot = maxi(0, tint.substr(4, 1).to_int() - 1)
 				elif material is BaseMaterial3D:
 					color = (material as BaseMaterial3D).albedo_color
+					# A light: glows at night (planet.gdshader).
+					if tint.begins_with("glow"):
+						color.a = 0.5
 			if label.begins_with("far"):
 				model.far.add(arrays, xform, color, slot, swing)
 				continue

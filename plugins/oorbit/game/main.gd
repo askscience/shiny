@@ -152,6 +152,7 @@ func _step(delta: float) -> void:
 		traffic.tick(ui.live_now_ms())
 	_update_marks()
 	planet_view.set_camera(camera, clampf((_zoom - 1.0) / (ZOOM_MAX - 1.0), 0.0, 1.0), float(viewport.size.y))
+	_update_sky()
 	_update_sound(delta)
 	if not host.available or ui.catalog.is_empty():
 		return
@@ -449,6 +450,90 @@ func _select(index: int) -> void:
 	ui.select_tile(index)
 
 
+# ---------------------------------------------------------------- day, seasons, festivals
+
+var _sun: DirectionalLight3D
+## Preview overrides from the address (`?hour=21&season=2.5&fest=sun`,
+## `&lapse=30` for a whole day in 30 seconds).
+var _sky_debug := {}
+var _sky_debug_read := false
+## How far the snow comes down in deep winter, by climate (1 = to the
+## equator), and how bare the trees get.
+const SNOW_BY_CLIMATE := {"temperate": 0.38, "frozen": 0.75, "arid": 0.1, "oceanic": 0.25}
+
+
+## Planet hour (0-24) and season position (0 spring .. 4) right now.
+func _calendar_now() -> Array:
+	var cal: Dictionary = ui.view.get("calendar", {})
+	var now := ui.live_now_ms()
+	var day := float(cal.get("day_ms", 86400000.0))
+	var hour := fmod(now, day) / day * 24.0
+	var season := 0.0
+	if cal.has("season_ms"):
+		var into := clampf((now - float(cal["season_start_ms"])) / maxf(1.0, float(cal["season_ms"])), 0.0, 0.999)
+		season = float(cal.get("season", 0)) + into
+	if _sky_debug.has("hour"):
+		hour = float(_sky_debug["hour"])
+	if _sky_debug.has("lapse"):
+		# A whole day in `lapse` seconds, from the hour given (or noon).
+		hour = fmod(float(_sky_debug.get("hour", 12.0)) + Time.get_ticks_msec() / 1000.0 * 24.0 / maxf(1.0, float(_sky_debug["lapse"])), 24.0)
+	if _sky_debug.has("season"):
+		season = float(_sky_debug["season"])
+	return [hour, season]
+
+
+## The sun goes round the planet once a planet day (noon over the home),
+## higher in summer; the season shows on the land; a festival under way is
+## drawn.
+func _update_sky() -> void:
+	if planet_view == null or not planet_view.builder.ready() or ui.view.is_empty():
+		return
+	if not _sky_debug_read:
+		_sky_debug_read = true
+		if OS.has_feature("web"):
+			var query := str(JavaScriptBridge.eval("location.search")).trim_prefix("?")
+			for pair in query.split("&", false):
+				var kv := pair.split("=")
+				if kv.size() == 2 and kv[0] in ["hour", "season", "fest", "lapse"]:
+					_sky_debug[kv[0]] = kv[1]
+	var when := _calendar_now()
+	var hour: float = when[0]
+	var season: float = when[1]
+	var w := []
+	for k in 4:
+		# Each season peaks in its middle and fades into the next.
+		var d := absf(fposmod(season - (k + 0.5) + 2.0, 4.0) - 2.0)
+		w.append(clampf(1.0 - d, 0.0, 1.0))
+	var planet: Dictionary = ui.view.get("planet", {})
+	var home: Vector3 = planet_view.builder.centers[clampi(int(planet.get("home", 0)), 0, planet_view.builder.centers.size() - 1)]
+	var noon := atan2(home.x, home.z)
+	var a := noon + (hour - 12.0) / 24.0 * TAU
+	var tilt := 0.35 * (float(w[1]) - float(w[3]))
+	var sun := Vector3(cos(tilt) * sin(a), sin(tilt), cos(tilt) * cos(a))
+	var reach: float = SNOW_BY_CLIMATE.get(str(planet.get("climate", "temperate")), 0.5)
+	planet_view.set_sky(sun, {
+		"snow": reach * float(w[3]), "autumn": float(w[2]), "bare": float(w[3]) * (0.4 if reach < 0.2 else 0.9),
+		"bloom": float(w[0]), "summer": float(w[1]),
+	})
+	var world_sun := planet_view.pivot.global_basis * sun
+	_sun.global_basis = Basis.looking_at(-world_sun, Vector3.UP if absf(world_sun.y) < 0.99 else Vector3.RIGHT)
+	# The festival under way, if any.
+	var fest := ""
+	var c = planet.get("celebration")
+	if c is Dictionary:
+		var step := ui.live_now_ms() / float(ui.view.get("step_ms", 600000))
+		if step >= float(c.get("from_step", 0)) and step < float(c.get("until_step", 0)):
+			fest = str(c.get("id", ""))
+	if _sky_debug.has("fest"):
+		fest = str(_sky_debug["fest"])
+	planet_view.set_festival(fest)
+	# Preview: `?fest=` also flies over the village green once.
+	if _sky_debug.has("fest") and not _sky_debug.has("flown") and planet_view.fest_cell() >= 0:
+		_sky_debug["flown"] = true
+		planet_view.focus(planet_view.fest_cell(), true)
+		_zoom_target = ZOOM_MAX
+
+
 # ---------------------------------------------------------------- wonders
 
 ## `?look=<wonder>` in the window's address (the preview server's
@@ -621,11 +706,11 @@ func _build_world() -> void:
 	traffic.visible = false
 	world.add_child(traffic)
 
-	var sun := DirectionalLight3D.new()
-	sun.light_color = Palette.SUN
-	sun.light_energy = 1.15
-	sun.rotation = Vector3(deg_to_rad(-30.0), deg_to_rad(-50.0), 0.0)
-	world.add_child(sun)
+	_sun = DirectionalLight3D.new()
+	_sun.light_color = Palette.SUN
+	_sun.light_energy = 1.15
+	_sun.rotation = Vector3(deg_to_rad(-30.0), deg_to_rad(-50.0), 0.0)
+	world.add_child(_sun)
 
 	camera = Camera3D.new()
 	camera.fov = 32.0

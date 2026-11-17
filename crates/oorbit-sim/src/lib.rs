@@ -19,6 +19,7 @@
 
 pub mod actions;
 pub mod autoplay;
+pub mod calendar;
 pub mod catalog;
 pub mod cities;
 pub mod clock;

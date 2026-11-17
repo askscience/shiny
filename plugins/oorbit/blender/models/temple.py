@@ -10,4 +10,4 @@ def build():
             cylinder("column%d%d" % (k, row), "eae2d6", 0.09, 0.9, 6, loc=(-0.7 + k * 0.35, row * 0.5, 0.42))
     box("entablature", "d9d0cc", (1.8, 1.3, 0.15), loc=(0, 0, 1.32))
     prism("roof", "c07a54", 1.9, 0.4, 1.4, loc=(0, 0, 1.47))
-    box("detail_statue", "f2c078", (0.16, 0.16, 0.4), loc=(0, 0, 0.42))
+    box("detail_statue", "glow_f2c078", (0.16, 0.16, 0.4), loc=(0, 0, 0.42))
