@@ -56,6 +56,17 @@ else
 fi
 echo "catalogue auto-update: off ($ENV_FILE)"
 
+# A machine not installed from the package has no system keyring: check the
+# catalogue against the repository's copy of the archive key.
+if [ ! -f /usr/share/keyrings/liteaura-archive.gpg ]; then
+    if grep -q '^SHINY_PLUGIN_KEYRING=' "$ENV_FILE"; then
+        sed -i "s#^SHINY_PLUGIN_KEYRING=.*#SHINY_PLUGIN_KEYRING=$REPO/packaging/liteaura-archive.gpg#" "$ENV_FILE"
+    else
+        echo "SHINY_PLUGIN_KEYRING=$REPO/packaging/liteaura-archive.gpg" >> "$ENV_FILE"
+    fi
+    echo "catalogue key: $REPO/packaging/liteaura-archive.gpg"
+fi
+
 # 4. Restart and wait for the server to answer.
 start_line=$( [ -f "$LOG" ] && wc -l < "$LOG" || echo 0 )
 echo "restarting shiny.service..."
