@@ -16,7 +16,9 @@ const [out = '.', size = '1100x700', query = ''] = process.argv.slice(2);
 const [width, height] = size.split('x').map(Number);
 const require = createRequire(process.env.SHINY_PLAYWRIGHT_MODULE || import.meta.url);
 const { chromium } = require('playwright');
-const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+// CHROME_ARGS replaces the software renderer (e.g. "--use-angle=gl --ignore-gpu-blocklist" for the GPU).
+const args = process.env.CHROME_ARGS ? process.env.CHROME_ARGS.split(' ') : ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'];
+const browser = await chromium.launch({ args });
 const page = await browser.newPage({ viewport: { width, height } });
 const logs = [];
 page.on('console', (m) => logs.push(`[${m.type()}] ${m.text()}`));
@@ -38,6 +40,6 @@ for (const [name, x, y, wait, wheel] of JSON.parse(process.env.STEPS || '[]')) {
   await page.waitForTimeout(wait || 1500);
   await page.screenshot({ path: `${out}/${i++}-${name}.png` });
 }
-const quiet = /^\[(debug|verbose)\]|Godot Engine|OpenGL API|Build configuration/;
+const quiet = /^\[(debug|verbose)\]|Godot Engine|Build configuration/;
 console.log(logs.filter((l) => !quiet.test(l)).slice(-80).join('\n'));
 await browser.close();

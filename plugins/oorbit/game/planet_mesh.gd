@@ -217,16 +217,31 @@ static func _tri(verts: PackedVector3Array, normals: PackedVector3Array, cols: P
 
 
 ## The cell whose centre is nearest to a direction.
-func cell_at(direction: Vector3) -> int:
+func cell_at(direction: Vector3, hint := -1) -> int:
+	if centers.is_empty():
+		return -1
 	var d := direction.normalized()
-	var best := -1
-	var best_dot := -2.0
-	for i in centers.size():
-		var dot := d.dot(centers[i])
-		if dot > best_dot:
-			best_dot = dot
-			best = i
+	# Walk from a nearby cell (the hint, or the last answer) to the
+	# neighbour closest to `d` until none is closer: on these cells that is
+	# the nearest centre, and asking near the last point takes a step or
+	# two instead of a look at all the cells.
+	var best := hint if hint >= 0 and hint < centers.size() else _last_cell
+	var best_dot := d.dot(centers[best])
+	for step in 64:
+		var moved := false
+		for n in neighbors[best]:
+			var dot := d.dot(centers[n])
+			if dot > best_dot:
+				best_dot = dot
+				best = n
+				moved = true
+		if not moved:
+			break
+	_last_cell = best
 	return best
+
+
+var _last_cell := 0
 
 
 ## The point of the ground in `direction`, inside cell `cell` (pass -1 to
@@ -240,7 +255,7 @@ func ground(direction: Vector3, cell := -1) -> Vector3:
 		cell = cell_at(d)
 	var p := _ground_in(d, cell)
 	if p == Vector3.ZERO:
-		p = _ground_in(d, cell_at(d))
+		p = _ground_in(d, cell_at(d, cell))
 	if p == Vector3.ZERO:
 		return d * center_points[cell].length()
 	return p

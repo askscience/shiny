@@ -107,7 +107,40 @@ func _ready() -> void:
 	host.get_json("catalog", _on_catalog)
 
 
+## `?stats` in the window's address (the preview server's `/?stats`): print
+## what the low-resolution view draws every few seconds, to measure costs.
+var _stats := OS.has_feature("web") and str(JavaScriptBridge.eval("location.search")).contains("stats")
+var _stats_left := 3.0
+var _stats_frames := 0
+var _stats_process := 0.0
+
+
+func _print_stats(delta: float, spent_usec: int) -> void:
+	_stats_left -= delta
+	_stats_frames += 1
+	_stats_process += spent_usec / 1000.0
+	if _stats_left > 0.0:
+		return
+	var vp := viewport.get_viewport_rid()
+	print("[stats] zoom %.2f  primitives %d  draw calls %d  objects %d  scripts %.2f ms/frame  fps %d" % [
+		_zoom,
+		RenderingServer.viewport_get_render_info(vp, RenderingServer.VIEWPORT_RENDER_INFO_TYPE_VISIBLE, RenderingServer.VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME),
+		RenderingServer.viewport_get_render_info(vp, RenderingServer.VIEWPORT_RENDER_INFO_TYPE_VISIBLE, RenderingServer.VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME),
+		RenderingServer.viewport_get_render_info(vp, RenderingServer.VIEWPORT_RENDER_INFO_TYPE_VISIBLE, RenderingServer.VIEWPORT_RENDER_INFO_OBJECTS_IN_FRAME),
+		_stats_process / maxf(1.0, _stats_frames),
+		Engine.get_frames_per_second()])
+	_stats_left = 3.0
+	_stats_frames = 0
+	_stats_process = 0.0
+
+
 func _process(delta: float) -> void:
+	_step(delta)
+	if _stats:
+		_print_stats(delta, roundi(Performance.get_monitor(Performance.TIME_PROCESS) * 1e6))
+
+
+func _step(delta: float) -> void:
 	if absf(_zoom - _zoom_target) > 0.001:
 		_zoom = lerpf(_zoom, _zoom_target, minf(1.0, delta * 10.0))
 		if absf(_zoom - _zoom_target) < 0.002:
@@ -118,7 +151,7 @@ func _process(delta: float) -> void:
 	if traffic.visible:
 		traffic.tick(ui.live_now_ms())
 	_update_marks()
-	planet_view.set_camera(camera, clampf((_zoom - 1.0) / (ZOOM_MAX - 1.0), 0.0, 1.0))
+	planet_view.set_camera(camera, clampf((_zoom - 1.0) / (ZOOM_MAX - 1.0), 0.0, 1.0), float(viewport.size.y))
 	_update_sound(delta)
 	if not host.available or ui.catalog.is_empty():
 		return
@@ -187,7 +220,10 @@ func _on_view(reply: Dictionary) -> void:
 	if planet != null:
 		planet_view.visible = true
 		planet_view.time_rate = float(data.get("clock", {}).get("rate", 1.0))
+		_load_wonders(str(planet.get("seed", "")))
 		planet_view.show_planet(planet, data.get("rates", {}))
+		ui.wonders = planet_view.wonders
+		_look_once()
 		var era = data.get("era")
 		_set_palette(int(era["number"]) if era != null else 1)
 		traffic.show_view(data)
@@ -409,7 +445,58 @@ func _reset() -> void:
 
 func _select(index: int) -> void:
 	planet_view.select(index)
+	_discover(index)
 	ui.select_tile(index)
+
+
+# ---------------------------------------------------------------- wonders
+
+## `?look=<wonder>` in the window's address (the preview server's
+## `/?look=whale`): fly close over that wonder once, for screenshots.
+var _look_done := false
+
+
+func _look_once() -> void:
+	if _look_done or not OS.has_feature("web"):
+		return
+	_look_done = true
+	var query := str(JavaScriptBridge.eval("location.search"))
+	var at := query.find("look=")
+	if at < 0:
+		return
+	var kind := query.substr(at + 5).get_slice("&", 0)
+	for cell in planet_view.wonders:
+		if planet_view.wonders[cell] == kind:
+			planet_view.focus(cell, true)
+			_zoom_target = ZOOM_MAX
+
+var _wonders_seed := ""
+
+
+## The wonders found on this planet, kept in the browser per planet.
+func _load_wonders(seed: String) -> void:
+	if seed == _wonders_seed:
+		return
+	_wonders_seed = seed
+	var found := {}
+	for kind in _load_pref("oorbit.wonders." + seed, "").split(",", false):
+		found[kind] = true
+	planet_view.found_wonders = found
+	ui.found_wonders = found
+
+
+## A click on a hidden wonder finds it: a toast, a chime, and it stops
+## glinting.
+func _discover(cell: int) -> void:
+	var kind := planet_view.wonder_at(cell)
+	if kind == "" or planet_view.found_wonders.has(kind) or ui.building_at(cell):
+		return
+	planet_view.found_wonders[kind] = true
+	_save_pref("oorbit.wonders." + _wonders_seed, ",".join(planet_view.found_wonders.keys()))
+	ui.found_wonders = planet_view.found_wonders
+	audio.play("discovery")
+	ui.toast(I18n.t("ui.wonder.found", {"name": I18n.name_of("wonder", kind),
+		"count": planet_view.found_wonders.size(), "total": planet_view.wonders.size()}))
 
 
 # ---------------------------------------------------------------- input

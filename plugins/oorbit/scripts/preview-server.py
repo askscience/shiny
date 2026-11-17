@@ -38,6 +38,10 @@ PARENT = b"""<!doctype html><body style="margin:0;background:#000">
 <script>
 const params = new URLSearchParams(location.search);
 f.dataset.shinyLocale = params.get('lang') || 'it';
+// `?stats` makes the game print what it draws every few seconds, and
+// `?look=whale` flies over a wonder: both are passed to the game's frame.
+const own = ['stats', 'look'].filter((k) => params.has(k)).map((k) => params.get(k) ? `${k}=${params.get(k)}` : k);
+if (own.length) f.src = '/plugins/oorbit/?' + own.join('&');
 const after = Number(params.get('light') || 0);
 if (after) f.addEventListener('load', () => setTimeout(() => f.contentWindow.postMessage(
   {type:'shiny:context', locale: f.dataset.shinyLocale, theme:'dusk', mode:'light'}, location.origin), after));

@@ -21,14 +21,44 @@ var pivot: Node3D
 var builder := PlanetMesh.new()
 var _land: MeshInstance3D
 var _outline: MeshInstance3D
-## Every prop (trees, peaks, buildings) merged into one mesh with vertex
-## colours: one draw call instead of hundreds of small ones.
-var _props: MeshInstance3D
+## Every prop (trees, peaks, buildings) merged into a few meshes with
+## vertex colours: one patch of the planet per mesh (see `_chunks`), in two
+## levels of detail, so the far side of the planet and the details too
+## small to see cost nothing.
+var _props_material: Material
 var _verts := PackedVector3Array()
 var _normals := PackedVector3Array()
 var _colors := PackedColorArray()
 var _indices := PackedInt32Array()
+var _far_v := PackedVector3Array()
+var _far_n := PackedVector3Array()
+var _far_c := PackedColorArray()
+var _far_i := PackedInt32Array()
+## Building the planet's props: also fill the far arrays.
+var _lod := false
+## The highest prop point (squared distance from the centre) in the patch.
+var _top := 0.0
 static var _shapes := {}
+
+## Patches of the planet (`CHUNKS` of them, neighbouring cells together),
+## each with its props near and far: {cells, dir, reach (radians), top,
+## near, far}. `_cull` shows one level of each patch on this side of the
+## horizon and hides the rest. Not many more: with about fifty meshes the
+## Compatibility renderer in the browser (SwiftShader at least) drew the
+## clouds' and particles' MultiMesh instances with garbage transforms.
+const CHUNKS := 12
+var _chunks := []
+var _chunk_of := PackedInt32Array()
+## A shape smaller than this (planet radii) is left out of the far view.
+const FAR_MIN := 0.006
+## The near level shows once a detail this big (planet radii) covers this
+## many pixels of the low-resolution view.
+const DETAIL_SIZE := 0.005
+const DETAIL_PIXELS := 1.2
+## Lowest ground (the sea), for the horizon.
+const GROUND_LOW := 0.985
+var view_height := 300.0
+var _culled_from := Vector3.INF
 
 ## Little people, all in one MultiMesh (one draw call): crews walking
 ## between the village and the cell they work and back with their load,
@@ -107,64 +137,19 @@ func _ready() -> void:
 	outline_material.albedo_color = Palette.OUTLINE
 	_outline.material_override = outline_material
 	pivot.add_child(_outline)
-	_props = MeshInstance3D.new()
-	_props.material_override = _toon(Color.WHITE, true)
-	pivot.add_child(_props)
+	_props_material = _toon(Color.WHITE, true)
 	_roads = MeshInstance3D.new()
 	var road_material := _toon(Color.WHITE, true)
 	road_material.cull_mode = BaseMaterial3D.CULL_DISABLED
 	_roads.material_override = road_material
 	pivot.add_child(_roads)
-	_vehicles = MultiMeshInstance3D.new()
-	var vehicle_mesh := _compose(func():
-		# A cart: a box on two wheels, a load on top.
-		_put(_box(0.05, 0.016, 0.03), Color("8f6f5a"), Vector3.UP, Vector3.ZERO, Vector3(0, 0.004, 0))
-		_put(_box(0.034, 0.014, 0.024), Color.WHITE, Vector3.UP, Vector3.ZERO, Vector3(0, 0.018, 0))
-		for side in [-1.0, 1.0]:
-			_put(_cylinder(0.012, 0.006, 8), Color("4a3b33"), Vector3.UP, Vector3.ZERO, Vector3(0, -0.004, side * 0.018), 1.0, PI / 2.0, PI / 2.0)
-		_put(_box(0.03, 0.004, 0.004), Color("6b5a4e"), Vector3.UP, Vector3.ZERO, Vector3(0.035, 0.0, 0)))
-	var vehicles := MultiMesh.new()
-	vehicles.transform_format = MultiMesh.TRANSFORM_3D
-	vehicles.use_colors = true
-	vehicles.mesh = vehicle_mesh
-	_fixed(vehicles, MAX_RIDES)
-	_vehicles.multimesh = vehicles
-	_vehicles.material_override = _toon(Color.WHITE, true)
-	pivot.add_child(_vehicles)
-	_boats = MultiMeshInstance3D.new()
-	var boats := MultiMesh.new()
-	boats.transform_format = MultiMesh.TRANSFORM_3D
-	boats.use_colors = true
-	boats.mesh = _compose(func():
-		# A boat: a hull pointed at the bow, a mast and a sail.
-		_put(_box(0.06, 0.014, 0.026), Color("6b5a4e"), Vector3.UP, Vector3.ZERO, Vector3(0, 0.0, 0))
-		_put(_cone(0.013, 0.02, 4), Color("6b5a4e"), Vector3.UP, Vector3.ZERO, Vector3(0.038, 0.0, 0), 1.0, PI / 4.0, -PI / 2.0)
-		_put(_box(0.004, 0.05, 0.004), Color("4a3b33"), Vector3.UP, Vector3.ZERO, Vector3(-0.002, 0.03, 0))
-		_put(_prism(0.004, 0.04, 0.03), Color.WHITE, Vector3.UP, Vector3.ZERO, Vector3(0.008, 0.032, 0), 1.0, PI / 2.0))
-	_fixed(boats, MAX_RIDES)
-	_boats.multimesh = boats
-	_boats.material_override = _toon(Color.WHITE, true)
-	pivot.add_child(_boats)
+	# Carts, boats, people, animals and birds: the Blender models as
+	# MultiMeshes drawn by creature.gdshader (tints and walking legs).
+	_vehicles = _creature_set(_creature_mesh("cart"), MAX_RIDES)
+	_boats = _creature_set(_creature_mesh("boat"), MAX_RIDES)
 	_build_walkers()
-	_animals = MultiMeshInstance3D.new()
-	var animals := MultiMesh.new()
-	animals.transform_format = MultiMesh.TRANSFORM_3D
-	animals.use_colors = true
-	animals.mesh = _compose(func():
-		# A four-legged animal, tinted per kind.
-		var up := Vector3.UP
-		var o := Vector3.ZERO
-		_put(_box(0.05, 0.024, 0.024), Color.WHITE, up, o, Vector3(0, 0.03, 0))
-		_put(_box(0.018, 0.02, 0.016), Color.WHITE, up, o, Vector3(0.03, 0.046, 0))
-		_put(_box(0.008, 0.006, 0.006), Color("4a3b33"), up, o, Vector3(0.042, 0.042, 0))
-		for fx in [-0.018, 0.018]:
-			for fz in [-0.008, 0.008]:
-				_put(_box(0.006, 0.02, 0.006), Color.WHITE.darkened(0.3), up, o, Vector3(fx, 0.01, fz))
-		_put(_box(0.006, 0.01, 0.004), Color.WHITE, up, o, Vector3(-0.027, 0.04, 0)))
-	_fixed(animals, MAX_ANIMALS)
-	_animals.multimesh = animals
-	_animals.material_override = _toon(Color.WHITE, true)
-	pivot.add_child(_animals)
+	for species in SPECIES_TINTS:
+		_animal_sets[species] = _creature_set(_creature_mesh(species), MAX_ANIMALS + (MAX_QUARRIES if species == QUARRY else 0))
 	_build_birds_and_fx()
 	weather = Weather.new()
 	pivot.add_child(weather)
@@ -190,6 +175,15 @@ func _process(delta: float) -> void:
 	_move_walkers(delta)
 
 
+var _tick := 0
+
+
+## Someone beyond the horizon: not drawn.
+func _hide_walker(mm: MultiMesh, index: int) -> void:
+	if index < MAX_WALKERS:
+		mm.set_instance_transform(index, Transform3D(Basis().scaled(Vector3.ZERO), Vector3.ZERO))
+
+
 ## Seconds since the window started: people walk on this clock, so placing
 ## them again never sends them back home.
 var _seconds := 0.0
@@ -198,11 +192,18 @@ var _warned := false
 
 func _move_walkers(delta: float) -> void:
 	_seconds += delta
+	_tick += 1
 	_people.clear()
 	_fx_static.clear()
 	var size := _tile_size() * 1.2
+	# From afar people are a few pixels tall: each moves every other frame.
+	var halves := _closeness < 0.25
 	for k in _walk.size():
 		var w: Dictionary = _walk[k]
+		if halves and (k + _tick) % 2 == 1 and w.has("at"):
+			if w["at"] != Vector3.ZERO:
+				_people.append(w["at"])
+			continue
 		var multimesh := _walker_mm(w)
 		var index := int(w.get("index", 0))
 		w["t"] = _seconds + float(w["offset"])
@@ -212,6 +213,8 @@ func _move_walkers(delta: float) -> void:
 		var tilt := 0.0
 		var crouch := 1.0
 		var hide := false
+		var tint: Color = WALKER_COLORS[k % WALKER_COLORS.size()]
+		var motion := 0.0
 		match w["kind"]:
 			"crew":
 				var route: Dictionary = _routes[w["route"]]
@@ -237,22 +240,34 @@ func _move_walkers(delta: float) -> void:
 				var f := along * (points.size() - 1)
 				var i := mini(int(f), points.size() - 2)
 				at = points[i].lerp(points[i + 1], f - i)
+				if not _seen(at):
+					w["at"] = Vector3.ZERO
+					_hide_walker(multimesh, index)
+					continue
 				forward = (points[i + 1] - points[i]).normalized() * (1.0 if t < walk else -1.0)
 				normal = at.normalized()
+				motion = 1.0
 				if t >= walk and t < walk + work:
+					motion = 0.0
 					var pose := _work_pose(route, w, t - walk)
 					at = pose["at"]
 					forward = pose["forward"]
 					normal = at.normalized()
 					tilt = pose.get("tilt", 0.0)
 					crouch = pose.get("crouch", 1.0)
-				multimesh.set_instance_color(index, route["color"] if t >= walk + work else WALKER_COLORS[k % WALKER_COLORS.size()])
+				if t >= walk + work:
+					tint = route["color"]
 				if w.get("hidden", false):
 					hide = true
 			_:
 				# Strolling or building: a slow loop around a cell.
 				var cell: int = w["cell"]
 				normal = builder.centers[cell]
+				if not _seen(normal):
+					w["at"] = Vector3.ZERO
+					_hide_walker(multimesh, index)
+					continue
+				motion = 0.6 if w["kind"] == "stroll" else 0.0
 				var tg := _tangents(normal)
 				var angle := float(w["phase"]) + float(w["t"]) * float(w["speed"])
 				var r := float(w["radius"])
@@ -261,18 +276,17 @@ func _move_walkers(delta: float) -> void:
 				if w["kind"] == "builder":
 					at += normal * absf(sin(float(w["t"]) * 10.0)) * 0.004
 		at += normal * (0.026 * size + absf(sin(float(w["t"]) * 9.0)) * 0.002)
-		var side := forward.cross(normal)
-		if side.length_squared() < 1e-8:
-			side = _tangents(normal)[0]
-		side = side.normalized()
-		var basis := Basis(side, normal, side.cross(normal))
+		var basis := _ride_basis(forward, normal, 1.0)
+		var side := basis.x
 		if tilt != 0.0:
 			basis = basis.rotated(side, tilt)
 		basis = basis.scaled(Vector3(size, size * crouch, size))
 		if not hide:
 			_people.append(at)
+			w["at"] = at
 		else:
 			basis = Basis().scaled(Vector3.ZERO)
+			w["at"] = Vector3.ZERO
 		if not (at.length() < 1.3) or not basis.is_finite():
 			# Never draw anyone off the planet.
 			if not _warned:
@@ -281,10 +295,12 @@ func _move_walkers(delta: float) -> void:
 			basis = Basis().scaled(Vector3.ZERO)
 			at = Vector3.ZERO
 		if index < MAX_WALKERS:
-			multimesh.set_instance_transform(index, _safe(Transform3D(basis, at), "walker %s %s" % [w["kind"], w.get("tool", "")]))
+			multimesh.set_instance_transform(index, _safe(Transform3D(basis, at), "walker"))
+			_look(multimesh, index, tint, motion)
 	_move_vehicles()
 	_move_animals()
 	_move_birds(delta)
+	_move_wonders(delta)
 	_feel_now_and_then(delta)
 	_update_fx(delta)
 	_bob_marks()
@@ -419,9 +435,7 @@ func _place_walkers(planet: Dictionary, rates: Dictionary) -> void:
 		w["index"] = counts.get(tool, 0)
 		counts[tool] = counts.get(tool, 0) + 1
 	for tool in _walker_sets:
-		(_walker_sets[tool] as MultiMeshInstance3D).multimesh.visible_instance_count = counts.get(tool, 0)
-	for k in _walk.size():
-		_walker_mm(_walk[k]).set_instance_color(int(_walk[k]["index"]), WALKER_COLORS[k % WALKER_COLORS.size()])
+		_count(_walker_sets[tool], counts.get(tool, 0))
 	_move_walkers(0.0)
 
 
@@ -491,7 +505,8 @@ func show_planet(planet: Dictionary, rates := {}) -> void:
 	if signature == _signature:
 		return
 	_signature = signature
-	if biomes != _biomes or heights != _heights:
+	var biomes_changed := biomes != _biomes or heights != _heights
+	if biomes_changed:
 		_biomes = biomes
 		_heights = heights
 		_land.mesh = builder.build(biomes, heights, Palette.BIOMES)
@@ -499,15 +514,11 @@ func show_planet(planet: Dictionary, rates := {}) -> void:
 		# The rim only needs the shape: the coarse surface is enough.
 		_outline.mesh = builder.build(biomes, heights, Palette.BIOMES, 1)
 		_ts = _tile_size()
+	if biomes_changed:
+		_place_wonders(biomes)
 	if not _focused_home:
 		_focused_home = true
 		focus(_home, true)
-	_verts = PackedVector3Array()
-	_normals = PackedVector3Array()
-	_colors = PackedColorArray()
-	_indices = PackedInt32Array()
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 11
 	_stocks = stocks
 	_dug = dug
 	_ordered = {}
@@ -520,21 +531,123 @@ func show_planet(planet: Dictionary, rates := {}) -> void:
 	for c in planet.get("construction", []):
 		_site_times[int(c["tile"])] = [float(c.get("start_step", 0)) * step_ms, float(c["done_step"]) * step_ms]
 	_smoke.clear()
-	for i in biomes.size():
-		_place_tile(i, biomes[i], buildings[i], rng)
+	if _chunks.is_empty():
+		_make_chunks()
+	# Each patch of the planet in its own meshes; every cell draws its
+	# props from its own seed, so a change on one cell never reshuffles the
+	# trees of another.
+	var rng := RandomNumberGenerator.new()
+	_lod = true
+	for chunk in _chunks:
+		_verts = PackedVector3Array()
+		_normals = PackedVector3Array()
+		_colors = PackedColorArray()
+		_indices = PackedInt32Array()
+		_far_v = PackedVector3Array()
+		_far_n = PackedVector3Array()
+		_far_c = PackedColorArray()
+		_far_i = PackedInt32Array()
+		_top = 1.0
+		for i in chunk["cells"]:
+			rng.seed = 11 + i * 7919
+			_place_tile(i, biomes[i], buildings[i], rng)
+		chunk["top"] = sqrt(_top)
+		(chunk["near"] as MeshInstance3D).mesh = _mesh_of(_verts, _normals, _colors, _indices)
+		(chunk["far"] as MeshInstance3D).mesh = _mesh_of(_far_v, _far_n, _far_c, _far_i)
+	_lod = false
+	_verts = PackedVector3Array()
+	_normals = PackedVector3Array()
+	_colors = PackedColorArray()
+	_indices = PackedInt32Array()
+	_far_v = PackedVector3Array()
+	_far_n = PackedVector3Array()
+	_far_c = PackedColorArray()
+	_far_i = PackedInt32Array()
 	_site_times.clear()
-	var arrays := []
-	arrays.resize(Mesh.ARRAY_MAX)
-	arrays[Mesh.ARRAY_VERTEX] = _verts
-	arrays[Mesh.ARRAY_NORMAL] = _normals
-	arrays[Mesh.ARRAY_COLOR] = _colors
-	arrays[Mesh.ARRAY_INDEX] = _indices
-	var mesh := ArrayMesh.new()
-	if _verts.size() > 0:
-		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
-	_props.mesh = mesh
+	_culled_from = Vector3.INF
 	_place_labels()
 	_update_highlight()
+
+
+static func _mesh_of(verts: PackedVector3Array, normals: PackedVector3Array, colors: PackedColorArray, indices: PackedInt32Array) -> ArrayMesh:
+	var mesh := ArrayMesh.new()
+	if verts.is_empty():
+		return mesh
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = verts
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	arrays[Mesh.ARRAY_COLOR] = colors
+	arrays[Mesh.ARRAY_INDEX] = indices
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	return mesh
+
+
+## Split the cells into `CHUNKS` patches around evenly spread directions
+## (a Fibonacci sphere), each with a near and a far mesh.
+func _make_chunks() -> void:
+	var dirs := []
+	for k in CHUNKS:
+		var y := 1.0 - (k + 0.5) * 2.0 / CHUNKS
+		var r := sqrt(1.0 - y * y)
+		var a := k * PI * (3.0 - sqrt(5.0))
+		dirs.append(Vector3(cos(a) * r, y, sin(a) * r))
+		_chunks.append({"cells": [], "dir": dirs[k], "reach": 0.0, "top": 1.0})
+	_chunk_of.resize(builder.centers.size())
+	for i in builder.centers.size():
+		var c: Vector3 = builder.centers[i].normalized()
+		var best := 0
+		for k in CHUNKS:
+			if c.dot(dirs[k]) > c.dot(dirs[best]):
+				best = k
+		_chunk_of[i] = best
+		_chunks[best]["cells"].append(i)
+	var cell_reach := _tile_size() * 0.75
+	for chunk in _chunks:
+		var reach := 0.0
+		for i in chunk["cells"]:
+			reach = maxf(reach, (chunk["dir"] as Vector3).angle_to(builder.centers[i]))
+		chunk["reach"] = reach + cell_reach
+		for level in ["near", "far"]:
+			var node := MeshInstance3D.new()
+			node.material_override = _props_material
+			node.visible = false
+			pivot.add_child(node)
+			chunk[level] = node
+
+
+## Show each patch at the level the camera needs: none behind the
+## horizon, the far meshes where details would be smaller than
+## `DETAIL_PIXELS`, the near ones up close. Runs only when the camera moved
+## in the planet's frame.
+func _cull() -> void:
+	if _camera == null or _chunks.is_empty():
+		return
+	var eye := pivot.global_transform.affine_inverse() * _camera.global_position
+	if eye.distance_squared_to(_culled_from) < 1e-8:
+		return
+	_culled_from = eye
+	var d := eye.length()
+	var toward := eye / d
+	var horizon := acos(clampf(GROUND_LOW / d, -1.0, 1.0))
+	# Moving things: the horizon, plus a cell and the height of a bird.
+	_eye_dir = toward
+	_see_cos = cos(minf(PI, horizon + acos(GROUND_LOW / 1.08) + _tile_size() * 0.5))
+	# Pixels per planet radius at distance 1 from the camera.
+	var focal := view_height / (2.0 * tan(deg_to_rad(_camera.fov) * 0.5))
+	for chunk in _chunks:
+		var dir: Vector3 = chunk["dir"]
+		var reach: float = chunk["reach"]
+		# A prop as tall as the patch's tallest still peeks over the horizon.
+		var over := acos(clampf(GROUND_LOW / maxf(float(chunk["top"]), GROUND_LOW), -1.0, 1.0))
+		var seen := toward.angle_to(dir) <= horizon + over + reach
+		var near := false
+		if seen:
+			# The patch's nearest point to the camera.
+			var gap := maxf(0.02, eye.distance_to(dir) - reach)
+			near = DETAIL_SIZE * focal / gap >= DETAIL_PIXELS
+		(chunk["near"] as MeshInstance3D).visible = seen and near
+		(chunk["far"] as MeshInstance3D).visible = seen and not near
 
 
 ## Rotate by a drag of `relative` pixels (in the low-resolution view).
@@ -625,7 +738,10 @@ func _toon(color: Color, vertex_colors := false) -> StandardMaterial3D:
 static func _shape(key: String, make: Callable) -> Array:
 	if not _shapes.has(key):
 		var mesh: PrimitiveMesh = make.call()
-		_shapes[key] = mesh.get_mesh_arrays()
+		var arrays := mesh.get_mesh_arrays()
+		var box := mesh.get_aabb()
+		arrays.append(maxf(box.size.x, maxf(box.size.y, box.size.z)))
+		_shapes[key] = arrays
 	return _shapes[key]
 
 
@@ -672,8 +788,69 @@ static func _tangents_of(normal: Vector3) -> Array:
 
 
 ## Place `mesh` on the tile: `offset` is (along u, up, along w) in the tile's
-## frame, `turn` rotates it around the tile's up.
+## frame, `turn` rotates it around the tile's up. While the planet's props
+## are built (`_lod`), a shape big enough to show from afar also goes into
+## the far mesh; smaller ones (a window, a flower) only into the near one.
 func _put(shape: Array, color: Color, normal: Vector3, base: Vector3, offset: Vector3, size := 1.0, turn := 0.0, roll := 0.0) -> void:
+	var xform := _place(normal, base, offset, size, turn, roll)
+	var rotation := xform.basis.orthonormalized()
+	var verts: PackedVector3Array = shape[Mesh.ARRAY_VERTEX]
+	var normals: PackedVector3Array = shape[Mesh.ARRAY_NORMAL]
+	var indices: PackedInt32Array = shape[Mesh.ARRAY_INDEX]
+	var start := _verts.size()
+	for k in verts.size():
+		var v := xform * verts[k]
+		_verts.append(v)
+		_normals.append(rotation * normals[k])
+		_colors.append(color)
+		_top = maxf(_top, v.length_squared())
+	for index in indices:
+		_indices.append(start + index)
+	if not _lod or _extent(shape) * xform.basis.get_scale().x < FAR_MIN:
+		return
+	start = _far_v.size()
+	for k in verts.size():
+		_far_v.append(xform * verts[k])
+		_far_n.append(rotation * normals[k])
+		_far_c.append(color)
+	for index in indices:
+		_far_i.append(start + index)
+
+
+## Place a Blender model (`models/<name>.glb`) like `_put` places a shape:
+## its near parts in the near mesh and its far parts in the far one.
+## `tints` colour its tint1, tint2... materials.
+func _put_model(name: String, normal: Vector3, base: Vector3, offset: Vector3, size := 1.0, turn := 0.0, tints := []) -> void:
+	var model := Models.get_model(name)
+	var xform := _place(normal, base, offset, size, turn, 0.0)
+	var rotation := xform.basis.orthonormalized()
+	var part := model.near
+	var start := _verts.size()
+	for k in part.verts.size():
+		var v := xform * part.verts[k]
+		_verts.append(v)
+		_normals.append(rotation * part.normals[k])
+		var slot := part.slots[k]
+		_colors.append(part.colors[k] if slot < 0 else (tints[slot] if slot < tints.size() else Color.WHITE))
+		_top = maxf(_top, v.length_squared())
+	for index in part.indices:
+		_indices.append(start + index)
+	if not _lod:
+		return
+	part = model.far
+	start = _far_v.size()
+	for k in part.verts.size():
+		_far_v.append(xform * part.verts[k])
+		_far_n.append(rotation * part.normals[k])
+		var slot := part.slots[k]
+		_far_c.append(part.colors[k] if slot < 0 else (tints[slot] if slot < tints.size() else Color.WHITE))
+	for index in part.indices:
+		_far_i.append(start + index)
+
+
+## Where `_put` puts a shape: the transform from the shape's frame to the
+## planet's.
+func _place(normal: Vector3, base: Vector3, offset: Vector3, size: float, turn: float, roll: float) -> Transform3D:
 	var t := _tangents(normal)
 	var u: Vector3 = t[0]
 	var w: Vector3 = t[1]
@@ -687,18 +864,12 @@ func _put(shape: Array, color: Color, normal: Vector3, base: Vector3, offset: Ve
 		# Nature stands wherever it is: on the ground at that very spot,
 		# sunk a little so slopes never leave a gap underneath.
 		at = builder.ground(at, _cell) - y * 0.004 * _ts
-	var xform := Transform3D(basis, at + y * offset.y)
-	var rotation := basis.orthonormalized()
-	var start := _verts.size()
-	var verts: PackedVector3Array = shape[Mesh.ARRAY_VERTEX]
-	var normals: PackedVector3Array = shape[Mesh.ARRAY_NORMAL]
-	for k in verts.size():
-		_verts.append(xform * verts[k])
-		_normals.append(rotation * normals[k])
-		_colors.append(color)
-	var indices: PackedInt32Array = shape[Mesh.ARRAY_INDEX]
-	for index in indices:
-		_indices.append(start + index)
+	return Transform3D(basis, at + y * offset.y)
+
+
+## A shape's largest side (`_shape` keeps it after the mesh arrays).
+static func _extent(shape: Array) -> float:
+	return float(shape[Mesh.ARRAY_MAX]) if shape.size() > Mesh.ARRAY_MAX else 1.0
 
 
 ## Nature follows the ground prop by prop; buildings stand on one footing.
@@ -720,15 +891,17 @@ func _place_tile(i: int, biome: String, building: String, rng: RandomNumberGener
 		if i < _dug.size() and _dug[i]:
 			_quarry(normal, base, rng)
 		else:
-			_nature(normal, base, biome, rng, maxi(1, roundi(6.0 * (0.25 + 0.75 * stock))))
+			_nature(normal, base, biome, rng, 1 if wonders.has(i) else maxi(1, roundi(6.0 * (0.25 + 0.75 * stock))))
 		if biome == "forest" and stock < 0.75:
 			# Stumps where the trees were cut.
 			for k in roundi((1.0 - stock) * 7.0):
 				var a := rng.randf() * TAU
 				var r := 0.05 + rng.randf() * 0.18
-				_put(_cylinder(0.014, 0.022, 5), Color("8f6f5a"), normal, base, Vector3(cos(a) * r, 0.008, sin(a) * r))
+				_put_model("stump", normal, base, Vector3(cos(a) * r, 0.0, sin(a) * r), 0.9 + rng.randf() * 0.3, rng.randf() * TAU)
 		if _finds_at.has(i):
 			_find_model(_finds_at[i], normal, base, rng)
+		if wonders.has(i) and wonders[i] != "whale":
+			_put_model(wonders[i], normal, base, Vector3(0.03, 0.0, -0.02), 1.4, rng.randf() * TAU, [LEAVES[0]])
 		if _ordered.has(i):
 			# A stake with a little flag the colour of what is gathered.
 			_put(_box(0.012, 0.16, 0.012), Palette.HUT_WALL, normal, base, Vector3(0, 0.08, 0))
@@ -754,33 +927,23 @@ func _place_tile(i: int, biome: String, building: String, rng: RandomNumberGener
 	_on_ground = false
 
 
-## A tree with a trunk: a conifer (stacked cones) or a broadleaf (a few
-## round crowns), standing on the ground at `at` (offset in the cell's
-## frame).
+## A tree standing on the ground at `at` (offset in the cell's frame): a
+## fir or a tall spruce, or a broadleaf (an oak or a round lime) with leaves
+## of its own green.
 func _tree(normal: Vector3, base: Vector3, at: Vector3, s: float, conifer: bool, rng: RandomNumberGenerator) -> void:
-	var trunk := Color("6b5a4e")
-	_put(_cylinder(0.011, 0.06, 5), trunk, normal, base, at + Vector3(0, 0.03 * s, 0), s)
+	var turn := rng.randf() * TAU
 	if conifer:
-		var green := Palette.TREE
-		_put(_cone(0.06, 0.1, 6), green.darkened(0.08), normal, base, at + Vector3(0, 0.075 * s, 0), s)
-		_put(_cone(0.047, 0.085, 6), green, normal, base, at + Vector3(0, 0.12 * s, 0), s)
-		_put(_cone(0.032, 0.065, 6), green.lightened(0.08), normal, base, at + Vector3(0, 0.16 * s, 0), s)
+		_put_model("tree_conifer_tall" if rng.randf() < 0.35 else "tree_conifer", normal, base, at, s, turn)
 	else:
-		var leaf := Color("6f9163").lerp(Color("8fae6b"), rng.randf())
-		_put(_ball(0.05), leaf.darkened(0.1), normal, base, at + Vector3(0, 0.055 * s, 0), s)
-		_put(_ball(0.04), leaf, normal, base, at + Vector3(0.022 * s, 0.075 * s, 0.01 * s), s)
-		_put(_ball(0.035), leaf.lightened(0.08), normal, base, at + Vector3(-0.018 * s, 0.085 * s, -0.012 * s), s)
+		var leaf: Color = LEAVES[rng.randi() % LEAVES.size()]
+		_put_model("tree_round" if rng.randf() < 0.4 else "tree_broadleaf", normal, base, at, s, turn, [leaf])
+
+const LEAVES := [Color("6f9163"), Color("7fa070"), Color("8fae6b"), Color("5e7d62"), Color("94b37e")]
 
 
-## A palm: a leaning trunk in three pieces and a crown of fronds.
+## A palm: a leaning trunk and a crown of fronds.
 func _palm(normal: Vector3, base: Vector3, at: Vector3, s: float, rng: RandomNumberGenerator) -> void:
-	var lean := Vector3(0.012, 0.0, 0.006) * s
-	for k in 3:
-		_put(_cylinder(0.008, 0.035, 5), Color("8f6f5a"), normal, base, at + lean * k + Vector3(0, (0.017 + 0.033 * k) * s, 0), s)
-	var top := at + lean * 3.0 + Vector3(0, 0.105 * s, 0)
-	for k in 5:
-		var a := k * TAU / 5.0 + rng.randf() * 0.3
-		_put(_box(0.05, 0.006, 0.014), Color("6f9163"), normal, base, top + Vector3(cos(a) * 0.022, -0.004, sin(a) * 0.022) * s, s, -a)
+	_put_model("tree_palm", normal, base, at, s, rng.randf() * TAU)
 
 
 ## A worked-out quarry: a dark pit with spoil heaps around it.
@@ -834,7 +997,9 @@ func _ground_plane(cell: int, normal: Vector3, base: Vector3) -> Array:
 const BUILDING_SCALE := 1.15
 
 
-## Trees, peaks or ice around the tile's edge (`amount` trees on a forest).
+## Trees, peaks or ice around the tile's edge (`amount` trees on a forest),
+## and the small things only seen up close: grass, flowers, mushrooms,
+## mossy stones.
 func _nature(normal: Vector3, base: Vector3, biome: String, rng: RandomNumberGenerator, amount: int) -> void:
 	match biome:
 		"forest":
@@ -843,36 +1008,58 @@ func _nature(normal: Vector3, base: Vector3, biome: String, rng: RandomNumberGen
 				var r := (0.04 + rng.randf() * 0.2) if amount > 2 else 0.2 + rng.randf() * 0.06
 				var s := 0.7 + rng.randf() * 0.6
 				_tree(normal, base, Vector3(cos(angle) * r, 0.0, sin(angle) * r), s, rng.randf() < 0.6, rng)
+			if rng.randf() < 0.5:
+				_scatter("rock_mossy", normal, base, rng, 1, 0.5, 0.8)
+			if rng.randf() < 0.3:
+				_scatter("bush", normal, base, rng, 1, 0.5, 0.7, [LEAVES[3]])
+			_scatter("grass", normal, base, rng, 2, 0.6, 1.0)
 		"mountain":
 			# The peak is the ground itself; a few boulders on its flanks.
 			for k in mini(amount, 3):
 				var angle := k * TAU / 3.0 + rng.randf()
 				var r := 0.12 + rng.randf() * 0.1
-				_put(_box(0.05, 0.04, 0.045), Palette.PEAK, normal, base,
-					Vector3(cos(angle) * r, 0.012, sin(angle) * r), 0.7 + rng.randf() * 0.6, rng.randf() * TAU)
+				_put_model("rock", normal, base, Vector3(cos(angle) * r, 0.0, sin(angle) * r), 0.7 + rng.randf() * 0.6, rng.randf() * TAU)
+			if rng.randf() < 0.3:
+				_scatter("tree_conifer", normal, base, rng, 1, 0.5, 0.7)
 		"plains":
 			for k in mini(amount, 2):
-				var angle := rng.randf() * TAU
-				var r := 0.08 + rng.randf() * 0.14
-				_put(_ball(0.035), Color("6f9163"), normal, base,
-					Vector3(cos(angle) * r, 0.0, sin(angle) * r), 0.8 + rng.randf() * 0.5)
-			# Now and then a lone broadleaf tree, and flowers.
+				_scatter("bush", normal, base, rng, 1, 0.8, 1.2, [LEAVES[rng.randi() % LEAVES.size()]])
+			# Now and then a lone broadleaf tree, flowers and grass.
 			if amount > 3 and rng.randf() < 0.45:
 				var a := rng.randf() * TAU
 				_tree(normal, base, Vector3(cos(a) * 0.17, 0.0, sin(a) * 0.17), 0.8, false, rng)
-			for k in 3:
-				var a := rng.randf() * TAU
-				var r := 0.05 + rng.randf() * 0.2
-				_put(_box(0.012, 0.01, 0.012), [Color("f2c078"), Color("e3c3c6"), Color("eef3f2")][k], normal, base, Vector3(cos(a) * r, 0.005, sin(a) * r))
-		"coast", "desert":
+			_scatter("flowers", normal, base, rng, 2, 0.8, 1.1)
+			_scatter("grass", normal, base, rng, 4, 0.7, 1.1)
+			if rng.randf() < 0.15:
+				_scatter("rock", normal, base, rng, 1, 0.3, 0.5)
+		"coast":
 			if amount > 3 and rng.randf() < 0.5:
 				var a := rng.randf() * TAU
 				_palm(normal, base, Vector3(cos(a) * 0.15, 0.0, sin(a) * 0.15), 0.9 + rng.randf() * 0.3, rng)
+			_scatter("grass", normal, base, rng, 1, 0.6, 0.9)
+		"desert":
+			if amount > 3 and rng.randf() < 0.35:
+				var a := rng.randf() * TAU
+				_palm(normal, base, Vector3(cos(a) * 0.15, 0.0, sin(a) * 0.15), 0.9 + rng.randf() * 0.3, rng)
+			elif rng.randf() < 0.5:
+				_scatter("cactus", normal, base, rng, 1 + rng.randi() % 2, 0.8, 1.2)
+			if rng.randf() < 0.2:
+				_scatter("tree_dead", normal, base, rng, 1, 0.8, 1.0)
+			if rng.randf() < 0.4:
+				_scatter("rock", normal, base, rng, 1, 0.3, 0.6)
 		"ice":
 			for k in mini(amount, 3):
 				var angle := k * TAU / 3.0 + rng.randf()
-				_put(_cone(0.08, 0.06, 5), Palette.SNOW, normal, base,
-					Vector3(cos(angle) * 0.14, 0.02, sin(angle) * 0.14), 0.8 + rng.randf() * 0.4)
+				_put_model("ice_shard", normal, base, Vector3(cos(angle) * 0.14, 0.0, sin(angle) * 0.14), 0.8 + rng.randf() * 0.4, rng.randf() * TAU)
+
+
+## `count` copies of a model at random spots of the cell, sized between
+## `low` and `high`.
+func _scatter(name: String, normal: Vector3, base: Vector3, rng: RandomNumberGenerator, count: int, low: float, high: float, tints := []) -> void:
+	for k in count:
+		var a := rng.randf() * TAU
+		var r := 0.04 + rng.randf() * 0.2
+		_put_model(name, normal, base, Vector3(cos(a) * r, 0.0, sin(a) * r), lerpf(low, high, rng.randf()), rng.randf() * TAU, tints)
 
 
 var _stocks := []
@@ -885,7 +1072,8 @@ var _site_times := {}
 ## The building going up on a site: its own small mesh, scaled up from the
 ## footing as the work goes on (see `_move_walkers`).
 func _grow_site(cell: int, id: String, normal: Vector3, footing: Vector3) -> void:
-	var saved := [_verts, _normals, _colors, _indices]
+	var saved := [_verts, _normals, _colors, _indices, _lod, _top]
+	_lod = false
 	_verts = PackedVector3Array()
 	_normals = PackedVector3Array()
 	_colors = PackedColorArray()
@@ -901,25 +1089,22 @@ func _grow_site(cell: int, id: String, normal: Vector3, footing: Vector3) -> voi
 	_normals = saved[1]
 	_colors = saved[2]
 	_indices = saved[3]
+	_lod = saved[4]
+	_top = saved[5]
 	if arrays[Mesh.ARRAY_VERTEX].is_empty():
 		return
 	var mesh := ArrayMesh.new()
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 	var node := MeshInstance3D.new()
 	node.mesh = mesh
-	node.material_override = _props.material_override
+	node.material_override = _props_material
 	pivot.add_child(node)
 	var times: Array = _site_times.get(cell, [0.0, 1.0])
 	_sites.append([node, footing, normal.normalized(), times[0], times[1]])
 
 
 func _scaffold(normal: Vector3, base: Vector3) -> void:
-	var pole := _box(0.012, 0.12, 0.012)
-	for k in 4:
-		var angle := k * TAU / 4.0 + PI / 4.0
-		_put(pole, Palette.HUT_WALL, normal, base, Vector3(cos(angle) * 0.05, 0.06, sin(angle) * 0.05))
-	_put(_box(0.11, 0.012, 0.11), Palette.HUT_WALL, normal, base, Vector3(0, 0.12, 0))
-	_put(_box(0.07, 0.03, 0.05), Palette.PEAK, normal, base, Vector3(0.02, 0.015, 0.0))
+	_put_model("scaffold", normal, base, Vector3.ZERO)
 
 
 ## One small model per building id.
@@ -932,7 +1117,16 @@ func _building(id: String, n: Vector3, b: Vector3) -> void:
 var _scale := 1.0
 
 
+## Buildings with a Blender model of their own (models/<id>.glb); the
+## later eras' ones are still drawn from shapes (`_styled`).
+const MODELLED := ["hut", "house", "hunting_camp", "fire_pit", "stone_circle", "field", "pasture",
+	"storehouse", "great_granary", "mine", "foundry", "temple", "scribe_house", "ziggurat", "colony"]
+
+
 func _building_parts(id: String, n: Vector3, b: Vector3) -> void:
+	if id in MODELLED:
+		_put_model(id, n, b, Vector3.ZERO)
+		return
 	var wall := Palette.HUT_WALL
 	var roof := Palette.HUT_ROOF
 	var stone := Palette.PEAK
@@ -1372,19 +1566,24 @@ func _place_rides() -> void:
 	var carts := _rides.filter(func(r): return not r["boat"])
 	var sails := _rides.filter(func(r): return r["boat"])
 	_rides = carts + sails
-	_vehicles.multimesh.visible_instance_count = mini(carts.size(), MAX_RIDES)
+	_count(_vehicles, mini(carts.size(), MAX_RIDES))
 	for k in mini(carts.size(), MAX_RIDES):
-		_vehicles.multimesh.set_instance_color(k, Color("d9b48f"))
-	_boats.multimesh.visible_instance_count = mini(sails.size() + _fishers.size(), MAX_RIDES)
+		_look(_vehicles.multimesh, k, CART_LOADS[k % CART_LOADS.size()], 0.0)
+	_count(_boats, mini(sails.size() + _fishers.size(), MAX_RIDES))
 	for k in _boats.multimesh.visible_instance_count:
-		_boats.multimesh.set_instance_color(k, Color("eef3f2"))
+		_look(_boats.multimesh, k, Color("eef3f2") if k < sails.size() else Color("e3c3c6"), 0.0)
 	_move_vehicles()
 
 
-func _ride_basis(forward: Vector3, normal: Vector3, size: float) -> Basis:
-	var side := forward.cross(normal)
+const CART_LOADS := [Color("d9b48f"), Color("c2d69b"), Color("b0a6ad"), Color("f2c078")]
+
+
+## A model's frame on the ground: up along `normal`, its front (+Z) along
+## `forward`.
+static func _ride_basis(forward: Vector3, normal: Vector3, size: float) -> Basis:
+	var side := normal.cross(forward)
 	if side.length_squared() < 1e-8:
-		side = _tangents(normal)[0]
+		side = _tangents_of(normal)[0]
 	side = side.normalized()
 	return Basis(side, normal, side.cross(normal)).scaled(Vector3.ONE * size)
 
@@ -1406,11 +1605,11 @@ func _move_vehicles() -> void:
 		if r["boat"] and boats >= MAX_RIDES:
 			continue
 		if r["boat"]:
-			at += normal * (0.004 * size + 0.002 * sin(_seconds * 2.0 + boats))
+			at += normal * (0.002 * sin(_seconds * 2.0 + boats) - 0.002 * size)
 			_boats.multimesh.set_instance_transform(boats, _safe(Transform3D(_ride_basis(forward, normal, size), at), "boat"))
 			boats += 1
 		elif carts < MAX_RIDES:
-			at += normal * 0.022 * size
+			at += normal * (0.004 * size + 0.002)
 			_vehicles.multimesh.set_instance_transform(carts, _safe(Transform3D(_ride_basis(forward, normal, size), at), "cart"))
 			carts += 1
 	# Fishing boats circle slowly on their cell.
@@ -1423,7 +1622,7 @@ func _move_vehicles() -> void:
 		var a := _seconds * 0.25 + k * 2.1
 		var dir: Vector3 = tg[0] * cos(a) + tg[1] * sin(a)
 		var at := n * PlanetMesh.SEA_LEVEL + dir * 0.03 * _ts
-		at = at.normalized() * (PlanetMesh.SEA_LEVEL + 0.004 * size + 0.002 * sin(_seconds * 2.0 + k))
+		at = at.normalized() * (PlanetMesh.SEA_LEVEL - 0.002 * size + 0.002 * sin(_seconds * 2.0 + k))
 		var forward: Vector3 = -tg[0] * sin(a) + tg[1] * cos(a)
 		_boats.multimesh.set_instance_transform(boats, _safe(Transform3D(_ride_basis(forward, at.normalized(), size), at), "fisher"))
 		boats += 1
@@ -1526,7 +1725,7 @@ func _mark_mesh(build: Callable, unshaded := false) -> MeshInstance3D:
 		m.vertex_color_use_as_albedo = true
 		node.material_override = m
 	else:
-		node.material_override = _props.material_override
+		node.material_override = _props_material
 	return node
 
 
@@ -1721,19 +1920,105 @@ func _facade(n: Vector3, b: Vector3, k: float, z: float, rows: int) -> void:
 
 # ---------------------------------------------------------------- tools and wildlife
 
+var _creature_material: ShaderMaterial
+
+
+## A Blender model (its near level) as one mesh for MultiMesh instances,
+## with the shapes `extra` puts (as in `_compose`) added in.
+func _creature_mesh(name: String, extra := Callable()) -> ArrayMesh:
+	var mesh := Models.get_model(name).near.mesh()
+	if not extra.is_valid():
+		return mesh
+	var more := _compose(extra)
+	if more.get_surface_count() == 0:
+		return mesh
+	var a := mesh.surface_get_arrays(0)
+	var b := more.surface_get_arrays(0)
+	a[Mesh.ARRAY_TANGENT] = null
+	var start: int = (a[Mesh.ARRAY_VERTEX] as PackedVector3Array).size()
+	var added: int = (b[Mesh.ARRAY_VERTEX] as PackedVector3Array).size()
+	for k in [Mesh.ARRAY_VERTEX, Mesh.ARRAY_NORMAL, Mesh.ARRAY_COLOR]:
+		var list = a[k]
+		list.append_array(b[k])
+		a[k] = list
+	var uv: PackedVector2Array = a[Mesh.ARRAY_TEX_UV]
+	var uv2: PackedVector2Array = a[Mesh.ARRAY_TEX_UV2]
+	for k in added:
+		uv.append(Vector2.ZERO)
+		uv2.append(Vector2.ZERO)
+	a[Mesh.ARRAY_TEX_UV] = uv
+	a[Mesh.ARRAY_TEX_UV2] = uv2
+	var indices: PackedInt32Array = a[Mesh.ARRAY_INDEX]
+	for i in (b[Mesh.ARRAY_INDEX] as PackedInt32Array):
+		indices.append(start + i)
+	a[Mesh.ARRAY_INDEX] = indices
+	var out := ArrayMesh.new()
+	out.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, a)
+	return out
+
+
+## A MultiMesh of `count` hidden instances of `mesh`, drawn by
+## creature.gdshader; `_look` gives each its tint and motion.
+func _creature_set(mesh: Mesh, count: int) -> MultiMeshInstance3D:
+	if _creature_material == null:
+		_creature_material = ShaderMaterial.new()
+		_creature_material.shader = load("res://creature.gdshader")
+	var node := MultiMeshInstance3D.new()
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_custom_data = true
+	mm.mesh = mesh
+	_fixed(mm, count)
+	node.multimesh = mm
+	node.material_override = _creature_material
+	node.visible = false
+	pivot.add_child(node)
+	return node
+
+
+## An instance's tint (its model's tint materials) and motion (0 standing
+## still, 1 walking: how far legs, arms and tails swing).
+static func _look(mm: MultiMesh, i: int, tint: Color, motion: float) -> void:
+	mm.set_instance_custom_data(i, Color(tint.r, tint.g, tint.b, motion))
+
+
+## Show only the MultiMeshes with something to draw.
+static func _count(node: MultiMeshInstance3D, count: int) -> void:
+	node.multimesh.visible_instance_count = count
+	node.visible = count > 0
+
+
+## Whether a point (planet frame) is on this side of the horizon, with a
+## margin: things beyond it are neither moved nor drawn.
+func _seen(p: Vector3) -> bool:
+	return p.dot(_eye_dir) > _see_cos * p.length()
+
+
+var _eye_dir := Vector3.BACK
+var _see_cos := -1.0
+
+
 var _walker_sets := {} # tool ("" for empty hands) -> MultiMeshInstance3D
-var _animals: MultiMeshInstance3D
+## Wild animals, one MultiMesh per species (`_animal_sets`).
+var _animal_sets := {}
 var _birds: MultiMeshInstance3D
 var _herd := []        # per animal: {cell, phase, speed, radius}
 var _flocks := []      # per flock: see `_place_birds`
-var _herd_colors := []
 var _wildlife_dirty := true
 var _wild_buildings := []
-const ANIMAL_COLORS := {
-	"forest": [Color("8f6f5a"), Color("5b4a42")], "plains": [Color("b58e6b"), Color("d9c8b0")],
-	"mountain": [Color("e8e2d6"), Color("a39aa8")], "ice": [Color("f4f6f8")], "desert": [Color("d9b48f")],
-	"coast": [Color("c8b49a")],
+## Which animals live where, and their coats (a fox on the ice is white).
+const SPECIES := {
+	"forest": ["deer", "deer", "boar"], "plains": ["deer", "fox", "sheep", "sheep"], "mountain": ["goat"],
+	"ice": ["fox", "penguin", "penguin"], "desert": ["camel"], "coast": ["crab"],
 }
+const SPECIES_TINTS := {
+	"deer": [Color("8f6f5a"), Color("b58e6b")], "boar": [Color("5b4a42"), Color("6b5a4e")],
+	"goat": [Color("e8e2d6"), Color("b0a6ad")], "sheep": [Color("eef3f2"), Color("e3d9c8")],
+	"fox": [Color("e08f6c"), Color("c07a54")], "camel": [Color("d9b48f"), Color("c8a46e")],
+	"crab": [Color.WHITE], "penguin": [Color.WHITE],
+}
+## The hunters' quarry.
+const QUARRY := "deer"
 
 
 ## What a crew carries: spears, then bows, then muskets to hunt in the
@@ -1760,7 +2045,7 @@ func _build_walkers() -> void:
 	var o := Vector3.ZERO
 	var wood := Color("8f6f5a")
 	var shapes := {
-		"": func(): pass,
+		"": Callable(),
 		"spear": func():
 			_put(_box(0.004, 0.075, 0.004), wood, up, o, Vector3(0.01, 0.02, 0.018), 1.0, 0.0, 0.25)
 			_put(_cone(0.006, 0.014, 4), Color("b0a6ad"), up, o, Vector3(0.01, 0.062, 0.028)),
@@ -1785,30 +2070,10 @@ func _build_walkers() -> void:
 			_put(_box(0.003, 0.045, 0.003), wood, up, o, Vector3(0.008, 0.01, 0.018), 1.0, 0.0, 0.3)
 			_put(_box(0.024, 0.004, 0.004), Color("857c8a"), up, o, Vector3(0.012, 0.032, 0.024)),
 	}
+	# A person (the Blender model: walking legs and arms, a tunic in the
+	# instance's colour) with what it carries.
 	for tool in shapes:
-		var node := MultiMeshInstance3D.new()
-		var mm := MultiMesh.new()
-		mm.transform_format = MultiMesh.TRANSFORM_3D
-		mm.use_colors = true
-		var tool_shape: Callable = shapes[tool]
-		mm.mesh = _compose(func():
-			# A person (legs, a body in a tunic, a head) and what it carries.
-			_put(_box(0.022, 0.018, 0.016), Color("6b5a4e"), up, o, Vector3(0, -0.018, 0))
-			_put(_box(0.03, 0.03, 0.022), Color.WHITE, up, o, Vector3(0, 0.006, 0))
-			_put(_ball(0.012), Color("e8c4a0"), up, o, Vector3(0, 0.021, 0))
-			_put(_box(0.016, 0.012, 0.016), Color("e8c4a0"), up, o, Vector3(0, 0.024, 0))
-			tool_shape.call())
-		# A fixed number of instances, set once: changing instance_count
-		# every refresh drew stray streaks across the sky (WebGL); only
-		# `visible_instance_count` changes.
-		mm.instance_count = MAX_WALKERS
-		for k in MAX_WALKERS:
-			mm.set_instance_transform(k, Transform3D(Basis().scaled(Vector3.ZERO), Vector3.ZERO))
-		mm.visible_instance_count = 0
-		node.multimesh = mm
-		node.material_override = _toon(Color.WHITE, true)
-		pivot.add_child(node)
-		_walker_sets[tool] = node
+		_walker_sets[tool] = _creature_set(_creature_mesh("person", shapes[tool]), MAX_WALKERS)
 
 
 func _walker_mm(w: Dictionary) -> MultiMesh:
@@ -1822,46 +2087,72 @@ func _place_animals(biomes: Array, buildings: Array) -> void:
 	_herd.clear()
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 77
-	var chance := {"forest": 0.35, "plains": 0.16, "mountain": 0.22, "ice": 0.1, "desert": 0.08, "coast": 0.05}
-	_herd_colors.clear()
+	var chance := {"forest": 0.35, "plains": 0.16, "mountain": 0.22, "ice": 0.12, "desert": 0.08, "coast": 0.1}
+	var counts := {}
 	for i in biomes.size():
 		var biome := str(biomes[i])
 		var roll := rng.randf()
-		var tint := rng.randi()
+		var pick := rng.randi()
 		if not chance.has(biome) or str(buildings[i]) != "" or roll >= float(chance[biome]):
 			continue
-		if _herd.size() >= MAX_ANIMALS - MAX_QUARRIES:
+		if _herd.size() >= MAX_ANIMALS:
 			break
-		var palette: Array = ANIMAL_COLORS[biome]
-		_herd.append({"cell": i, "phase": rng.randf() * TAU, "speed": (0.05 + rng.randf() * 0.08) * (1.0 if rng.randf() < 0.5 else -1.0), "radius": (0.06 + rng.randf() * 0.1), "run": 0.0})
-		_herd_colors.append(palette[tint % palette.size()])
-	for k in _herd.size():
-		_animals.multimesh.set_instance_color(k, _herd_colors[k])
+		var kinds: Array = SPECIES[biome]
+		var species: String = kinds[pick % kinds.size()]
+		var coats: Array = SPECIES_TINTS[species]
+		var coat: Color = Color("f4f6f8") if species == "fox" and biome == "ice" else coats[(pick >> 8) % coats.size()]
+		var index: int = counts.get(species, 0)
+		counts[species] = index + 1
+		var slow := 0.5 if species in ["crab", "penguin"] else 1.0
+		_herd.append({"cell": i, "set": species, "i": index, "coat": coat, "phase": rng.randf() * TAU,
+			"speed": (0.05 + rng.randf() * 0.08) * slow * (1.0 if rng.randf() < 0.5 else -1.0),
+			"radius": (0.06 + rng.randf() * 0.1), "run": 0.0, "shown": true})
+	_herd_counts = counts
+	for a in _herd:
+		_look((_animal_sets[a["set"]] as MultiMeshInstance3D).multimesh, a["i"], a["coat"], 0.4)
 	_place_birds(biomes, rng)
 	_move_animals()
 
 
+var _herd_counts := {}
+
+
 ## The herd, plus one quarry per hunting crew (it grazes, bolts when the
-## hunters come, falls, and is carried home).
+## hunters come, falls, and is carried home). Animals beyond the horizon are
+## hidden and not moved.
 func _move_animals() -> void:
 	var size := _tile_size() * 1.3
-	var mm := _animals.multimesh
 	var delta := get_process_delta_time()
+	var hidden := Transform3D(Basis().scaled(Vector3.ZERO), Vector3.ZERO)
+	# From afar each animal moves every other frame.
+	var halves := _closeness < 0.25
 	for k in _herd.size():
 		var a: Dictionary = _herd[k]
+		if halves and (k + _tick) % 2 == 1:
+			continue
+		var mm: MultiMesh = (_animal_sets[a["set"]] as MultiMeshInstance3D).multimesh
 		var cell: int = a["cell"]
 		var n: Vector3 = builder.centers[cell]
+		if not _seen(n):
+			if a["shown"]:
+				a["shown"] = false
+				mm.set_instance_transform(a["i"], hidden)
+			continue
+		a["shown"] = true
 		var tg := _tangents(n)
-		var here := builder.ground(n, cell)
 		# Someone close: run off for a while.
-		for p in _people:
-			if (p as Vector3).distance_squared_to(here) < 0.0016:
-				a["run"] = 2.5
-				break
 		var run := float(a["run"])
+		if run <= 0.0:
+			var here: Vector3 = builder.center_points[cell] if cell < builder.center_points.size() else n
+			for p in _people:
+				if (p as Vector3).distance_squared_to(here) < 0.0016:
+					a["run"] = 2.5
+					run = 2.5
+					break
 		if run > 0.0:
-			a["run"] = run - delta
-			a["phase"] = float(a["phase"]) + delta * 3.5 * signf(float(a["speed"]))
+			var step := delta * (2.0 if halves else 1.0)
+			a["run"] = run - step
+			a["phase"] = float(a["phase"]) + step * 3.5 * signf(float(a["speed"]))
 		# Graze a while, then amble on.
 		var t := _seconds * float(a["speed"])
 		var angle := float(a["phase"]) + t + 0.6 * sin(t * 3.0)
@@ -1870,47 +2161,48 @@ func _move_animals() -> void:
 		var forward: Vector3 = (-tg[0] * sin(angle) + tg[1] * cos(angle)) * signf(float(a["speed"]))
 		if run > 0.0:
 			at += at.normalized() * absf(sin(_seconds * 14.0 + k)) * 0.004 * _ts
-		mm.set_instance_transform(k, _safe(_upright(at, forward, size), "animal"))
+		mm.set_instance_transform(a["i"], _safe(_upright(at, forward, size), "animal"))
+		_look(mm, a["i"], a["coat"], 1.0 if run > 0.0 else 0.35 + 0.3 * absf(cos(t * 3.0)))
 	# Quarries of the hunting crews.
+	var quarry: MultiMesh = (_animal_sets[QUARRY] as MultiMeshInstance3D).multimesh
+	var first: int = _herd_counts.get(QUARRY, 0)
 	var q := 0
 	for route in _routes:
 		if not route["tool"] in HUNTING or q >= MAX_QUARRIES:
 			continue
-		var index := _herd.size() + q
+		var index := first + q
 		q += 1
-		mm.set_instance_color(index, Color("8f6f5a"))
 		var walk := float(route["walk"])
 		var work := float(route["work"])
 		var t := fmod(_seconds + float(route["offset0"]), walk * 2.0 + work)
-		var hidden := Transform3D(Basis().scaled(Vector3.ZERO), Vector3.ZERO)
-		if t >= walk + work:
-			mm.set_instance_transform(index, hidden)
+		if t >= walk + work or not _seen(builder.centers[int(route["cell"])]):
+			quarry.set_instance_transform(index, hidden)
 			continue
 		var wt := clampf(t - walk, 0.0, work - CATCH_SECONDS)
 		var at := _quarry_pos(route, wt)
 		var ahead := _quarry_pos(route, wt + 0.1)
 		var xform := _upright(at, ahead - at, size * 1.1)
+		var motion := 1.0
 		if t < walk:
 			# Grazing, unaware.
-			xform = _upright(at + at.normalized() * 0.0, (ahead - at).rotated(at.normalized(), sin(_seconds) * 1.5), size * 1.1)
+			xform = _upright(at, (ahead - at).rotated(at.normalized(), sin(_seconds) * 1.5), size * 1.1)
+			motion = 0.3
 		elif t - walk >= work - CATCH_SECONDS:
 			# Caught: it lies on its side.
 			var b := xform.basis.orthonormalized()
 			xform = Transform3D(b.rotated(b.z.normalized(), PI / 2.0).scaled(Vector3.ONE * size * 1.1), at + at.normalized() * 0.004)
+			motion = 0.0
 		else:
 			xform.origin += at.normalized() * absf(sin(_seconds * 16.0)) * 0.005 * _ts
-		mm.set_instance_transform(index, _safe(xform, "quarry"))
-	mm.visible_instance_count = _herd.size() + q
+		quarry.set_instance_transform(index, _safe(xform, "quarry"))
+		_look(quarry, index, Color("8f6f5a"), motion)
+	for species in _animal_sets:
+		_count(_animal_sets[species], _herd_counts.get(species, 0) + (q if species == QUARRY else 0))
 
 
 ## A model standing on the ground at `at`, facing `forward`.
 func _upright(at: Vector3, forward: Vector3, size: float) -> Transform3D:
-	var normal := at.normalized()
-	var side := forward.cross(normal)
-	if side.length_squared() < 1e-10:
-		side = _tangents(normal)[0]
-	side = side.normalized()
-	return Transform3D(Basis(side, normal, side.cross(normal)).scaled(Vector3.ONE * size), at)
+	return Transform3D(_ride_basis(forward, at.normalized(), size), at)
 
 
 # ---------------------------------------------------------------- work
@@ -2168,34 +2460,10 @@ var _gull_cells := []
 func _build_birds_and_fx() -> void:
 	var up := Vector3.UP
 	var o := Vector3.ZERO
-	_birds = MultiMeshInstance3D.new()
-	var birds := MultiMesh.new()
-	birds.transform_format = MultiMesh.TRANSFORM_3D
-	birds.use_colors = true
-	birds.mesh = _compose(func():
-		# Body, head, beak and tail; the front is +X.
-		_put(_box(0.016, 0.007, 0.008), Color.WHITE, up, o, Vector3(0, 0, 0))
-		_put(_box(0.007, 0.007, 0.007), Color.WHITE, up, o, Vector3(0.01, 0.003, 0))
-		_put(_box(0.004, 0.002, 0.002), Color("f2c078"), up, o, Vector3(0.0155, 0.002, 0))
-		_put(_box(0.008, 0.002, 0.007), Color.WHITE.darkened(0.2), up, o, Vector3(-0.011, 0.001, 0)))
-	_fixed(birds, MAX_BIRDS)
-	_birds.multimesh = birds
-	_birds.material_override = _toon(Color.WHITE, true)
-	pivot.add_child(_birds)
-	_wings = MultiMeshInstance3D.new()
-	var wings := MultiMesh.new()
-	wings.transform_format = MultiMesh.TRANSFORM_3D
-	wings.use_colors = true
-	# One wing, from the body out to the side (+Z here is the bird's side).
-	wings.mesh = _compose(func():
-		_put(_box(0.008, 0.0015, 0.013), Color.WHITE, up, o, Vector3(0, 0, 0.0065))
-		_put(_box(0.005, 0.0015, 0.008), Color.WHITE.darkened(0.15), up, o, Vector3(-0.002, 0, 0.016)))
-	_fixed(wings, MAX_BIRDS * 2)
-	_wings.multimesh = wings
-	var wing_material := _toon(Color.WHITE, true)
-	wing_material.cull_mode = BaseMaterial3D.CULL_DISABLED
-	_wings.material_override = wing_material
-	pivot.add_child(_wings)
+	# Bodies and wings (the right wing, mirrored for the left one) from
+	# the Blender models, tinted per bird.
+	_birds = _creature_set(_creature_mesh("bird"), MAX_BIRDS)
+	_wings = _creature_set(_creature_mesh("bird_wing"), MAX_BIRDS * 2)
 	_fx = MultiMeshInstance3D.new()
 	var fx := MultiMesh.new()
 	fx.transform_format = MultiMesh.TRANSFORM_3D
@@ -2242,14 +2510,14 @@ func _place_birds(biomes: Array, rng: RandomNumberGenerator) -> void:
 		flock["pos"] = builder.ground(builder.centers[cell], cell)
 		_flocks.append(flock)
 		used += count
-	_birds.multimesh.visible_instance_count = used
-	_wings.multimesh.visible_instance_count = used * 2
+	_count(_birds, used)
+	_count(_wings, used * 2)
 	var k := 0
 	for flock in _flocks:
 		for bird in flock["birds"]:
-			_birds.multimesh.set_instance_color(k, bird["c"])
-			_wings.multimesh.set_instance_color(k * 2, bird["c"])
-			_wings.multimesh.set_instance_color(k * 2 + 1, bird["c"])
+			_look(_birds.multimesh, k, bird["c"], 0.0)
+			_look(_wings.multimesh, k * 2, bird["c"], 0.0)
+			_look(_wings.multimesh, k * 2 + 1, bird["c"], 0.0)
 			k += 1
 
 
@@ -2328,6 +2596,18 @@ func _move_birds(delta: float) -> void:
 					flock["state"] = "perch"
 					flock["timer"] = rng.randf_range(6.0, 16.0)
 		var pos: Vector3 = flock["pos"]
+		if not _seen(pos):
+			# Beyond the horizon: the flock keeps its plans, unseen.
+			if flock.get("shown", true):
+				flock["shown"] = false
+				var gone := Transform3D(Basis().scaled(Vector3.ZERO), Vector3.ZERO)
+				for m in flock["birds"].size():
+					_birds.multimesh.set_instance_transform(k + m, gone)
+					_wings.multimesh.set_instance_transform((k + m) * 2, gone)
+					_wings.multimesh.set_instance_transform((k + m) * 2 + 1, gone)
+			k += flock["birds"].size()
+			continue
+		flock["shown"] = true
 		var up := pos.normalized()
 		var tg := _tangents(up)
 		for bird in flock["birds"]:
@@ -2367,7 +2647,7 @@ func _move_birds(delta: float) -> void:
 				var beat := sin(_seconds * (9.0 if flock["gulls"] else 20.0) + float(bird["phase"]))
 				flap = (0.25 + 0.55 * beat) if flock["gulls"] else 0.9 * beat
 			var b := body.basis
-			var fwd := -b.z.normalized()
+			var fwd := b.z.normalized()
 			var right := Basis(fwd, flap) * b
 			var left := Basis(fwd, -flap) * b.rotated(b.y.normalized(), PI)
 			if not flapping:
@@ -2406,6 +2686,86 @@ func _safe(t: Transform3D, kind: String) -> Transform3D:
 	return Transform3D(Basis().scaled(Vector3.ZERO), Vector3.ZERO)
 
 
+# ---------------------------------------------------------------- wonders
+
+## Small wonders hidden on the planet, one of each kind where its land
+## exists (a cell drawn from the planet's own land, so it never moves):
+## found by clicking their cell, they glint now and then until then.
+const WONDERS := [
+	["mushroom_ring", ["forest"]], ["old_oak", ["forest", "plains"]], ["shipwreck", ["coast"]],
+	["cave", ["mountain"]], ["totem", ["plains"]], ["whale", ["ocean"]], ["stone_head", ["desert", "coast"]],
+	["igloo", ["ice"]], ["bones", ["desert", "plains"]], ["crystal", ["mountain", "plains", "desert", "ice"]],
+]
+## cell -> kind
+var wonders := {}
+## Kinds already found (main.gd keeps them per planet).
+var found_wonders := {}
+var _whale: MeshInstance3D
+var _whale_cell := -1
+var _glint_left := 1.0
+
+
+## Pick a cell for each wonder: land of its kind away from the home, drawn
+## from the land itself so the same planet always hides them in the same
+## places (a building put up there covers it).
+func _place_wonders(biomes: Array) -> void:
+	wonders.clear()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(biomes)
+	var home: Vector3 = builder.centers[_home] if _home >= 0 and _home < builder.centers.size() else Vector3.UP
+	for w in WONDERS:
+		var kind: String = w[0]
+		var cells := []
+		for i in biomes.size():
+			if str(biomes[i]) in w[1] and not wonders.has(i) and home.angle_to(builder.centers[i]) > 0.25:
+				cells.append(i)
+		if cells.is_empty():
+			continue
+		wonders[cells[rng.randi() % cells.size()]] = kind
+	_whale_cell = -1
+	for cell in wonders:
+		if wonders[cell] == "whale":
+			_whale_cell = cell
+	if _whale == null:
+		_whale = MeshInstance3D.new()
+		_whale.mesh = _mesh_of(Models.get_model("whale").near.verts, Models.get_model("whale").near.normals, Models.get_model("whale").near.colors, Models.get_model("whale").near.indices)
+		_whale.material_override = _props_material
+		pivot.add_child(_whale)
+	_whale.visible = _whale_cell >= 0
+
+
+## The wonder on a cell, or "".
+func wonder_at(cell: int) -> String:
+	return str(wonders.get(cell, ""))
+
+
+## The whale surfaces, blows and dives again; undiscovered wonders glint
+## when the camera is close enough to see them.
+func _move_wonders(delta: float) -> void:
+	if _whale != null and _whale_cell >= 0:
+		var n: Vector3 = builder.centers[_whale_cell]
+		var cycle := fmod(_seconds, 14.0) / 14.0
+		var up := sin(cycle * TAU)
+		var tg := _tangents(n)
+		var heading: Vector3 = tg[0].rotated(n, _seconds * 0.05)
+		var at: Vector3 = n * (PlanetMesh.SEA_LEVEL + (up - 0.3) * 0.012 * _ts) + heading * sin(_seconds * 0.05) * 0.06 * _ts
+		_whale.visible = up > -0.4 and _seen(at)
+		_whale.transform = Transform3D(_ride_basis(heading.cross(n).normalized(), n, _ts * 1.4), at)
+	_glint_left -= delta
+	if _glint_left > 0.0 or _closeness < 0.2:
+		return
+	_glint_left = 1.2
+	for cell in wonders:
+		if found_wonders.has(wonders[cell]):
+			continue
+		var p := builder.ground(builder.centers[cell], cell)
+		if not _seen(p):
+			continue
+		var n := p.normalized()
+		for k in 3:
+			_spawn(p + n * (0.03 + randf() * 0.04) * _ts + _jitter(0.025 * _ts), n * 0.01 * _ts, Color("f5d76e"), 0.9, 0.006 * _ts, 0.0)
+
+
 # ---------------------------------------------------------------- feelings
 
 ## How people feel, shown as a coloured dot that pops out of a head: only
@@ -2425,9 +2785,13 @@ var _feel_queue := []   # [seconds left, position, kind]
 
 ## Where the camera is and how close it has come (0 whole planet, 1 at the
 ## ground): the weather and the feelings follow it.
-func set_camera(camera: Camera3D, closeness: float) -> void:
+func set_camera(camera: Camera3D, closeness: float, pixels_tall := 300.0) -> void:
 	_camera = camera
 	_closeness = closeness
+	if pixels_tall != view_height:
+		view_height = pixels_tall
+		_culled_from = Vector3.INF
+	_cull()
 	if weather != null:
 		weather.look(pivot.to_local(camera.global_position), closeness)
 

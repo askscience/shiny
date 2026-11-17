@@ -392,10 +392,14 @@ func _draw_rain(delta: float) -> void:
 	var storm_on := not _storm.is_empty() and float(_storm["power"]) > 0.2
 	var wet := []
 	if _closeness > 0.15:
+		# Only banks on this side of the planet rain: drops nobody can see
+		# are not worth a thought.
+		var toward := _camera.normalized()
+		var horizon := 1.0 / maxf(_camera.length(), 1.01) - 0.1
 		for b in _banks.size():
 			var bank: Dictionary = _banks[b]
 			var f := float(bank["age"]) / float(bank["life"])
-			if bank["wet"] and f > 0.25 and f < 0.75:
+			if bank["wet"] and f > 0.25 and f < 0.75 and (bank["dir"] as Vector3).dot(toward) > horizon:
 				wet.append(b)
 	var i := 0
 	for drop in _drops:

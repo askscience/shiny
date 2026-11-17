@@ -50,6 +50,23 @@
 - Plugin names are plain identifiers (letters, digits, `.`, `_`, `-`); a name
   such as `*` could stop the server from starting.
 
+### Added
+
+- Oorbit 0.7.6: models made in Blender, a planet that draws only what you
+  can see, and wonders to find. Trees, rocks, bushes, ice, cacti, the
+  buildings of the first three eras, people, eight kinds of animal (deer,
+  boar, goat, sheep, fox, camel, crab, penguin), birds, carts and boats are
+  low-poly models, one Blender script and one `.glb` file each
+  (`plugins/oorbit/blender/`, `game/models/`). Each has a near level and a
+  simpler far one. Up close the ground fills with grass, flowers, berries,
+  mossy stones and scarecrows. People swing their legs and arms as they
+  walk, animals walk and wag their tails (on the GPU), and every animal now
+  walks head first. Ten wonders hide on the planet: a fairy ring, an
+  ancient oak with a little door and a swing, a wreck, a cave with eyes in
+  the dark, a totem, a whale that surfaces and blows, a stone head, an
+  igloo, a giant's bones and a fallen star. They glint when you come close,
+  and a click finds them and tells their story.
+
 ### Changed
 
 - `take_query`, `take_path` and `as_int`, copied into ten plugins, live in
@@ -61,6 +78,16 @@
 
 ### Fixed
 
+- Oorbit draws far less: the props are split into patches with a near and a
+  far mesh, the patches behind the planet are hidden, and the near meshes
+  show only where details are big enough to see (about 70 000 triangles for
+  the whole planet instead of 270 000). People, animals, birds and rain
+  beyond the horizon are no longer moved or drawn, finding the cell under a
+  point no longer scans all 642 cells, and the game's scripts take about
+  half the time per frame. Animals, carts and boats no longer move
+  sideways.
+- Oorbit's `preview-seed.py` works again (it plays the planet with the
+  simulation's own steady player).
 - The Vosk model download no longer blocks a server worker for its whole
   duration.
 - Live update: the page's event streams end when the server starts draining,

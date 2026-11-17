@@ -6,7 +6,7 @@ document covers the plugin as built; the game itself is described in
 [design.md](design.md), and its rules live in
 [`crates/oorbit-sim`](../../../crates/oorbit-sim/README.md).
 
-Status: **0.7.5, an active game with cities.** The user founds a planet (one
+Status: **0.7.6, an active game with cities.** The user founds a planet (one
 per account), and the window shows it as it is now: continents and seas of
 642 cells, crews sent to work by pointing at the land, buildings that rise
 while they are built, colonies linked to the capital by roads and sea routes, research, events, notable people, the Chronicle, and a dock that
@@ -43,6 +43,12 @@ Low-poly 3D drawn as pixel art, with soft colours:
   Age's magenta and cyan, the Orbital Age's white.
 - Flat-shaded tiles and props with toon diffuse, and a dark outline (the same
   mesh, slightly larger, drawn from the inside).
+- Trees, rocks, bushes, the buildings of the first three eras, people,
+  animals, birds, carts and boats are low-poly models made in Blender (see
+  [Models](#models)); the later eras' buildings are still drawn from shapes
+  by style (`STYLES` in `game/planet_view.gd`).
+- Up close the ground fills with small things the far view leaves out:
+  grass, flowers, berries, mossy stones, stumps, scarecrows, windows.
 - `game/sky.gdshader` draws the background at the low resolution: an indigo
   night with single-pixel stars, or a lavender and peach dusk in the light
   theme.
@@ -50,8 +56,28 @@ Low-poly 3D drawn as pixel art, with soft colours:
 
 ## Cost
 
-- All props (trees, peaks, buildings) are merged into one vertex-coloured
-  mesh, the walkers are one MultiMesh: about 15 draw calls in all.
+- The props (trees, rocks, buildings) are merged into vertex-coloured
+  meshes, one per patch of the planet: `CHUNKS` (12) patches of neighbouring
+  cells, each with a **near** mesh (everything) and a **far** mesh (the
+  models' simpler far parts, without details smaller than `FAR_MIN`). Every
+  frame the camera moved, `_cull()` shows one level per patch on this side
+  of the horizon and hides the patches behind it; the near mesh shows only
+  where a detail of `DETAIL_SIZE` would cover `DETAIL_PIXELS` of the
+  low-resolution view. A fir is 46 triangles near and 8 far. On the preview
+  planet this draws about 70 000 triangles for the whole planet and 80 000
+  to 110 000 up close, where everything used to cost 270 000 at any zoom.
+- People, animals, birds, carts and boats are MultiMeshes of the models,
+  drawn by `game/creature.gdshader`: per instance a tint and a motion, and
+  legs, arms and tails swing on the GPU. Whatever is beyond the horizon is
+  hidden and not moved; from afar (`_closeness < 0.25`) people and animals
+  move every other frame. Rain only falls from clouds on this side.
+- More than about fifty meshes made SwiftShader (Chrome's software WebGL)
+  draw the clouds' and particles' instances with garbage transforms; a real
+  GPU draws them fine. The patch count stays low for that reason, but the
+  software renderer can still show stray shapes now and then.
+- `PlanetMesh.cell_at()` walks from a nearby cell (the hint, or the last
+  answer) to the neighbour closest to the point, instead of looking at all
+  642 cells; on these cells the walk always ends on the nearest centre.
 - The palette pass runs inside the low-resolution view (`hint_screen_texture`
   on a full-screen rectangle), never over the upscaled window.
 - At most 30 frames a second (`FPS_VISIBLE`); while the window is off screen
@@ -62,6 +88,8 @@ Low-poly 3D drawn as pixel art, with soft colours:
 - The simulation costs nothing while nobody plays: the planet advances only
   when the window asks. Catching up a month takes about 25 ms
   (`cargo run --release -p oorbit-sim --example catchup`).
+- `/?stats` on the preview server prints, every three seconds, what the view
+  draws (primitives, draw calls, objects) and the frame's process time.
 
 The planet is a Goldberg polyhedron GP(8,0): 12 pentagons, then 630
 hexagons, 642 cells in the same order as the simulation. The layout
@@ -84,8 +112,9 @@ depends on the biome. `PlanetMesh.ground()` returns the height of that very
 surface at any point: trees, rocks and bushes stand on the ground where
 they are, and each building stands on a footing (the lowest ground under it)
 with a plinth, so nothing floats on a slope. Mountains are relief, with snow
-on the highest peaks. Every building has its own small model
-(`game/planet_view.gd`), and scaffolding stands while it is being built.
+on the highest peaks. Every building has its own small model, and
+scaffolding stands while it is being built. Each cell draws its props from
+its own seed, so a change on one cell never moves the trees of another.
 
 New buildings go on free land within two cells of the settled land (the home
 and every building or building site), nearest to the home first
@@ -93,6 +122,51 @@ and every building or building site), nearest to the home first
 another layout (versions 1 to 3 had 32 or 72 tiles) is reborn on its next
 advance (`Planet::fit_tiles`): new land from its seed and climate, its
 buildings moved to the land around the new home, and everything else kept.
+
+## Models
+
+Every model is its own Blender script, `blender/models/<name>.py`, exported
+to its own file, `game/models/<name>.glb` (Godot imports it; commit both
+the `.glb` and its `.import`). The scripts use the helpers in
+`blender/lib.py`; its docstring holds the conventions the game reads back
+(`game/models.gd`):
+
+- one Blender metre is 0.1 tile units; Z up, the front faces -Y (the game's
+  +Z);
+- one flat material per colour, baked into vertex colours; `tint1`,
+  `tint2`... take a colour from the game (leaves, a tunic, a coat);
+- objects named `detail*` are dropped from the far level, objects named
+  `far*` replace the rest in it;
+- objects named `anim_<axis>_<p|m><hundredths>` swing around their own
+  origin in `creature.gdshader` (legs, arms, tails).
+
+```bash
+blender -b --factory-startup --python plugins/oorbit/blender/build.py            # all models
+blender -b --factory-startup --python plugins/oorbit/blender/build.py -- hut deer # some
+blender -b --factory-startup --python plugins/oorbit/blender/build.py -- --blend hut  # also blender/blend/hut.blend
+```
+
+The build prints each model's triangles near and far. `.blend` files are
+for opening a model in Blender and are not committed (the script is the
+source); a change made by hand in Blender belongs back in the script. The
+models: trees (fir, spruce, oak, lime, palm, dead tree), bush, rocks, ice,
+cactus, flowers, grass, stump; the buildings from the hut to the colony and
+the scaffolding; a person; deer, boar, goat, sheep, fox, camel, crab and
+penguin; a bird and its wing; a cart and a boat; and the wonders.
+
+## Wonders
+
+Ten small wonders hide on the planet, one of each kind where its land
+exists, on a cell drawn from the land itself (`WONDERS` in
+`game/planet_view.gd`): a fairy ring in the woods, an ancient oak with a
+little red door and a swing, a wreck on a beach, a cave whose eyes glint in
+the dark, a totem, a whale that surfaces and blows, a stone head in the
+sand, an igloo with a fishing hole, a giant's bones and a fallen star. Up
+close an undiscovered wonder glints now and then; clicking its cell finds
+it (a chime, a toast with the count) and the cell's panel then tells its
+story. The kinds found are kept in the browser per planet
+(`oorbit.wonders.<seed>`). A building put up on the cell covers it. The
+preview server's `/?look=whale` flies over a wonder.
 
 ## Time
 
@@ -195,8 +269,12 @@ library only, fixed seeds; run it again to regenerate them):
 | `game/host.gd` | The game's side of the page bridge; the only GDScript that touches JavaScript. |
 | `scripts/export-web.sh` | Exports `game/` to `web/game/<hash>/` and writes `web/game/build.json`; refuses to export when a script has errors. |
 | `scripts/goldberg.py` | Generates the cell layout in `crates/oorbit-sim/data/`. |
-| `scripts/preview-seed.py` | Makes a planet some days old, played by a simple bot, for previews. |
-| `scripts/preview-server.py`, `scripts/preview-shot.mjs` | Serve the window outside LiteAura (with the core's web-app CSP, and the real simulation through `crates/oorbit-sim/examples/preview.rs` on a local state file; `OORBIT_WEB` serves another build) and screenshot it headless, under `xvfb-run`, with scripted clicks (`STEPS`). |
+| `scripts/preview-seed.py` | Makes a planet some days old, played by the simulation's steady player (`autoplay`), for previews. |
+| `scripts/preview-server.py`, `scripts/preview-shot.mjs` | Serve the window outside LiteAura (with the core's web-app CSP, and the real simulation through `crates/oorbit-sim/examples/preview.rs` on a local state file; `OORBIT_WEB` serves another build) and screenshot it headless, under `xvfb-run`, with scripted clicks (`STEPS`). `CHROME_ARGS="--use-angle=vulkan --enable-gpu --ignore-gpu-blocklist --enable-features=Vulkan"` renders on the GPU instead of SwiftShader. |
+| `scripts/preview-video.mjs` | Records a tour of the preview (far view, descent to the home, a look around, back up) to `tour.webm`, and writes when the tour starts to `start.txt`. |
+| `blender/build.py`, `blender/lib.py`, `blender/models/` | The models, one script each (see [Models](#models)). |
+| `game/models.gd`, `game/models/` | Loads the exported models into vertex arrays (near and far, tints, swinging parts). |
+| `game/creature.gdshader` | People, animals, birds and vehicles: tints and swinging parts per instance. |
 | `web/index.html` | The window: boots the export and exposes `window.oorbitHost`. |
 | `web/game/` | Export output, **not committed** (`.gitignore`); rebuild it with the script. |
 

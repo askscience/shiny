@@ -24,6 +24,9 @@ const NARROW := 640.0
 var view := {}
 var catalog := {}
 var selected_tile := -1
+## The planet's hidden wonders (cell -> kind) and the kinds found.
+var wonders := {}
+var found_wonders := {}
 var open_panel := ""
 var dismissed_event := ""
 var _was_founding := false
@@ -844,6 +847,19 @@ func describe(entry: Dictionary) -> String:
 	return I18n.t("log." + str(entry["key"]), params)
 
 
+## Whether a cell has a building (or one going up).
+func building_at(cell: int) -> bool:
+	var tiles: Array = _planet().get("tiles", [])
+	if cell < 0 or cell >= tiles.size():
+		return false
+	if tiles[cell].get("building") != null:
+		return true
+	for c in _planet().get("construction", []):
+		if int(c["tile"]) == cell:
+			return true
+	return false
+
+
 func select_tile(index: int) -> void:
 	selected_tile = index
 	if _narrow() and index >= 0:
@@ -871,6 +887,11 @@ func _fill_tile() -> void:
 	head.add_child(close)
 	_tile_body.add_child(head)
 
+	var wonder: String = str(wonders.get(selected_tile, ""))
+	if wonder != "" and found_wonders.has(wonder) and not building_at(selected_tile):
+		_tile_body.add_child(_label("✦ " + I18n.name_of("wonder", wonder), 14, Color("f5d76e")))
+		_tile_body.add_child(_muted(I18n.t("wonder.%s.desc" % wonder)))
+		_tile_body.add_child(_muted(I18n.t("ui.wonder.count", {"count": found_wonders.size(), "total": wonders.size()})))
 	var city := _city_at(selected_tile)
 	if city >= 0:
 		_fill_city(city)

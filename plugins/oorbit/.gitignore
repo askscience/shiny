@@ -1,2 +1,4 @@
 /web/game/
 /game/.godot/
+/blender/blend/
+__pycache__/
