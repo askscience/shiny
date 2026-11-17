@@ -64,7 +64,8 @@
   and a signed `index.json` (Pages, `/plugins/`). The Plugin manager's new
   **Apps** section installs, updates and removes them; archives are checked
   against the SHA-256 in the index, the index against the archive key with
-  `gpgv`. The server installs this account's default plugins once and keeps
+  `gpgv`. Without a network the section waits; with no catalogue published
+  for the version it says so. The server installs this account's default plugins once and keeps
   catalogue plugins up to date in the background (`SHINY_PLUGIN_AUTO_UPDATE=0`
   turns that off). Details in `docs/plugins/process-plugins.md`.
 

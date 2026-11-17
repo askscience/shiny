@@ -655,10 +655,17 @@ function renderStage() {
     }
     const apps = catalogApps();
     if (!apps.length) {
+      // No network is a wait; any other error is a catalogue that is not
+      // there (not published for this version yet, or not trusted).
+      const waiting = catalog.error && catalog.offline;
       stage.appendChild(stageEmpty({
-        icon: catalog.error ? 'ui/network' : 'ui/check',
-        title: catalog.error ? t('plugins.storeWaitingForConnection', null, 'Waiting for connection') : t('plugins.appsNone', null, 'Nothing to install'),
-        body: catalog.error ? t('plugins.storeConnectingBody', null, 'The app catalog will load on its own as soon as the network is ready.') : '',
+        icon: waiting ? 'ui/network' : catalog.error ? 'ui/warning' : 'ui/check',
+        title: waiting ? t('plugins.storeWaitingForConnection', null, 'Waiting for connection')
+          : catalog.error ? t('plugins.appsUnavailable', null, 'Catalogue unavailable')
+            : t('plugins.appsNone', null, 'Nothing to install'),
+        body: waiting ? t('plugins.storeConnectingBody', null, 'The app catalog will load on its own as soon as the network is ready.')
+          : catalog.error ? t('plugins.appsUnavailableBody', null, 'No app catalogue is published for this version yet. Installed apps keep working.')
+            : '',
       }));
       return;
     }

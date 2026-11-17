@@ -717,6 +717,8 @@
   "plugins.tabApps": "App",
   "plugins.subtitleApps": "Le app di LiteAura, ognuna in esecuzione per conto suo: installa quelle che usi, togli le altre.",
   "plugins.appsNone": "Niente da installare",
+  "plugins.appsUnavailable": "Catalogo non disponibile",
+  "plugins.appsUnavailableBody": "Per questa versione non è ancora pubblicato un catalogo di app. Le app installate continuano a funzionare.",
   "plugins.uninstallConfirm": "Rimuovere il plugin “{name}”? I suoi dati salvati verranno conservati.",
   "plugins.unknownError": "Errore sconosciuto",
   "settings.voice.language": "Lingua",

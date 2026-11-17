@@ -405,6 +405,9 @@ impl Catalog {
         json!({
             "refreshing": self.inner.refreshing.load(Ordering::SeqCst),
             "release": index.as_ref().map(|i| i.release.clone()),
+            // No network is a wait; anything else (not published yet, a bad
+            // signature) is the catalogue being unavailable.
+            "offline": error.as_deref().is_some_and(network_error),
             "error": error,
             "plugins": plugins,
         })
@@ -583,6 +586,25 @@ impl Catalog {
     }
 }
 
+/// Whether a fetch failed for want of a network rather than because of the
+/// answer (a 404, a bad signature).
+fn network_error(error: &str) -> bool {
+    let error = error.to_ascii_lowercase();
+    [
+        "error sending request",
+        "dns error",
+        "failed to lookup address",
+        "connection refused",
+        "connection reset",
+        "network is unreachable",
+        "no route to host",
+        "temporary failure",
+        "timed out",
+    ]
+    .iter()
+    .any(|needle| error.contains(needle))
+}
+
 /// Check a detached OpenPGP signature with `gpgv` (part of every Debian
 /// system: APT uses it for the same job).
 async fn verify_signature(keyring: &Path, data: &[u8], signature: &[u8]) -> Result<(), String> {
@@ -738,6 +760,14 @@ mod tests {
             proto::PROTOCOL_MAX + 2
         )
         .compatible());
+    }
+
+    #[test]
+    fn a_missing_catalogue_is_not_a_missing_network() {
+        assert!(network_error("error sending request for url (https://x): dns error"));
+        assert!(network_error("operation timed out"));
+        assert!(!network_error("https://askscience.github.io/shiny/plugins/index.json answered 404 Not Found"));
+        assert!(!network_error("the catalogue signature does not verify: BAD signature"));
     }
 
     #[test]

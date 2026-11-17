@@ -704,6 +704,8 @@
   "plugins.tabApps": "Apps",
   "plugins.subtitleApps": "LiteAura apps, each running on its own: install what you use, remove what you do not.",
   "plugins.appsNone": "Nothing to install",
+  "plugins.appsUnavailable": "Catalogue unavailable",
+  "plugins.appsUnavailableBody": "No app catalogue is published for this version yet. Installed apps keep working.",
   "plugins.uninstallConfirm": "Remove plugin “{name}”? Its saved data will be kept.",
   "plugins.unknownError": "Unknown error",
   "settings.voice.language": "Language",
