@@ -136,3 +136,81 @@ async fn a_published_catalogue_must_be_signed() {
         "{error}"
     );
 }
+
+/// The real path: an index signed with an OpenPGP key verifies against that
+/// key's keyring with `gpgv`, and a byte changed after signing does not.
+/// Skipped where gpg is not installed.
+#[tokio::test]
+async fn a_signed_catalogue_verifies_and_a_tampered_one_does_not() {
+    let gpg_ok = std::process::Command::new("gpg")
+        .arg("--version")
+        .output()
+        .is_ok()
+        && std::process::Command::new("gpgv")
+            .arg("--version")
+            .output()
+            .is_ok();
+    if !gpg_ok {
+        eprintln!("gpg/gpgv not installed: skipped");
+        return;
+    }
+    let work = tempfile::tempdir().unwrap();
+    let home = work.path().join("gnupg");
+    std::fs::create_dir(&home).unwrap();
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&home, std::fs::Permissions::from_mode(0o700)).unwrap();
+    }
+    let gpg = |args: &[&str]| {
+        let out = std::process::Command::new("gpg")
+            .arg("--homedir")
+            .arg(&home)
+            .arg("--batch")
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "gpg {args:?}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        out.stdout
+    };
+    gpg(&[
+        "--passphrase",
+        "",
+        "--quick-gen-key",
+        "Catalogue test <test@invalid>",
+        "ed25519",
+        "sign",
+        "never",
+    ]);
+    let index = work.path().join("index.json");
+    std::fs::write(&index, r#"{"format":1,"release":"signed","plugins":[]}"#).unwrap();
+    let sig = work.path().join("index.json.sig");
+    gpg(&[
+        "--yes",
+        "--digest-algo",
+        "SHA256",
+        "--detach-sign",
+        "--output",
+        sig.to_str().unwrap(),
+        index.to_str().unwrap(),
+    ]);
+    let keyring = work.path().join("keyring.gpg");
+    std::fs::write(&keyring, gpg(&["--export"])).unwrap();
+
+    let catalog = Catalog::new(Settings {
+        index_url: format!("file://{}", index.display()),
+        keyring: keyring.clone(),
+        allow_unsigned: false,
+        allow_any_host: true,
+        defaults_file: "/nonexistent".into(),
+        auto_maintain: false,
+    });
+    assert_eq!(catalog.index(true).await.unwrap().release, "signed");
+
+    std::fs::write(&index, r#"{"format":1,"release":"tampered","plugins":[]}"#).unwrap();
+    let error = catalog.index(true).await.unwrap_err();
+    assert!(error.contains("does not verify"), "{error}");
+}
