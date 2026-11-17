@@ -468,7 +468,8 @@ func _calendar_now() -> Array:
 	var now := ui.live_now_ms()
 	var day := float(cal.get("day_ms", 86400000.0))
 	var hour := fmod(now, day) / day * 24.0
-	var season := 0.0
+	# A server without the calendar yet: plain summer, nothing odd.
+	var season := 1.5
 	if cal.has("season_ms"):
 		var into := clampf((now - float(cal["season_start_ms"])) / maxf(1.0, float(cal["season_ms"])), 0.0, 0.999)
 		season = float(cal.get("season", 0)) + into

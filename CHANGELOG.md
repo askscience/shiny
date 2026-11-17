@@ -90,6 +90,10 @@
 
 ### Fixed
 
+- Oorbit: the seasons' colours on trees and bushes were drawn from a
+  pattern fixed in space, so they changed while the planet turned; they now
+  belong to the planet. Before the server has the calendar the window shows
+  plain summer instead of a mix of spring and winter.
 - Oorbit draws far less: the props are split into patches with a near and a
   far mesh, the patches behind the planet are hidden, and the near meshes
   show only where details are big enough to see (about 70 000 triangles for

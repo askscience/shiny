@@ -27,6 +27,9 @@ uniform bool ground = false;
 varying vec3 radial;
 varying vec3 world_normal;
 varying vec3 world_pos;
+// The point in the planet's own frame: a pattern drawn on it turns with the
+// planet (a pattern in world space would slide over the land as it turns).
+varying vec3 local_pos;
 
 float hash(vec3 p) {
 	return fract(sin(dot(floor(p), vec3(12.9898, 78.233, 37.719))) * 43758.5453);
@@ -34,6 +37,7 @@ float hash(vec3 p) {
 
 void vertex() {
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+	local_pos = VERTEX;
 	radial = normalize(world_pos - centre);
 	world_normal = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
 }
@@ -42,7 +46,7 @@ void fragment() {
 	vec3 c = COLOR.rgb;
 	float leafy = step(c.r * 1.05, c.g) * step(c.b, c.r) * leaf_strength;
 	// A patch of land (about a tree) shares its season's colour.
-	float h = ground ? 0.5 : hash(world_pos * 60.0);
+	float h = ground ? 0.5 : hash(local_pos * 60.0);
 	if (bloom > 0.0) {
 		vec3 blossom = h > 0.5 ? vec3(0.89, 0.76, 0.78) : vec3(0.95, 0.94, 0.9);
 		c = mix(c, blossom, leafy * bloom_strength * bloom * step(0.62, h));
