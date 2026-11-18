@@ -133,6 +133,12 @@ Keep every user Appearance option and put visible text in translation catalogs.
    to `data/plugins` alone leaves the stale window in front of it.
 6. Plugin migrations are recorded by filename and never re-run: never edit an applied
    file, add a new one.
+7. **Raising `version` in `plugin.toml` publishes the plugin**: on a push to `main`
+   the plugin workflow builds its archive and every server receives it within hours.
+   Leave the version alone while the work is unfinished; raise it (with a CHANGELOG
+   line) when the plugin is good to ship. If the new version uses something added to
+   the server since its last release, set `min_host` to the next server release. See
+   [docs/plugins/process-plugins.md](docs/plugins/process-plugins.md).
 
 ### Update docs
 Docs are part of the change, not an afterthought: when a feature, setting, env var,

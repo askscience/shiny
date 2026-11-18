@@ -118,27 +118,72 @@ removed, so none outlives the server.
 Measured on the development machine (release build): about 5 MB of memory per
 idle process, 13 ms from start to ready, under 1 ms per call.
 
-## Packaging
+## Packaging and publication
 
 `scripts/stage-plugin.sh <name> <dest>` lays out one plugin as the server
 loads it. `scripts/build-plugin-archives.sh` makes one
-`<name>-<version>-linux-<arch>.tar.gz` per process plugin and `index.json`,
-the catalogue. On a release tag the publish workflow:
+`<name>-<version>-linux-<arch>.tar.gz` per process plugin (all of them, or
+those named in `PLUGIN_NAMES`) and an `index.json` of what it built.
 
-1. uploads the archives to the GitHub Release;
-2. signs `index.json` with the LiteAura archive key (`index.json.sig`);
-3. publishes both on Pages at `https://askscience.github.io/shiny/plugins/`.
+**A plugin is published when its `version` in `plugin.toml` goes up on
+`main`**, not with a server release. Raising the version is the act of
+publishing, so:
 
+- work in progress goes to `main` **without** touching the version: nothing
+  is published and nobody receives it;
+- when the plugin is good to ship, raise its version (and note it in the
+  CHANGELOG): the push publishes it and every server picks it up within six
+  hours;
+- a plugin that only needs rebuilding (the SDK it is built with changed) is
+  published the same way: raise its version.
+
+On such a push `.github/workflows/publish-plugins.yml`:
+
+1. reads the published catalogue and finds the plugins whose version in the
+   repository is newer (`scripts/plugin-catalog.py pending`);
+2. builds only those, in the image the server is built in, and makes their
+   archives;
+3. merges them into the catalogue (`plugin-catalog.py merge`) and signs it
+   with the LiteAura archive key (`index.json.sig`);
+4. uploads archives, `index.json` and `index.json.sig` to the rolling GitHub
+   release **`plugins`**:
+   `https://github.com/askscience/shiny/releases/download/plugins/index.json`.
+
+A server release (`publish.yml`, on a `v*` tag) no longer builds plugins.
 The Debian package ships only terminal, updates and installer, plus
 `/usr/share/shiny/default-plugins`, the list every account gets.
+
+### `min_host`: a plugin that needs a newer server
+
+A plugin's executable only needs the protocol, but its window is built from
+the server's UI modules (`../../ui/index.js`, `web/js`, the core
+stylesheets). A plugin version that uses something added to the server after
+its last release must say so in `plugin.toml`:
+
+```toml
+min_host = "0.3.1"   # the first server release that has what this version uses
+```
+
+The catalogue then offers that version only to servers at 0.3.1 or newer.
+It keeps the previous version for the others: an index may list several
+versions of one plugin, each server takes the newest it can run
+(`Index::offers`), and `merge` drops a version once no server would pick it.
+A plugin without `min_host` is offered to every server that speaks its
+protocol.
+
+Servers up to 0.2.9 do not know `min_host`. They read
+`https://askscience.github.io/shiny/plugins/index.json`, which every release
+republishes unchanged from `packaging/plugins-legacy/` (the signed 0.2.9
+catalogue): they keep the plugins of their release until the server is
+updated.
 
 ## The catalogue
 
 The Plugin manager's **Apps** section lists what the catalogue offers for
-this server: matching architecture and a shared protocol version. **Get**
-and **Update** download the archive, check it against the SHA-256 in the
-signed index and install it with the ordinary installer. **Remove** uninstalls
-it.
+this server: matching architecture, a shared protocol version and a server
+new enough (`min_host`). **Get** and **Update** download the archive, check
+it against the SHA-256 in the signed index and install it with the ordinary
+installer. **Remove** uninstalls it.
 
 The index is trusted only after `gpgv` checks its signature against
 `/usr/share/keyrings/liteaura-archive.gpg`, the key APT already trusts.
@@ -152,7 +197,7 @@ directory).
 
 | Variable | Default | Use |
 |---|---|---|
-| `SHINY_PLUGIN_INDEX_URL` | the Pages URL | another catalogue; a `file://` one needs no signature (a local build) |
+| `SHINY_PLUGIN_INDEX_URL` | the `plugins` release URL | another catalogue; a `file://` one needs no signature (a local build) |
 | `SHINY_PLUGIN_KEYRING` | `/usr/share/keyrings/liteaura-archive.gpg` | the key the index is checked against |
 | `SHINY_DEFAULT_PLUGINS_FILE` | `/usr/share/shiny/default-plugins` | the default list |
 | `SHINY_PLUGIN_AUTO_UPDATE` | on | `0` stops the background installs (a machine running its own builds) |
@@ -179,6 +224,9 @@ A running server loads the new executable when it rescans the plugin
 locally:
 
 ```sh
-LITEAURA_VERSION=0.2.8 PLUGIN_BASE_URL=file://$PWD/out scripts/build-plugin-archives.sh out
+LITEAURA_VERSION=0.3.0 PLUGIN_BASE_URL=file://$PWD/out scripts/build-plugin-archives.sh out
 SHINY_PLUGIN_INDEX_URL=file://$PWD/out/index.json shiny
 ```
+
+`python3 scripts/test-plugin-catalog.py` tests the catalogue script (what is
+pending, how versions are merged and dropped).

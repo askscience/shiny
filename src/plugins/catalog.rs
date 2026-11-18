@@ -1,9 +1,16 @@
 //! The LiteAura plugin catalogue: process plugins published as archives.
 //!
-//! Every release publishes one `.tar.gz` per process plugin and a catalogue,
+//! A plugin is published on its own, when its version in `plugin.toml` goes
+//! up on `main`: one `.tar.gz` per version, listed in a catalogue,
 //! `index.json`, signed with the LiteAura archive key (`index.json.sig`, the
 //! key APT already trusts). The Plugin manager lists what the catalogue offers,
 //! installs and updates from it, and removes with the ordinary uninstall.
+//!
+//! A plugin's window is built from the server's own UI modules, so a version
+//! may need a newer server than the one reading the catalogue: an entry says
+//! so with `min_host`, and the catalogue keeps the older versions a server
+//! that has not been updated can still run. Each server takes, per plugin,
+//! the newest version it can run ([`Index::offers`]).
 //!
 //! Trust runs through the signature: the index is checked with `gpgv` against
 //! the archive keyring before anything in it is used, and each archive must
@@ -35,8 +42,12 @@ use crate::api::AppState;
 use crate::models::Traveler;
 use crate::plugins::installer::log_event;
 
-/// Where releases publish the catalogue (GitHub Pages, next to the APT repo).
-pub const DEFAULT_INDEX_URL: &str = "https://askscience.github.io/shiny/plugins/index.json";
+/// Where the catalogue is published: the assets of the rolling `plugins`
+/// release, which the plugin workflow replaces whenever a plugin's version
+/// goes up. (Servers up to 0.2.9 read `plugins/index.json` on Pages, which
+/// stays as their last release left it: they know nothing of `min_host`.)
+pub const DEFAULT_INDEX_URL: &str =
+    "https://github.com/askscience/shiny/releases/download/plugins/index.json";
 /// The archive key, as installed by `liteaura-archive-keyring`.
 pub const DEFAULT_KEYRING: &str = "/usr/share/keyrings/liteaura-archive.gpg";
 /// Plugins a new account gets, one name per line.
@@ -126,13 +137,65 @@ pub struct Entry {
     pub url: String,
     pub size: u64,
     pub sha256: String,
+    /// The oldest server this version works with (`min_host` in the plugin's
+    /// `plugin.toml`); absent when any server speaking its protocol will do.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub min_host: Option<String>,
 }
 
 impl Entry {
     /// Whether this server can run it.
+    #[cfg(test)]
     fn compatible(&self) -> bool {
+        self.compatible_with(env!("CARGO_PKG_VERSION"))
+    }
+
+    fn compatible_with(&self, host_version: &str) -> bool {
         self.arch == host_arch()
             && proto::negotiate(self.protocol, proto::VersionRange::current()).is_some()
+            && host_satisfies(self.min_host.as_deref(), host_version)
+    }
+}
+
+/// Is a server at `host_version` new enough for `min_host`? A requirement
+/// that does not parse is not met: better no update than a broken window.
+pub fn host_satisfies(min_host: Option<&str>, host_version: &str) -> bool {
+    let Some(min) = min_host.map(str::trim).filter(|m| !m.is_empty()) else {
+        return true;
+    };
+    match (
+        semver::Version::parse(min),
+        semver::Version::parse(host_version),
+    ) {
+        (Ok(min), Ok(host)) => host >= min,
+        _ => false,
+    }
+}
+
+impl Index {
+    /// What the catalogue offers this server: for each plugin, the newest
+    /// version it can run, in the catalogue's order.
+    pub fn offers(&self) -> Vec<&Entry> {
+        self.offers_for(env!("CARGO_PKG_VERSION"))
+    }
+
+    fn offers_for(&self, host_version: &str) -> Vec<&Entry> {
+        let mut best: Vec<&Entry> = Vec::new();
+        for entry in self
+            .plugins
+            .iter()
+            .filter(|e| e.compatible_with(host_version))
+        {
+            match best.iter_mut().find(|b| b.name == entry.name) {
+                Some(slot) => {
+                    if newer(&entry.version, &slot.version) {
+                        *slot = entry;
+                    }
+                }
+                None => best.push(entry),
+            }
+        }
+        best
     }
 }
 
@@ -370,13 +433,7 @@ impl Catalog {
         };
         let plugins: Vec<serde_json::Value> = index
             .as_ref()
-            .map(|index| {
-                index
-                    .plugins
-                    .iter()
-                    .filter(|e| e.compatible())
-                    .collect::<Vec<_>>()
-            })
+            .map(|index| index.offers())
             .unwrap_or_default()
             .into_iter()
             .map(|entry| {
@@ -422,9 +479,10 @@ impl Catalog {
         }
         let index = self.index(false).await.map_err(AppError::Internal)?;
         let entry = index
-            .plugins
+            .offers()
             .into_iter()
-            .find(|e| e.name == name && e.compatible())
+            .find(|e| e.name == name)
+            .cloned()
             .ok_or_else(|| {
                 AppError::NotFound(format!("the catalogue offers no '{name}' for this system"))
             })?;
@@ -518,7 +576,7 @@ impl Catalog {
             .map(|m| (m.name, m.version.to_string()))
             .collect();
         let mut done = Vec::new();
-        for entry in index.plugins.iter().filter(|e| e.compatible()) {
+        for entry in index.offers() {
             if self.busy(&entry.name) {
                 continue;
             }
@@ -751,6 +809,7 @@ mod tests {
             url: String::new(),
             size: 0,
             sha256: String::new(),
+            min_host: None,
         };
         assert!(entry(host_arch(), proto::PROTOCOL_MIN, proto::PROTOCOL_MAX).compatible());
         assert!(!entry("sparc", proto::PROTOCOL_MIN, proto::PROTOCOL_MAX).compatible());
@@ -768,6 +827,85 @@ mod tests {
         assert!(network_error("operation timed out"));
         assert!(!network_error("https://askscience.github.io/shiny/plugins/index.json answered 404 Not Found"));
         assert!(!network_error("the catalogue signature does not verify: BAD signature"));
+    }
+
+    fn offer(name: &str, version: &str, min_host: Option<&str>) -> Entry {
+        Entry {
+            name: name.into(),
+            version: version.into(),
+            description: String::new(),
+            summary: String::new(),
+            category: String::new(),
+            kind: String::new(),
+            arch: host_arch().into(),
+            protocol: proto::VersionRange::current(),
+            url: String::new(),
+            size: 0,
+            sha256: String::new(),
+            min_host: min_host.map(str::to_string),
+        }
+    }
+
+    #[test]
+    fn a_version_that_needs_a_newer_server_is_not_offered_to_an_older_one() {
+        assert!(host_satisfies(None, "0.3.0"));
+        assert!(host_satisfies(Some(""), "0.3.0"));
+        assert!(host_satisfies(Some("0.3.0"), "0.3.0"));
+        assert!(host_satisfies(Some("0.3.0"), "0.3.1"));
+        assert!(!host_satisfies(Some("0.3.1"), "0.3.0"));
+        assert!(!host_satisfies(Some("0.10.0"), "0.9.0"));
+        // An unreadable requirement is not met.
+        assert!(!host_satisfies(Some("soon"), "0.3.0"));
+
+        assert!(offer("x", "1.0.0", Some("0.3.0")).compatible_with("0.3.0"));
+        assert!(!offer("x", "1.0.0", Some("0.4.0")).compatible_with("0.3.0"));
+    }
+
+    #[test]
+    fn each_server_is_offered_the_newest_version_it_can_run() {
+        let index = Index {
+            format: 2,
+            release: String::new(),
+            plugins: vec![
+                offer("image", "0.1.2", None),
+                offer("word", "0.1.3", Some("0.3.0")),
+                offer("image", "0.1.4", Some("0.4.0")),
+                offer("image", "0.1.3", Some("0.3.0")),
+                {
+                    let mut other = offer("pdf", "9.0.0", None);
+                    other.arch = "sparc".into();
+                    other
+                },
+            ],
+        };
+        let offered = |host: &str| -> Vec<(String, String)> {
+            index
+                .offers_for(host)
+                .into_iter()
+                .map(|e| (e.name.clone(), e.version.clone()))
+                .collect()
+        };
+        let pair = |n: &str, v: &str| (n.to_string(), v.to_string());
+        // An old server keeps the last version made for it.
+        assert_eq!(offered("0.2.9"), vec![pair("image", "0.1.2")]);
+        assert_eq!(
+            offered("0.3.0"),
+            vec![pair("image", "0.1.3"), pair("word", "0.1.3")]
+        );
+        assert_eq!(
+            offered("0.4.1"),
+            vec![pair("image", "0.1.4"), pair("word", "0.1.3")]
+        );
+    }
+
+    #[test]
+    fn an_index_without_min_host_reads_as_before() {
+        let index: Index = serde_json::from_str(
+            r#"{"format":1,"release":"0.2.9","plugins":[{"name":"radio","version":"0.1.1",
+                "arch":"amd64","protocol":{"min":1,"max":1},"url":"u","size":1,"sha256":"s"}]}"#,
+        )
+        .unwrap();
+        assert_eq!(index.plugins[0].min_host, None);
     }
 
     #[test]

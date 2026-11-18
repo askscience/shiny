@@ -1,0 +1,195 @@
+name: Publish plugins
+
+# A plugin is published when its version in plugins/<name>/plugin.toml goes
+# up on main: only that plugin is built, its archive is added to the rolling
+# `plugins` release and the signed catalogue there (index.json) is updated.
+# Work in progress on main is not published until the version is raised.
+#
+# The catalogue is what servers newer than 0.2.9 read
+# (src/plugins/catalog.rs, DEFAULT_INDEX_URL). See docs/plugins/process-plugins.md.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "plugins/*/plugin.toml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# One publication at a time: each merges into the catalogue the previous left.
+concurrency:
+  group: liteaura-publish-plugins
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  CATALOG_RELEASE: plugins
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      names: ${{ steps.pending.outputs.names }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch the published catalogue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p published
+          # No release yet (the first publication): an empty catalogue.
+          if gh release view "$CATALOG_RELEASE" >/dev/null 2>&1; then
+            gh release download "$CATALOG_RELEASE" --pattern index.json --dir published
+          else
+            echo "no '$CATALOG_RELEASE' release yet: everything is pending"
+          fi
+
+      - name: Find the plugins whose version went up
+        id: pending
+        run: |
+          set -euo pipefail
+          python3 scripts/test-plugin-catalog.py
+          names=$(python3 scripts/plugin-catalog.py pending published/index.json | tr '\n' ' ')
+          echo "pending: ${names:-none}"
+          echo "names=${names% }" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: published-catalogue
+          path: published
+          if-no-files-found: ignore
+          retention-days: 3
+
+  build:
+    needs: plan
+    if: needs.plan.outputs.names != ''
+    runs-on: ubuntu-latest
+    # The system the plugins run on: the same image the server is built in.
+    container: debian:13
+    steps:
+      - name: Verify signing key is configured
+        env:
+          LITEAURA_GPG_PRIVATE_KEY: ${{ secrets.LITEAURA_GPG_PRIVATE_KEY || secrets.PEAKD_GPG_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${LITEAURA_GPG_PRIVATE_KEY:-}" ]; then
+            echo "::error title=Missing signing key::Add the LITEAURA_GPG_PRIVATE_KEY repository secret with the armored private key."
+            exit 1
+          fi
+
+      - name: Install checkout prerequisites
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            ca-certificates curl git
+
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            build-essential pkg-config \
+            libsqlite3-dev libgtk-3-dev cmake nasm xz-utils unzip \
+            libclang-dev python3
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build the plugins
+        shell: bash
+        env:
+          NAMES: ${{ needs.plan.outputs.names }}
+        run: |
+          set -euo pipefail
+          packages=()
+          for name in $NAMES; do packages+=(-p "shiny-$name-plugin"); done
+          cargo build --release --locked "${packages[@]}"
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: published-catalogue
+          path: published
+        # Nothing was published before the first run.
+        continue-on-error: true
+
+      - name: Build the archives and the catalogue
+        shell: bash
+        env:
+          PLUGIN_NAMES: ${{ needs.plan.outputs.names }}
+          PLUGIN_BASE_URL: https://github.com/${{ github.repository }}/releases/download/${{ env.CATALOG_RELEASE }}
+        run: |
+          set -euo pipefail
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          export SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)
+          # The server version this tree builds, for the catalogue's record.
+          export LITEAURA_VERSION=$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          ./scripts/build-plugin-archives.sh out/built
+          mkdir -p out/release
+          cp out/built/*.tar.gz out/release/
+          python3 scripts/plugin-catalog.py merge published/index.json out/built/index.json out/release/index.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: plugin-archives
+          path: out/release
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: plugin-archives
+          path: out
+
+      - name: Import signing key
+        id: signing
+        env:
+          LITEAURA_GPG_PRIVATE_KEY: ${{ secrets.LITEAURA_GPG_PRIVATE_KEY || secrets.PEAKD_GPG_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          install -d -m 0700 "$RUNNER_TEMP/gnupg"
+          printf '%s\n' "$LITEAURA_GPG_PRIVATE_KEY" | gpg --homedir "$RUNNER_TEMP/gnupg" --batch --import
+          key=$(gpg --homedir "$RUNNER_TEMP/gnupg" --list-secret-keys --with-colons | awk -F: '/^fpr:/ {print $10; exit}')
+          expected=$(gpg --show-keys --with-colons packaging/liteaura-archive.gpg | awk -F: '/^fpr:/ {print $10; exit}')
+          if [ "$key" != "$expected" ]; then
+            echo "::error::The secret key ($key) does not match packaging/liteaura-archive.gpg ($expected)."
+            exit 1
+          fi
+          echo "fingerprint=$key" >> "$GITHUB_OUTPUT"
+
+      - name: Sign the catalogue
+        env:
+          GNUPGHOME: ${{ runner.temp }}/gnupg
+        run: |
+          set -euo pipefail
+          gpg --batch --yes --local-user "${{ steps.signing.outputs.fingerprint }}" --digest-algo SHA256 \
+            --detach-sign --output out/index.json.sig out/index.json
+          gpgv --keyring packaging/liteaura-archive.gpg out/index.json.sig out/index.json
+
+      - name: Publish to the plugins release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if ! gh release view "$CATALOG_RELEASE" >/dev/null 2>&1; then
+            gh release create "$CATALOG_RELEASE" \
+              --title "LiteAura plugins" \
+              --notes "Plugin archives and their signed catalogue (index.json). Updated whenever a plugin's version goes up; servers read it on their own." \
+              --latest=false
+          fi
+          # Archives first: the catalogue must never point at a missing file.
+          gh release upload "$CATALOG_RELEASE" out/*.tar.gz --clobber
+          # A server that reads the catalogue between these two files finds a
+          # signature that does not match and asks again two minutes later.
+          gh release upload "$CATALOG_RELEASE" out/index.json out/index.json.sig --clobber

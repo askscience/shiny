@@ -31,6 +31,8 @@ jobs:
           node-version: "20"
       - name: Frontend tests
         run: scripts/test-web.sh
+      - name: Plugin catalogue script tests
+        run: python3 scripts/test-plugin-catalog.py
 
   kiosk:
     runs-on: ubuntu-latest

@@ -1,0 +1,295 @@
+{
+  "format": 1,
+  "release": "0.2.9",
+  "plugins": [
+    {
+      "name": "browser",
+      "version": "0.2.5",
+      "description": "Browse the web inside Shiny \u2014 an adblocked window with a bookmark start page, downloads, incognito and news",
+      "summary": "Browser: adblock-filtered web browsing with a bookmark start page, download manager, incognito tabs and related-news cards",
+      "category": "Web",
+      "kind": "native",
+      "arch": "amd64",
+      "protocol": {
+        "min": 1,
+        "max": 1
+      },
+      "file": "browser-0.2.5-linux-amd64.tar.gz",
+      "url": "https://github.com/askscience/shiny/releases/download/v0.2.9/browser-0.2.5-linux-amd64.tar.gz",
+      "size": 6769581,
+      "sha256": "71bd5270df4ef35c33df246e4b8f86cd12500f8a7701ed4312fff6e0feb61c4a"
+    },
+    {
+      "name": "calc",
+      "version": "0.1.3",
+      "description": "Spreadsheet calculator \u2014 sheets stored as open cell grids, editable in the Calc window",
+      "summary": "Calc: create, edit and compute with spreadsheets",
+      "category": "Office",
+      "kind": "native",
+      "arch": "amd64",
+      "protocol": {
+        "min": 1,
+        "max": 1
+      },
+      "file": "calc-0.1.3-linux-amd64.tar.gz",
+      "url": "https://github.com/askscience/shiny/releases/download/v0.2.9/calc-0.1.3-linux-amd64.tar.gz",
+      "size": 2481903,
+      "sha256": "6530f1c30210c13072c9be246f2ad46649ba67eae80be028ab22e276313469a8"
+    },
+    {
+      "name": "calculator",
+      "version": "0.1.1",
+      "description": "Scientific calculator \u2014 evaluate arithmetic and scientific expressions in the Calculator window",
+      "summary": "Calculator: basic and scientific math",
+      "category": "Office",
+      "kind": "native",
+      "arch": "amd64",
+      "protocol": {
+        "min": 1,
+        "max": 1
+      },
+      "file": "calculator-0.1.1-linux-amd64.tar.gz",
+      "url": "https://github.com/askscience/shiny/releases/download/v0.2.9/calculator-0.1.1-linux-amd64.tar.gz",
+      "size": 1729141,
+      "sha256": "ed615bc4171c99088c98f7a47a1d01c1d0dfd440f65a13424105c8d77a4b196c"
+    },
+    {
+      "name": "calendar",
+      "version": "0.1.1",
+      "description": "Calendar \u2014 schedule, list and organize events in the Calendar window",
+      "summary": "Calendar: schedule and organize events",
+      "category": "Office",
+      "kind": "native",
+      "arch": "amd64",
+      "protocol": {
+        "min": 1,
+        "max": 1
+      },
+      "file": "calendar-0.1.1-linux-amd64.tar.gz",
+      "url": "https://github.com/askscience/shiny/releases/download/v0.2.9/calendar-0.1.1-linux-amd64.tar.gz",
+      "size": 1839251,
+      "sha256": "1040dc93ff05345a35c4a350e1f6071d9012dde18bc491a5094b1016805099e7"
+    },
+    {
+      "name": "capture",
+      "version": "0.1.6",
+      "description": "Screen recording, live streaming and an AI video editor",
+      "summary": "Capture: record the screen or a window with a webcam bubble, go live, edit with AI",
+      "category": "Media",
+      "kind": "native",
+      "arch": "amd64",
+      "protocol": {
+        "min": 1,
+        "max": 1
+      },
+      "file": "capture-0.1.6-linux-amd64.tar.gz",
+      "url": "https://github.com/askscience/shiny/releases/download/v0.2.9/capture-0.1.6-linux-amd64.tar.gz",
+      "size": 2612844,
+      "sha256": "0e7d48a81a8be9aa93414a89c8fca02ff06da5973e21d1dad37c5c887f255b5e"
+    },
+    {
+      "name": "files",
+      "version": "0.1.2",
+      "description": "File browser \u2014 browse, preview and manage your home folders",
+      "summary": "GNOME-style file browser: grid/list, thumbnails, quick preview, upload and a trash",
+      "category": "System",
+      "kind": "native",
+      "arch": "amd64",
+      "protocol": {
+        "min": 1,
+        "max": 1
+      },
+      "file": "files-0.1.2-linux-amd64.tar.gz",
+      "url": "https://github.com/askscience/shiny/releases/download/v0.2.9/files-0.1.2-linux-amd64.tar.gz",
+      "size": 5529109,
+      "sha256": "741e10a13ba4e2793cf38762f86f423fa1606504fbbc04bb4a7612c1e5f5c3ea"
+    },
+    {
+      "name": "image",
+      "version": "0.1.1",
+      "description": "Photo editor \u2014 tone and colour adjustments, blur/sharpen/vignette and one-tap film looks in the Image window",
+      "summary": "Photo editor: adjustments and film looks",
+      "category": "Media",
+      "kind": "native",
+      "arch": "amd64",
+      "protocol": {
+        "min": 1,
+        "max": 1
+      },
+      "file": "image-0.1.1-linux-amd64.tar.gz",
+      "url": "https://github.com/askscience/shiny/releases/download/v0.2.9/image-0.1.1-linux-amd64.tar.gz",
+      "size": 2569095,
+      "sha256": "1da0408ed9b40d91ab5174d53024c878bc66c7e88715545db20c2b08af6ad6f1"
+    },
+    {
+      "name": "impress",
+      "version": "0.1.3",
+      "description": "Presentation builder \u2014 decks stored as slides and exported as open .odp files",
+      "summary": "Impress: build, edit and present OpenDocument (.odp) slide decks",
+      "category": "Office",
+      "kind": "native",
+      "arch": "amd64",
+      "protocol": {
+        "min": 1,
+        "max": 1
+      },
+      "file": "impress-0.1.3-linux-amd64.tar.gz",
+      "url": "https://github.com/askscience/shiny/releases/download/v0.2.9/impress-0.1.3-linux-amd64.tar.gz",
+      "size": 2496888,
+      "sha256": "627b68f46816fa7ccd3d55656dec162e3bf4dc634e119764a3855223dfb781c0"
+    },
+    {
+      "name": "keyboard",
+      "version": "0.1.1",
+      "description": "Virtual multi-language keyboard at the bottom of the screen \u2014 types into any focused input",
+      "summary": "Virtual keyboard: types into any text input (8 language layouts)",
+      "category": "System",
+      "kind": "native",
+      "arch": "amd64",
+      "protocol": {
+        "min": 1,
+        "max": 1
+      },
+      "file": "keyboard-0.1.1-linux-amd64.tar.gz",
+      "url": "https://github.com/askscience/shiny/releases/download/v0.2.9/keyboard-0.1.1-linux-amd64.tar.gz",
+      "size": 1327265,
+      "sha256": "94f9e1a777031138e11934d22d728a3cdcd50d1048ddc212898e6232a5d135ba"
+    },
+    {
+      "name": "mail",
+      "version": "0.1.2",
+      "description": "Mail client \u2014 IMAP inbox + SMTP compose, backed by io-email",
+      "summary": "Mail client: configure mail accounts, read the inbox and send email",
+      "category": "Office",
+      "kind": "native",
+      "arch": "amd64",
+      "protocol": {
+        "min": 1,
+        "max": 1
+      },
+      "file": "mail-0.1.2-linux-amd64.tar.gz",
+      "url": "https://github.com/askscience/shiny/releases/download/v0.2.9/mail-0.1.2-linux-amd64.tar.gz",
+      "size": 3584937,
+      "sha256": "6f83ca9b065a85bb2fb06d85752db013f759d4475f89c15ec9ea14cdc6614a0f"
+    },
+    {
+      "name": "oorbit",
+      "version": "0.7.9",
+      "description": "Oorbit: a tiny planet whose society grows from the stone age to space, in real time, beside your friends' planets",
+      "summary": "Oorbit: a slow planet game",
+      "category": "Games",
+      "kind": "hybrid",
+      "arch": "amd64",
+      "protocol": {
+        "min": 1,
+        "max": 1
+      },
+      "file": "oorbit-0.7.9-linux-amd64.tar.gz",
+      "url": "https://github.com/askscience/shiny/releases/download/v0.2.9/oorbit-0.7.9-linux-amd64.tar.gz",
+      "size": 3656764,
+      "sha256": "33b7f36ebc55cead1f6d15146de2a6311f576911d5099d9c289de6a2daa2005d"
+    },
+    {
+      "name": "pdf",
+      "version": "0.3.2",
+      "description": "PDF \u2014 write documents on A4 pages and export an exact PDF, read any PDF, comment (highlight, notes, text, drawing, shapes, links), header & footer, watermark, organise pages, undo every change",
+      "summary": "PDF: view pages, extract text, edit & annotate (highlight, note, link, watermark), rotate/reorder/merge, create PDFs",
+      "category": "Office",
+      "kind": "native",
+      "arch": "amd64",
+      "protocol": {
+        "min": 1,
+        "max": 1
+      },
+      "file": "pdf-0.3.2-linux-amd64.tar.gz",
+      "url": "https://github.com/askscience/shiny/releases/download/v0.2.9/pdf-0.3.2-linux-amd64.tar.gz",
+      "size": 6439416,
+      "sha256": "0526f28b28390b184030182db7de06bcd6b1768f3aebc2314ac91cb92ff8d8b2"
+    },
+    {
+      "name": "radio",
+      "version": "0.1.1",
+      "description": "Internet radio via Radio Browser \u2014 search stations and play them in the Radio window",
+      "summary": "Internet radio: search and play stations (Radio Browser)",
+      "category": "Media",
+      "kind": "native",
+      "arch": "amd64",
+      "protocol": {
+        "min": 1,
+        "max": 1
+      },
+      "file": "radio-0.1.1-linux-amd64.tar.gz",
+      "url": "https://github.com/askscience/shiny/releases/download/v0.2.9/radio-0.1.1-linux-amd64.tar.gz",
+      "size": 2979141,
+      "sha256": "49962addb38427b938e81a44a15bd4c9a23c8890eff010160f017637e81dd30e"
+    },
+    {
+      "name": "studio",
+      "version": "0.1.2",
+      "description": "Music studio \u2014 a DAW-grade step sequencer, polysynth, drum machine and modular Grid that renders arrangements to audio in the Studio window",
+      "summary": "Music studio: polyphonic synth + drum machine + modular Grid, rendered offline by a self-contained DSP engine",
+      "category": "Media",
+      "kind": "native",
+      "arch": "amd64",
+      "protocol": {
+        "min": 1,
+        "max": 1
+      },
+      "file": "studio-0.1.2-linux-amd64.tar.gz",
+      "url": "https://github.com/askscience/shiny/releases/download/v0.2.9/studio-0.1.2-linux-amd64.tar.gz",
+      "size": 2618239,
+      "sha256": "f1a912beb9cb37a61c42b1e446f392c9ddf5be5d87cacf2731a09ca4fba4afb0"
+    },
+    {
+      "name": "traveler",
+      "version": "0.1.1",
+      "description": "Trip tracking, GPS, diary, map and navigation tools for the AI assistant",
+      "summary": "Trip tracking, GPS, diary, map tools, navigation",
+      "category": "Travel",
+      "kind": "native",
+      "arch": "amd64",
+      "protocol": {
+        "min": 1,
+        "max": 1
+      },
+      "file": "traveler-0.1.1-linux-amd64.tar.gz",
+      "url": "https://github.com/askscience/shiny/releases/download/v0.2.9/traveler-0.1.1-linux-amd64.tar.gz",
+      "size": 3440788,
+      "sha256": "a3782ef0b0db63ca5cd3a4c466f0c0c027ed211b9b326c3db9f466bac29848af"
+    },
+    {
+      "name": "word",
+      "version": "0.1.2",
+      "description": "Word processor \u2014 open .odt documents with Word (.docx) and PDF export",
+      "summary": "Word processor: write .odt documents, import Word files, export polished .docx and PDF",
+      "category": "Office",
+      "kind": "native",
+      "arch": "amd64",
+      "protocol": {
+        "min": 1,
+        "max": 1
+      },
+      "file": "word-0.1.2-linux-amd64.tar.gz",
+      "url": "https://github.com/askscience/shiny/releases/download/v0.2.9/word-0.1.2-linux-amd64.tar.gz",
+      "size": 11949594,
+      "sha256": "a76a3ce528582705ce7ec333c893bdc9a068405ffbd6aad7f85e9922953d4eb8"
+    },
+    {
+      "name": "youtube",
+      "version": "0.1.1",
+      "description": "Watch YouTube videos in the YouTube window \u2014 the AI can search YouTube and play videos",
+      "summary": "YouTube: AI search and playback in the YouTube window",
+      "category": "Media",
+      "kind": "native",
+      "arch": "amd64",
+      "protocol": {
+        "min": 1,
+        "max": 1
+      },
+      "file": "youtube-0.1.1-linux-amd64.tar.gz",
+      "url": "https://github.com/askscience/shiny/releases/download/v0.2.9/youtube-0.1.1-linux-amd64.tar.gz",
+      "size": 3053066,
+      "sha256": "f7504d2518292efc740f3f818bddd939f815d9d02741f606e0482ee0cada209c"
+    }
+  ]
+}

@@ -4,6 +4,21 @@
 
 ### Changed
 
+- **Plugins are published on their own.** A plugin's archive is built and
+  added to the signed catalogue when its `version` in `plugin.toml` goes up
+  on `main` (`publish-plugins.yml`), not with a server release: only that
+  plugin is built. Raising the version is now the act of publishing, so
+  work in progress stays on `main` without a version change. The catalogue
+  moved to the rolling `plugins` GitHub release.
+- A plugin version can state the oldest server it works with (`min_host` in
+  `plugin.toml`). The catalogue keeps the previous version for older
+  servers and each server takes the newest one it can run. Servers up to
+  0.2.9 keep reading the catalogue of their release on Pages, unchanged.
+- Browser 0.2.6, Calculator 0.1.2, Calendar 0.1.2, Capture 0.1.7, Files
+  0.1.3, Keyboard 0.1.2, Mail 0.1.3, Oorbit 0.8.0, PDF 0.3.3, Radio 0.1.2,
+  Studio 0.1.3: rebuilt with the lighter plugin runtime (two threads, no
+  fsync per commit on the write-ahead log); no change of their own.
+
 - The database uses SQLite's write-ahead log. The server and every plugin
   process share one file, and a write in one of them (a mail sync, the
   browser history) used to block the reads of all the others. Commits no

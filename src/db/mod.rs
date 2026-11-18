@@ -64,7 +64,9 @@ pub async fn enable_wal(conn: &mut SqliteConnection) -> bool {
         // An in-memory database answers "memory": nothing to do.
         Ok(mode) if mode.eq_ignore_ascii_case("memory") => false,
         Ok(mode) => {
-            tracing::warn!("Database stays in journal mode '{mode}' (write-ahead log not available)");
+            tracing::warn!(
+                "Database stays in journal mode '{mode}' (write-ahead log not available)"
+            );
             false
         }
         Err(error) => {
@@ -85,7 +87,10 @@ async fn relax_sync_in_wal(conn: &mut SqliteConnection) {
         .await
         .unwrap_or_default();
     if mode.eq_ignore_ascii_case("wal") {
-        if let Err(error) = sqlx::query("PRAGMA synchronous=NORMAL").execute(&mut *conn).await {
+        if let Err(error) = sqlx::query("PRAGMA synchronous=NORMAL")
+            .execute(&mut *conn)
+            .await
+        {
             tracing::warn!("Could not set synchronous=NORMAL: {error}");
         }
     }
@@ -95,7 +100,10 @@ async fn relax_sync_in_wal(conn: &mut SqliteConnection) {
 /// file alone holds everything (a copy of just `shiny.db` is then complete).
 /// Called at shutdown; best effort.
 pub async fn checkpoint(pool: &SqlitePool) {
-    if let Err(error) = sqlx::query("PRAGMA wal_checkpoint(TRUNCATE)").fetch_all(pool).await {
+    if let Err(error) = sqlx::query("PRAGMA wal_checkpoint(TRUNCATE)")
+        .fetch_all(pool)
+        .await
+    {
         tracing::debug!("WAL checkpoint skipped: {error}");
     }
 }
@@ -303,7 +311,10 @@ mod path_tests {
 
         // Without the switch a pool keeps SQLite's rollback journal and FULL.
         let pool = init_pool(&url).await.unwrap();
-        let sync: i64 = sqlx::query_scalar("PRAGMA synchronous").fetch_one(&pool).await.unwrap();
+        let sync: i64 = sqlx::query_scalar("PRAGMA synchronous")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
         assert_eq!(sync, 2);
         pool.close().await;
 
@@ -312,11 +323,23 @@ mod path_tests {
         drop(conn);
 
         let pool = init_pool(&url).await.unwrap();
-        let mode: String = sqlx::query_scalar("PRAGMA journal_mode").fetch_one(&pool).await.unwrap();
-        let sync: i64 = sqlx::query_scalar("PRAGMA synchronous").fetch_one(&pool).await.unwrap();
+        let mode: String = sqlx::query_scalar("PRAGMA journal_mode")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        let sync: i64 = sqlx::query_scalar("PRAGMA synchronous")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
         assert_eq!((mode.as_str(), sync), ("wal", 1));
-        sqlx::query("CREATE TABLE t (id INTEGER)").execute(&pool).await.unwrap();
-        sqlx::query("INSERT INTO t VALUES (1)").execute(&pool).await.unwrap();
+        sqlx::query("CREATE TABLE t (id INTEGER)")
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("INSERT INTO t VALUES (1)")
+            .execute(&pool)
+            .await
+            .unwrap();
         checkpoint(&pool).await;
         let wal = root.path().join("state.db-wal");
         assert_eq!(std::fs::metadata(&wal).map(|m| m.len()).unwrap_or(0), 0);

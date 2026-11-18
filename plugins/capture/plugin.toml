@@ -1,5 +1,5 @@
 name = "capture"
-version = "0.1.6"
+version = "0.1.7"
 api_level = 1
 runtime = "process"
 entry_symbol = "shiny_plugin_entry"

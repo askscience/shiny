@@ -307,6 +307,7 @@ Fields:
 | `summary` | string | no | used by admin UI to say "what this plugin adds" |
 | `category` | string | no | grouping hint for the top-bar tray (e.g. `Office`, `Media`, `Travel`, `System`) — see §19 |
 | `capabilities` | string[] | no | declared capabilities, e.g. `["open-urls"]` makes the plugin a candidate link handler — see §19 |
+| `min_host` | string | no | oldest server release this plugin version works with; the catalogue offers it only to servers that new (docs/plugins/process-plugins.md) |
 | `migrations_dir` | string | no | default `"migrations"` |
 | `skills_dir` | string | no | default `"skills"` |
 | `web_dir` | string | no | default `"web"` |
