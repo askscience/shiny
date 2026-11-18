@@ -71,8 +71,13 @@ UID_BASE=@UID_BASE@
 PORT=$((PORT_BASE + $(id -u) - UID_BASE))
 
 # The per-user server unit reads SERVER_PORT from here, so both sides agree.
+# Only that line is ours: any other setting in the file survives the login.
 mkdir -p "$HOME/.config/shiny"
-printf 'SERVER_PORT=%s\n' "$PORT" > "$HOME/.config/shiny/env"
+ENV_FILE="$HOME/.config/shiny/env"
+{
+    [ -f "$ENV_FILE" ] && grep -v '^SERVER_PORT=' "$ENV_FILE" || true
+    printf 'SERVER_PORT=%s\n' "$PORT"
+} > "$ENV_FILE.new" && mv "$ENV_FILE.new" "$ENV_FILE"
 export LITEAURA_APP_ORIGIN="http://127.0.0.1:$PORT"
 # Where the shell opens at startup. It navigates to the auto-login URL instead
 # when a boot token is available (see load_boot_token below).

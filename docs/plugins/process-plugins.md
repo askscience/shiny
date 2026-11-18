@@ -160,7 +160,12 @@ scripts/install-plugin-dev.sh word        # copies bin/word and the rest
 To move a development machine from library plugins to process plugins in
 one step (install every rebuilt plugin, turn off catalogue auto-updates,
 restart, report what started), run `scripts/switch-to-process-plugins.sh`
-from a terminal outside LiteAura after a release build.
+from a terminal outside LiteAura after a release build. It is a one-time
+step: its catalogue settings go in the systemd drop-in
+`~/.config/systemd/user/shiny.service.d/30-plugin-catalog.conf`, which
+survives logins (`~/.config/shiny/env` belongs to the session script, which
+sets `SERVER_PORT` there at every login). Later plugin builds need only
+`scripts/install-plugin-dev.sh <name>` and a rescan, no restart.
 
 A running server loads the new executable when it rescans the plugin
 (`POST /api/plugins/rescan`, or the next start). To try the whole catalogue

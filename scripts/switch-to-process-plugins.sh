@@ -1,8 +1,8 @@
 #!/bin/sh
 # Move a development machine to the process-plugin server in one go:
 # install every rebuilt plugin into the plugin roots the server loads, turn
-# off catalogue auto-updates (release builds must not replace local ones),
-# restart shiny.service and report which plugins came up as processes.
+# off catalogue auto-updates (release builds must not replace local ones)
+# with a systemd drop-in that survives logins, restart shiny.service and report which plugins came up as processes.
 #
 # Build first (does not touch the running session):
 #
@@ -46,26 +46,23 @@ for manifest in plugins/*/plugin.toml; do
 done
 echo "plugins installed: $installed"
 
-# 3. No background installs from the published catalogue on this machine.
-mkdir -p "$(dirname "$ENV_FILE")"
-touch "$ENV_FILE"
-if grep -q '^SHINY_PLUGIN_AUTO_UPDATE=' "$ENV_FILE"; then
-    sed -i 's/^SHINY_PLUGIN_AUTO_UPDATE=.*/SHINY_PLUGIN_AUTO_UPDATE=0/' "$ENV_FILE"
-else
-    echo 'SHINY_PLUGIN_AUTO_UPDATE=0' >> "$ENV_FILE"
-fi
-echo "catalogue auto-update: off ($ENV_FILE)"
-
-# A machine not installed from the package has no system keyring: check the
-# catalogue against the repository's copy of the archive key.
-if [ ! -f /usr/share/keyrings/liteaura-archive.gpg ]; then
-    if grep -q '^SHINY_PLUGIN_KEYRING=' "$ENV_FILE"; then
-        sed -i "s#^SHINY_PLUGIN_KEYRING=.*#SHINY_PLUGIN_KEYRING=$REPO/packaging/liteaura-archive.gpg#" "$ENV_FILE"
-    else
-        echo "SHINY_PLUGIN_KEYRING=$REPO/packaging/liteaura-archive.gpg" >> "$ENV_FILE"
+# 3. Catalogue settings for this machine, in a systemd drop-in: the session
+#    script rewrites ~/.config/shiny/env at every login, a drop-in stays.
+#    No background installs (release builds must not replace local ones), and
+#    without the package's system keyring, the repository's copy of the key.
+DROPIN_DIR="$HOME/.config/systemd/user/shiny.service.d"
+DROPIN="$DROPIN_DIR/30-plugin-catalog.conf"
+mkdir -p "$DROPIN_DIR"
+{
+    echo "# Written by scripts/switch-to-process-plugins.sh (development machine)."
+    echo "[Service]"
+    echo "Environment=SHINY_PLUGIN_AUTO_UPDATE=0"
+    if [ ! -f /usr/share/keyrings/liteaura-archive.gpg ]; then
+        echo "Environment=SHINY_PLUGIN_KEYRING=$REPO/packaging/liteaura-archive.gpg"
     fi
-    echo "catalogue key: $REPO/packaging/liteaura-archive.gpg"
-fi
+} > "$DROPIN"
+systemctl --user daemon-reload
+echo "catalogue settings: $DROPIN"
 
 # 4. Restart and wait for the server to answer.
 start_line=$( [ -f "$LOG" ] && wc -l < "$LOG" || echo 0 )

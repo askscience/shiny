@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- The session script rewrote `~/.config/shiny/env` at every login, dropping
+  every setting but `SERVER_PORT`. It now replaces only that line.
+- `scripts/switch-to-process-plugins.sh` keeps the catalogue settings
+  (auto-update off, the repository's archive key) in a systemd drop-in, so
+  they survive logins and the script runs once.
+
 ## [0.2.9] - 2026-11-17
 
 ### Security
