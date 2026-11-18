@@ -15,7 +15,7 @@
   servers and each server takes the newest one it can run. Servers up to
   0.2.9 keep reading the catalogue of their release on Pages, unchanged.
 - Browser 0.2.6, Calculator 0.1.2, Calendar 0.1.2, Capture 0.1.7, Files
-  0.1.3, Keyboard 0.1.2, Mail 0.1.3, Oorbit 0.8.0, PDF 0.3.3, Radio 0.1.2,
+  0.1.3, Keyboard 0.1.2, Mail 0.1.3, Oorbit 0.7.10, PDF 0.3.3, Radio 0.1.2,
   Studio 0.1.3: rebuilt with the lighter plugin runtime (two threads, no
   fsync per commit on the write-ahead log); no change of their own.
 

@@ -1,5 +1,5 @@
 name = "oorbit"
-version = "0.8.0"
+version = "0.7.10"
 api_level = 1
 runtime = "process"
 entry_symbol = "shiny_plugin_entry"
