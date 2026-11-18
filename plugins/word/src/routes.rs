@@ -120,12 +120,27 @@ fn doc_get(ctx: Arc<PluginCtx>) -> RouteHandler {
             )?;
             let row = rows.first().ok_or_else(|| AppError::NotFound("Document not found".into()))?;
             let title = as_text(&row[0]);
-            let html = engine::odt_to_html(&as_blob(&row[1]))?;
+            let odt = as_blob(&row[1]);
+            let html = blocking(move || engine::odt_to_html(&odt)).await?;
             let updated_at = as_text(&row[2]);
             let design = Design::from_json(&as_text(&row[3]));
             Ok(ok(json!({ "id": id, "title": title, "html": html, "updated_at": updated_at, "design": design })))
         }
     })
+}
+
+/// Run a document conversion off the plugin's single runtime thread, so a
+/// long document being saved (every autosave converts it whole) does not hold
+/// up the plugin's other requests. The closure only receives owned data,
+/// never `ctx.db()`.
+async fn blocking<T, F>(f: F) -> Result<T, AppError>
+where
+    F: FnOnce() -> Result<T, AppError> + Send + 'static,
+    T: Send + 'static,
+{
+    tokio::task::spawn_blocking(f)
+        .await
+        .map_err(|e| AppError::Internal(format!("document conversion task failed: {e}")))?
 }
 
 fn doc_save(ctx: Arc<PluginCtx>) -> RouteHandler {
@@ -158,7 +173,7 @@ fn doc_save(ctx: Arc<PluginCtx>) -> RouteHandler {
                     .filter(|t| !t.is_empty())
                     .unwrap_or_else(|| "Untitled".into()),
             };
-            let odt_bytes = engine::html_to_odt(&html)?;
+            let odt_bytes = blocking(move || engine::html_to_odt(&html)).await?;
 
             let changed = ctx.db().execute(
                 "UPDATE documents SET title = ?1, odt = ?2, updated_at = datetime('now') \

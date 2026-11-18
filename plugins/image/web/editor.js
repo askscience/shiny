@@ -418,6 +418,35 @@ export function plotRaw(w, h, buf) {
   paintView();
 }
 
+/**
+ * Show a reduced render of the picture (a dial being dragged). Only the
+ * pixels on screen change: the document keeps its size, so zoom and fit are
+ * untouched, and the full-size render replaces this when the dial is released.
+ */
+function plotPreview(w, h, buf) {
+  if (!S.render) return;
+  if (!offscreen) offscreen = document.createElement('canvas');
+  offscreen.width = w;
+  offscreen.height = h;
+  offscreen.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(buf), w, h), 0, 0);
+  paintView();
+}
+
+/**
+ * The longest side worth asking for while a dial is dragged: what the view
+ * shows, in steps of 256 px so the server keeps reusing one reduced copy.
+ * 0 (render it whole) when zoomed in past what a preview could show sharply.
+ */
+function previewSide() {
+  const view = S.els.view;
+  if (!view || !S.render) return 0;
+  const shown = Math.max(view.width, view.height);
+  if (shown > PREVIEW_MAX_SIDE) return 0;
+  return Math.min(PREVIEW_MAX_SIDE, Math.max(512, Math.ceil(shown / 256) * 256));
+}
+
+const PREVIEW_MAX_SIDE = 2048;
+
 export function paintView() {
   const { view, area } = S.els;
   if (!view || !area) return;
@@ -643,8 +672,11 @@ export function wireCanvas(view, area) {
 
 /** Send a request body ({operations} or {settings}) and sync the live state. */
 async function send(body, { commit }) {
-  const res = await api.rawApply(S.doc.image_id, body, { commit });
-  plotRaw(res.w, res.h, res.buf);
+  // A dial step that is not committed only has to look right on screen.
+  const preview = !commit && body.settings ? previewSide() : 0;
+  const res = await api.rawApply(S.doc.image_id, body, { commit, preview });
+  if (res.preview) plotPreview(res.w, res.h, res.buf);
+  else plotRaw(res.w, res.h, res.buf);
   setSettings(res.adjust);
   setActiveLook(res.look);
   // The strip previews render over the settings base, so they follow every

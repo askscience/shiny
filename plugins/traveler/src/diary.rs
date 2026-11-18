@@ -100,6 +100,11 @@ pub async fn generate_for_date(
     Ok(entry)
 }
 
+/// The ~100 m grid cell of a coordinate (three decimals of a degree).
+fn geocode_cell(lat: f64, lon: f64) -> (i64, i64) {
+    ((lat * 1000.0).round() as i64, (lon * 1000.0).round() as i64)
+}
+
 async fn build_location_summary(locations: &[Location]) -> String {
     if locations.is_empty() {
         return "No GPS data recorded for this date.".into();
@@ -109,6 +114,7 @@ async fn build_location_summary(locations: &[Location]) -> String {
     let mut summary = String::new();
     let mut prev: Option<(f64, f64)> = None;
     let mut total_dist = 0.0;
+    let mut places: std::collections::HashMap<(i64, i64), String> = std::collections::HashMap::new();
 
     for loc in locations {
         if let Some((pl, pn)) = prev {
@@ -116,11 +122,21 @@ async fn build_location_summary(locations: &[Location]) -> String {
         }
         prev = Some((loc.latitude, loc.longitude));
 
-        let place = osm_client
-            .reverse_geocode(loc.latitude, loc.longitude)
-            .await
-            .map(|p| p.display_name)
-            .unwrap_or_else(|_| format!("{}, {}", loc.latitude, loc.longitude));
+        // One lookup per ~100 m cell: a day's track is mostly points a few
+        // metres apart (parked, walking, at home), and each lookup costs a
+        // request plus Nominatim's one-second pause.
+        let cell = geocode_cell(loc.latitude, loc.longitude);
+        let place = match places.get(&cell) {
+            Some(known) => known.clone(),
+            None => match osm_client.reverse_geocode(loc.latitude, loc.longitude).await {
+                Ok(found) => {
+                    places.insert(cell, found.display_name.clone());
+                    found.display_name
+                }
+                // Not remembered: the next point of the cell asks again.
+                Err(_) => format!("{}, {}", loc.latitude, loc.longitude),
+            },
+        };
 
         let time = loc.timestamp.as_deref().unwrap_or("unknown");
         let speed = loc
@@ -133,4 +149,16 @@ async fn build_location_summary(locations: &[Location]) -> String {
 
     summary.push_str(&format!("\nTotal distance traveled: {:.2} km", total_dist));
     summary
+}
+
+#[cfg(test)]
+mod geocode_cell_tests {
+    use super::geocode_cell;
+
+    #[test]
+    fn points_a_few_metres_apart_share_a_cell_and_distant_ones_do_not() {
+        assert_eq!(geocode_cell(45.46420, 9.19000), geocode_cell(45.46431, 9.19012));
+        assert_ne!(geocode_cell(45.4642, 9.1900), geocode_cell(45.4662, 9.1900));
+        assert_ne!(geocode_cell(-0.0004, 0.0), geocode_cell(0.0006, 0.0));
+    }
 }

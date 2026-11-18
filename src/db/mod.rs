@@ -37,8 +37,67 @@ pub async fn init_pool(database_url: &str) -> Result<SqlitePool, sqlx::Error> {
 
     SqlitePoolOptions::new()
         .max_connections(5)
+        .after_connect(|conn, _meta| {
+            Box::pin(async move {
+                relax_sync_in_wal(conn).await;
+                Ok(())
+            })
+        })
         .connect_with(opts)
         .await
+}
+
+/// Switch the database file to write-ahead logging. The mode is stored in the
+/// file, so every later connection (the pool, each plugin process) inherits
+/// it. In WAL a writer no longer blocks readers in the other processes, which
+/// the rollback journal did for the length of every write.
+///
+/// Never fatal: the switch needs a moment with no other connection on the
+/// file, and a database that stays on its rollback journal works as before.
+/// Returns whether the file is in WAL mode now.
+pub async fn enable_wal(conn: &mut SqliteConnection) -> bool {
+    match sqlx::query_scalar::<_, String>("PRAGMA journal_mode=WAL")
+        .fetch_one(&mut *conn)
+        .await
+    {
+        Ok(mode) if mode.eq_ignore_ascii_case("wal") => true,
+        // An in-memory database answers "memory": nothing to do.
+        Ok(mode) if mode.eq_ignore_ascii_case("memory") => false,
+        Ok(mode) => {
+            tracing::warn!("Database stays in journal mode '{mode}' (write-ahead log not available)");
+            false
+        }
+        Err(error) => {
+            tracing::warn!("Could not switch the database to write-ahead logging: {error}");
+            false
+        }
+    }
+}
+
+/// `synchronous=NORMAL` for a connection on a WAL database: commits stop
+/// waiting for an fsync each (the log is synced at checkpoints). The file
+/// cannot be corrupted by a power cut; only the last commits before it can be
+/// lost. On a rollback-journal database the setting is left at FULL, where
+/// NORMAL would not be as safe.
+async fn relax_sync_in_wal(conn: &mut SqliteConnection) {
+    let mode = sqlx::query_scalar::<_, String>("PRAGMA journal_mode")
+        .fetch_one(&mut *conn)
+        .await
+        .unwrap_or_default();
+    if mode.eq_ignore_ascii_case("wal") {
+        if let Err(error) = sqlx::query("PRAGMA synchronous=NORMAL").execute(&mut *conn).await {
+            tracing::warn!("Could not set synchronous=NORMAL: {error}");
+        }
+    }
+}
+
+/// Fold the write-ahead log back into the database file and empty it, so the
+/// file alone holds everything (a copy of just `shiny.db` is then complete).
+/// Called at shutdown; best effort.
+pub async fn checkpoint(pool: &SqlitePool) {
+    if let Err(error) = sqlx::query("PRAGMA wal_checkpoint(TRUNCATE)").fetch_all(pool).await {
+        tracing::debug!("WAL checkpoint skipped: {error}");
+    }
 }
 
 /// Ordered, append-only migration registry. Existing databases are adopted
@@ -236,6 +295,34 @@ async fn apply_legacy_migration(
 #[cfg(test)]
 mod path_tests {
     use super::*;
+
+    #[tokio::test]
+    async fn wal_is_stored_in_the_file_and_pool_connections_commit_with_normal_sync() {
+        let root = tempfile::tempdir().unwrap();
+        let url = format!("sqlite://{}", root.path().join("state.db").display());
+
+        // Without the switch a pool keeps SQLite's rollback journal and FULL.
+        let pool = init_pool(&url).await.unwrap();
+        let sync: i64 = sqlx::query_scalar("PRAGMA synchronous").fetch_one(&pool).await.unwrap();
+        assert_eq!(sync, 2);
+        pool.close().await;
+
+        let mut conn = connect(&url).await.unwrap();
+        assert!(enable_wal(&mut conn).await);
+        drop(conn);
+
+        let pool = init_pool(&url).await.unwrap();
+        let mode: String = sqlx::query_scalar("PRAGMA journal_mode").fetch_one(&pool).await.unwrap();
+        let sync: i64 = sqlx::query_scalar("PRAGMA synchronous").fetch_one(&pool).await.unwrap();
+        assert_eq!((mode.as_str(), sync), ("wal", 1));
+        sqlx::query("CREATE TABLE t (id INTEGER)").execute(&pool).await.unwrap();
+        sqlx::query("INSERT INTO t VALUES (1)").execute(&pool).await.unwrap();
+        checkpoint(&pool).await;
+        let wal = root.path().join("state.db-wal");
+        assert_eq!(std::fs::metadata(&wal).map(|m| m.len()).unwrap_or(0), 0);
+        pool.close().await;
+    }
+
     #[test]
     fn bare_paths_and_sqlite_urls_keep_query_options_and_create_only_their_parent() {
         let root = tempfile::tempdir().unwrap();

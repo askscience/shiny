@@ -731,13 +731,42 @@ async function importCsv(file) {
 
 /* ── Grid ───────────────────────────────────────────────────── */
 
+/** The data cells of the grid as it was last built: `{ host, rows, cols, cells }`. */
+let builtGrid = null;
+
+/**
+ * Bring an already-built grid of the same size up to date instead of
+ * rebuilding it: only the cells whose text or state changed are touched.
+ * A rebuild creates one element and three listeners per cell (up to 200×52)
+ * and ran after every committed edit. False when the grid has to be built.
+ */
+function refreshGrid(totalRows, totalCols) {
+  const built = builtGrid;
+  if (!built || built.host !== gridEl || built.rows !== totalRows || built.cols !== totalCols) return false;
+  // An open editor is positioned over its cell and is dropped by a rebuild:
+  // keep that path as it was.
+  if (editing || !built.cells.length || !built.cells[0].el.isConnected) return false;
+  for (const { el, ref, r, c } of built.cells) {
+    const raw = current.cells.get(ref);
+    const text = displayValue(raw);
+    if (el.textContent !== text) el.textContent = text;
+    el.classList.toggle('is-formula', String(raw ?? '').startsWith('='));
+    el.classList.toggle('is-selected', r === sel.row && c === sel.col);
+    el.__editOnTap = false;
+  }
+  return true;
+}
+
 function renderGrid() {
   if (!gridEl || !current) return;
 
-  gridEl.innerHTML = '';
-
   const totalCols = Math.max(1, Math.min(current.cols, 52));
   const totalRows = Math.min(current.rows, 200);
+  if (refreshGrid(totalRows, totalCols)) return;
+
+  gridEl.innerHTML = '';
+  const cells = [];
+  builtGrid = { host: gridEl, rows: totalRows, cols: totalCols, cells };
 
   // Size the grid columns to the actual sheet width. The CSS default is a
   // fallback only; if this stays fixed while totalCols varies, CSS auto-flow
@@ -800,6 +829,7 @@ function renderGrid() {
         showEditor();
       });
       gridEl.appendChild(cell);
+      cells.push({ el: cell, ref, r, c });
     }
   }
 }
@@ -1176,6 +1206,7 @@ export function unmountCalcTile() {
   tileEl?.remove();
   tileEl = null;
   gridEl = null;
+  builtGrid = null;
   gridWrapEl = null;
   editorInputEl = null;
   sheetMenuBtn = null;

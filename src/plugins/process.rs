@@ -303,6 +303,9 @@ impl Supervisor {
         // The plugin binds its socket once it is up. Poll until it accepts,
         // the process dies, or the deadline passes.
         let deadline = Instant::now() + HELLO_TIMEOUT;
+        // A plugin is usually listening within a few milliseconds: look again
+        // quickly at first, then at the old 15 ms pace.
+        let mut pause = Duration::from_millis(1);
         loop {
             if !running.alive() {
                 return Err(AppError::Internal(format!(
@@ -322,7 +325,8 @@ impl Supervisor {
                     self.name
                 )));
             }
-            tokio::time::sleep(Duration::from_millis(15)).await;
+            tokio::time::sleep(pause).await;
+            pause = (pause * 2).min(Duration::from_millis(15));
         }
         let hello = proto::Hello {
             protocol: proto::VersionRange::current(),

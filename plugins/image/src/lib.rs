@@ -9,6 +9,7 @@ pub mod looks;
 pub mod ops;
 pub mod pixels;
 pub mod plugin;
+pub mod preview;
 pub mod routes;
 pub mod tools;
 

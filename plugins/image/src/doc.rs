@@ -82,27 +82,45 @@ pub struct EditResult {
     /// The full effective dial settings after the run ({} = neutral).
     pub adjust: Json,
 }
-fn as_blob(v: &Value) -> Vec<u8> {
-    match v {
-        Value::Blob(b) => b.clone(),
-        _ => Vec::new(),
-    }
-}
 /// Load a document with both buffers decoded to raw RGBA (legacy `png` rows
 /// are decoded on read; the first edit rewrites them as `rgba`).
 pub fn load(db: &Db, uid: &str, image_id: &str) -> Result<Doc, AppError> {
-    let rows = db.query(
+    load_buffers(db, uid, image_id, true)
+}
+
+/// Load a document for rendering only: the working pixels, the look and the
+/// dial settings, **without the original upload**. A dial drag renders on
+/// every step and never reads the original, which is as large as the picture
+/// itself (up to 10 MB); `Doc::original` is left empty.
+pub fn load_for_render(db: &Db, uid: &str, image_id: &str) -> Result<Doc, AppError> {
+    load_buffers(db, uid, image_id, false)
+}
+
+/// Move a blob out of its row instead of copying it.
+fn take_blob(v: &mut Value) -> Vec<u8> {
+    match std::mem::replace(v, Value::Null) {
+        Value::Blob(b) => b,
+        _ => Vec::new(),
+    }
+}
+
+fn load_buffers(db: &Db, uid: &str, image_id: &str, with_original: bool) -> Result<Doc, AppError> {
+    let sql = if with_original {
         "SELECT title, width, height, bytes, original, orig_width, orig_height, format, look, adjust \
-         FROM images WHERE id = ?1 AND user_id = ?2",
-        &[Value::text(image_id), Value::text(uid)],
-    )?;
-    let r = rows
-        .first()
+         FROM images WHERE id = ?1 AND user_id = ?2"
+    } else {
+        "SELECT title, width, height, bytes, NULL, orig_width, orig_height, format, look, adjust \
+         FROM images WHERE id = ?1 AND user_id = ?2"
+    };
+    let rows = db.query(sql, &[Value::text(image_id), Value::text(uid)])?;
+    let mut r = rows
+        .into_iter()
+        .next()
         .ok_or_else(|| AppError::NotFound("Image not found".into()))?;
 
     let title = as_text(&r[0]);
     let format = as_text(&r[7]);
-    let bytes = as_blob(&r[3]);
+    let bytes = take_blob(&mut r[3]);
     let (raw, w, h) = if format == "rgba" {
         (
             bytes,
@@ -114,8 +132,10 @@ pub fn load(db: &Db, uid: &str, image_id: &str) -> Result<Doc, AppError> {
         (img.get_raw_pixels(), img.get_width(), img.get_height())
     };
 
-    let original_raw = as_blob(&r[4]);
-    let (original, orig_w, orig_h) = if original_raw.is_empty() {
+    let original_raw = take_blob(&mut r[4]);
+    let (original, orig_w, orig_h) = if !with_original {
+        (Vec::new(), w, h)
+    } else if original_raw.is_empty() {
         (raw.clone(), w, h)
     } else if format == "rgba" {
         let ow = as_int(&r[5]).max(1) as u32;
@@ -187,6 +207,8 @@ pub fn save(
     h: u32,
 ) -> Result<(), AppError> {
     crate::ops::checked_layer_len(w, h)?;
+    // The working pixels change: a kept dial-drag preview is of the old ones.
+    crate::preview::invalidate();
     let changed = db.execute(
         "UPDATE images SET bytes = ?1, width = ?2, height = ?3, format = 'rgba', \
          updated_at = datetime('now') WHERE id = ?4 AND user_id = ?5",
@@ -261,7 +283,7 @@ pub fn apply_settings(
     update: &Map<String, Json>,
     commit: bool,
 ) -> Result<EditResult, AppError> {
-    let d = load(db, uid, image_id)?;
+    let d = load_for_render(db, uid, image_id)?;
     let res = apply_settings_pixels(d, update)?;
     if commit {
         commit_settings(db, uid, image_id, &res.adjust)?;
@@ -296,6 +318,50 @@ pub fn apply_settings_pixels(
         adjust: Json::Object(settings),
     })
 }
+
+/// [`apply_settings_pixels`] over a reduced copy of the picture (`scale` is
+/// reduced side / full side). Dials measured in pixels are scaled with the
+/// picture so the preview looks like the full render; the returned settings
+/// are the real, unscaled ones.
+pub fn apply_settings_preview(
+    d: Doc,
+    update: &Map<String, Json>,
+    scale: f64,
+) -> Result<EditResult, AppError> {
+    let mut settings = d.adjust.clone();
+    for key in DIAL_ORDER {
+        if let Some(v) = update.get(*key) {
+            let n = v.as_f64().unwrap_or(0.0);
+            if n.abs() < 1e-9 {
+                settings.remove(*key);
+            } else {
+                settings.insert((*key).to_string(), serde_json::json!(n));
+            }
+        }
+    }
+    let mut scaled = settings.clone();
+    if let Some(radius) = scaled.get("blur").and_then(|v| v.as_f64()) {
+        let reduced = radius * scale;
+        if reduced < 0.5 {
+            scaled.remove("blur");
+        } else {
+            scaled.insert("blur".into(), serde_json::json!(reduced));
+        }
+    }
+    let raw = render_with(&d, &scaled, d.look.as_deref())?;
+    Ok(EditResult {
+        raw,
+        w: d.w,
+        h: d.h,
+        look: d.look,
+        adjust: Json::Object(settings),
+    })
+}
+
+/// The preview keeps one process-wide slot; tests that write pixels or use
+/// the slot take this lock so they do not clear each other's state.
+#[cfg(test)]
+pub(crate) static PREVIEW_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 /// Persist the effective dial settings returned by [`apply_settings_pixels`].
 pub fn commit_settings(
@@ -394,4 +460,98 @@ pub fn apply_operations(
             Json::Object(d.adjust)
         },
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn db_with_image() -> Db {
+        let db = Db::open("sqlite::memory:").unwrap();
+        db.execute(
+            "CREATE TABLE images (id TEXT PRIMARY KEY, user_id TEXT, title TEXT, width INTEGER, \
+             height INTEGER, created_at TEXT, updated_at TEXT, format TEXT, orig_width INTEGER, \
+             orig_height INTEGER, look TEXT, adjust TEXT, bytes BLOB, original BLOB)",
+            &[],
+        )
+        .unwrap();
+        // 2x1 working pixels, 1x1 original.
+        db.execute(
+            "INSERT INTO images (id, user_id, title, width, height, bytes, original, format, orig_width, orig_height, adjust) \
+             VALUES ('i', 'u', 'Pic', 2, 1, ?1, ?2, 'rgba', 1, 1, ?3)",
+            &[
+                Value::blob(vec![10, 20, 30, 255, 40, 50, 60, 255]),
+                Value::blob(vec![1, 2, 3, 255]),
+                Value::text(r#"{"brightness": 20}"#),
+            ],
+        )
+        .unwrap();
+        db
+    }
+
+    #[test]
+    fn a_render_load_skips_the_original_and_shows_the_same_picture() {
+        let db = db_with_image();
+        let full = load(&db, "u", "i").unwrap();
+        let light = load_for_render(&db, "u", "i").unwrap();
+
+        assert_eq!(full.original, vec![1, 2, 3, 255]);
+        assert_eq!((full.orig_w, full.orig_h), (1, 1));
+        assert!(light.original.is_empty());
+
+        assert_eq!(light.raw, full.raw);
+        assert_eq!((light.w, light.h), (2, 1));
+        assert_eq!(light.adjust, full.adjust);
+        assert_eq!(visible(&light).unwrap(), visible(&full).unwrap());
+        assert_ne!(visible(&light).unwrap(), light.raw, "the dial setting is rendered");
+
+        // A dial step renders the same from either load.
+        let step: Map<String, Json> = serde_json::from_str(r#"{"contrast": 40}"#).unwrap();
+        let from_light = apply_settings_pixels(light, &step).unwrap();
+        let from_full = apply_settings_pixels(full, &step).unwrap();
+        assert_eq!(from_light.raw, from_full.raw);
+        assert_eq!(from_light.adjust, from_full.adjust);
+        assert!(load_for_render(&db, "someone-else", "i").is_err());
+    }
+
+    #[test]
+    fn a_dial_step_over_a_reduced_copy_matches_the_full_render_and_saving_pixels_drops_it() {
+        let _guard = PREVIEW_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let db = Db::open("sqlite::memory:").unwrap();
+        db.execute(
+            "CREATE TABLE images (id TEXT PRIMARY KEY, user_id TEXT, title TEXT, width INTEGER, \
+             height INTEGER, created_at TEXT, updated_at TEXT, format TEXT, orig_width INTEGER, \
+             orig_height INTEGER, look TEXT, adjust TEXT, bytes BLOB, original BLOB)",
+            &[],
+        )
+        .unwrap();
+        // A flat 2000x1000 picture: reduced or not, every pixel renders alike.
+        let (w, h) = (2000u32, 1000u32);
+        let flat: Vec<u8> = [90u8, 120, 150, 255].repeat((w * h) as usize);
+        db.execute(
+            "INSERT INTO images (id, user_id, title, width, height, bytes, original, format, orig_width, orig_height, adjust) \
+             VALUES ('i', 'u', 'Pic', ?1, ?2, ?3, ?3, 'rgba', ?1, ?2, ?4)",
+            &[Value::Int(w as i64), Value::Int(h as i64), Value::blob(flat.clone()), Value::text(r#"{"contrast": 10}"#)],
+        )
+        .unwrap();
+
+        let step: Map<String, Json> = serde_json::from_str(r#"{"brightness": 40}"#).unwrap();
+        let full = apply_settings_pixels(load_for_render(&db, "u", "i").unwrap(), &step).unwrap();
+
+        let meta = crate::preview::meta(&db, "u", "i").unwrap().expect("rgba row");
+        let size = crate::preview::preview_size(meta.w, meta.h, 500).unwrap();
+        assert_eq!(size, (500, 250));
+        let generation = crate::preview::generation();
+        let reduced = crate::preview::reduce("u", "i", flat.clone(), (w, h), size, generation).unwrap();
+        let small = crate::preview::render(&reduced, size, (w, h), meta, &step).unwrap();
+
+        assert_eq!((small.w, small.h), size);
+        assert_eq!(small.adjust, full.adjust, "the real settings travel with a preview");
+        assert_eq!(&small.raw[..4], &full.raw[..4], "same colour as the full render");
+        assert_ne!(&small.raw[..4], &flat[..4]);
+
+        assert!(crate::preview::cached("u", "i", (w, h), size).is_some());
+        save(&db, "u", "i", &flat, w, h).unwrap();
+        assert!(crate::preview::cached("u", "i", (w, h), size).is_none());
+    }
 }

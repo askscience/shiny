@@ -243,6 +243,10 @@ sudo -u "$SHINY_USER" -H sh -c "mkdir -p '$USER_HOME/.local/share/shiny/plugins'
 if [ ! -f "$USER_DB" ] && [ -f "$SHARED_DB" ]; then
     echo "Migrating $SHINY_USER's data into $USER_DB…"
     sudo -u "$SHINY_USER" -H sh -c "mkdir -p '$USER_HOME/.local/share/shiny' && cp '$SHARED_DB' '$USER_DB'"
+    # A write-ahead log beside the shared database holds its latest commits.
+    if [ -s "$SHARED_DB-wal" ]; then
+        sudo -u "$SHINY_USER" -H cp "$SHARED_DB-wal" "$USER_DB-wal"
+    fi
 fi
 
 # The repo now backs both the system plugin baseline and the served web UI, so

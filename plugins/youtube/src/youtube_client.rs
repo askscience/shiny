@@ -33,6 +33,23 @@ fn cache() -> &'static SearchCache {
     C.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
+/// One client for every search: its connection pool keeps the TLS session to
+/// youtube.com open, where a client per search (the home page runs a search
+/// per category) paid a new handshake each time.
+fn http_client() -> Result<&'static reqwest::Client, AppError> {
+    static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+    if let Some(client) = CLIENT.get() {
+        return Ok(client);
+    }
+    let client = reqwest::Client::builder()
+        .user_agent(UA)
+        .connect_timeout(Duration::from_secs(5))
+        .timeout(Duration::from_secs(20))
+        .build()
+        .map_err(|e| AppError::Internal(format!("http client: {e}")))?;
+    Ok(CLIENT.get_or_init(|| client))
+}
+
 pub async fn search(query: &str, limit: usize) -> Result<Vec<VideoResult>, AppError> {
     let key = format!("{limit}\u{1}{query}");
     if let Ok(c) = cache().lock() {
@@ -47,14 +64,7 @@ pub async fn search(query: &str, limit: usize) -> Result<Vec<VideoResult>, AppEr
         .map_err(|e| AppError::Internal(format!("bad url: {e}")))?;
     url.query_pairs_mut().append_pair("search_query", query);
 
-    let client = reqwest::Client::builder()
-        .user_agent(UA)
-        .connect_timeout(Duration::from_secs(5))
-        .timeout(Duration::from_secs(20))
-        .build()
-        .map_err(|e| AppError::Internal(format!("http client: {e}")))?;
-
-    let resp = client
+    let resp = http_client()?
         .get(url)
         .send()
         .await
@@ -82,7 +92,12 @@ pub async fn search(query: &str, limit: usize) -> Result<Vec<VideoResult>, AppEr
 
     if let Ok(mut c) = cache().lock() {
         if c.len() >= CACHE_CAP {
-            c.clear();
+            // Drop what expired; only a cache still full of fresh results
+            // (hundreds of distinct searches in ten minutes) starts over.
+            c.retain(|_, (at, _)| at.elapsed() < CACHE_TTL);
+            if c.len() >= CACHE_CAP {
+                c.clear();
+            }
         }
         c.insert(key, (Instant::now(), out.clone()));
     }

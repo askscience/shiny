@@ -59,7 +59,17 @@ noted (raw PNG/RGBA bodies). Errors surface as the SDK's `AppError` shape
 
 The **shared operations entry point** for the window and the agent.
 
-- **Query:** `?raw=true|false` (default `false`), `?commit=true|false` (default `true`).
+- **Query:** `?raw=true|false` (default `false`), `?commit=true|false` (default `true`),
+  `?preview=<px>` (optional).
+- **Reduced preview:** with `raw=true&commit=false`, a settings update and
+  `preview=<longest side>` (256–2048), a picture clearly larger than that is
+  rendered over a reduced copy (`src/preview.rs`): the reply's
+  `x-image-width`/`x-image-height` are the reduced size, `x-image-preview: 1`
+  marks it, and `x-image-full-width`/`x-image-full-height` give the real
+  size. The reduced copy is made once and kept until the picture's pixels
+  are written. Without the header the reply is the whole picture, as when
+  the picture is small or `preview` is absent. Nothing stored comes from a
+  preview: the commit on release renders at full size.
 - **Request (JSON):** one of
   - `{ "settings": { "brightness": 30, … } }` — a **partial dial update**,
     merged into the live settings (`images.adjust`) and rendered over the base;

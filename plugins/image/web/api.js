@@ -71,9 +71,12 @@ export async function fetchRender(id) {
  * (partial dial update); `commit:false` previews without writing. The returned
  * `look` / `adjust` are the document's live state after the run.
  */
-export async function rawApply(id, body, { commit = true } = {}) {
+export async function rawApply(id, body, { commit = true, preview = 0 } = {}) {
+  // `preview` (longest side, px) asks for a reduced render of an uncommitted
+  // dial step; the reply then says `preview: true` and `w`/`h` are its size.
+  const reduced = !commit && preview > 0 ? `&preview=${Math.round(preview)}` : '';
   const res = await fetch(
-    `/api/images/${enc(id)}/apply?raw=true&commit=${commit ? 'true' : 'false'}`,
+    `/api/images/${enc(id)}/apply?raw=true&commit=${commit ? 'true' : 'false'}${reduced}`,
     {
       method: 'POST',
       headers: authHeaders({ 'Content-Type': 'application/json' }),
@@ -90,7 +93,8 @@ export async function rawApply(id, body, { commit = true } = {}) {
   } catch (_) {
     adjust = {};
   }
-  return { w, h, buf: await res.arrayBuffer(), look, adjust };
+  const isPreview = res.headers.get('x-image-preview') === '1';
+  return { w, h, buf: await res.arrayBuffer(), look, adjust, preview: isPreview };
 }
 
 /**

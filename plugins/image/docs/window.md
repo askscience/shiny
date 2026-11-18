@@ -101,7 +101,8 @@ fit ↔ 1:1.
 - **Dials are persistent settings** (`role="slider"`): each value lives on the
   document (`images.adjust`) and the picture renders as `look(settings(bytes))`.
   Turning a knob sends a partial settings update — live preview while moving
-  (`commit=false`), one commit on release (`commit=true`) — and the dial **stays
+  (`commit=false`, rendered at the size the view shows it: `preview=<px>`),
+  one full-size commit on release (`commit=true`) — and the dial **stays
   where you put it**, so fine-tuning a value **replaces** it instead of stacking
   deltas. Drag vertically (160 px = full range; hold Shift for fine control),
   scroll to nudge, arrow keys (Shift = ×10), `Home`/`End` jump to the range

@@ -2,8 +2,47 @@
 
 ## [Unreleased]
 
+### Changed
+
+- The database uses SQLite's write-ahead log. The server and every plugin
+  process share one file, and a write in one of them (a mail sync, the
+  browser history) used to block the reads of all the others. Commits no
+  longer wait for an fsync each (`synchronous=NORMAL` on a WAL database): a
+  power cut cannot corrupt the file but can lose the last commits. The
+  switch happens at start-up and is never fatal; at shutdown the log is
+  folded back, so `shiny.db` alone is a complete copy after a clean stop.
+  While the server runs, `shiny.db-wal` belongs with it
+  (docs/core/data-and-auth.md).
+- Plugin processes run two runtime threads instead of one per CPU core (all
+  plugin code runs on the plugin's single thread anyway): about 250 fewer
+  idle threads with every plugin loaded on a 16-core machine.
+- A plugin process is reached as soon as it listens: the server looked for
+  its socket every 15 ms, now after 1, 2, 4… ms.
+- Image 0.1.2: a dial being dragged renders over a reduced copy of the
+  picture, no larger than the window shows it (about 60 ms a step instead of
+  140 on a 1600×1200 picture); releasing the dial renders and saves at full
+  size as before. Rendering no longer reads the original upload (as large
+  as the picture itself). The pixel buffers moved to the end of the table
+  row (migration 009): the gallery list and every render used to walk both
+  buffers of every picture to reach the small columns after them.
+- Calc 0.1.4: a committed edit updates the cells that changed instead of
+  rebuilding the whole grid (up to 10,000 cells, three listeners each).
+- Traveler 0.1.2: the diary looks up one place name per ~100 m of track
+  instead of one per GPS point (each lookup is a request plus Nominatim's
+  one-second pause, so a day spent mostly in one place took minutes).
+- YouTube 0.1.2: every search shares one HTTP client, so the home page's
+  searches reuse the connection instead of a TLS handshake each; a full
+  search cache drops its expired entries instead of everything.
+- Word 0.1.3: converting a document on open and on every autosave runs off
+  the plugin's thread, so a long document no longer holds up its other
+  requests.
+- Impress 0.1.4: the presentation list lets SQLite count the slides instead
+  of reading and parsing every deck's whole content.
+
 ### Fixed
 
+- Image 0.1.2: the brightness dial did nothing. The dial sends its value as
+  a decimal number and the engine only read whole numbers.
 - The session script rewrote `~/.config/shiny/env` at every login, dropping
   every setting but `SERVER_PORT`. It now replaces only that line.
 - `scripts/switch-to-process-plugins.sh` keeps the catalogue settings

@@ -59,6 +59,13 @@ runtime = "process"
 process after ten idle minutes and starts it again on the next request. Leave
 it out when `on_load` starts background work (mail sync, a scheduler, audio).
 
+Inside the process, all plugin code (tools, routes, hooks, SQLite) runs on the
+plugin's **single** runtime thread, as it does for a library plugin
+([runtime-abi.md](runtime-abi.md)). The Tokio runtime `run` builds only accepts
+connections and hands requests to that thread, so it has two workers, not one
+per CPU core. CPU-heavy work belongs in `tokio::task::spawn_blocking`, which
+has its own pool.
+
 The process runs in the **server's working directory** (relative paths keep
 their meaning) with these variables:
 

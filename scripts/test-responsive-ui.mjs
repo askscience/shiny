@@ -225,6 +225,32 @@ try{
      await page.waitForTimeout(400); // the slide-in
    }
  }
+ if(name==='calc' && size.touch===false && !size.tileWidth) {
+   // A committed edit brings the grid up to date in place: formulas that
+   // depend on the cell show their new value and no cell element is replaced
+   // (a rebuild made 10,000 elements after every edit).
+   const cell=ref=>page.locator(`.calc-cell--data[data-ref="${ref}"]`);
+   await cell('B2').waitFor();
+   const type=async(ref,text)=>{
+     await cell(ref).dblclick();
+     await page.locator('.calc-cell-editor').fill(text);
+     await page.keyboard.press('Enter');
+     await page.waitForTimeout(120);
+   };
+   await type('C2','=B2*2');
+   assert.equal(await cell('C2').textContent(),'240','a formula shows its value');
+   assert.ok(await cell('C2').evaluate(e=>e.classList.contains('is-formula')),'a formula cell is marked');
+   await page.evaluate(()=>{window.__calcCell=document.querySelector('.calc-cell--data[data-ref="C2"]');});
+   await type('B2','5');
+   assert.equal(await cell('B2').textContent(),'5','the edited cell shows its value');
+   assert.equal(await cell('C2').textContent(),'10','a dependent formula follows the edit');
+   assert.ok(await page.evaluate(()=>window.__calcCell===document.querySelector('.calc-cell--data[data-ref="C2"]') && window.__calcCell.isConnected),'the grid is updated in place');
+   await type('C2','');
+   assert.equal(await cell('C2').textContent(),'','a cleared cell is empty');
+   assert.ok(!await cell('C2').evaluate(e=>e.classList.contains('is-formula')),'a cleared cell is no longer a formula');
+   assert.equal(await page.locator('.calc-cell--data.is-selected').count(),1,'one cell is selected');
+   assert.ok(await page.locator('.calc-cell-editor').evaluate(e=>getComputedStyle(e).display==='none').catch(()=>true),'the editor is closed after an edit');
+ }
  if(name==='calculator') {
    // Narrow or phone: the history is a pane over the pad, opened from the
    // bar's History toggle and closed by Escape.

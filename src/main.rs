@@ -51,6 +51,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // prepared statement (stale `SELECT *` column metadata panics on read).
     let mut migration_conn = db::connect(&config.database_url).await?;
     db::run_migrations(&mut migration_conn).await?;
+    // Before the pool and before any plugin process opens the file.
+    db::enable_wal(&mut migration_conn).await;
     drop(migration_conn);
 
     let pool = db::init_pool(&config.database_url).await?;
@@ -221,6 +223,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         tracing::warn!("Plugin process stop deadline reached");
     }
+    // Plugins are stopped: fold the write-ahead log into the database file.
+    let _ = tokio::time::timeout(std::time::Duration::from_secs(3), db::checkpoint(&pool)).await;
     // Long-lived SSE streams may hold a pool clone; never wait indefinitely.
     if tokio::time::timeout(std::time::Duration::from_secs(2), pool.close())
         .await

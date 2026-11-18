@@ -87,7 +87,11 @@ fn f64_param(op: &Value, key: &str, default: f64) -> f64 {
 }
 
 fn i64_param(op: &Value, key: &str, default: i64) -> i64 {
-    op.get(key).and_then(|v| v.as_i64()).unwrap_or(default)
+    // The dials send floats (`30.0`): `as_i64` alone read those as absent,
+    // so the brightness dial rendered nothing.
+    op.get(key)
+        .and_then(|v| v.as_i64().or_else(|| v.as_f64().map(|f| f.round() as i64)))
+        .unwrap_or(default)
 }
 
 fn is_reset(op: &Value) -> bool {

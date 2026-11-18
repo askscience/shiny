@@ -255,7 +255,7 @@ fn image_data(ctx: Arc<PluginCtx>) -> RouteHandler {
         async move {
             let uid = user_id(&req)?;
             let id = path_param(&req, "id")?;
-            let d = doc::load(&ctx.db(), &uid, &id)?;
+            let d = doc::load_for_render(&ctx.db(), &uid, &id)?;
             let raw = doc::visible(&d)?;
             png_response(&raw, d.w, d.h)
         }
@@ -270,6 +270,9 @@ fn image_apply(ctx: Arc<PluginCtx>) -> RouteHandler {
     struct Q {
         raw: Option<bool>,
         commit: Option<bool>,
+        /// Longest side, in pixels, of a reduced preview. Honoured only for
+        /// an uncommitted dial update (a drag step); see `preview.rs`.
+        preview: Option<u32>,
     }
 
     #[derive(Deserialize, Default)]
@@ -294,8 +297,14 @@ fn image_apply(ctx: Arc<PluginCtx>) -> RouteHandler {
             let commit = q.commit.unwrap_or(true);
             let db = ctx.db();
 
+            if let (Some(settings), Some(side), false, true) = (&body.settings, q.preview, commit, want_raw) {
+                if let Some(res) = preview_step(db, &uid, &id, settings, side).await? {
+                    return Ok(res);
+                }
+            }
+
             let res = if let Some(settings) = body.settings {
-                let d = doc::load(db, &uid, &id)?;
+                let d = doc::load_for_render(db, &uid, &id)?;
                 let res = tokio::task::spawn_blocking(move || {
                     doc::apply_settings_pixels(d, &settings)
                 })
@@ -330,6 +339,60 @@ fn image_apply(ctx: Arc<PluginCtx>) -> RouteHandler {
     })
 }
 
+/// One dial-drag step rendered over a reduced copy of the picture. `None`
+/// when the picture is not reduced (small, or a legacy row): the caller
+/// renders it whole. The response carries the reduced size in the usual
+/// headers, `x-image-preview: 1`, and the picture's real size.
+async fn preview_step(
+    db: &shiny_plugin_sdk::db::Db,
+    uid: &str,
+    id: &str,
+    settings: &Map<String, Json>,
+    side: u32,
+) -> Result<Option<Response>, AppError> {
+    use crate::preview;
+    let Some(meta) = preview::meta(db, uid, id)? else {
+        return Ok(None);
+    };
+    let src = (meta.w, meta.h);
+    let Some(size) = preview::preview_size(meta.w, meta.h, side) else {
+        return Ok(None);
+    };
+    // A miss reads the working pixels once; the steps after it do not touch
+    // the pixel buffers at all.
+    let kept = preview::cached(uid, id, src, size);
+    let full = match kept {
+        Some(_) => None,
+        None => {
+            let generation = preview::generation();
+            let d = doc::load_for_render(db, uid, id)?;
+            if (d.w, d.h) != src {
+                return Ok(None);
+            }
+            Some((d.raw, generation))
+        }
+    };
+    let (uid, id, settings) = (uid.to_string(), id.to_string(), settings.clone());
+    let res = tokio::task::spawn_blocking(move || {
+        let reduced = match (kept, full) {
+            (Some(reduced), _) => reduced,
+            (None, Some((raw, generation))) => preview::reduce(&uid, &id, raw, src, size, generation)?,
+            (None, None) => unreachable!("a miss always loads the pixels"),
+        };
+        preview::render(&reduced, size, src, meta, &settings)
+    })
+    .await
+    .map_err(|e| AppError::Internal(format!("image worker task failed: {e}")))??;
+
+    let adjust = res.adjust.as_object().cloned().unwrap_or_default();
+    let mut response = raw_response(res.raw, res.w, res.h, res.look.as_deref(), &adjust)?;
+    let headers = response.headers_mut();
+    headers.insert("x-image-preview", axum::http::HeaderValue::from_static("1"));
+    headers.insert("x-image-full-width", axum::http::HeaderValue::from(src.0));
+    headers.insert("x-image-full-height", axum::http::HeaderValue::from(src.1));
+    Ok(Some(response))
+}
+
 /* ── GET /api/images/:id/render ─────────────────────────────── */
 
 fn image_render(ctx: Arc<PluginCtx>) -> RouteHandler {
@@ -345,7 +408,7 @@ fn image_render(ctx: Arc<PluginCtx>) -> RouteHandler {
             let uid = user_id(&req)?;
             let id = path_param(&req, "id")?;
             let (q, _req) = take_query::<Q>(req).await?;
-            let d = doc::load(&ctx.db(), &uid, &id)?;
+            let d = doc::load_for_render(&ctx.db(), &uid, &id)?;
             let raw = doc::visible(&d)?;
             if q.raw.unwrap_or(false) {
                 return raw_response(raw, d.w, d.h, d.look.as_deref(), &d.adjust);
@@ -365,7 +428,7 @@ fn image_looks(ctx: Arc<PluginCtx>) -> RouteHandler {
         async move {
             let uid = user_id(&req)?;
             let id = path_param(&req, "id")?;
-            let d = doc::load(&ctx.db(), &uid, &id)?;
+            let d = doc::load_for_render(&ctx.db(), &uid, &id)?;
             let tile = crate::looks::TILE as usize;
             // Tiles render each look over the current settings (no look), so a
             // swap stays meaningful and dial changes update the previews.

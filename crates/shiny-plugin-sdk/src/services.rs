@@ -91,6 +91,20 @@ impl PluginCtx {
                 SqlitePoolOptions::new()
                     .max_connections(2)
                     .acquire_timeout(Duration::from_secs(5))
+                    // Same rule as the host's pool and the synchronous
+                    // `Db`: no fsync per commit on a write-ahead-log database.
+                    .after_connect(|conn, _meta| {
+                        Box::pin(async move {
+                            let mode = sqlx::query_scalar::<_, String>("PRAGMA journal_mode")
+                                .fetch_one(&mut *conn)
+                                .await
+                                .unwrap_or_default();
+                            if mode.eq_ignore_ascii_case("wal") {
+                                let _ = sqlx::query("PRAGMA synchronous=NORMAL").execute(&mut *conn).await;
+                            }
+                            Ok(())
+                        })
+                    })
                     .connect(&self.config.database_url)
                     .await
                     .expect("plugin failed to open SQLite database")

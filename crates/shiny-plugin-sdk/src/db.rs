@@ -96,7 +96,23 @@ impl Db {
         // instead of failing immediately with "database is locked". The core
         // pool already sets 5 s; the synchronous plugin handle did not.
         unsafe { libsqlite3_sys::sqlite3_busy_timeout(raw, 5_000) };
-        Ok(Db { raw: Mutex::new(raw) })
+        let db = Db { raw: Mutex::new(raw) };
+        db.relax_sync_in_wal();
+        Ok(db)
+    }
+
+    /// On a database the host switched to write-ahead logging, commit without
+    /// an fsync each (`synchronous=NORMAL`): safe against corruption there,
+    /// and the setting the host's own connections use. A rollback-journal
+    /// database keeps SQLite's default.
+    fn relax_sync_in_wal(&self) {
+        let wal = matches!(
+            self.query("PRAGMA journal_mode", &[]).ok().and_then(|rows| rows.into_iter().next()).and_then(|row| row.into_iter().next()),
+            Some(Value::Text(mode)) if mode.eq_ignore_ascii_case("wal")
+        );
+        if wal {
+            let _ = self.execute("PRAGMA synchronous=NORMAL", &[]);
+        }
     }
 
     /// Run a non-SELECT statement; returns the number of affected rows.
@@ -282,6 +298,32 @@ mod tests {
         assert_eq!(db.query("SELECT name FROM t", &[]).unwrap()[0][0], Value::Text("hi".into()));
         drop(db);
         let _ = std::fs::remove_file(&tmp);
+    }
+
+    #[test]
+    fn a_wal_database_commits_with_normal_sync_and_a_journal_one_keeps_full() {
+        let path = std::env::temp_dir().join(format!("shiny_dbtest_wal_{}.db", std::process::id()));
+        let cleanup = || {
+            for suffix in ["", "-wal", "-shm"] {
+                let _ = std::fs::remove_file(format!("{}{suffix}", path.display()));
+            }
+        };
+        cleanup();
+        let url = format!("sqlite:{}", path.display());
+        let sync = |db: &Db| db.query("PRAGMA synchronous", &[]).unwrap()[0][0].clone();
+
+        let first = Db::open(&url).unwrap();
+        assert_eq!(sync(&first), Value::Int(2), "rollback journal: FULL");
+        first.query("PRAGMA journal_mode=WAL", &[]).unwrap();
+        first.execute("CREATE TABLE t (id INTEGER)", &[]).unwrap();
+
+        // What a plugin process sees once the host switched the file.
+        let second = Db::open(&url).unwrap();
+        assert_eq!(sync(&second), Value::Int(1), "WAL: NORMAL");
+        second.execute("INSERT INTO t VALUES (1)", &[]).unwrap();
+        assert_eq!(first.query("SELECT id FROM t", &[]).unwrap()[0][0], Value::Int(1));
+        drop((first, second));
+        cleanup();
     }
 
     #[test]

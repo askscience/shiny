@@ -45,9 +45,32 @@ Startup order in [`src/main.rs:128-135`](../../src/main.rs):
 ```rust
 let mut migration_conn = db::connect(&config.database_url).await?;
 db::run_migrations(&mut migration_conn).await?;
+db::enable_wal(&mut migration_conn).await;
 drop(migration_conn);
 let pool = db::init_pool(&config.database_url).await?;
 ```
+
+### Write-ahead log
+
+`enable_wal()` switches the database file to SQLite's write-ahead log
+(`journal_mode=WAL`). The mode is stored in the file, so the pool and every
+plugin process inherit it. The server and the plugin processes all open the
+same file: with the rollback journal a write in one of them (a mail sync, the
+browser history) blocked every read in the others for its whole length; in WAL
+readers and the writer do not wait for each other.
+
+- The switch is **never fatal**. It needs a moment with no other connection on
+  the file; when it does not get one, the server logs a warning, runs on the
+  rollback journal as before and tries again at its next start.
+- Connections on a WAL database use `synchronous=NORMAL` (the core pool, the
+  SDK's `ctx.db()` and `ctx.pool()`): a commit no longer waits for an fsync. A
+  power cut cannot corrupt the file; it can lose the last commits before it.
+  On a rollback-journal database the setting stays at SQLite's `FULL`.
+- Two files appear beside the database while it is open: `shiny.db-wal` and
+  `shiny.db-shm`. **A copy of `shiny.db` alone is complete only after a clean
+  stop**: at shutdown the server folds the log into the file
+  (`db::checkpoint`, `PRAGMA wal_checkpoint(TRUNCATE)`). To copy a database in
+  use, copy `shiny.db-wal` with it, or use SQLite's backup (`VACUUM INTO`).
 
 ### Migration files and runner
 

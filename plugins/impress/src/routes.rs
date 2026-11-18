@@ -11,7 +11,7 @@ use serde_json::{json, Value as Json};
 
 use shiny_plugin_sdk::db::Value;
 use shiny_plugin_sdk::errors::AppError;
-use shiny_plugin_sdk::util::{as_text, clean_title, filename_for_title};
+use shiny_plugin_sdk::util::{as_int, as_text, clean_title, filename_for_title};
 use shiny_plugin_sdk::odp;
 use shiny_plugin_sdk::routes::{bridged_route, RouteHandler, ok, user_id, take_query, take_path};
 use shiny_plugin_sdk::services::PluginCtx;
@@ -83,14 +83,19 @@ fn deck_list(ctx: Arc<PluginCtx>) -> RouteHandler {
         let ctx = ctx.clone();
         async move {
             let uid = user_id(&req)?;
+            // SQLite counts the slides: the list used to read every deck's
+            // whole slide JSON (text, notes, images) and parse it for a number.
             let rows = ctx.db().query(
-                "SELECT id, title, slides, theme, updated_at FROM presentations \
+                "SELECT id, title, \
+                        CASE WHEN json_valid(slides) AND json_type(slides) = 'array' \
+                             THEN json_array_length(slides) ELSE 0 END, \
+                        theme, updated_at FROM presentations \
                  WHERE user_id = ?1 ORDER BY updated_at DESC LIMIT 200",
                 &[Value::text(&uid)],
             )?;
             let decks: Vec<Json> = rows
                 .iter()
-                .map(|r| json!({ "id": as_text(&r[0]), "title": as_text(&r[1]), "slide_count": parse_slides(&as_text(&r[2])).len(), "theme": as_text(&r[3]), "updated_at": as_text(&r[4]) }))
+                .map(|r| json!({ "id": as_text(&r[0]), "title": as_text(&r[1]), "slide_count": (as_int(&r[2]).max(0) as usize).min(MAX_SLIDES), "theme": as_text(&r[3]), "updated_at": as_text(&r[4]) }))
                 .collect();
             Ok(ok(json!(decks)))
         }

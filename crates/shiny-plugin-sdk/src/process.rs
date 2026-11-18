@@ -65,7 +65,12 @@ pub fn run_with<P: Plugin + 'static>(plugin: P, options: Options) -> ! {
             std::process::exit(2);
         }
     };
+    // This runtime only accepts connections and hands each request to the
+    // plugin's single runtime thread (`rt`), where all plugin code runs. The
+    // default of one worker per CPU core left a dozen threads parked in every
+    // plugin process; two are enough (blocking work has its own pool).
     let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(2)
         .enable_all()
         .thread_name("shiny-plugin")
         .build()

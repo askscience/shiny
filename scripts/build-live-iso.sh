@@ -206,6 +206,10 @@ seed_live_account() {
     kill "$pid" 2>/dev/null || true
     wait "$pid" 2>/dev/null || true
     [ -s "$db" ] || die "seeded live database was not created"
+    # The server folds its write-ahead log into the file when it stops. Only
+    # the file is shipped, so a log left behind would mean a seed without
+    # the account.
+    [ ! -s "$db-wal" ] || die "seeded live database still has a write-ahead log"
     install -d "$ROOTFS/usr/share/shiny/live"
     install -m 0600 "$db" "$ROOTFS/usr/share/shiny/live/seed.db"
     rm -rf "$seed"
