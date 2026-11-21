@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.2.10] - 2026-11-21
+
 ### Security
 
 - **`shiny-auth` (the root password helper) is stricter about its callers.**
