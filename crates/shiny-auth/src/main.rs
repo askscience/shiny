@@ -10,9 +10,17 @@
 //! Hardening:
 //!   * the socket is mode 0660 root:shiny and `SO_PEERCRED` restricts callers
 //!     to the uids in `SHINY_AUTH_ALLOW_UID` (comma-separated; root always);
-//!   * per-user and global rate limits bound password guessing;
-//!   * a per-connection read/write timeout bounds slow-loris clients;
-//!   * request size is capped;
+//!   * a caller may only check **its own** account's password; only root and
+//!     the login screen's account (`SHINY_AUTH_GREETER_USER`, default
+//!     `shiny-greeter`) may check any account and start sessions — every
+//!     account that signs in is in the `shiny` group, so the socket's
+//!     permissions alone would let one user test or lock out another;
+//!   * per-user and global rate limits bound password guessing (the login
+//!     screen has its own global budget, so other callers cannot exhaust it);
+//!   * a request is read up to `max_line` bytes within one overall deadline,
+//!     and at most `MAX_CONNECTIONS` are served at once: slow or oversized
+//!     clients cannot grow memory or threads;
+//!   * names written to the log are stripped of control characters;
 //!   * only `verify`, `login-session` and `ping` are implemented;
 //!   * `login-session` starts `shiny-kiosk@<user>.service` for the account PAM
 //!     just verified — never for an account named in the request it did not
@@ -27,12 +35,13 @@ mod pam;
 mod protocol;
 
 use std::collections::HashMap;
-use std::io::{self, BufRead, BufReader, Write};
+use std::io::{self, Read, Write};
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::io::{AsRawFd, FromRawFd};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::Path;
 use std::process::Command;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -43,9 +52,23 @@ fn log(message: impl AsRef<str>) {
     eprintln!("[shiny-auth] {}", message.as_ref());
 }
 
+/// A caller-supplied name made safe for the log: control characters (a newline
+/// would forge a whole log line) become `?`, and it is cut to 64 characters.
+fn shown(name: &str) -> String {
+    name.chars()
+        .take(64)
+        .map(|c| if c.is_control() { '?' } else { c })
+        .collect()
+}
+
+/// Connections served at the same time; more are refused right away.
+const MAX_CONNECTIONS: usize = 32;
+
 /// Bounds how often one username (and the socket as a whole) may be tried.
 struct Limiter {    per_user: Mutex<HashMap<String, Vec<Instant>>>,
     global: Mutex<Vec<Instant>>,
+    /// The login screen's own global budget, so other callers cannot use it up.
+    global_priv: Mutex<Vec<Instant>>,
     window: Duration,
     per_user_max: usize,
     global_max: usize,
@@ -56,13 +79,14 @@ impl Limiter {
         Self {
             per_user: Mutex::new(HashMap::new()),
             global: Mutex::new(Vec::new()),
+            global_priv: Mutex::new(Vec::new()),
             window,
             per_user_max,
             global_max,
         }
     }
 
-    fn allow(&self, user: &str) -> bool {
+    fn allow(&self, user: &str, privileged: bool) -> bool {
         let now = Instant::now();
         {
             let mut map = self.per_user.lock().unwrap_or_else(|e| e.into_inner());
@@ -81,7 +105,8 @@ impl Limiter {
             }
             times.push(now);
         }
-        let mut global = self.global.lock().unwrap_or_else(|e| e.into_inner());
+        let bucket = if privileged { &self.global_priv } else { &self.global };
+        let mut global = bucket.lock().unwrap_or_else(|e| e.into_inner());
         global.retain(|t| now.duration_since(*t) < self.window);
         if global.len() >= self.global_max {
             return false;
@@ -106,6 +131,9 @@ struct Config {
     handover_file: String,
     /// Report the unit instead of starting it — installer/test use.
     dry_run: bool,
+    /// The login screen's account: with root, the only caller that may check
+    /// any account's password and start sessions.
+    greeter_user: String,
     timeout: Duration,
     max_line: usize,
     limiter: Limiter,
@@ -136,6 +164,10 @@ impl Config {
             dry_run: std::env::var("SHINY_AUTH_DRY_RUN")
                 .map(|v| v.trim() == "1" || v.trim().eq_ignore_ascii_case("true"))
                 .unwrap_or(false),
+            greeter_user: std::env::var("SHINY_AUTH_GREETER_USER")
+                .ok()
+                .filter(|v| !v.trim().is_empty())
+                .unwrap_or_else(|| "shiny-greeter".into()),
             timeout: Duration::from_secs(
                 std::env::var("SHINY_AUTH_TIMEOUT_SECS")
                     .ok()
@@ -225,6 +257,57 @@ fn peer_uid(stream: &UnixStream) -> Option<u32> {
     }
 }
 
+/// Who is calling: its uid, its account name and whether it may act for any
+/// account (root or the login screen).
+struct Caller {
+    uid: u32,
+    name: Option<String>,
+    privileged: bool,
+}
+
+fn caller(uid: u32, cfg: &Config) -> Caller {
+    let name = account_name(uid);
+    let privileged = uid == 0 || account_uid(&cfg.greeter_user) == Some(uid);
+    Caller { uid, name, privileged }
+}
+
+/// May `caller` act for `user`? Root and the login screen may act for anyone;
+/// everyone else only for their own account.
+fn may_act_for(caller: &Caller, user: &str) -> bool {
+    caller.privileged || caller.name.as_deref() == Some(user)
+}
+
+/// Read one request line: at most `max` bytes, all within `deadline`. Returns
+/// `Ok(None)` when the line is longer than `max` (nothing more is read).
+fn read_request(stream: &UnixStream, max: usize, deadline: Instant) -> io::Result<Option<String>> {
+    let mut buf = Vec::with_capacity(256);
+    let mut chunk = [0u8; 512];
+    let mut s = stream;
+    loop {
+        let left = deadline.saturating_duration_since(Instant::now());
+        if left.is_zero() {
+            return Err(io::Error::new(io::ErrorKind::TimedOut, "request deadline"));
+        }
+        s.set_read_timeout(Some(left))?;
+        let n = s.read(&mut chunk)?;
+        if n == 0 {
+            break; // client closed: whatever arrived is the request
+        }
+        if let Some(i) = chunk[..n].iter().position(|&b| b == b'\n') {
+            buf.extend_from_slice(&chunk[..i]);
+            break;
+        }
+        buf.extend_from_slice(&chunk[..n]);
+        if buf.len() > max {
+            return Ok(None);
+        }
+    }
+    if buf.len() > max {
+        return Ok(None);
+    }
+    Ok(Some(String::from_utf8_lossy(&buf).into_owned()))
+}
+
 fn write_response(stream: &UnixStream, resp: &Response) -> io::Result<()> {
     let mut s = stream;
     s.write_all(resp.to_line().as_bytes())?;
@@ -232,7 +315,7 @@ fn write_response(stream: &UnixStream, resp: &Response) -> io::Result<()> {
 }
 
 fn handle(stream: UnixStream, cfg: &Config) -> io::Result<()> {
-    match peer_uid(&stream) {
+    let uid = match peer_uid(&stream) {
         Some(uid) => {
             if !cfg.allow_uids.is_empty() && !uid_allowed(&cfg.allow_uids, uid) {
                 let _ = write_response(
@@ -242,6 +325,7 @@ fn handle(stream: UnixStream, cfg: &Config) -> io::Result<()> {
                 log(format!("rejected connection from uid {uid}"));
                 return Ok(());
             }
+            uid
         }
         None => {
             let _ = write_response(
@@ -250,19 +334,18 @@ fn handle(stream: UnixStream, cfg: &Config) -> io::Result<()> {
             );
             return Ok(());
         }
-    }
+    };
+    let who = caller(uid, cfg);
 
-    stream.set_read_timeout(Some(cfg.timeout)).ok();
     stream.set_write_timeout(Some(cfg.timeout)).ok();
-
-    let mut reader = BufReader::new(stream.try_clone()?);
-    let mut line = String::new();
-    let read = reader.read_line(&mut line)?;
-    if read == 0 {
+    // One deadline for the whole request: a client dripping a byte at a time
+    // cannot keep the connection (and its thread) for longer than this.
+    let line = match read_request(&stream, cfg.max_line, Instant::now() + cfg.timeout)? {
+        Some(line) => line,
+        None => return write_response(&stream, &Response::error("too_large", "request too large")),
+    };
+    if line.trim().is_empty() {
         return Ok(());
-    }
-    if read > cfg.max_line {
-        return write_response(&stream, &Response::error("too_large", "request too large"));
     }
 
     let req: Request = match serde_json::from_str(line.trim()) {
@@ -278,14 +361,14 @@ fn handle(stream: UnixStream, cfg: &Config) -> io::Result<()> {
                 Response::unavailable(pam::unavailable_reason().unwrap_or_default())
             }
         }
-        "verify" => verify(&req, cfg),
-        "login-session" => login_session(&req, cfg),
+        "verify" => verify(&req, cfg, &who),
+        "login-session" => login_session(&req, cfg, &who),
         other => Response::error("unknown_op", format!("unknown op `{other}`")),
     };
     write_response(&stream, &response)
 }
 
-fn verify(req: &Request, cfg: &Config) -> Response {
+fn verify(req: &Request, cfg: &Config, who: &Caller) -> Response {
     let user = req.user.as_deref().unwrap_or("").trim().to_string();
     let password = req.password.as_deref().unwrap_or("");
 
@@ -295,18 +378,22 @@ fn verify(req: &Request, cfg: &Config) -> Response {
     if password.len() > 1024 {
         return Response::error("invalid_password", "password too long");
     }
-    if !cfg.limiter.allow(&user) {
-        log(format!("rate limited: {user}"));
+    if !may_act_for(who, &user) {
+        log(format!("refused: uid {} asked to check another account ({})", who.uid, shown(&user)));
+        return Response::error("forbidden", "only your own account can be checked");
+    }
+    if !cfg.limiter.allow(&user, who.privileged) {
+        log(format!("rate limited: {}", shown(&user)));
         return Response::error("rate_limited", "too many attempts — wait and retry");
     }
 
     match pam::verify(&cfg.service, &user, password) {
         Ok(()) => {
-            log(format!("verified: {user}"));
+            log(format!("verified: {}", shown(&user)));
             Response::ok()
         }
         Err(PamError::Denied(code, message)) => {
-            log(format!("denied: {user} (pam {code}: {message})"));
+            log(format!("denied: {} (pam {code}: {message})", shown(&user)));
             Response::denied(message)
         }
         Err(PamError::Unavailable(message)) => {
@@ -319,25 +406,30 @@ fn verify(req: &Request, cfg: &Config) -> Response {
 /// `login-session` — verify the password, then start that account's kiosk
 /// session. This is the one place a session is *created*, and it is always the
 /// account PAM just verified: the caller cannot name a unit, only a user.
-fn login_session(req: &Request, cfg: &Config) -> Response {
+fn login_session(req: &Request, cfg: &Config, who: &Caller) -> Response {
     let user = req.user.as_deref().unwrap_or("").trim().to_string();
     let password = req.password.as_deref().unwrap_or("");
 
+    // Only the login screen (and root) put a session on the seat.
+    if !who.privileged {
+        log(format!("refused: uid {} is not the login screen and cannot start sessions", who.uid));
+        return Response::error("forbidden", "only the login screen can start a session");
+    }
     if user.is_empty() || user.len() > 64 {
         return Response::error("invalid_user", "missing or invalid user name");
     }
     if password.len() > 1024 {
         return Response::error("invalid_password", "password too long");
     }
-    if !cfg.limiter.allow(&user) {
-        log(format!("rate limited: {user}"));
+    if !cfg.limiter.allow(&user, who.privileged) {
+        log(format!("rate limited: {}", shown(&user)));
         return Response::error("rate_limited", "too many attempts — wait and retry");
     }
 
     match pam::verify(&cfg.service, &user, password) {
         Ok(()) => {}
         Err(PamError::Denied(code, message)) => {
-            log(format!("denied: {user} (pam {code}: {message})"));
+            log(format!("denied: {} (pam {code}: {message})", shown(&user)));
             return Response::denied(message);
         }
         Err(PamError::Unavailable(message)) => {
@@ -348,11 +440,11 @@ fn login_session(req: &Request, cfg: &Config) -> Response {
 
     // Root and service accounts have passwords too; none of them gets a seat.
     if !human_account(&user) {
-        log(format!("refused session for non-human account: {user}"));
+        log(format!("refused session for non-human account: {}", shown(&user)));
         return Response::denied("not a login account");
     }
     let Some(unit) = kiosk_unit_for(&cfg.kiosk_unit, &user) else {
-        log(format!("refused session for unusable user name: {user}"));
+        log(format!("refused session for unusable user name: {}", shown(&user)));
         return Response::denied("not a valid account name");
     };
 
@@ -437,8 +529,42 @@ fn human_account(name: &str) -> bool {
     is_human_account(passwd.pw_uid, &shell)
 }
 
+/// The account name of `uid` (`getpwuid_r`), or `None`.
+fn account_name(uid: u32) -> Option<String> {
+    let mut buf = [0 as libc::c_char; 16 * 1024];
+    let mut passwd: libc::passwd = unsafe { std::mem::zeroed() };
+    let mut result: *mut libc::passwd = std::ptr::null_mut();
+    let rc = unsafe { libc::getpwuid_r(uid, &mut passwd, buf.as_mut_ptr(), buf.len(), &mut result) };
+    if rc != 0 || result.is_null() {
+        return None;
+    }
+    Some(unsafe { std::ffi::CStr::from_ptr(passwd.pw_name) }.to_string_lossy().into_owned())
+}
+
+/// The uid of account `name` (`getpwnam_r`), or `None`.
+fn account_uid(name: &str) -> Option<u32> {
+    let name = std::ffi::CString::new(name).ok()?;
+    let mut buf = [0 as libc::c_char; 16 * 1024];
+    let mut passwd: libc::passwd = unsafe { std::mem::zeroed() };
+    let mut result: *mut libc::passwd = std::ptr::null_mut();
+    let rc = unsafe { libc::getpwnam_r(name.as_ptr(), &mut passwd, buf.as_mut_ptr(), buf.len(), &mut result) };
+    if rc != 0 || result.is_null() {
+        return None;
+    }
+    Some(passwd.pw_uid)
+}
+
+/// Releases a connection slot when the connection's thread ends.
+struct Slot(Arc<AtomicUsize>);
+impl Drop for Slot {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::SeqCst);
+    }
+}
+
 fn main() {
     let cfg = Arc::new(Config::from_env());
+    let active = Arc::new(AtomicUsize::new(0));
 
     if pam::available() {
         log("libpam loaded — verification enabled");
@@ -470,14 +596,30 @@ fn main() {
     for incoming in listener.incoming() {
         match incoming {
             Ok(stream) => {
+                // Bounded concurrency: refuse at once instead of piling up threads.
+                if active.fetch_add(1, Ordering::SeqCst) >= MAX_CONNECTIONS {
+                    active.fetch_sub(1, Ordering::SeqCst);
+                    stream.set_write_timeout(Some(Duration::from_secs(1))).ok();
+                    let _ = write_response(&stream, &Response::error("busy", "too many connections — retry"));
+                    continue;
+                }
+                let slot = Slot(active.clone());
                 let cfg = cfg.clone();
-                std::thread::spawn(move || {
+                let spawned = std::thread::Builder::new().spawn(move || {
+                    let _slot = slot;
                     if let Err(e) = handle(stream, &cfg) {
                         log(format!("connection error: {e}"));
                     }
                 });
+                if let Err(e) = spawned {
+                    log(format!("cannot start a connection thread: {e}"));
+                }
             }
-            Err(e) => log(format!("accept failed: {e}")),
+            Err(e) => {
+                log(format!("accept failed: {e}"));
+                // e.g. out of file descriptors: do not spin on the error
+                std::thread::sleep(Duration::from_millis(100));
+            }
         }
     }
 }
@@ -489,19 +631,38 @@ mod tests {
     #[test]
     fn limiter_blocks_one_user_after_the_cap() {
         let limiter = Limiter::new(Duration::from_secs(60), 2, 100);
-        assert!(limiter.allow("alice"));
-        assert!(limiter.allow("alice"));
-        assert!(!limiter.allow("alice"));
+        assert!(limiter.allow("alice", false));
+        assert!(limiter.allow("alice", false));
+        assert!(!limiter.allow("alice", false));
         // A different user is unaffected by alice's cap.
-        assert!(limiter.allow("bob"));
+        assert!(limiter.allow("bob", false));
     }
 
     #[test]
     fn limiter_enforces_a_global_cap() {
         let limiter = Limiter::new(Duration::from_secs(60), 100, 2);
-        assert!(limiter.allow("a"));
-        assert!(limiter.allow("b"));
-        assert!(!limiter.allow("c"));
+        assert!(limiter.allow("a", false));
+        assert!(limiter.allow("b", false));
+        assert!(!limiter.allow("c", false));
+        // The login screen keeps its own budget when others have used theirs.
+        assert!(limiter.allow("d", true));
+    }
+
+    #[test]
+    fn callers_act_only_for_themselves_unless_privileged() {
+        let alice = Caller { uid: 1000, name: Some("alice".into()), privileged: false };
+        assert!(may_act_for(&alice, "alice"));
+        assert!(!may_act_for(&alice, "bob"));
+        let unknown = Caller { uid: 4242, name: None, privileged: false };
+        assert!(!may_act_for(&unknown, "alice"));
+        let greeter = Caller { uid: 990, name: Some("shiny-greeter".into()), privileged: true };
+        assert!(may_act_for(&greeter, "bob"));
+    }
+
+    #[test]
+    fn log_names_cannot_forge_lines() {
+        assert_eq!(shown("bob\n[shiny-auth] verified: root"), "bob?[shiny-auth] verified: root");
+        assert_eq!(shown(&"x".repeat(200)).len(), 64);
     }
 
     #[test]

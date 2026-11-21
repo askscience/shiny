@@ -168,6 +168,7 @@ ExecStart=$BIN
 Environment=SHINY_AUTH_SOCK=/run/shiny/auth.sock
 Environment=SHINY_AUTH_PAM_SERVICE=$PAM_SERVICE
 Environment=SHINY_AUTH_ALLOW_UID=$SERVER_UID
+Environment=SHINY_AUTH_GREETER_USER=$GREETER_USER
 Restart=on-failure
 RestartSec=2
 # A verify-only helper needs no home, no network and no devices.
@@ -179,6 +180,10 @@ ProtectControlGroups=yes
 RestrictAddressFamilies=AF_UNIX
 LockPersonality=yes
 RestrictNamespaces=yes
+# Bounds for a root process every signed-in account can reach: it never
+# needs more (one request ≤ 8 KB, at most 32 connections at once).
+MemoryMax=128M
+TasksMax=64
 
 [Install]
 WantedBy=multi-user.target

@@ -186,10 +186,17 @@ A root-owned, socket-activated, **verify-only** process
 ([`crates/shiny-auth`](../../crates/shiny-auth)):
 
 - Listens on `SHINY_AUTH_SOCK` (`/run/shiny/auth.sock`).
-- Exposes only `verify` and `ping`.
-- Checks the caller with `SO_PEERCRED`, rate-limits attempts
-  (`SHINY_AUTH_MAX_ATTEMPTS`, `SHINY_AUTH_WINDOW_SECS`,
-  `SHINY_AUTH_GLOBAL_MAX_ATTEMPTS`), and never stores or logs a password.
+- Exposes only `verify`, `login-session` and `ping`.
+- Checks the caller with `SO_PEERCRED`. Every account that signs in is in the
+  `shiny` group, so the caller decides what is allowed: an account may
+  `verify` **only its own** password; root and the login screen's account
+  (`SHINY_AUTH_GREETER_USER`, default `shiny-greeter`) may verify any account,
+  and only they may call `login-session`.
+- Rate-limits attempts (`SHINY_AUTH_MAX_ATTEMPTS`, `SHINY_AUTH_WINDOW_SECS`,
+  `SHINY_AUTH_GLOBAL_MAX_ATTEMPTS`; the login screen has its own global
+  budget), reads a request of at most 8 KB within one deadline
+  (`SHINY_AUTH_TIMEOUT_SECS`), serves at most 32 connections at once, strips
+  control characters from names it logs, and never stores or logs a password.
 - Authenticates against the PAM service `SHINY_AUTH_PAM_SERVICE` (default
   `shiny`).
 - **A PAM denial is final**: [`auth_helper::verify`](../../src/services/auth_helper.rs)

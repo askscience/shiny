@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+### Security
+
+- **`shiny-auth` (the root password helper) is stricter about its callers.**
+  Every account that signs in can reach its socket, so an account can now
+  check only its own password; checking another account's password and
+  starting a session on the seat are reserved to the login screen
+  (`shiny-greeter`) and root. Before, any signed-in account could test other
+  accounts' passwords and, by failing on purpose, keep someone (or, through
+  the global limit, everyone) from signing in for a minute at a time. The
+  login screen also gets its own global attempt budget.
+- `shiny-auth` reads at most 8 KB per request within one deadline and serves
+  at most 32 connections at once: a caller could make it read an unbounded
+  line into memory (hundreds of MB) or hold any number of threads open by
+  sending a byte every few seconds. Names it logs are stripped of control
+  characters (a username with a newline could forge a log line), and its
+  unit caps memory (128 MB) and tasks (64).
+
 ### Changed
 
 - **Plugins are published on their own.** A plugin's archive is built and

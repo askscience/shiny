@@ -10,6 +10,9 @@ User=root
 ExecStart=/usr/bin/shiny-auth
 Environment=SHINY_AUTH_SOCK=/run/shiny/auth.sock
 Environment=SHINY_AUTH_PAM_SERVICE=shiny
+# The login screen's account: only it (and root) may check any account and
+# start sessions; every other caller can check only its own password.
+Environment=SHINY_AUTH_GREETER_USER=shiny-greeter
 Restart=on-failure
 RestartSec=2
 PrivateTmp=yes
@@ -20,6 +23,10 @@ ProtectControlGroups=yes
 RestrictAddressFamilies=AF_UNIX
 LockPersonality=yes
 RestrictNamespaces=yes
+# Bounds for a root process every signed-in account can reach: it never
+# needs more (one request ≤ 8 KB, at most 32 connections at once).
+MemoryMax=128M
+TasksMax=64
 
 [Install]
 WantedBy=multi-user.target
