@@ -70,7 +70,11 @@ export function askOutcome(record) {
       answer: lineText(picked.label),
     };
   }
-  const parts = [picked ? lineText(picked.label) : '', text].filter(Boolean);
+  // A secret (a password) is never shown back.
+  const parts = [picked ? lineText(picked.label) : '', record.secret ? '' : text].filter(Boolean);
+  if (record.secret && text) {
+    return { tone: 'ok', label: t('chat.ask.answered', null, 'Answered'), answer: '' };
+  }
   if (!parts.length) return { tone: 'none', label: t('chat.ask.noAnswer', null, 'No answer'), answer: '' };
   return { tone: 'ok', label: t('chat.ask.answered', null, 'Answered'), answer: parts.join(' — ') };
 }
@@ -113,6 +117,8 @@ function choiceBody(option) {
   top.append(el('span', 'ask-card-choice-name', lineText(option.label)));
   if (option.state === 'ready') {
     top.append(badge(t('chat.ask.language.ready', null, 'Ready'), { tone: 'ok' }));
+  } else if (option.state === 'setup') {
+    top.append(badge(t('chat.ask.language.setup', null, 'Will be installed'), { tone: 'accent' }));
   } else if (option.state === 'unavailable') {
     top.append(badge(t('chat.ask.language.unavailable', null, 'Not available yet'), { tone: 'warn' }));
   }
@@ -182,6 +188,7 @@ export function makeAskCard(prompt, { send, onSettled } = {}) {
     let ok = false;
     try { ok = !!(await send?.(reply)); } catch { ok = false; }
     if (ok) {
+      if (record.secret && textField) textField.value = '';
       settle(card, head, { ...record, answer: reply });
       onSettled?.();
     } else {
@@ -196,7 +203,15 @@ export function makeAskCard(prompt, { send, onSettled } = {}) {
   let textField = null;
   const fieldRow = (placeholder) => {
     const row = el('div', 'ask-card-field');
-    textField = input({ placeholder, label: placeholder, maxlength: 2000, className: 'ask-card-input' });
+    textField = input({
+      placeholder,
+      label: placeholder,
+      maxlength: 2000,
+      className: 'ask-card-input',
+      // A secret is typed hidden and kept out of the browser's suggestions.
+      type: record.secret ? 'password' : 'text',
+      autocomplete: record.secret ? 'off' : undefined,
+    });
     row.append(textField);
     return row;
   };
@@ -268,7 +283,9 @@ export function makeAskCard(prompt, { send, onSettled } = {}) {
       controls.append(list);
     }
     if (record.allow_text !== false) {
-      const row = fieldRow(t('chat.ask.answerPlaceholder', null, 'Type your answer…'));
+      const row = fieldRow(record.secret
+        ? t('chat.ask.passwordPlaceholder', null, 'Password')
+        : t('chat.ask.answerPlaceholder', null, 'Type your answer…'));
       const sendButton = button({
         label: t('chat.ask.send', null, 'Send'),
         variant: 'primary',

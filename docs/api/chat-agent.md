@@ -144,11 +144,12 @@ produce an `approval` event at all — they are refused outright. See
 `ask` parks the turn the same way, on a card the assistant put to the user:
 `kind` is `question` (free text, optional suggested `options`), `plan`
 (`steps`, answered with the option `approve`, `changes` or `cancel`) or
-`choice` (one of `options`, each with a `state` of `ready` or `unavailable`, a
+`choice` (one of `options`, each with a `state` of `ready`, `setup` or `unavailable`, a
 `detail` line and `notes` listing what it still needs). `title`, an option's
 `label` and `detail`, and each note are `{ text, key? }`: a line the core
 wrote carries the catalogue `key` the client translates, a line the model
-wrote has `text` only. `allow_text` says the card has a text field. Answer it
+wrote has `text` only. `allow_text` says the card has a text field; `secret`
+that the text is a password (hidden while typed, never stored). Answer it
 with `POST /api/agent/answer` (below). Only a request sent with
 `ask_cards: true` receives one; without it a spoken turn asks aloud and reads
 the next message as the answer, and any other turn asks in its reply. See

@@ -23,9 +23,14 @@
   it. Errors come back with their file and line, the compiler's included.
   Nothing is written before the plan is approved, the install asks for
   consent, and none of it works over a remote connection. Each step shows as
-  a card in the chat. Rust plugins only for now, on a machine that has the
-  Rust compiler and the plugin SDK sources; see
+  a card in the chat. Rust plugins only for now; see
   [the plugin builder](docs/plugins/builder.md).
+- **Choosing Rust installs what the machine lacks.** The package now ships
+  the plugin SDK (`/usr/share/shiny/plugin-sdk`) and recommends `gcc`. When
+  the Rust compiler is missing, choosing Rust on the card downloads it into
+  the user's home with `rustup`, checked against its published checksum; when
+  the C compiler is missing it is installed with `apt-get`, after asking for
+  the administrator password on a card that hides it and never stores it.
 - The language chosen for building plugins belongs to the conversation: it is
   asked once per chat, kept when the chat is reopened, and another chat
   chooses on its own. The plan and its state are kept the same way.

@@ -123,30 +123,53 @@ install events.
 
 `rust_doctor` and the choice card read `rust::readiness()`:
 
-- `cargo` and `rustc`, in `PATH` or `~/.cargo/bin`;
-- a C linker (`cc`) and the system SQLite's development files;
-- the **SDK bundle**: a directory laid out like the repository, with
-  `crates/shiny-plugin-sdk`, `crates/shiny-plugin-protocol`,
-  `vendor/libsqlite3-sys` and the server's `Cargo.lock`. It is looked for in
-  `SHINY_PLUGIN_SDK_DIR`, then `/usr/share/shiny/plugin-sdk`, then the
-  directory the server runs in (a source checkout).
+| Needed | Where it comes from | When it is missing |
+|---|---|---|
+| The **SDK bundle**: `crates/shiny-plugin-sdk`, `crates/shiny-plugin-protocol`, `vendor/libsqlite3-sys` and the server's `Cargo.lock`, laid out like the repository | the LiteAura package, in `/usr/share/shiny/plugin-sdk` (`scripts/stage-plugin-sdk.sh`, 2 MB); a source checkout is one too; `SHINY_PLUGIN_SDK_DIR` names another | Rust cannot be chosen: the installation is incomplete |
+| The system **SQLite** library | the LiteAura package depends on it | Rust cannot be chosen |
+| `cargo` and `rustc`, in `PATH` or `~/.cargo/bin` | installed when Rust is chosen | see below |
+| A C linker (`cc`) | the package recommends `gcc` and `libc6-dev`; installed when Rust is chosen | see below |
 
 The vendored `libsqlite3-sys` is required: the template patches it in, as the
 server's own build does. Without it the SDK would build SQLite's bindings with
-bindgen and need libclang.
+bindgen and need libclang. SQLite's development package is not needed: where
+only the runtime library exists, the build links it through a symbolic link of
+its own (`<data>/plugin-dev/.lib/libsqlite3.so`, on `LIBRARY_PATH`).
 
 A new plugin starts from the bundle's `Cargo.lock`, so the first build needs
 nothing newer from the network than the server was built with. Measured on the
-development machine: 3 min 08 s for the first build (the SDK and its
+development machine: 3 min for the first build (the SDK and its
 dependencies), 600 MB in the shared target directory.
+
+### Choosing Rust installs what is missing
+
+On the choice card a language is `ready`, `setup` (choosing it installs what
+the card lists) or `unavailable` (it lacks something that cannot be installed
+from here, and cannot be picked: a conversation keeps its language for good,
+so it is never bound to one that leads nowhere).
+
+Choosing a `setup` language runs `Machine::install` (`rust_setup.rs`) before
+the language becomes the conversation's; if it fails the chat is free to
+choose again. The commands are fixed:
+
+- **The C linker**: `apt-get install -y --no-install-recommends gcc libc6-dev`
+  through `sudo -S -k`. When `sudo` needs a password, a second card asks for
+  it in a hidden field. It is piped to `sudo`'s standard input and dropped: it
+  is in no argument, environment variable, log line, stored conversation row
+  or prompt. Other package managers are not driven: the card's failure says
+  to install a C compiler by hand.
+- **The compiler**: `rustup-init` from `static.rust-lang.org`
+  (`SHINY_RUSTUP_DIST_URL` overrides it), checked against the SHA-256
+  published next to it, then run as the session user with
+  `-y --profile minimal --default-toolchain stable --no-modify-path`. It
+  installs into the user's home; no administrator rights.
+
+By voice there is no card to agree on: a language that needs setup is not
+chosen, and the assistant says it is set up from the text chat.
 
 ## Not there yet
 
 - Python plugins: the choice card shows the language as not available yet and
   says its kit is missing; it cannot be chosen.
-- Fetching what Rust needs when the machine lacks it. The card lists what is
-  missing and Rust cannot be chosen until it is there; nothing is downloaded.
-- Packaging the SDK bundle (`/usr/share/shiny/plugin-sdk` is looked for but no
-  package installs it yet).
 - Working on an installed plugin's window and skill, rolling back, the
   window's JavaScript errors, calling a route or a tool as a test.

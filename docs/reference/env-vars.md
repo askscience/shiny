@@ -143,6 +143,7 @@ Read directly by the code named, not through `Config`.
 | Variable | Default | Read by | Meaning |
 |---|---|---|---|
 | `PLUGIN_WATCH_SECS` | `10` | `src/application/plugin_watch.rs` | How often the server looks for plugins changed on disk. |
+| `SHINY_RUSTUP_DIST_URL` | `https://static.rust-lang.org/rustup/dist` | `src/services/plugin_dev/rust_setup.rs` | Where `rustup-init` and its checksum are downloaded from when the plugin builder installs the Rust compiler. |
 | `SHINY_PLUGIN_SDK_DIR` | — | `src/services/plugin_dev/rust.rs` | The plugin SDK bundle Rust plugins are built against: a directory with `crates/shiny-plugin-sdk`, `crates/shiny-plugin-protocol`, `vendor/libsqlite3-sys` and `Cargo.lock`. Looked for next in `/usr/share/shiny/plugin-sdk`, then in the directory the server runs in. See [the plugin builder](../plugins/builder.md). |
 | `SHINY_LOOKS_DIR` | `/var/lib/shiny/looks` | `src/services/greeter_look.rs` | Where each account publishes its look for the login screen. |
 | `LITEAURA_POINTER_FILE` | `~/.config/liteaura/pointer.json` | `src/services/pointer.rs` | Mouse and touchpad settings file. |

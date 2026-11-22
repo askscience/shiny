@@ -686,7 +686,9 @@ interpreter; Rust needs `cargo` and `rustc` (also looked for in
 `~/.cargo/bin`), a C linker, the system SQLite's development files and the
 plugin SDK bundle (`SHINY_PLUGIN_SDK_DIR`, then
 `/usr/share/shiny/plugin-sdk`, then a source checkout). An option that lacks
-something lists what is missing and cannot be picked.
+something lists what is missing: when it can be installed (the Rust compiler,
+the C linker) choosing the option installs it first, otherwise the option
+cannot be picked.
 
 The builder's commands are split in modules (`plugin_dev/mod.rs`): `entry`
 (`plugin_dev_start`, the only one a chat knows before a language is chosen),

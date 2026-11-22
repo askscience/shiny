@@ -319,8 +319,8 @@ pub async fn settle_pending_on(
                 Some(language) if !readiness(language).ready() => {
                     set_pending(pool, conversation_id, traveler_id, None).await?;
                     Some(format!(
-                        "The user's message asks for {}, which cannot be used on this machine yet (missing: {}). \
-                         Nothing was chosen: tell them so.",
+                        "The user's message asks for {}, which is not ready on this machine (missing: {}). \
+                         Nothing was chosen: tell them it is set up from the text chat, where the card installs it.",
                         language.label(),
                         readiness(language).missing_text().join("; ")
                     ))
@@ -494,7 +494,7 @@ mod tests {
         let (state, note) = settle_pending_on(&pool, "a", "u", "Python please", machine).await.unwrap();
         assert_eq!(state.language, None, "a language the machine lacks is not chosen");
         assert_eq!(state.pending, None);
-        assert!(note.unwrap().contains("cannot be used on this machine yet"));
+        assert!(note.unwrap().contains("is not ready on this machine"));
 
         set_pending(&pool, "a", "u", Some(Pending::Language)).await.unwrap();
         let (state, note) = settle_pending_on(&pool, "a", "u", "in Rust", machine).await.unwrap();

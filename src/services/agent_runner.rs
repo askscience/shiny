@@ -735,6 +735,13 @@ where
                 Some(name) => {
                     let step = step_label_for_action(name);
                     on_step(&UiText::keyed(step.key, step.text), Some(name));
+                    let machine = crate::services::plugin_dev::ThisMachine {
+                        work_dir: crate::services::plugin_dev::workspace::Workspaces::beside_plugins(
+                            &state.config.plugins_dir,
+                        )
+                        .root()
+                        .join(".setup"),
+                    };
                     crate::services::plugin_dev::dialog::run(
                         &crate::services::plugin_dev::dialog::Dialog {
                             pool: &state.pool,
@@ -742,10 +749,11 @@ where
                             gate: input.ask.as_ref(),
                             cancel: cancel.as_ref(),
                             remote: input.remote,
-                            readiness: crate::services::plugin_dev::Language::readiness,
+                            machine: &machine,
                         },
                         name,
                         &params,
+                        &mut |step| on_step(&UiText::keyed(step.key, step.text), Some(name)),
                     )
                     .await
                     .map(|result| {

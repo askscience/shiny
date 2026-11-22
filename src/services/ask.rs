@@ -76,8 +76,9 @@ pub struct AskOption {
     /// on this machine). Empty when nothing is.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub notes: Vec<AskLine>,
-    /// `ready`, or `unavailable` when [`Self::notes`] lists what the option
-    /// still lacks: the card shows it and does not let it be picked.
+    /// `ready`; `setup` when picking the option installs what [`Self::notes`]
+    /// lists; `unavailable` when it lists what cannot be installed from here,
+    /// and the card does not let the option be picked.
     #[serde(skip_serializing_if = "String::is_empty")]
     pub state: String,
 }
@@ -117,6 +118,10 @@ pub struct AskContent {
     pub options: Vec<AskOption>,
     /// The card has a text field (a question's free answer, a plan's remark).
     pub allow_text: bool,
+    /// The text is a secret (a password): the field hides it, and the card is
+    /// neither stored with the conversation nor shown with its answer.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub secret: bool,
 }
 
 impl AskContent {
@@ -128,6 +133,7 @@ impl AskContent {
             steps: Vec::new(),
             options: Vec::new(),
             allow_text: false,
+            secret: false,
         }
     }
 }

@@ -48,6 +48,11 @@ for name in terminal updates installer; do
 done
 install -m 0644 "$REPO/packaging/default-plugins" "$PKG/usr/share/shiny/default-plugins"
 
+# The plugin SDK bundle: what the assistant's plugin builder compiles a Rust
+# plugin against. It ships with the server it matches, so nothing has to be
+# fetched and a plugin always builds against the right version.
+"$REPO/scripts/stage-plugin-sdk.sh" "$PKG/usr/share/shiny/plugin-sdk"
+
 # ── The login screen and the per-user session (packaging/seat) ───────────
 # The same seat a development checkout installs with
 # scripts/install-kiosk-greeter.sh, at system paths. Shipped disabled:
@@ -207,7 +212,7 @@ Priority: optional
 Architecture: amd64
 Maintainer: LiteAura <noreply@localhost>
 Depends: libc6, libgcc-s1, libstdc++6, libsqlite3-0, libbz2-1.0, libgtk-3-0t64, libqt6core6t64, libqt6gui6, libqt6widgets6, libqt6quick6, libqt6quickwidgets6, libqt6webenginecore6, libqt6webenginecore6-bin, libqt6webenginequick6, libqt6webengine6-data, libqt6webchannel6, libqt6webchannelquick6, libqt6network6, libqt6qml6, libqt6qmlmodels6, libqt6qmlworkerscript6, libqt6quickcontrols2-6, libqt6quicktemplates2-6, libqt6opengl6, libqt6positioning6, libqt6positioning6-plugins, libqt6svg6, qml6-module-qtquick, qml6-module-qtquick-window, qml6-module-qtquick-effects, qml6-module-qtwebengine, qml6-module-qtwebchannel, libnss3, libnspr4, libasound2t64, libx11-6, libxcomposite1, libxdamage1, libxext6, libxfixes3, libxrandr2, libxtst6, libdbus-1-3, libfontconfig1, libfreetype6, libexpat1, libpng16-16t64, libwebp7, libwebpdemux2, libharfbuzz0b, libdrm2, libxkbcommon0, libxcb1, libsnappy1v5, libminizip1t64, libgbm1, libevent-2.1-7t64, libopus0, libjpeg62-turbo, libzstd1, zlib1g, libpam0g, passwd, fonts-roboto-unhinted, ca-certificates, curl, gpgv, parted, e2fsprogs, dosfstools, python3-venv
-Recommends: xinit, xserver-xorg, matchbox-window-manager, x11-xserver-utils, udisks2
+Recommends: xinit, xserver-xorg, matchbox-window-manager, x11-xserver-utils, udisks2, gcc, libc6-dev
 Suggests: geoclue-2.0
 Description: LiteAura AI desktop shell and server
  The LiteAura kiosk shell, the Shiny local server, the baseline plugins and the

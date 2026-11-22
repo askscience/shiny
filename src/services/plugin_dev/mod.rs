@@ -21,6 +21,7 @@ pub mod dialog;
 pub mod package;
 pub mod python;
 pub mod rust;
+pub mod rust_setup;
 pub mod state;
 pub mod workspace;
 
@@ -72,9 +73,65 @@ impl Language {
 pub struct Readiness {
     /// What is missing, item by item. Empty means ready.
     pub missing: Vec<AskLine>,
-    /// Whether what is missing can be fetched for the user (after they
-    /// agree). False when it has to be installed by hand.
+    /// Whether everything that is missing can be installed for the user
+    /// (after they agree). False when something has to be done by hand.
     pub fetchable: bool,
+}
+
+/// The machine the builder runs on: what it has for a language, and how what
+/// is missing gets installed. The real one is [`ThisMachine`]; tests answer
+/// for a machine of their own.
+#[async_trait::async_trait]
+pub trait Machine: Send + Sync {
+    fn readiness(&self, language: Language) -> Readiness;
+
+    /// Whether installing what `language` lacks needs the administrator's
+    /// password.
+    async fn needs_password(&self, language: Language) -> bool;
+
+    /// Install what `language` lacks. `password` is used once, for `sudo`.
+    async fn install(
+        &self,
+        language: Language,
+        password: Option<&str>,
+        cancel: Option<&crate::services::agent_cancel::CancelHandle>,
+    ) -> Result<(), String>;
+}
+
+/// The machine the server runs on.
+pub struct ThisMachine {
+    /// Where a download is kept while it is installed.
+    pub work_dir: std::path::PathBuf,
+}
+
+#[async_trait::async_trait]
+impl Machine for ThisMachine {
+    fn readiness(&self, language: Language) -> Readiness {
+        language.readiness()
+    }
+
+    async fn needs_password(&self, language: Language) -> bool {
+        language == Language::Rust && rust::lacks_linker() && rust_setup::needs_password().await
+    }
+
+    async fn install(
+        &self,
+        language: Language,
+        password: Option<&str>,
+        cancel: Option<&crate::services::agent_cancel::CancelHandle>,
+    ) -> Result<(), String> {
+        if language != Language::Rust {
+            return Err(format!("nothing can be installed for {} yet", language.label()));
+        }
+        // The system packages first: without a linker the compiler is no use.
+        if rust::lacks_linker() {
+            rust_setup::install_linker(password, cancel).await?;
+        }
+        if rust::lacks_compiler() {
+            rust_setup::install_compiler(&self.work_dir, cancel).await?;
+        }
+        Ok(())
+    }
 }
 
 impl Readiness {

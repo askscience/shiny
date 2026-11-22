@@ -14,6 +14,7 @@ use super::state::{self, Pending, Plan, PlanState};
 use super::Language;
 use crate::errors::AppError;
 use crate::services::agent_cancel::CancelHandle;
+use crate::services::agent_steps::StepText;
 use crate::services::agent_tools::ActionOutcome;
 use crate::services::ask::{AskContent, AskGate, AskKind, AskLine, AskOption, AskOutcome, AskReply};
 
@@ -42,9 +43,9 @@ pub struct Dialog<'a> {
     pub cancel: Option<&'a CancelHandle>,
     /// The turn came from a remote client (Iroh, a public URL).
     pub remote: bool,
-    /// What this machine has for a language ([`Language::readiness`]; tests
-    /// answer for a machine of their own).
-    pub readiness: fn(Language) -> super::Readiness,
+    /// The machine plugins are built on ([`super::ThisMachine`]; tests answer
+    /// for a machine of their own).
+    pub machine: &'a dyn super::Machine,
 }
 
 /// The action's result, and the card as it ended when one was shown: stored
@@ -54,11 +55,18 @@ pub struct DialogResult {
     pub record: Option<Value>,
 }
 
-pub async fn run(dialog: &Dialog<'_>, action: &'static str, params: &Value) -> Result<DialogResult, AppError> {
+/// `progress` is told when the action starts something long (installing a
+/// language's tools), so the chat's status line says what is going on.
+pub async fn run<P: FnMut(StepText)>(
+    dialog: &Dialog<'_>,
+    action: &'static str,
+    params: &Value,
+    progress: &mut P,
+) -> Result<DialogResult, AppError> {
     match action {
         ASK_USER => ask_user(dialog, params).await,
         PLAN_PROPOSE => plan_propose(dialog, params).await,
-        _ => plugin_dev_start(dialog).await,
+        _ => plugin_dev_start(dialog, progress).await,
     }
 }
 
@@ -385,7 +393,13 @@ async fn plan_propose(dialog: &Dialog<'_>, params: &Value) -> Result<DialogResul
 // ── plugin_dev_start ─────────────────────────────────────────────────────
 
 /// The Python / Rust card: each language with what this machine has for it.
-fn language_card(readiness: fn(Language) -> super::Readiness) -> AskContent {
+///
+/// - `ready`: everything is there;
+/// - `setup`: something is missing and choosing the language installs it;
+/// - `unavailable`: something is missing that cannot be installed from here,
+///   so the language cannot be picked. A conversation keeps its language for
+///   good and must never be bound to one that leads nowhere.
+fn language_card(machine: &dyn super::Machine) -> AskContent {
     let mut content = AskContent::new(
         AskKind::Choice,
         AskLine::keyed("chat.ask.language.title", "Which language for this plugin?"),
@@ -393,7 +407,7 @@ fn language_card(readiness: fn(Language) -> super::Readiness) -> AskContent {
     content.options = Language::ALL
         .iter()
         .map(|language| {
-            let readiness = readiness(*language);
+            let readiness = machine.readiness(*language);
             let (state, detail) = match (language, readiness.ready()) {
                 (Language::Python, true) => (
                     "ready",
@@ -407,18 +421,15 @@ fn language_card(readiness: fn(Language) -> super::Readiness) -> AskContent {
                     ),
                 ),
                 (_, false) if readiness.fetchable => (
-                    "unavailable",
+                    "setup",
                     AskLine::keyed(
                         "chat.ask.language.needsDownload",
-                        "Not on this machine yet. It still needs:",
+                        "Not on this machine yet. Choosing it installs, in a few minutes:",
                     ),
                 ),
                 (_, false) => (
                     "unavailable",
-                    AskLine::keyed(
-                        "chat.ask.language.needsInstall",
-                        "Not on this machine. It has to be installed first:",
-                    ),
+                    AskLine::keyed("chat.ask.language.needsInstall", "Cannot be used on this machine yet. Missing:"),
                 ),
             };
             AskOption::new(language.as_str(), AskLine::plain(language.label()))
@@ -430,35 +441,68 @@ fn language_card(readiness: fn(Language) -> super::Readiness) -> AskContent {
     content
 }
 
-/// What the model is told once the chat has its language.
-fn language_note(language: Language, already: bool, readiness: &super::Readiness) -> String {
+fn language_data(language: Language, already: bool) -> Value {
     let lead = if already {
         format!("This chat already builds plugins in {}; the user chose it earlier.", language.label())
     } else {
         format!("The user chose {} for this chat.", language.label())
     };
-    if readiness.ready() {
-        format!("{lead} Everything it needs is on this machine.")
-    } else {
-        format!(
-            "{lead} Not on this machine yet: {}. Tell the user plainly; do not pretend it is ready.",
-            readiness.missing_text().join("; ")
-        )
-    }
-}
-
-fn language_data(language: Language, already: bool, readiness: &super::Readiness) -> Value {
     json!({
         "language": language.as_str(),
         "already": already,
-        "ready": readiness.ready(),
-        "missing": readiness.missing_text(),
         "commands": super::commands_for(Some(language)),
-        "note": language_note(language, already, readiness),
+        "note": format!("{lead} Everything it needs is on this machine."),
     })
 }
 
-async fn plugin_dev_start(dialog: &Dialog<'_>) -> Result<DialogResult, AppError> {
+/// Nothing was chosen: the card as it ended, and why.
+fn not_chosen(content: &AskContent, reply: Option<&AskReply>, reason: String) -> DialogResult {
+    DialogResult {
+        outcome: outcome(PLUGIN_DEV_START, "cancelled", json!({ "reason": reason })),
+        record: Some(record(content, reply)),
+    }
+}
+
+/// Install what the chosen language lacks. The user agreed on the card, which
+/// listed it; the administrator's password, when system packages need it, is
+/// asked on a card of its own and goes to the installer and nowhere else.
+async fn set_up<P: FnMut(StepText)>(
+    dialog: &Dialog<'_>,
+    gate: &AskGate,
+    language: Language,
+    progress: &mut P,
+) -> Result<(), String> {
+    let password = if dialog.machine.needs_password(language).await {
+        let mut content = AskContent::new(
+            AskKind::Question,
+            AskLine::keyed(
+                "chat.ask.password.title",
+                "Administrator password, to install the C compiler (gcc)",
+            ),
+        );
+        content.allow_text = true;
+        content.secret = true;
+        match gate.ask(content, dialog.cancel).await {
+            AskOutcome::Answered(reply) => match typed(&reply) {
+                Some(password) => Some(password.to_string()),
+                None => return Err("the user gave no administrator password. Nothing was installed.".into()),
+            },
+            _ => return Err("the administrator password was not given. Nothing was installed.".into()),
+        }
+    } else {
+        None
+    };
+    progress(StepText::new(
+        "step.installingLanguageTools",
+        "Installing what the language needs… this takes a few minutes",
+    ));
+    dialog.machine.install(language, password.as_deref(), dialog.cancel).await
+}
+
+async fn plugin_dev_start<P: FnMut(StepText)>(
+    dialog: &Dialog<'_>,
+    progress: &mut P,
+) -> Result<DialogResult, AppError> {
     // A plugin is code that runs on this machine: like installing one, building
     // one is for the machine's own session, never for a remote client.
     if dialog.remote {
@@ -477,48 +521,61 @@ async fn plugin_dev_start(dialog: &Dialog<'_>) -> Result<DialogResult, AppError>
     let conversation_id = gate.conversation_id();
     let current = state::load(dialog.pool, conversation_id, dialog.traveler_id).await?;
     if let Some(language) = current.language {
-        let readiness = (dialog.readiness)(language);
-        return Ok(done(PLUGIN_DEV_START, "ok", language_data(language, true, &readiness)));
+        return Ok(done(PLUGIN_DEV_START, "ok", language_data(language, true)));
     }
 
-    let content = language_card(dialog.readiness);
+    let content = language_card(dialog.machine);
     match gate.ask(content.clone(), dialog.cancel).await {
         AskOutcome::Answered(reply) => {
             let Some(language) = reply.option.as_deref().and_then(Language::parse) else {
-                return Ok(DialogResult {
-                    outcome: outcome(
-                        PLUGIN_DEV_START,
-                        "cancelled",
-                        json!({ "reason": "the user closed the card without choosing a language. Nothing was started." }),
-                    ),
-                    record: Some(record(&content, Some(&reply))),
-                });
+                return Ok(not_chosen(
+                    &content,
+                    Some(&reply),
+                    "the user closed the card without choosing a language. Nothing was started.".into(),
+                ));
             };
-            // A language this machine cannot build in is not a choice: the
-            // card does not offer it, and an answer naming it changes nothing.
-            // The chat would otherwise be bound to a language that leads nowhere.
-            let readiness = (dialog.readiness)(language);
+            let readiness = dialog.machine.readiness(language);
             if !readiness.ready() {
-                return Ok(DialogResult {
-                    outcome: outcome(
-                        PLUGIN_DEV_START,
-                        "cancelled",
-                        json!({
-                            "reason": format!(
-                                "{} cannot be used on this machine yet (missing: {}). Nothing was chosen: tell the user.",
-                                language.label(),
-                                readiness.missing_text().join("; ")
-                            ),
-                        }),
-                    ),
-                    record: Some(record(&content, None)),
-                });
+                if !readiness.fetchable {
+                    return Ok(not_chosen(
+                        &content,
+                        None,
+                        format!(
+                            "{} cannot be used on this machine yet (missing: {}). Nothing was chosen: tell the user.",
+                            language.label(),
+                            readiness.missing_text().join("; ")
+                        ),
+                    ));
+                }
+                // The language is the chat's only once its tools are there:
+                // a failed installation leaves the chat free to choose again.
+                if let Err(error) = set_up(dialog, gate, language, progress).await {
+                    return Ok(not_chosen(
+                        &content,
+                        None,
+                        format!(
+                            "{} could not be set up: {error} Nothing was chosen: tell the user what went wrong.",
+                            language.label()
+                        ),
+                    ));
+                }
+                let after = dialog.machine.readiness(language);
+                if !after.ready() {
+                    return Ok(not_chosen(
+                        &content,
+                        None,
+                        format!(
+                            "the installation finished but {} still lacks: {}. Nothing was chosen: tell the user.",
+                            language.label(),
+                            after.missing_text().join("; ")
+                        ),
+                    ));
+                }
             }
             let chosen =
                 state::choose_language(dialog.pool, conversation_id, dialog.traveler_id, language).await?;
-            let readiness = (dialog.readiness)(chosen);
             Ok(DialogResult {
-                outcome: outcome(PLUGIN_DEV_START, "ok", language_data(chosen, false, &readiness)),
+                outcome: outcome(PLUGIN_DEV_START, "ok", language_data(chosen, false)),
                 record: Some(record(&content, Some(&reply))),
             })
         }
@@ -529,12 +586,18 @@ async fn plugin_dev_start(dialog: &Dialog<'_>) -> Result<DialogResult, AppError>
             let spoken: Vec<String> = Language::ALL
                 .iter()
                 .map(|language| {
-                    let readiness = (dialog.readiness)(*language);
+                    let readiness = dialog.machine.readiness(*language);
                     if readiness.ready() {
                         format!("{} is ready on this machine", language.label())
+                    } else if readiness.fetchable {
+                        format!(
+                            "{} has to be installed first, which is done from the text chat (it lacks: {})",
+                            language.label(),
+                            readiness.missing_text().join("; ")
+                        )
                     } else {
                         format!(
-                            "{} cannot be chosen yet, this machine lacks: {}",
+                            "{} cannot be used on this machine yet (it lacks: {})",
                             language.label(),
                             readiness.missing_text().join("; ")
                         )
@@ -604,19 +667,72 @@ mod tests {
         Some(AskReply { option: option.map(str::to_string), text: text.map(str::to_string) })
     }
 
-    /// A machine that has everything for Rust and no Python kit.
-    fn machine(language: Language) -> crate::services::plugin_dev::Readiness {
-        match language {
-            Language::Rust => Default::default(),
-            Language::Python => crate::services::plugin_dev::Readiness {
-                missing: vec![AskLine::plain("Python plugin kit")],
-                fetchable: false,
-            },
+    /// A machine of the test's own: Python has no kit; Rust lacks its tools
+    /// until `install` has run, when `rust_ready` starts false.
+    struct TestMachine {
+        rust_ready: std::sync::atomic::AtomicBool,
+        needs_password: bool,
+        install_fails: bool,
+        installs: Mutex<Vec<Option<String>>>,
+    }
+
+    impl TestMachine {
+        fn new(rust_ready: bool) -> Self {
+            Self {
+                rust_ready: rust_ready.into(),
+                needs_password: false,
+                install_fails: false,
+                installs: Mutex::default(),
+            }
         }
     }
 
+    #[async_trait::async_trait]
+    impl crate::services::plugin_dev::Machine for TestMachine {
+        fn readiness(&self, language: Language) -> crate::services::plugin_dev::Readiness {
+            use std::sync::atomic::Ordering;
+            match language {
+                Language::Rust if self.rust_ready.load(Ordering::SeqCst) => Default::default(),
+                Language::Rust => crate::services::plugin_dev::Readiness {
+                    missing: vec![AskLine::plain("Rust compiler")],
+                    fetchable: true,
+                },
+                Language::Python => crate::services::plugin_dev::Readiness {
+                    missing: vec![AskLine::plain("Python plugin kit")],
+                    fetchable: false,
+                },
+            }
+        }
+
+        async fn needs_password(&self, _language: Language) -> bool {
+            self.needs_password
+        }
+
+        async fn install(
+            &self,
+            _language: Language,
+            password: Option<&str>,
+            _cancel: Option<&CancelHandle>,
+        ) -> Result<(), String> {
+            self.installs.lock().unwrap().push(password.map(str::to_string));
+            if self.install_fails {
+                return Err("the download failed.".into());
+            }
+            self.rust_ready.store(true, std::sync::atomic::Ordering::SeqCst);
+            Ok(())
+        }
+    }
+
+    /// A machine with Rust ready, shared by the tests that are not about setup.
+    static READY: std::sync::LazyLock<TestMachine> = std::sync::LazyLock::new(|| TestMachine::new(true));
+
     fn dialog<'a>(pool: &'a SqlitePool, gate: &'a AskGate) -> Dialog<'a> {
-        Dialog { pool, traveler_id: "u", gate: Some(gate), cancel: None, remote: false, readiness: machine }
+        Dialog { pool, traveler_id: "u", gate: Some(gate), cancel: None, remote: false, machine: &*READY }
+    }
+
+    /// Run an action with no one listening to its progress.
+    async fn go(dialog: &Dialog<'_>, action: &'static str, params: &Value) -> Result<DialogResult, AppError> {
+        super::run(dialog, action, params, &mut |_| {}).await
     }
 
     #[test]
@@ -632,7 +748,7 @@ mod tests {
     async fn a_question_returns_the_users_answer() {
         let pool = pool().await;
         let (gate, shown) = gate(reply(Some("2"), None), true, false);
-        let result = run(
+        let result = go(
             &dialog(&pool, &gate),
             ASK_USER,
             &json!({ "question": "Light or dark?", "options": ["Light", { "label": "Dark", "detail": "easier at night" }] }),
@@ -654,17 +770,17 @@ mod tests {
     async fn a_question_without_text_is_refused_and_a_spoken_one_is_asked_aloud() {
         let pool = pool().await;
         let (card, _) = gate(None, true, false);
-        assert!(run(&dialog(&pool, &card), ASK_USER, &json!({})).await.is_err());
+        assert!(go(&dialog(&pool, &card), ASK_USER, &json!({})).await.is_err());
 
         let (spoken, shown) = gate(None, false, true);
-        let result = run(&dialog(&pool, &spoken), ASK_USER, &json!({ "question": "Which city?" })).await.unwrap();
+        let result = go(&dialog(&pool, &spoken), ASK_USER, &json!({ "question": "Which city?" })).await.unwrap();
         assert_eq!(result.outcome.result, "ok");
         assert_eq!(result.outcome.data["asked_aloud"], true);
         assert!(result.record.is_none());
         assert!(shown.lock().unwrap().is_empty(), "no card in a spoken turn");
 
         let (silent, _) = gate(None, false, false);
-        let result = run(&dialog(&pool, &silent), ASK_USER, &json!({ "question": "Which city?" })).await.unwrap();
+        let result = go(&dialog(&pool, &silent), ASK_USER, &json!({ "question": "Which city?" })).await.unwrap();
         assert_eq!(result.outcome.result, "unavailable");
     }
 
@@ -674,7 +790,7 @@ mod tests {
         let params = json!({ "title": "Notes", "steps": ["1. Scaffold", "- Write the window", "3D preview"] });
 
         let (gate_changes, shown) = gate(reply(None, Some("great, go!")), true, false);
-        let result = run(&dialog(&pool, &gate_changes), PLAN_PROPOSE, &params).await.unwrap();
+        let result = go(&dialog(&pool, &gate_changes), PLAN_PROPOSE, &params).await.unwrap();
         assert_eq!(result.outcome.data["decision"], "changes");
         assert_eq!(
             shown.lock().unwrap()[0].content.steps,
@@ -686,23 +802,23 @@ mod tests {
         assert_eq!(stored.pending, None);
 
         let (gate_ok, _) = gate(reply(Some("approve"), None), true, false);
-        let result = run(&dialog(&pool, &gate_ok), PLAN_PROPOSE, &params).await.unwrap();
+        let result = go(&dialog(&pool, &gate_ok), PLAN_PROPOSE, &params).await.unwrap();
         assert_eq!(result.outcome.data["decision"], "approved");
         assert_eq!(state::load(&pool, "chat", "u").await.unwrap().plan_state, PlanState::Approved);
 
         let (gate_no, _) = gate(reply(Some("cancel"), None), true, false);
-        let result = run(&dialog(&pool, &gate_no), PLAN_PROPOSE, &params).await.unwrap();
+        let result = go(&dialog(&pool, &gate_no), PLAN_PROPOSE, &params).await.unwrap();
         assert_eq!(result.outcome.data["decision"], "cancelled");
 
         let (empty, _) = gate(None, true, false);
-        assert!(run(&dialog(&pool, &empty), PLAN_PROPOSE, &json!({ "title": "x" })).await.is_err());
+        assert!(go(&dialog(&pool, &empty), PLAN_PROPOSE, &json!({ "title": "x" })).await.is_err());
     }
 
     #[tokio::test]
     async fn a_spoken_plan_waits_for_the_next_message() {
         let pool = pool().await;
         let (spoken, _) = gate(None, false, true);
-        let result = run(&dialog(&pool, &spoken), PLAN_PROPOSE, &json!({ "steps": ["One", "Two"] })).await.unwrap();
+        let result = go(&dialog(&pool, &spoken), PLAN_PROPOSE, &json!({ "steps": ["One", "Two"] })).await.unwrap();
         assert_eq!(result.outcome.data["decision"], "proposed");
         let stored = state::load(&pool, "chat", "u").await.unwrap();
         assert_eq!(stored.plan_state, PlanState::Proposed);
@@ -713,7 +829,7 @@ mod tests {
     async fn the_language_is_the_users_choice_and_is_asked_once() {
         let pool = pool().await;
         let (gate_rust, shown) = gate(reply(Some("rust"), None), true, false);
-        let result = run(&dialog(&pool, &gate_rust), PLUGIN_DEV_START, &json!({ "language": "python" })).await.unwrap();
+        let result = go(&dialog(&pool, &gate_rust), PLUGIN_DEV_START, &json!({ "language": "python" })).await.unwrap();
         assert_eq!(result.outcome.result, "ok");
         assert_eq!(result.outcome.data["language"], "rust", "a language the model passes is ignored");
         assert_eq!(result.outcome.data["already"], false);
@@ -728,7 +844,7 @@ mod tests {
 
         // The same chat again: no card, the same language, even answered otherwise.
         let (gate_python, shown) = gate(reply(Some("python"), None), true, false);
-        let result = run(&dialog(&pool, &gate_python), PLUGIN_DEV_START, &json!({})).await.unwrap();
+        let result = go(&dialog(&pool, &gate_python), PLUGIN_DEV_START, &json!({})).await.unwrap();
         assert_eq!(result.outcome.data["language"], "rust");
         assert_eq!(result.outcome.data["already"], true);
         assert!(shown.lock().unwrap().is_empty());
@@ -738,24 +854,111 @@ mod tests {
     async fn a_language_the_machine_lacks_is_not_a_choice() {
         let pool = pool().await;
         let (card, _) = gate(reply(Some("python"), None), true, false);
-        let result = run(&dialog(&pool, &card), PLUGIN_DEV_START, &json!({})).await.unwrap();
+        let result = go(&dialog(&pool, &card), PLUGIN_DEV_START, &json!({})).await.unwrap();
         assert_eq!(result.outcome.result, "cancelled");
         assert!(result.outcome.data["reason"].as_str().unwrap().contains("Python cannot be used on this machine yet"));
         assert_eq!(state::load(&pool, "chat", "u").await.unwrap().language, None, "the chat is not bound to it");
         assert_eq!(result.record.unwrap()["abandoned"], true);
     }
 
+    /// The gate of a machine that needs the password: the choice card is
+    /// answered with Rust, the password card with `password`.
+    fn setup_gate(password: Option<&'static str>) -> (AskGate, Arc<Mutex<Vec<AskPrompt>>>) {
+        let registry = AskRegistry::default();
+        let shown: Arc<Mutex<Vec<AskPrompt>>> = Arc::default();
+        let (answering, seen) = (registry.clone(), shown.clone());
+        let gate = AskGate::new(
+            registry,
+            "turn".into(),
+            "u".into(),
+            "chat".into(),
+            true,
+            Box::new(move |prompt| {
+                seen.lock().unwrap().push(prompt.clone());
+                let reply = if prompt.content.secret {
+                    AskReply { option: None, text: password.map(str::to_string) }
+                } else {
+                    AskReply { option: Some("rust".into()), text: None }
+                };
+                answering.resolve("turn", &prompt.request_id, "u", reply);
+            }),
+        );
+        (gate, shown)
+    }
+
+    #[tokio::test]
+    async fn choosing_a_language_the_machine_lacks_installs_it_first() {
+        let pool = pool().await;
+        let machine = TestMachine::new(false);
+        let (gate, shown) = gate(reply(Some("rust"), None), true, false);
+        let dialog = Dialog { machine: &machine, ..dialog(&pool, &gate) };
+        let mut steps: Vec<&str> = Vec::new();
+        let result = super::run(&dialog, PLUGIN_DEV_START, &json!({}), &mut |step| steps.push(step.key)).await.unwrap();
+        assert_eq!(result.outcome.result, "ok", "{:?}", result.outcome.data);
+        assert_eq!(result.outcome.data["language"], "rust");
+        assert_eq!(*machine.installs.lock().unwrap(), vec![None], "installed once, no password needed");
+        assert_eq!(steps, vec!["step.installingLanguageTools"]);
+        assert_eq!(state::load(&pool, "chat", "u").await.unwrap().language, Some(Language::Rust));
+        let shown = shown.lock().unwrap();
+        assert_eq!(shown.len(), 1, "no password card");
+        assert_eq!(shown[0].content.options[1].state, "setup");
+        assert_eq!(shown[0].content.options[1].notes[0].text, "Rust compiler");
+    }
+
+    #[tokio::test]
+    async fn the_administrator_password_goes_to_the_installer_and_is_not_kept() {
+        let pool = pool().await;
+        let machine = TestMachine { needs_password: true, ..TestMachine::new(false) };
+        let (gate, shown) = setup_gate(Some("s3cret"));
+        let dialog = Dialog { machine: &machine, ..dialog(&pool, &gate) };
+        let result = go(&dialog, PLUGIN_DEV_START, &json!({})).await.unwrap();
+        assert_eq!(result.outcome.result, "ok");
+        assert_eq!(*machine.installs.lock().unwrap(), vec![Some("s3cret".to_string())]);
+        {
+            let shown = shown.lock().unwrap();
+            assert_eq!(shown.len(), 2);
+            assert!(shown[1].content.secret && shown[1].content.allow_text);
+            assert_eq!(shown[1].content.title.key.as_deref(), Some("chat.ask.password.title"));
+        }
+        // Neither what the model reads nor what the conversation stores has it.
+        let record = result.record.unwrap();
+        assert_eq!(record["kind"], "choice", "only the choice card is stored");
+        assert!(!record.to_string().contains("s3cret"));
+        assert!(!result.outcome.data.to_string().contains("s3cret"));
+    }
+
+    #[tokio::test]
+    async fn a_setup_that_fails_leaves_the_chat_free_to_choose_again() {
+        let pool = pool().await;
+        // No password given.
+        let machine = TestMachine { needs_password: true, ..TestMachine::new(false) };
+        let (no_password, _) = setup_gate(None);
+        let result =
+            go(&Dialog { machine: &machine, ..dialog(&pool, &no_password) }, PLUGIN_DEV_START, &json!({})).await.unwrap();
+        assert_eq!(result.outcome.result, "cancelled");
+        assert!(machine.installs.lock().unwrap().is_empty(), "nothing is installed without it");
+        assert_eq!(state::load(&pool, "chat", "u").await.unwrap().language, None);
+
+        // The installer fails.
+        let machine = TestMachine { install_fails: true, ..TestMachine::new(false) };
+        let (gate, _) = gate(reply(Some("rust"), None), true, false);
+        let result = go(&Dialog { machine: &machine, ..dialog(&pool, &gate) }, PLUGIN_DEV_START, &json!({})).await.unwrap();
+        assert_eq!(result.outcome.result, "cancelled");
+        assert!(result.outcome.data["reason"].as_str().unwrap().contains("the download failed"));
+        assert_eq!(state::load(&pool, "chat", "u").await.unwrap().language, None);
+    }
+
     #[tokio::test]
     async fn a_closed_card_or_a_remote_client_starts_nothing() {
         let pool = pool().await;
         let (closed, _) = gate(reply(None, None), true, false);
-        let result = run(&dialog(&pool, &closed), PLUGIN_DEV_START, &json!({})).await.unwrap();
+        let result = go(&dialog(&pool, &closed), PLUGIN_DEV_START, &json!({})).await.unwrap();
         assert_eq!(result.outcome.result, "cancelled");
         assert_eq!(state::load(&pool, "chat", "u").await.unwrap().language, None);
 
         let (card, shown) = gate(reply(Some("rust"), None), true, false);
         let remote = Dialog { remote: true, ..dialog(&pool, &card) };
-        let result = run(&remote, PLUGIN_DEV_START, &json!({})).await.unwrap();
+        let result = go(&remote, PLUGIN_DEV_START, &json!({})).await.unwrap();
         assert_eq!(result.outcome.result, "refused");
         assert!(shown.lock().unwrap().is_empty());
         assert_eq!(state::load(&pool, "chat", "u").await.unwrap().language, None);
@@ -765,7 +968,7 @@ mod tests {
     async fn a_spoken_start_parks_the_choice() {
         let pool = pool().await;
         let (spoken, _) = gate(None, false, true);
-        let result = run(&dialog(&pool, &spoken), PLUGIN_DEV_START, &json!({})).await.unwrap();
+        let result = go(&dialog(&pool, &spoken), PLUGIN_DEV_START, &json!({})).await.unwrap();
         assert_eq!(result.outcome.data["asked_aloud"], true);
         assert_eq!(state::load(&pool, "chat", "u").await.unwrap().pending, Some(Pending::Language));
     }

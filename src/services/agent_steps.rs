@@ -657,7 +657,7 @@ pub struct StepText {
 }
 
 impl StepText {
-    const fn new(key: &'static str, text: &'static str) -> Self {
+    pub const fn new(key: &'static str, text: &'static str) -> Self {
         Self { key, text }
     }
 }

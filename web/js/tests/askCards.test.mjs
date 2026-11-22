@@ -97,6 +97,19 @@ check('an unknown key falls back to its English', lineText({ key: 'chat.ask.nope
     live.resolved && text(live.card.querySelector('.ask-card-status')) === 'No answer' && buttons(live.card).length === 0);
 }
 
+{
+  const { sent, send } = recorder();
+  const live = makeAskCard({ kind: 'question', title: { text: 'Administrator password' }, allow_text: true, secret: true }, { send });
+  const field = live.card.querySelector('input');
+  check('secret: the field hides what is typed', field.type === 'password');
+  field.value = 'hunter2';
+  field.fire('keydown', { key: 'Enter' });
+  await settled();
+  check('secret: the text is sent', sent[0]?.text === 'hunter2');
+  check('secret: the closed card never shows it', live.resolved && !text(live.card).includes('hunter2')
+    && live.card.querySelector('.ask-card-answer') === null);
+}
+
 /* ── plan ───────────────────────────────────────────────────── */
 
 const plan = {
@@ -150,7 +163,7 @@ const choice = {
       id: 'rust',
       label: { text: 'Rust' },
       state: 'unavailable',
-      detail: { key: 'chat.ask.language.needsDownload', text: 'Not here yet.' },
+      detail: { key: 'chat.ask.language.needsInstall', text: 'Not here yet.' },
       notes: [{ key: 'chat.ask.missing.rustCompiler', text: 'Rust compiler' }, { key: 'chat.ask.missing.sdk', text: 'Plugin SDK sources' }],
     },
   ],
@@ -163,7 +176,7 @@ const choice = {
   check('choice: one row per option', rows.length === 2);
   check('choice: a ready option says so', text(rows[0]).includes('Python') && text(rows[0]).includes('Ready'));
   check('choice: what is missing is listed on the option that needs it',
-    rows[1].querySelectorAll('li').map(text).join('|') === 'Rust compiler (about 1.5 GB)|Plugin SDK sources'
+    rows[1].querySelectorAll('li').map(text).join('|') === 'Rust compiler (downloaded into your home folder)|Plugin SDK (part of the LiteAura package)'
       && text(rows[1]).includes('Not available yet'), text(rows[1]));
   check('choice: an option the machine lacks cannot be picked', rows[1].disabled && rows[1].classList.contains('is-unavailable'));
   rows[1].click();
@@ -176,6 +189,18 @@ const choice = {
   check('choice: both options stay in view, the chosen one marked',
     closed.length === 2 && closed[0].classList.contains('is-picked') && !closed[1].classList.contains('is-picked'));
   check('choice: no buttons left', buttons(live.card).length === 0);
+}
+
+{
+  const { sent, send } = recorder();
+  const setup = { ...choice, options: [choice.options[0], { ...choice.options[1], state: 'setup' }] };
+  const live = makeAskCard(setup, { send });
+  const row = live.card.querySelectorAll('.ask-card-choice')[1];
+  check('choice: an option that installs what it lacks says so and can be picked',
+    text(row).includes('Will be installed') && !row.disabled);
+  row.click();
+  await settled();
+  check('choice: picking it sends its id', sent[0]?.option === 'rust');
 }
 
 {

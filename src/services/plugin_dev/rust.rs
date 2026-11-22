@@ -40,38 +40,51 @@ struct Found {
     /// The plugin SDK bundle: the SDK is not published, a plugin builds
     /// against the copy that matches this server.
     sdk: bool,
-    /// The system SQLite's development files: the SDK links the one SQLite
-    /// the server uses.
+    /// The system SQLite library the SDK links: the one the server uses.
     sqlite: bool,
+}
+
+pub fn lacks_compiler() -> bool {
+    !(on_path("cargo", &cargo_bin()) && on_path("rustc", &cargo_bin()))
+}
+
+pub fn lacks_linker() -> bool {
+    !on_path("cc", &[])
 }
 
 pub fn readiness() -> Readiness {
     assess(Found {
-        compiler: on_path("cargo", &cargo_bin()) && on_path("rustc", &cargo_bin()),
-        linker: on_path("cc", &[]),
+        compiler: !lacks_compiler(),
+        linker: !lacks_linker(),
         sdk: sdk_root().is_some(),
-        sqlite: sqlite_dev_present(),
+        sqlite: sqlite_library().is_some(),
     })
 }
 
 fn assess(found: Found) -> Readiness {
     let mut missing = Vec::new();
     if !found.compiler {
-        missing.push(AskLine::keyed("chat.ask.missing.rustCompiler", "Rust compiler (about 1.5 GB)"));
-    }
-    if !found.linker {
-        missing.push(AskLine::keyed("chat.ask.missing.linker", "C linker (system package)"));
-    }
-    if !found.sqlite {
         missing.push(AskLine::keyed(
-            "chat.ask.missing.sqlite",
-            "SQLite development files (system package)",
+            "chat.ask.missing.rustCompiler",
+            "Rust compiler (downloaded into your home folder)",
         ));
     }
-    if !found.sdk {
-        missing.push(AskLine::keyed("chat.ask.missing.sdk", "Plugin SDK sources"));
+    if !found.linker {
+        missing.push(AskLine::keyed(
+            "chat.ask.missing.linker",
+            "C compiler gcc (system package, asks for the administrator password)",
+        ));
     }
-    Readiness { missing, fetchable: true }
+    if !found.sqlite {
+        missing.push(AskLine::keyed("chat.ask.missing.sqlite", "SQLite library (part of the LiteAura package)"));
+    }
+    if !found.sdk {
+        missing.push(AskLine::keyed("chat.ask.missing.sdk", "Plugin SDK (part of the LiteAura package)"));
+    }
+    // The compiler and the linker are installed for the user. The SDK and
+    // SQLite come with the package: missing, the installation is broken and
+    // nothing here repairs it.
+    Readiness { missing, fetchable: found.sdk && found.sqlite }
 }
 
 /// The SDK bundle's directory, absolute, when this machine has one.
@@ -115,14 +128,44 @@ fn is_executable(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
-/// The unversioned `libsqlite3.so` the linker resolves `-lsqlite3` with. Only
-/// the development package installs it; the runtime library alone is
-/// `libsqlite3.so.0`.
-fn sqlite_dev_present() -> bool {
+/// Where the system's SQLite library is, and whether the directory also has
+/// the unversioned `libsqlite3.so` the linker resolves `-lsqlite3` with.
+///
+/// Only the development package installs the unversioned name; the runtime
+/// library, which the LiteAura package depends on, is `libsqlite3.so.0`. The
+/// build links against that through a name of its own ([`sqlite_link_dir`]),
+/// so the development package is not needed.
+fn sqlite_library() -> Option<(PathBuf, bool)> {
     let multiarch = format!("/usr/lib/{}-linux-gnu", std::env::consts::ARCH);
-    [multiarch.as_str(), "/usr/lib64", "/usr/lib", "/usr/local/lib"]
-        .iter()
-        .any(|dir| Path::new(dir).join("libsqlite3.so").exists())
+    [multiarch.as_str(), "/usr/lib64", "/usr/lib", "/usr/local/lib"].iter().find_map(|dir| {
+        let dir = Path::new(dir);
+        if dir.join("libsqlite3.so").exists() {
+            Some((dir.join("libsqlite3.so"), true))
+        } else if dir.join("libsqlite3.so.0").exists() {
+            Some((dir.join("libsqlite3.so.0"), false))
+        } else {
+            None
+        }
+    })
+}
+
+/// A directory to add to the linker's search path so `-lsqlite3` resolves on
+/// a machine without SQLite's development package: it holds one symbolic link,
+/// `libsqlite3.so`, to the runtime library. `None` when the system already
+/// has the unversioned name.
+fn sqlite_link_dir(workspaces: &Workspaces) -> Option<PathBuf> {
+    let (library, unversioned) = sqlite_library()?;
+    if unversioned {
+        return None;
+    }
+    let dir = workspaces.root().join(".lib");
+    let link = dir.join("libsqlite3.so");
+    if std::fs::read_link(&link).ok().as_deref() != Some(library.as_path()) {
+        std::fs::create_dir_all(&dir).ok()?;
+        let _ = std::fs::remove_file(&link);
+        std::os::unix::fs::symlink(&library, &link).ok()?;
+    }
+    Some(dir)
 }
 
 // ── scaffold ─────────────────────────────────────────────────────────────
@@ -349,7 +392,14 @@ pub async fn build(
     let mut path: Vec<PathBuf> = cargo_bin();
     path.extend(std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()));
     let started = std::time::Instant::now();
-    let mut child = tokio::process::Command::new(&cargo)
+    let mut command = tokio::process::Command::new(&cargo);
+    if let Some(dir) = sqlite_link_dir(workspaces) {
+        // gcc reads LIBRARY_PATH for `-l` lookups.
+        let mut search = vec![dir];
+        search.extend(std::env::split_paths(&std::env::var_os("LIBRARY_PATH").unwrap_or_default()));
+        command.env("LIBRARY_PATH", std::env::join_paths(search).unwrap_or_default());
+    }
+    let mut child = command
         .args(["build", "--release", "--message-format=json", "--color=never"])
         .current_dir(&workspace.dir)
         .env("CARGO_TARGET_DIR", &target)
@@ -466,14 +516,18 @@ mod tests {
     fn each_missing_piece_is_named() {
         let none = assess(Found { compiler: false, linker: false, sdk: false, sqlite: false });
         assert_eq!(none.missing.len(), 4);
-        assert!(none.fetchable);
         assert!(none.missing.iter().all(|line| line.key.is_some()), "every line is translatable");
 
+        // The compiler and the linker are installed for the user.
+        let tools = assess(Found { compiler: false, linker: false, ..ALL });
+        assert_eq!(tools.missing.len(), 2);
+        assert!(tools.fetchable);
+        assert!(tools.missing_text()[0].starts_with("Rust compiler"));
+        // What ships with the package is not: a broken installation.
         let no_sdk = assess(Found { sdk: false, ..ALL });
-        assert_eq!(no_sdk.missing_text(), vec!["Plugin SDK sources"]);
-        let no_compiler = assess(Found { compiler: false, ..ALL });
-        assert_eq!(no_compiler.missing.len(), 1);
-        assert!(no_compiler.missing_text()[0].starts_with("Rust compiler"));
+        assert!(no_sdk.missing_text()[0].starts_with("Plugin SDK"));
+        assert!(!no_sdk.fetchable);
+        assert!(!assess(Found { sqlite: false, ..ALL }).fetchable);
     }
 
     #[test]
