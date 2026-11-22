@@ -15,6 +15,7 @@ import {
 } from '../ui/index.js';
 import { refreshActivePlugins, resetSessionPlugins } from './activePlugins.js';
 import { initLiveUpdate } from './liveUpdate.js';
+import { initPluginConsole } from './pluginConsole.js';
 import { initArtifactDock } from './artifacts.js';
 import { initInsightCards } from './insights/insightCards.js';
 import { initHudClock, initHudTrips } from './hudLeft.js';
@@ -189,6 +190,7 @@ async function initApp() {
   initHudPlugins(); // plugin icon tray in the top bar — works with zero plugins
   initPluginHud(); // optional per-plugin top-bar chips (loaded when installed)
   initLiveUpdate(); // follow the server through an update (plugins, web, swap)
+  initPluginConsole(); // a plugin window's errors reach the assistant that built it
   initCraftStore(); // Craft store: keeps the installed Craft apps updated
   // A Craft app saves through the browser APIs inside its iframe: the shell
   // reports the path so the desktop can say where the file went and refresh the

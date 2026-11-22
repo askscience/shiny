@@ -101,6 +101,7 @@ function toolName(action) {
  *  needs a card for. Its other steps are cards of the `builder` family. */
 const BUILDER_QUIET = new Set([
   'plugin_dev_list', 'plugin_dev_tree', 'plugin_dev_read', 'plugin_dev_status', 'plugin_dev_logs',
+  'plugin_dev_console', 'plugin_dev_call', 'plugin_dev_http',
 ]);
 
 export function isHousekeepingTool(action) {
@@ -563,6 +564,30 @@ function builderCard(record, d, name, p) {
     // The open arrow goes to the plugin that was just installed.
     const card = shell({ ...record, plugin: str(d.plugin) }, 'builder',
       [family, t('chat.toolCard.builder.installed', null, 'Installed')]);
+    return add(card, text(`${str(d.plugin)} ${str(d.version)}`.trim(), 'tool-card-title'));
+  }
+  if (name === 'rust_lint') {
+    const findings = [...list(d.errors), ...list(d.warnings)];
+    const errors = num(d.error_count) ?? 0;
+    const advice = num(d.warning_count) ?? 0;
+    const card = shell(record, 'builder', [family, errors
+      ? tp('chat.toolCard.builder.errors', errors, null, `${errors} errors`)
+      : (advice
+        ? tp('chat.toolCard.builder.advice', advice, null, `${advice} pieces of advice`)
+        : t('chat.toolCard.builder.noAdvice', null, 'No advice'))]);
+    rows(card, findings, 4, problem);
+    if (!findings.length && d.detail) add(card, text(oneLine(d.detail, 240)));
+    return card;
+  }
+  if (name === 'plugin_dev_open' || name === 'plugin_dev_rollback' || name === 'plugin_dev_uninstall') {
+    const done = {
+      plugin_dev_open: t('chat.toolCard.builder.opened', null, 'Opened'),
+      plugin_dev_rollback: t('chat.toolCard.builder.rolledBack', null, 'Previous version restored'),
+      plugin_dev_uninstall: t('chat.toolCard.builder.uninstalled', null, 'Uninstalled'),
+    }[name];
+    // An uninstalled plugin has no window left to open.
+    const target = name === 'plugin_dev_uninstall' ? record : { ...record, plugin: str(d.plugin) };
+    const card = shell(target, 'builder', [family, done]);
     return add(card, text(`${str(d.plugin)} ${str(d.version)}`.trim(), 'tool-card-title'));
   }
   if (name === 'plugin_dev_pack') {

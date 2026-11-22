@@ -215,6 +215,8 @@ pub struct AppState {
     /// Questions, plans and choices the assistant put to the user mid-turn,
     /// waiting for their answer (`services::ask`).
     pub asks: crate::services::ask::AskRegistry,
+    /// Errors plugin windows reported from the page, for the plugin builder.
+    pub plugin_console: crate::services::plugin_dev::console::Console,
     pub supertonic: SupertonicClient,
     /// faster-whisper streaming STT sidecar (optional; Vosk is the fallback).
     pub whisper: WhisperClient,
@@ -839,6 +841,8 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/plugins/catalog/install", post(crate::plugins::catalog::catalog_install))
         .route("/api/plugins/store/install", post(crate::plugins::store::store_install))
         .route("/api/plugins/store/mcp", post(crate::plugins::store::store_mcp))
+        // A plugin window's errors, reported by the page for the plugin builder.
+        .route("/api/plugins/dev/console", post(crate::services::plugin_dev::console::report))
         .layer(axum::middleware::from_fn(remote::local_only_gate));
 
     let protected_routes = protected_routes

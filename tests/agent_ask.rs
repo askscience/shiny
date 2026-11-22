@@ -812,7 +812,7 @@ async fn a_python_plugin_is_checked_installed_and_used() {
         &call("tasks_list", json!({})),
         "Installed.",
     ]);
-    let (_, tools) = builder_turn(&fixture, "p1", None, &answers).await;
+    let (conversation, tools) = builder_turn(&fixture, "p1", None, &answers).await;
 
     assert_eq!(
         card(&tools, "plugin_dev_write", 0)["result"],
@@ -890,6 +890,111 @@ async fn a_python_plugin_is_checked_installed_and_used() {
     let installed = fixture.app.root.path().join("plugins/tasks");
     assert!(installed.join("engine/shiny_plugin.py").is_file());
     assert!(installed.join("bin/tasks").is_file());
+
+    // The window reports an error from the page; only an installed plugin's is kept.
+    let router = shiny::api::build_router(fixture.app.state.clone());
+    for (plugin, recorded) in [("tasks", true), ("ghost", false)] {
+        let report = json!({ "plugin": plugin, "message": "items is not defined", "source": "plugin.js", "line": 41 });
+        let response = router
+            .clone()
+            .oneshot(post_json("/api/plugins/dev/console", "ada", report))
+            .await
+            .unwrap();
+        assert_eq!(
+            json_body(response).await["data"]["recorded"],
+            recorded,
+            "{plugin}"
+        );
+    }
+
+    // Later in the same chat: try it, read the window's errors, ship a new
+    // version, go back to the previous one, and remove it.
+    fixture.model.script(&[
+        &call("plugin_dev_call", json!({ "tool": "tasks_list" })),
+        &call("plugin_dev_call", json!({ "tool": "file_write" })),
+        &call("plugin_dev_http", json!({ "path": "/api/tasks/items", "method": "POST", "body": { "text": "From the route" } })),
+        &call("plugin_dev_http", json!({ "path": "/api/trips" })),
+        &call("plugin_dev_console", json!({})),
+        &call("plugin_dev_patch", json!({ "path": "plugin.toml", "find": "version = \"0.1.0\"", "replace": "version = \"0.1.1\"" })),
+        &call("check_all", json!({})),
+        &call("py_check", json!({})),
+        &call("plugin_dev_pack", json!({})),
+        &call("plugin_dev_install", json!({})),
+        &call("plugin_dev_status", json!({})),
+        &call("plugin_dev_rollback", json!({})),
+        &call("plugin_dev_status", json!({ "refresh": true })),
+        &call("tasks_list", json!({})),
+        &call("plugin_dev_uninstall", json!({})),
+        &call("plugin_dev_status", json!({ "after": "uninstall" })),
+        &call("plugin_dev_open", json!({ "name": "photocraft" })),
+        "Done.",
+    ]);
+    let (_, tools) = builder_turn(&fixture, "p2", Some(&conversation), &answers).await;
+    let tried = &card(&tools, "plugin_dev_call", 0)["data"];
+    assert!(
+        tried["data"].as_str().unwrap().contains("Water the plants"),
+        "{tried:#}"
+    );
+    assert_eq!(
+        card(&tools, "plugin_dev_call", 1)["result"],
+        "error",
+        "only the plugin's own tools"
+    );
+    let posted = &card(&tools, "plugin_dev_http", 0)["data"];
+    assert_eq!(posted["status"], 200, "{posted:#}");
+    assert!(posted["body"].as_str().unwrap().contains("From the route"));
+    assert_eq!(
+        card(&tools, "plugin_dev_http", 1)["result"],
+        "error",
+        "only the plugin's own routes"
+    );
+    let console = &card(&tools, "plugin_dev_console", 0)["data"];
+    assert_eq!(console["errors"][0]["message"], "items is not defined");
+    assert_eq!(console["errors"][0]["line"], 41);
+
+    assert_eq!(
+        card(&tools, "plugin_dev_install", 0)["data"]["version"],
+        "0.1.1"
+    );
+    assert_eq!(
+        card(&tools, "plugin_dev_status", 0)["data"]["installed"]["version"],
+        "0.1.1"
+    );
+    assert_eq!(
+        card(&tools, "plugin_dev_rollback", 0)["result"],
+        "ok",
+        "{:#}",
+        card(&tools, "plugin_dev_rollback", 0)
+    );
+    let back = &card(&tools, "plugin_dev_status", 1)["data"];
+    assert_eq!(back["installed"]["version"], "0.1.0", "{back:#}");
+    // The data outlives the versions.
+    assert_eq!(card(&tools, "tasks_list", 0)["data"]["count"], 2);
+
+    assert_eq!(card(&tools, "plugin_dev_uninstall", 0)["result"], "ok");
+    assert_eq!(
+        card(&tools, "plugin_dev_status", 2)["data"]["installed"],
+        Value::Null
+    );
+    assert!(!installed.exists());
+    assert!(
+        fixture
+            .app
+            .root
+            .path()
+            .join("plugin-dev/tasks/engine/plugin.py")
+            .is_file(),
+        "the sources are kept"
+    );
+    let craft = card(&tools, "plugin_dev_open", 0);
+    assert_eq!(craft["result"], "error");
+    assert!(
+        craft["data"]["reason"]
+            .as_str()
+            .unwrap()
+            .contains("app from the store"),
+        "{craft}"
+    );
     fixture.app.state.plugins.stop_processes().await;
 }
 

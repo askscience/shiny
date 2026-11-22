@@ -17,6 +17,7 @@
 
 pub mod checks;
 pub mod commands;
+pub mod console;
 pub mod dialog;
 pub mod package;
 pub mod python;
@@ -173,6 +174,13 @@ const COMMANDS: &[(&str, Module)] = &[
     ("plugin_dev_install", Module::Common),
     ("plugin_dev_status", Module::Common),
     ("plugin_dev_logs", Module::Common),
+    ("plugin_dev_open", Module::Common),
+    ("plugin_dev_console", Module::Common),
+    ("plugin_dev_call", Module::Common),
+    ("plugin_dev_http", Module::Common),
+    ("plugin_dev_rollback", Module::Common),
+    ("plugin_dev_uninstall", Module::Common),
+    ("rust_lint", Module::Only(Language::Rust)),
     ("rust_doctor", Module::Only(Language::Rust)),
     ("rust_build", Module::Only(Language::Rust)),
     ("rust_test", Module::Only(Language::Rust)),

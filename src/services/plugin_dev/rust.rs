@@ -376,6 +376,26 @@ pub async fn build(
     workspace: &mut Workspace,
     cancel: Option<&CancelHandle>,
 ) -> Result<BuildReport, AppError> {
+    cargo(workspaces, workspace, false, cancel).await
+}
+
+/// Run clippy on the plugin: the compiler's errors plus its advice on code
+/// that compiles but is probably wrong. Nothing is staged. `Broken` with
+/// cargo's own words when clippy is not installed.
+pub async fn lint(
+    workspaces: &Workspaces,
+    workspace: &mut Workspace,
+    cancel: Option<&CancelHandle>,
+) -> Result<BuildReport, AppError> {
+    cargo(workspaces, workspace, true, cancel).await
+}
+
+async fn cargo(
+    workspaces: &Workspaces,
+    workspace: &mut Workspace,
+    lint: bool,
+    cancel: Option<&CancelHandle>,
+) -> Result<BuildReport, AppError> {
     let cargo = find_program("cargo", &cargo_bin()).ok_or_else(|| {
         AppError::BadRequest("the Rust compiler is not on this machine, so the plugin cannot be built".into())
     })?;
@@ -400,7 +420,8 @@ pub async fn build(
         command.env("LIBRARY_PATH", std::env::join_paths(search).unwrap_or_default());
     }
     let mut child = command
-        .args(["build", "--release", "--message-format=json", "--color=never"])
+        .arg(if lint { "clippy" } else { "build" })
+        .args(["--release", "--message-format=json", "--color=never"])
         .current_dir(&workspace.dir)
         .env("CARGO_TARGET_DIR", &target)
         .env("PATH", std::env::join_paths(path).unwrap_or_default())
@@ -472,7 +493,9 @@ pub async fn build(
         String::new()
     };
 
-    if end == BuildEnd::Built {
+    if lint {
+        // A lint run neither makes nor invalidates the staged executable.
+    } else if end == BuildEnd::Built {
         let built = target.join("release").join(binary_name(&workspace.name));
         let staged = crate::plugins::process::executable_path(&workspace.dir, &workspace.name);
         if let Some(parent) = staged.parent() {
@@ -488,7 +511,9 @@ pub async fn build(
     } else {
         workspace.meta.built = None;
     }
-    workspace.save_meta()?;
+    if !lint {
+        workspace.save_meta()?;
+    }
 
     Ok(BuildReport {
         end,

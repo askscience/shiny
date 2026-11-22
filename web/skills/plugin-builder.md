@@ -43,3 +43,9 @@ Rules the checks enforce: tools are named `<name>_…`; routes are under `/api/<
 - `plugin_dev_install` — install the packed archive and turn the plugin on. params: `{}`
 - `plugin_dev_status` — whether the sources are checked, built and packed, and whether the installed plugin runs, with its tools and routes. params: `{}`
 - `plugin_dev_logs` — the last lines the plugin printed and its install events. params: `{ "lines"?: number }`
+- `plugin_dev_console` — the errors the plugin's window reported while open in the desktop (a module that failed to load, an exception), with file and line. params: `{ "clear"?: boolean }`. Use it when a window is blank or a button does nothing.
+- `plugin_dev_call` — call one of the installed plugin's own tools, to see what it answers. params: `{ "tool": string, "params"?: object }`
+- `plugin_dev_http` — call one of the installed plugin's own routes, as its window would. params: `{ "path": "/api/<name>/…", "method"?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE", "body"?: object }`. It answers with the status and the body.
+- `plugin_dev_open` — work on a plugin that is already installed. params: `{ "name": string }`. A plugin you built keeps its sources. Any other one opens from its installed copy: its engine has no sources here, so you can change its window, skill, translations and manifest, not its tools or routes. Raise `version` in `plugin.toml` before installing a changed copy. Apps from the store and the system's own plugins (terminal, updates, installer) cannot be opened.
+- `plugin_dev_rollback` — put back the version the last install replaced. params: `{ "name"?: string }`. The user is asked to allow it.
+- `plugin_dev_uninstall` — remove an installed plugin. params: `{ "name"?: string }`. The user is asked to allow it; the workspace and the plugin's data are kept. Only when the user asks for it.

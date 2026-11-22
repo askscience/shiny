@@ -37,8 +37,8 @@ The commands are split in modules (`plugin_dev/mod.rs`, the `COMMANDS` table):
 | Module | Commands | A conversation has it when |
 |---|---|---|
 | entry | `plugin_dev_start` | always |
-| common | `plugin_dev_new`, `plugin_dev_list`, `plugin_dev_tree`, `plugin_dev_read`, `plugin_dev_write`, `plugin_dev_patch`, `plugin_dev_delete`, `check_all`, `check_manifest`, `check_web`, `check_i18n`, `check_migrations`, `check_conflicts`, `plugin_dev_pack`, `plugin_dev_install`, `plugin_dev_status`, `plugin_dev_logs` | it has chosen a language |
-| rust | `rust_doctor`, `rust_build`, `rust_test` | it chose Rust |
+| common | `plugin_dev_new`, `plugin_dev_open`, `plugin_dev_list`, `plugin_dev_tree`, `plugin_dev_read`, `plugin_dev_write`, `plugin_dev_patch`, `plugin_dev_delete`, `check_all`, `check_manifest`, `check_web`, `check_i18n`, `check_migrations`, `check_conflicts`, `plugin_dev_pack`, `plugin_dev_install`, `plugin_dev_status`, `plugin_dev_logs`, `plugin_dev_console`, `plugin_dev_call`, `plugin_dev_http`, `plugin_dev_rollback`, `plugin_dev_uninstall` | it has chosen a language |
+| rust | `rust_doctor`, `rust_build`, `rust_lint`, `rust_test` | it chose Rust |
 | python | `py_check`, `py_test` | it chose Python |
 
 `scope_refusal` refuses a command of a module the conversation does not have,
@@ -197,7 +197,45 @@ choose again. The commands are fixed:
 By voice there is no card to agree on: a language that needs setup is not
 chosen, and the assistant says it is set up from the text chat.
 
-## Not there yet
+## Diagnostics
 
-- Working on an installed plugin's window and skill, rolling back, the
-  window's JavaScript errors, calling a route or a tool as a test.
+| Command | What it answers |
+|---|---|
+| `plugin_dev_status` | where the sources stand (checked, built, packed) and whether the installed plugin runs: version, process id, tools, routes |
+| `plugin_dev_logs` | the last lines the plugin printed (`[<name>] …` in the server log) and its install events |
+| `plugin_dev_console` | the errors the plugin's window reported from the page |
+| `plugin_dev_call` | the answer of one of the installed plugin's own tools |
+| `plugin_dev_http` | the status and body of one of the installed plugin's own routes (`/api/<name>/…`), called from the server as the user |
+| `rust_lint` | clippy's errors and advice, in the build's format; says so when clippy is not installed |
+
+A plugin's window runs in the desktop's page, where the assistant cannot look.
+`web/js/pluginConsole.js` listens for errors and rejected promises whose file
+is under `/plugins/<name>/`, and `tiles.js` reports a window module that
+fails to load; they are posted to `POST /api/plugins/dev/console` (local
+only) and the server keeps the last 40 per plugin in memory
+(`plugin_dev/console.rs`).
+
+## Installed plugins
+
+`plugin_dev_open` lets a chat work on a plugin that is already installed.
+
+- A plugin the assistant built has its workspace: it is opened as it is.
+- Any other one is **adopted**: its installed files (`plugin.toml`, `web/`,
+  `skills/`, `migrations/`, a Python `engine/`, and the executable) are copied
+  into a workspace. A Python plugin keeps its language. A compiled one has no
+  sources on the machine, so the workspace is *prebuilt*: any chat can work on
+  it, the window, skill, translations and manifest can change, and the
+  executable is packed as it was. `rust_build` and `rust_lint` refuse it.
+- Installing the changed copy puts it in the user's plugin directory, where
+  it overrides the system plugin of the same name for that account. The
+  system copy is not touched: uninstalling the override brings it back.
+- Not opened, rolled back or uninstalled from here: the Craft apps and other
+  framed web apps (the store's), and the plugins that run inside the server
+  (terminal, updates, installer).
+
+`plugin_dev_rollback` swaps the installed copy with the one the last install
+replaced (`<name>.bak`), so a rollback can itself be rolled back; when the
+previous copy does not load, the current one is kept. `plugin_dev_uninstall`
+removes the installed copy and keeps the workspace and the plugin's tables.
+Both ask the user on the allow / deny card, like an install.
+

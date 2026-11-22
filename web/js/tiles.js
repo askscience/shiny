@@ -1,3 +1,4 @@
+import { reportPluginError } from './pluginConsole.js';
 import { controlButton } from '../ui/components/button.js';
 /**
  * tiles.js — plugin window surfaces (Hyprland-style desktop).
@@ -167,6 +168,8 @@ async function ensureSurface(name) {
       return true;
     } catch (err) {
       console.warn(`plugin surface '${name}' failed to load`, err);
+      // The assistant that built the plugin reads this (plugin_dev_console).
+      reportPluginError(name, `the window failed to load: ${err?.message || err}`, 'plugin.js', 0);
       return false;
     }
   })();

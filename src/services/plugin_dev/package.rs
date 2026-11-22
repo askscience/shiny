@@ -44,7 +44,9 @@ pub fn pack(workspace: &mut Workspace) -> Result<Packed, AppError> {
         ));
     }
     let executable = crate::plugins::process::find_executable(&workspace.dir, &workspace.name);
-    let Some(executable) = executable.filter(|_| workspace.meta.built.as_deref() == Some(sources.as_str())) else {
+    // An adopted plugin's executable has no sources here: it is what it is.
+    let built = workspace.prebuilt() || workspace.meta.built.as_deref() == Some(sources.as_str());
+    let Some(executable) = executable.filter(|_| built) else {
         return Err(refused(
             "the plugin's engine is not built from these sources. Build it, then pack.",
         ));

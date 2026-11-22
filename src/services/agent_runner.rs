@@ -162,7 +162,7 @@ fn gated_action(state: &AppState, action: &str, params: &Value) -> Option<GatedA
     let normalized = normalize_action_name(action);
     // Installing a plugin the assistant built is a core command, not a
     // plugin's tool: it has no registry entry to resolve through.
-    if normalized == "plugin_dev_install" {
+    if matches!(normalized.as_str(), "plugin_dev_install" | "plugin_dev_rollback" | "plugin_dev_uninstall") {
         return describe_gated(&normalized, params);
     }
     let canonical = state
@@ -216,6 +216,17 @@ fn describe_gated(tool: &str, params: &Value) -> Option<GatedAction> {
                 .find_map(|key| params.get(*key).and_then(Value::as_str))
                 .map_or_else(|| "this chat built".to_string(), brief);
             format!("plugin_dev_install: install the plugin {name} on this machine (its code will run here)")
+        }
+        "plugin_dev_rollback" | "plugin_dev_uninstall" => {
+            let name = ["name", "plugin"]
+                .iter()
+                .find_map(|key| params.get(*key).and_then(Value::as_str))
+                .map_or_else(|| "this chat is working on".to_string(), brief);
+            if tool == "plugin_dev_rollback" {
+                format!("plugin_dev_rollback: put back the previous installed version of the plugin {name}")
+            } else {
+                format!("plugin_dev_uninstall: remove the installed plugin {name} from this machine")
+            }
         }
         _ => return None,
     };

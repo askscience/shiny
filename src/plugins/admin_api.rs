@@ -186,6 +186,15 @@ pub async fn uninstall(
     let name = body.get("name").and_then(|v| v.as_str())
         .ok_or_else(|| AppError::BadRequest("name required".into()))?
         .to_string();
+    let (removed, system_fallback) = uninstall_plugin(&state, &name).await?;
+    Ok(Json(json!({ "success": removed, "data": { "name": name, "system_fallback": system_fallback } })))
+}
+
+/// Uninstall a plugin of the writable directory: unload it, delete its files,
+/// and load the system plugin of the same name again when there is one.
+/// Returns whether something was unloaded and whether a system copy took over.
+pub async fn uninstall_plugin(state: &AppState, name: &str) -> Result<(bool, bool), AppError> {
+    let name = name.to_string();
     // `name` is joined into the plugins directory and recursively deleted —
     // only ever allow a single safe path component.
     crate::plugins::loader::validate_plugin_name(&name)?;
@@ -231,7 +240,8 @@ pub async fn uninstall(
     if let Some(rebuild) = &state.router_rebuild {
         rebuild();
     }
-    Ok(Json(json!({ "success": removed, "data": { "name": name, "system_fallback": state.plugins.is_installed(&name) } })))
+    Ok((removed, state.plugins.is_installed(&name)))
+
 }
 
 /// POST /api/plugins/activate  body {"name":"hello"}  — re-enable a plugin

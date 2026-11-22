@@ -26,6 +26,8 @@ pub const MAX_FILES: usize = 300;
 /// writes: compiled output, the staged executable, packed archives.
 const GENERATED_DIRS: &[&str] = &["target", "bin", "dist"];
 const META_FILE: &str = ".workspace.json";
+/// The `language` of a workspace whose engine is an executable without sources.
+pub const PREBUILT: &str = "prebuilt";
 
 /// File kinds a plugin's sources are made of. Anything else (an executable, an
 /// archive, a script for another interpreter) is refused.
@@ -136,6 +138,40 @@ impl Workspaces {
         Ok(workspace)
     }
 
+    /// Make a workspace out of an installed plugin: its manifest, window,
+    /// skill, migrations, a Python engine when it has one, and its executable.
+    /// Files are copied as they are, binary ones included (an icon, a font):
+    /// the assistant reads and writes only the text ones.
+    pub fn adopt(&self, name: &str, installed: &Path) -> Result<Workspace, AppError> {
+        validate_name(name)?;
+        let dir = self.root.join(name);
+        if dir.exists() {
+            return Err(AppError::BadRequest(format!("a plugin workspace named '{name}' already exists")));
+        }
+        let copied = (|| -> std::io::Result<()> {
+            std::fs::create_dir_all(&dir)?;
+            std::fs::copy(installed.join("plugin.toml"), dir.join("plugin.toml"))?;
+            for folder in ["web", "skills", "migrations", "engine", "bin"] {
+                copy_tree(&installed.join(folder), &dir.join(folder))?;
+            }
+            Ok(())
+        })();
+        if let Err(error) = copied {
+            let _ = std::fs::remove_dir_all(&dir);
+            return Err(AppError::Internal(format!("could not copy the installed plugin: {error}")));
+        }
+        let python = dir.join("engine/plugin.py").is_file();
+        let mut workspace = Workspace {
+            name: name.to_string(),
+            dir,
+            meta: Meta { language: if python { "python".into() } else { PREBUILT.into() }, ..Meta::default() },
+        };
+        // What was installed was built from exactly these files.
+        workspace.meta.built = Some(workspace.sources_digest());
+        workspace.save_meta()?;
+        Ok(workspace)
+    }
+
     /// Every workspace, by name, with its language.
     pub fn list(&self) -> Vec<(String, String)> {
         let Ok(entries) = std::fs::read_dir(&self.root) else {
@@ -153,6 +189,26 @@ impl Workspaces {
         found.sort();
         found
     }
+}
+
+/// Copy a directory's regular files, recursively. Symbolic links and hidden
+/// entries are left behind; a missing source is nothing to copy.
+fn copy_tree(from: &Path, to: &Path) -> std::io::Result<()> {
+    let Ok(entries) = std::fs::read_dir(from) else { return Ok(()) };
+    std::fs::create_dir_all(to)?;
+    for entry in entries.flatten() {
+        let kind = entry.file_type()?;
+        let name = entry.file_name();
+        if name.to_string_lossy().starts_with('.') || kind.is_symlink() {
+            continue;
+        }
+        if kind.is_dir() {
+            copy_tree(&entry.path(), &to.join(&name))?;
+        } else {
+            std::fs::copy(entry.path(), to.join(&name))?;
+        }
+    }
+    Ok(())
 }
 
 fn read_meta(dir: &Path) -> Option<Meta> {
@@ -186,6 +242,13 @@ pub struct Workspace {
 impl Workspace {
     pub fn language(&self) -> Option<Language> {
         Language::parse(&self.meta.language)
+    }
+
+    /// A workspace opened from an installed plugin whose engine came without
+    /// its sources: the executable is kept as it is, and what can change is
+    /// the window, the skill, the translations and the manifest.
+    pub fn prebuilt(&self) -> bool {
+        self.meta.language == PREBUILT
     }
 
     pub fn save_meta(&self) -> Result<(), AppError> {
@@ -513,6 +576,42 @@ mod tests {
         assert_eq!(all.list(), vec![("notes".into(), "rust".into()), ("todo".into(), "python".into())]);
         assert!(all.open("missing").is_err());
         assert_eq!(all.open("notes").unwrap().meta.language, "rust");
+    }
+
+    #[test]
+    fn an_installed_plugin_is_adopted_with_everything_it_ships() {
+        let (root, all, _workspace) = workspace();
+        let installed = root.path().join("installed/radio");
+        for dir in ["web/i18n", "skills", "bin", "migrations"] {
+            std::fs::create_dir_all(installed.join(dir)).unwrap();
+        }
+        std::fs::write(installed.join("plugin.toml"), "name = \"radio\"\nversion = \"1.0.0\"\n").unwrap();
+        std::fs::write(installed.join("web/plugin.js"), "export default {};").unwrap();
+        std::fs::write(installed.join("web/icon.png"), [0x89u8, b'P', b'N', b'G', 0, 1, 2]).unwrap();
+        std::fs::write(installed.join("skills/radio.md"), "# Radio").unwrap();
+        std::fs::write(installed.join("bin/radio"), [0x7fu8, b'E', b'L', b'F']).unwrap();
+        std::fs::write(installed.join("web/.hidden"), "x").unwrap();
+        std::os::unix::fs::symlink("/etc/passwd", installed.join("web/link.js")).unwrap();
+
+        let adopted = all.adopt("radio", &installed).unwrap();
+        assert!(adopted.prebuilt());
+        assert_eq!(adopted.language(), None);
+        let paths: Vec<String> = adopted.files().into_iter().map(|entry| entry.path).collect();
+        assert_eq!(paths, ["plugin.toml", "skills/radio.md", "web/icon.png", "web/plugin.js"]);
+        assert_eq!(std::fs::read(adopted.dir.join("bin/radio")).unwrap(), [0x7f, b'E', b'L', b'F']);
+        assert!(!adopted.dir.join("web/link.js").exists(), "links are not followed");
+        // The assistant edits the text files; the binary ones only travel.
+        assert!(adopted.source_path("web/plugin.js").is_ok());
+        assert!(adopted.source_path("web/icon.png").is_err());
+        assert_eq!(adopted.meta.built, Some(adopted.sources_digest()));
+        assert!(all.adopt("radio", &installed).is_err(), "already adopted");
+
+        // A plugin with a Python engine keeps its language.
+        let python = root.path().join("installed/tasks");
+        std::fs::create_dir_all(python.join("engine")).unwrap();
+        std::fs::write(python.join("plugin.toml"), "name = \"tasks\"\n").unwrap();
+        std::fs::write(python.join("engine/plugin.py"), "x = 1\n").unwrap();
+        assert_eq!(all.adopt("tasks", &python).unwrap().language(), Some(Language::Python));
     }
 
     #[test]

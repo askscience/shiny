@@ -57,6 +57,7 @@ impl AppState {
             agent_turns: Default::default(),
             approvals: Default::default(),
             asks: Default::default(),
+            plugin_console: Default::default(),
             supertonic: SupertonicClient::new(
                 config.supertonic_url.clone(),
                 config.supertonic_voice.clone(),

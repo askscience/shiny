@@ -78,6 +78,7 @@ into a header by core so a plugin's own axum can read them.
 | Background | `GET`/`POST`/`DELETE /api/background` |
 | Fonts | `GET /api/fonts` |
 | Chat | `POST /api/chat`, `GET /api/chat/history`, `/api/chat/conversations…` |
+| Plugin builder | `POST /api/plugins/dev/console` (local only: the page reports a plugin window's errors) |
 | Agent | `POST /api/agent`, `POST /api/agent/stop`, `POST /api/agent/approve`, `POST /api/agent/answer` |
 | AI models | `GET /api/ai/models`, `GET /api/ai/thinking`, `GET /api/ollama/models` |
 | Search | `POST /api/search` |

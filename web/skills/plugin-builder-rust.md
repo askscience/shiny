@@ -11,5 +11,6 @@ This chat builds plugins in Rust. The engine is a small crate; the template's fi
 Errors are `AppError` (`AppError::BadRequest("…".into())`, `AppError::NotFound(…)`); `?` works on database and JSON errors. Do not hold a `std::sync::Mutex` across an `.await`, and put CPU-heavy work in `tokio::task::spawn_blocking`.
 
 - `rust_build` — compile the engine. params: `{}`. The first build of a new plugin takes a few minutes; say so before you start it. Errors come with file, line and the compiler's own suggestion (`help`): fix them all, then build again. Warnings do not block.
+- `rust_lint` — run the linter (clippy): the compiler's errors plus advice on code that compiles but is probably wrong. params: `{}`. Optional: skip it if the result says the linter is not installed.
 - `rust_test` — start the built engine as the server would, without installing it, and report whether it starts and which tools and routes it declares. params: `{}`. Run it after a successful build, before packing.
 - `rust_doctor` — what this machine has and lacks for building Rust plugins. params: `{}`

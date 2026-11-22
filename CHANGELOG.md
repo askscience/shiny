@@ -29,6 +29,11 @@
   one file using the standard library and a small kit that speaks the plugin
   protocol; it is checked, started as a test and installed in seconds. A
   Rust plugin is compiled, like the bundled ones.
+- The builder also works on **installed plugins** (not the store's apps, nor
+  the system's own): it opens one, changes its window, skill and
+  translations, and installs the changed copy for the account; puts the
+  previous version back; uninstalls on request. It can try a plugin's tool or
+  route and read the errors its window reported in the page.
 - **Choosing Rust installs what the machine lacks.** The package now ships
   the plugin SDK (`/usr/share/shiny/plugin-sdk`) and recommends `gcc`. When
   the Rust compiler is missing, choosing Rust on the card downloads it into

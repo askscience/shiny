@@ -105,6 +105,9 @@ pub async fn run(builder: &Builder<'_>, action: &str, params: &Value) -> Result<
         "plugin_dev_new" => new_plugin(builder, &workspaces, language, params).await,
         "plugin_dev_list" => Ok(list(&workspaces, &chat, language)),
         "rust_doctor" => Ok(doctor(language)),
+        "plugin_dev_open" => open(builder, &workspaces, &chat, language, params).await,
+        "plugin_dev_rollback" => rollback(builder, &chat, params).await,
+        "plugin_dev_uninstall" => uninstall(builder, &chat, params).await,
         _ => {
             let workspace = match target(builder, &workspaces, &chat, language, params).await? {
                 Ok(workspace) => workspace,
@@ -120,7 +123,16 @@ pub async fn run(builder: &Builder<'_>, action: &str, params: &Value) -> Result<
                 "check_manifest" | "check_web" | "check_i18n" | "check_migrations" | "check_conflicts" => {
                     check(builder, workspace, action, action.strip_prefix("check_"))
                 }
+                "rust_build" | "rust_lint" if workspace.prebuilt() => Ok(refused(
+                    action,
+                    "this plugin was opened from its installed copy and its engine has no sources here: only its \
+                     window, skill, translations and manifest can change.",
+                )),
                 "rust_build" => build(builder, &workspaces, workspace).await,
+                "rust_lint" => lint(builder, &workspaces, workspace).await,
+                "plugin_dev_console" => Ok(console(builder, &workspace, params)),
+                "plugin_dev_call" => call(builder, &workspace, params).await,
+                "plugin_dev_http" => http(builder, &workspace, params).await,
                 "py_check" => py_check(workspace).await,
                 "rust_test" | "py_test" => dry_run(builder, &workspace, action).await,
                 "plugin_dev_pack" => pack(workspace),
@@ -153,7 +165,8 @@ async fn target(
         Ok(workspace) => workspace,
         Err(error) => return Ok(Err(error.to_string())),
     };
-    if workspace.language() != Some(language) {
+    // An adopted plugin has no engine sources: any chat can work on its window.
+    if !workspace.prebuilt() && workspace.language() != Some(language) {
         return Ok(Err(format!(
             "the plugin '{name}' is written in {} and this chat builds in {}. Tell the user it has to be opened in \
              a new chat.",
@@ -323,6 +336,300 @@ fn delete(workspace: &Workspace, params: &Value) -> Result<ActionOutcome, AppErr
     Ok(outcome("plugin_dev_delete", "ok", json!({ "path": path, "deleted": true })))
 }
 
+/// The plugin a command names, else the one this chat is working on.
+fn named(chat: &AgentState, params: &Value) -> Option<String> {
+    text(params, "name").or_else(|| text(params, "plugin")).or_else(|| chat.plugin.clone())
+}
+
+/// Why the builder does not touch an installed plugin, if it does not: the
+/// Craft apps are the store's, and the plugins that manage the system itself
+/// ship with the server.
+fn off_limits(builder: &Builder<'_>, name: &str) -> Option<String> {
+    use crate::plugins::loader::PluginRuntime;
+    let plugins = &builder.state.plugins;
+    if crate::plugins::store::CraftApp::by_id(name).is_some() || plugins.kind_for(name).is_framed() {
+        return Some(format!("'{name}' is an app from the store: the plugin builder does not change those."));
+    }
+    if plugins.is_installed(name) && plugins.loader().runtime_for(name) != PluginRuntime::Process {
+        return Some(format!("'{name}' is part of the system itself and is not changed from here."));
+    }
+    None
+}
+
+/// Make a workspace out of an installed plugin, so the chat can change it.
+async fn open(
+    builder: &Builder<'_>,
+    workspaces: &Workspaces,
+    chat: &AgentState,
+    language: Language,
+    params: &Value,
+) -> Result<ActionOutcome, AppError> {
+    const ACTION: &str = "plugin_dev_open";
+    let name = required(params, "name")?.to_ascii_lowercase();
+    if let Some(reason) = off_limits(builder, &name) {
+        return Ok(refused(ACTION, reason));
+    }
+    let workspace = if workspaces.exists(&name) {
+        workspaces.open(&name)?
+    } else {
+        let Some(installed) = builder.state.plugins.plugin_dir_for(&name) else {
+            return Ok(refused(ACTION, format!("no plugin named '{name}' is installed. list_plugins shows the installed ones.")));
+        };
+        workspaces.adopt(&name, &installed)?
+    };
+    if !workspace.prebuilt() && workspace.language() != Some(language) {
+        return Ok(refused(
+            ACTION,
+            format!(
+                "the plugin '{name}' is written in {} and this chat builds in {}. Tell the user it has to be opened in a new chat.",
+                workspace.language().map_or("another language", Language::label),
+                language.label()
+            ),
+        ));
+    }
+    if chat.plugin.as_deref() != Some(name.as_str()) {
+        state::set_plugin(&builder.state.pool, builder.conversation_id, &builder.traveler.id, &name).await?;
+    }
+    let files: Vec<String> = workspace
+        .files()
+        .into_iter()
+        .map(|entry| entry.path)
+        .filter(|path| workspace.source_path(path).is_ok())
+        .collect();
+    let note = if workspace.prebuilt() {
+        format!(
+            "Opened the installed plugin '{name}'. Its engine has no sources on this machine, so its tools and routes \
+             stay as they are: you can change its window (web/), its skill, its translations and its manifest. Raise \
+             \"version\" in plugin.toml, then check, pack and install: the changed copy replaces the installed one \
+             for this account, and plugin_dev_rollback puts the previous one back."
+        )
+    } else {
+        format!("Opened the plugin '{name}'. Raise \"version\" in plugin.toml before you install a changed copy.")
+    };
+    Ok(outcome(ACTION, "ok", json!({ "plugin": name, "prebuilt": workspace.prebuilt(), "files": files, "note": note })))
+}
+
+/// Put back the copy the last install replaced (`<name>.bak`).
+async fn rollback(builder: &Builder<'_>, chat: &AgentState, params: &Value) -> Result<ActionOutcome, AppError> {
+    const ACTION: &str = "plugin_dev_rollback";
+    let Some(name) = named(chat, params) else {
+        return Ok(refused(ACTION, "name required: the plugin to put back"));
+    };
+    crate::plugins::loader::validate_plugin_name(&name)?;
+    if let Some(reason) = off_limits(builder, &name) {
+        return Ok(refused(ACTION, reason));
+    }
+    let state = builder.state;
+    let plugins_dir = std::path::PathBuf::from(&state.config.plugins_dir);
+    let current = plugins_dir.join(&name);
+    let backup = plugins_dir.join(format!("{name}.bak"));
+    if !backup.join("plugin.toml").is_file() {
+        return Ok(refused(ACTION, format!("there is no previous version of '{name}' to put back.")));
+    }
+    // Swap the two copies, so a rollback can itself be rolled back.
+    let aside = plugins_dir.join(format!("_staging-rollback-{name}"));
+    let _ = std::fs::remove_dir_all(&aside);
+    state.plugins.uninstall(&name).await;
+    let swapped = (|| -> std::io::Result<()> {
+        if current.exists() {
+            std::fs::rename(&current, &aside)?;
+        }
+        std::fs::rename(&backup, &current)?;
+        Ok(())
+    })();
+    if let Err(error) = swapped {
+        if aside.exists() && !current.exists() {
+            let _ = std::fs::rename(&aside, &current);
+        }
+        let _ = state.plugins.install_dir_static(&current, state.plugin_ctx()).await;
+        return Err(AppError::Internal(format!("could not swap the plugin's copies: {error}")));
+    }
+    let loaded = state.plugins.install_dir_static(&current, state.plugin_ctx()).await;
+    if let Err(error) = &loaded {
+        // The previous copy does not load: put the newer one back.
+        let _ = std::fs::rename(&current, &backup);
+        if aside.exists() {
+            let _ = std::fs::rename(&aside, &current);
+            let _ = state.plugins.install_dir_static(&current, state.plugin_ctx()).await;
+        }
+        if let Some(rebuild) = &state.router_rebuild {
+            rebuild();
+        }
+        return Ok(outcome(
+            ACTION,
+            "error",
+            json!({ "error": format!("the previous version does not load ({error}); the current one was kept.") }),
+        ));
+    }
+    if aside.exists() {
+        let _ = std::fs::rename(&aside, &backup);
+    }
+    crate::plugins::installer::log_event(&plugins_dir, &format!("rollback-ok name={name}"));
+    if let Some(rebuild) = &state.router_rebuild {
+        rebuild();
+    }
+    let version = state.plugins.list().into_iter().find(|m| m.name == name).map(|m| m.version.to_string());
+    Ok(outcome(
+        ACTION,
+        "ok",
+        json!({
+            "plugin": name,
+            "version": version,
+            "note": format!("Put back the previous version of '{name}'. The one it replaced is kept: another rollback returns to it."),
+        }),
+    ))
+}
+
+async fn uninstall(builder: &Builder<'_>, chat: &AgentState, params: &Value) -> Result<ActionOutcome, AppError> {
+    const ACTION: &str = "plugin_dev_uninstall";
+    let Some(name) = named(chat, params) else {
+        return Ok(refused(ACTION, "name required: the plugin to uninstall"));
+    };
+    crate::plugins::loader::validate_plugin_name(&name)?;
+    if let Some(reason) = off_limits(builder, &name) {
+        return Ok(refused(ACTION, reason));
+    }
+    if !builder.state.plugins.is_installed(&name) {
+        return Ok(refused(ACTION, format!("no plugin named '{name}' is installed.")));
+    }
+    let (removed, system_fallback) = match crate::plugins::admin_api::uninstall_plugin(builder.state, &name).await {
+        Ok(done) => done,
+        Err(AppError::BadRequest(reason)) => return Ok(refused(ACTION, reason)),
+        Err(error) => return Err(error),
+    };
+    builder.state.plugin_console.clear(&name);
+    let note = if system_fallback {
+        format!("Removed this account's copy of '{name}'. The system's own '{name}' is in use again.")
+    } else {
+        format!("Uninstalled '{name}'. Its workspace (the sources) and its data tables are kept.")
+    };
+    Ok(outcome(ACTION, "ok", json!({ "plugin": name, "removed": removed, "system_plugin_restored": system_fallback, "note": note })))
+}
+
+async fn lint(builder: &Builder<'_>, workspaces: &Workspaces, mut workspace: Workspace) -> Result<ActionOutcome, AppError> {
+    let report = rust::lint(workspaces, &mut workspace, builder.cancel).await?;
+    let mut data = report.to_json();
+    if let Some(map) = data.as_object_mut() {
+        map.remove("built");
+    }
+    data["note"] = json!(match report.end {
+        rust::BuildEnd::Built if report.warning_count == 0 => "No errors and no advice from the linter.".to_string(),
+        rust::BuildEnd::Built => format!("No errors; {} piece(s) of advice, each with its file and line.", report.warning_count),
+        rust::BuildEnd::Failed => format!("{} error(s), each with its file and line.", report.error_count),
+        rust::BuildEnd::Broken => "The linter could not run: see \"detail\". If clippy is not installed, skip this step.".to_string(),
+        rust::BuildEnd::Stopped => "Stopped with the turn.".to_string(),
+        rust::BuildEnd::TimedOut => "Ran out of time and was stopped.".to_string(),
+    });
+    Ok(outcome("rust_lint", "ok", data))
+}
+
+/// The errors the plugin's window reported from the page.
+fn console(builder: &Builder<'_>, workspace: &Workspace, params: &Value) -> ActionOutcome {
+    let entries = builder.state.plugin_console.of(&workspace.name);
+    if params.get("clear").and_then(Value::as_bool) == Some(true) {
+        builder.state.plugin_console.clear(&workspace.name);
+    }
+    let note = if entries.is_empty() {
+        "The window reported no error. It reports only while it is open in the desktop: call show_plugin first if it is closed.".to_string()
+    } else {
+        format!("{} error(s) reported by the window, oldest first.", entries.len())
+    };
+    outcome("plugin_dev_console", "ok", json!({ "plugin": workspace.name, "errors": entries, "note": note }))
+}
+
+/// Largest answer of a tool or a route that is handed back as it is.
+const TRY_OUTPUT_BYTES: usize = 8 * 1024;
+
+fn clip(text: &str) -> (String, bool) {
+    if text.len() <= TRY_OUTPUT_BYTES {
+        return (text.to_string(), false);
+    }
+    let mut end = TRY_OUTPUT_BYTES;
+    while !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    (text[..end].to_string(), true)
+}
+
+/// Call one of the installed plugin's own tools, as the assistant would.
+async fn call(builder: &Builder<'_>, workspace: &Workspace, params: &Value) -> Result<ActionOutcome, AppError> {
+    const ACTION: &str = "plugin_dev_call";
+    let tool = required(params, "tool")?;
+    let registry = builder.state.plugins.tools();
+    if !registry.has(&tool) || registry.owner_of(&tool) != workspace.name {
+        return Ok(refused(
+            ACTION,
+            format!(
+                "'{tool}' is not a tool of the installed plugin '{}'. Its tools: {}.",
+                workspace.name,
+                registry.names_owned_by(&workspace.name).join(", ")
+            ),
+        ));
+    }
+    let arguments = params.get("params").cloned().unwrap_or_else(|| json!({}));
+    let context: shiny_plugin_sdk::context::AgentContext = serde_json::from_value(
+        json!({ "lat": null, "lon": null, "heading": null, "lang": "en", "ollama_model": null }),
+    )
+    .map_err(|e| AppError::Internal(e.to_string()))?;
+    let os_home = builder.state.os_identity_for(builder.traveler).map(|identity| identity.home);
+    let user = &builder.traveler.id;
+    let result = registry
+        .invoke(&tool, &builder.state.plugin_ctx(), user, user, &arguments, &context, os_home.as_deref())
+        .await;
+    Ok(match result {
+        Ok(done) => {
+            let (data, clipped) = clip(&done.data.to_string());
+            outcome(ACTION, "ok", json!({ "tool": tool, "result": done.result, "data": data, "clipped": clipped }))
+        }
+        Err(error) => outcome(
+            ACTION,
+            "ok",
+            json!({ "tool": tool, "result": "error", "error": error.to_string(), "note": format!("{tool} failed: {error}") }),
+        ),
+    })
+}
+
+/// Call one of the installed plugin's own routes, as its window would.
+async fn http(builder: &Builder<'_>, workspace: &Workspace, params: &Value) -> Result<ActionOutcome, AppError> {
+    use tower::ServiceExt;
+    const ACTION: &str = "plugin_dev_http";
+    let path = required(params, "path")?;
+    let method = text(params, "method").unwrap_or_else(|| "GET".into()).to_ascii_uppercase();
+    let base = format!("/api/{}", workspace.name);
+    let bare = path.split(['?', '#']).next().unwrap_or_default();
+    if (bare != base && !bare.starts_with(&format!("{base}/"))) || bare.contains("..") {
+        return Ok(refused(ACTION, format!("only this plugin's own routes can be called: paths under {base}/")));
+    }
+    let Ok(method) = axum::http::Method::from_bytes(method.as_bytes()) else {
+        return Ok(refused(ACTION, "method must be GET, POST, PUT, PATCH or DELETE"));
+    };
+    let Some(token) = builder.traveler.auth_token.as_deref() else {
+        return Ok(refused(ACTION, "this account has no session token to call the route with"));
+    };
+    let body = params.get("body").filter(|body| !body.is_null()).map(Value::to_string).unwrap_or_default();
+    let mut request = axum::http::Request::builder()
+        .method(method)
+        .uri(&path)
+        .header("authorization", format!("Bearer {token}"))
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(body))
+        .map_err(|e| AppError::BadRequest(format!("invalid request: {e}")))?;
+    // The request is made from the server itself.
+    request
+        .extensions_mut()
+        .insert(axum::extract::ConnectInfo(std::net::SocketAddr::from(([127, 0, 0, 1], 0))));
+    let response = crate::api::build_router(builder.state.clone())
+        .oneshot(request)
+        .await
+        .map_err(|e| AppError::Internal(format!("the route could not be called: {e}")))?;
+    let status = response.status().as_u16();
+    let bytes = axum::body::to_bytes(response.into_body(), 4 * 1024 * 1024)
+        .await
+        .map_err(|e| AppError::Internal(format!("the route's answer could not be read: {e}")))?;
+    let (body, clipped) = clip(&String::from_utf8_lossy(&bytes));
+    Ok(outcome(ACTION, "ok", json!({ "status": status, "body": body, "clipped": clipped })))
+}
+
 /// What the checks need to know about the rest of the system.
 fn surroundings(builder: &Builder<'_>, name: &str) -> checks::Surroundings {
     let registry = builder.state.plugins.tools();
@@ -403,7 +710,7 @@ async fn py_check(mut workspace: Workspace) -> Result<ActionOutcome, AppError> {
 /// handshake says whether it starts at all and what it declares. Nothing of
 /// it is called, and it is stopped at once.
 async fn dry_run(builder: &Builder<'_>, workspace: &Workspace, action: &str) -> Result<ActionOutcome, AppError> {
-    let fresh = workspace.meta.built.as_deref() == Some(workspace.sources_digest().as_str());
+    let fresh = workspace.prebuilt() || workspace.meta.built.as_deref() == Some(workspace.sources_digest().as_str());
     if !fresh || crate::plugins::process::find_executable(&workspace.dir, &workspace.name).is_none() {
         return Ok(refused(
             action,

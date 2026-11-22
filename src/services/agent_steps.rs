@@ -715,6 +715,11 @@ pub fn step_label_for_action(action: &str) -> StepText {
         "rust_test" | "py_test" => StepText::new("step.testingPlugin", "Starting the plugin to test it…"),
         "plugin_dev_pack" => StepText::new("step.packingPlugin", "Packing the plugin…"),
         "plugin_dev_install" => StepText::new("step.installingPlugin", "Installing the plugin…"),
+        "plugin_dev_open" => StepText::new("step.openingPluginSources", "Opening the plugin's files…"),
+        "plugin_dev_rollback" => StepText::new("step.rollingBackPlugin", "Putting the previous version back…"),
+        "plugin_dev_uninstall" => StepText::new("step.uninstallingPlugin", "Uninstalling the plugin…"),
+        "plugin_dev_call" | "plugin_dev_http" => StepText::new("step.tryingPlugin", "Trying the plugin…"),
+        "rust_lint" => StepText::new("step.lintingPlugin", "Reviewing the code…"),
         _ => StepText::new("step.working", "Working…"),
     }
 }
@@ -939,7 +944,8 @@ mod tests {
             "youtube_search", "youtube_play", "calc_create", "calc_write", "calc_clear", "calc_read",
             "calc_list", "calc_delete", "slide_create", "slide_write", "slide_edit", "slide_read",
             "slide_list", "slide_delete", "workspaces_unavailable", "ask_user", "plan_propose",
-            "plugin_dev_start", "plugin_dev_new", "plugin_dev_write", "check_all", "check_web", "rust_build", "py_check", "py_test",
+            "plugin_dev_start", "plugin_dev_new", "plugin_dev_write", "check_all", "check_web", "rust_build", "py_check", "py_test", "plugin_dev_open", "plugin_dev_rollback",
+            "plugin_dev_uninstall", "plugin_dev_call", "rust_lint",
             "plugin_dev_pack", "plugin_dev_install", "something_unknown",
         ];
         for action in actions {
