@@ -416,6 +416,55 @@ check('malformed record: no card', renderToolCard('not json') === null && render
   check('untrusted strings land as text', allText(card).includes('<script>alert(1)</script>') && !anyHtml(card));
 }
 
+/* ── plugin builder ─────────────────────────────────────────── */
+
+{
+  check('builder: reading steps get no card',
+    ['plugin_dev_read', 'plugin_dev_tree', 'plugin_dev_list', 'plugin_dev_status', 'plugin_dev_logs']
+      .every((action) => renderToolCard({ action, result: 'ok', data: {} }) === null));
+  check('builder: its other steps are not housekeeping, unlike plugin_activate',
+    !isHousekeepingTool('plugin_dev_check') && isHousekeepingTool('plugin_activate'));
+  check('builder: family', toolCardFamily('plugin_dev_check') === 'builder' && toolCardFamily('rust_build') === 'builder');
+
+  const failed = renderToolCard({
+    action: 'plugin_dev_check', result: 'ok',
+    data: { ok: false, errors: [
+      { check: 'web', file: 'web/plugin.js', line: 12, message: 'import "/ui/index.js" is not relative' },
+      { check: 'manifest', file: 'plugin.toml', message: 'description is missing' },
+    ] },
+  });
+  check('builder check: error count in the label', label(failed) === 'Plugin · 2 errors', label(failed));
+  const rowTitles = failed.findAll('.tool-card-row-title').map((r) => r.textContent);
+  check('builder check: each error with its file and line',
+    rowTitles[0] === 'web/plugin.js:12' && rowTitles[1] === 'plugin.toml', rowTitles.join('|'));
+
+  const passed = renderToolCard({ action: 'plugin_dev_check', result: 'ok', data: { ok: true, errors: [] } });
+  check('builder check: passed is one line', label(passed) === 'Plugin · Checks passed' && passed.children.length === 1);
+
+  const broken = renderToolCard({
+    action: 'rust_build', result: 'ok',
+    data: { built: false, error_count: 1, errors: [{ file: 'src/store.rs', line: 20, message: 'mismatched types' }] },
+  });
+  check('builder build: compiler errors listed', label(broken) === 'Plugin · 1 error'
+    && broken.find('.tool-card-row-title')?.textContent === 'src/store.rs:20', label(broken));
+  const built = renderToolCard({ action: 'rust_build', result: 'ok', data: { built: true, seconds: 14, errors: [] } });
+  check('builder build: built in N s', label(built) === 'Plugin · Built in 14 s', label(built));
+
+  const installed = renderToolCard({ action: 'plugin_dev_install', result: 'ok', data: { plugin: 'notes', version: '0.1.0' } });
+  check('builder install: names the plugin', label(installed) === 'Plugin · Installed' && allText(installed).includes('notes 0.1.0'));
+  dispatched.length = 0;
+  installed.find('.tool-card-open')?.click();
+  check('builder install: the arrow opens the new plugin',
+    dispatched[0]?.type === 'plugin:focus' && dispatched[0]?.detail?.name === 'notes');
+
+  const edited = renderToolCard({ action: 'plugin_dev_patch', result: 'ok', data: { path: 'src/tools.rs', replaced: 1 } });
+  check('builder edit: one line with the file', label(edited) === 'Plugin · Edited · src/tools.rs' && edited.children.length === 1);
+  const refusedCard = renderToolCard({
+    action: 'plugin_dev_write', result: 'refused', data: { reason: 'the user has not approved a plan in this chat.' },
+  });
+  check('builder: a refusal says why', allText(refusedCard).includes('has not approved a plan'));
+}
+
 if (failures) {
   console.error(`\n${failures} check(s) failed`);
   process.exit(1);

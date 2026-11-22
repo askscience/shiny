@@ -86,6 +86,8 @@ The shell is split by concern. Grouped:
 | `chatHistory.js` | Conversation list + message bubbles. |
 | `voice.js`, `transcriptGuard.js`, `textInput.js`, `sphere.js` | Voice bar, STT/TTS wiring, the compose chat panel (pending wheel + live step line, "Thinking" fold, image/song blocks, the terminal command approval card, close), the sphere. |
 | `dockStep.js`, `voiceDots.js`, `voiceDotGlyphs.js`, `toolIcons.js` | The assistant's steps and the voice bar: `dockStep.js` broadcasts each step, with its tool, as `agent:step` (nothing is painted; the old text bubble above the voice bar is gone), the bar's dot grid that follows the audio and the tools (four effects, also mounted as the Settings preview), its dot-matrix tool marks, and the tool → catalogue-icon map the tool cards use. |
+| `toolCards.js` | One card per finished tool call, by family (mail, files, calendar…); the `builder` family shows the plugin builder's steps: what was created or edited, the errors of a check or a build with their file and line, the installed plugin with its open arrow. |
+| `askCards.js` | The cards the assistant waits on: a question, a plan to approve, a choice between options (`ask` events, answered through `/api/agent/answer`); the same renderer rebuilds them from the stored `ask` rows. |
 | `thinkToggle.js` | Chat head's brain button + voice-bar menu entry: Ollama thinking on/off, gated by the model's capability (`GET /api/ai/thinking`). |
 | `artifacts.js`, `artifactStore.js` | Artifact cards + dock. |
 | `files.js` | `saveOrDownload` / `openWithPlugin` desktop integration. |

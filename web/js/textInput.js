@@ -1,11 +1,12 @@
 import { controlButton } from '../ui/components/button.js';
 import { setSphereState } from './sphere.js';
-import { currentConversationId, loadConversationMessages, stopActiveTurn, respondToApproval } from './agent.js';
+import { currentConversationId, loadConversationMessages, stopActiveTurn, respondToApproval, respondToAsk } from './agent.js';
 import { sanitizeHtml } from './sanitize.js';
 import { ensureMarked } from './vendorLoader.js';
 import { icon, button, cardEnter, notify } from '../ui/index.js';
 import { t } from './i18n.js';
 import { renderToolCard, insertToolCard } from './toolCards.js';
+import { makeAskCard, renderAskRecord, lineText } from './askCards.js';
 
 const compose = document.getElementById('compose-mode');
 const field = document.getElementById('text-input-field');
@@ -203,6 +204,8 @@ function showThinking(text) {
  * ────────────────────────────────────────────────────────── */
 
 const approvalCards = new Set();
+// Live question / plan / choice cards (see "Questions, plans and choices").
+const askCards = new Set();
 
 /** The question a card asks: a shell command, or a gated file/mail action. */
 function approvalTitle(action) {
@@ -250,10 +253,12 @@ function announceApproval(approval) {
 
 /** The voice bar breathes while a question waits behind a closed chat. */
 function syncAsking() {
-  const asking = approvalCards.size > 0 && !isOpen;
+  for (const ask of [...askCards]) if (ask.resolved) askCards.delete(ask);
+  const waiting = approvalCards.size + askCards.size;
+  const asking = waiting > 0 && !isOpen;
   if (asking) document.documentElement.dataset.agentAsks = '1';
   else delete document.documentElement.dataset.agentAsks;
-  if (!approvalCards.size && approvalNotice) {
+  if (!waiting && approvalNotice) {
     approvalNotice.classList.add('is-leaving');
     const el = approvalNotice;
     setTimeout(() => el.remove(), 260);
@@ -406,6 +411,56 @@ function expireApprovalCards() {
   for (const card of [...approvalCards]) {
     settleApprovalCard(card, 'expired', t('chat.approval.expired', null, 'Turn ended'));
   }
+  for (const ask of [...askCards]) ask.expire();
+  askCards.clear();
+  syncAsking();
+}
+
+/* ── Questions, plans and choices ────────────────────────────
+ * The assistant may stop to ask (askCards.js): the card sits above the
+ * waiting answer like a tool card, and the turn goes on when it is answered.
+ * The same card is stored with the conversation, answer included.
+ * ────────────────────────────────────────────────────────── */
+
+/** An `ask` event of the running turn. */
+function showAskCard(ask) {
+  if (!conversationEl) return;
+  const live = makeAskCard(ask, {
+    send: async (reply) => {
+      const res = await respondToAsk({
+        turnId: ask.turnId,
+        requestId: ask.request_id,
+        option: reply.option,
+        text: reply.text,
+      });
+      return !!res?.success;
+    },
+    onSettled: syncAsking,
+  });
+  if (!live) return;
+  conversationEl.insertBefore(live.card, liveCardAnchor());
+  askCards.add(live);
+  void cardEnter(live.card);
+  scrollConversation();
+  if (isOpen) {
+    live.focus();
+  } else {
+    // A closed chat stays closed: the same quiet notice a command uses.
+    approvalNotice?.remove();
+    approvalNotice = notify({
+      icon: 'ui/message-circle',
+      title: t('chat.ask.waiting', null, 'The assistant has a question for you'),
+      body: lineText(ask.title),
+      actions: [{ label: t('chat.approval.open', null, 'Open chat'), action: OPEN_FOR_APPROVAL }],
+    });
+  }
+  syncAsking();
+}
+
+/** A question, plan or choice stored in the conversation. */
+function renderStoredAsk(raw) {
+  const card = renderAskRecord(raw);
+  if (card) conversationEl?.insertBefore(card, composer || null);
 }
 
 /* ── Tool cards ──────────────────────────────────────────────
@@ -449,6 +504,7 @@ function clearConversation() {
     ?.querySelectorAll(':scope > .compose-bubble, :scope > .compose-image-block, :scope > .compose-song-block, :scope > .compose-approval, :scope > .tool-card')
     .forEach((b) => b.remove());
   approvalCards.clear();
+  askCards.clear();
   syncAsking();
   renderedMedia.clear();
   assistantBubble = null;
@@ -762,6 +818,7 @@ async function loadConversation() {
   for (const m of entries) {
     if (m.role === 'approval') renderApprovalRecord(m.content);
     else if (m.role === 'tool') renderToolRecord(m.content);
+    else if (m.role === 'ask') renderStoredAsk(m.content);
     else if (m.role === 'media') renderMediaRecord(m.content);
     else renderBubble(m.role === 'user' ? 'user' : 'assistant', m.content, m.thinking || '');
   }
@@ -974,6 +1031,7 @@ async function submitTextInput() {
         if (!isOpen) announceApproval(approval);
         syncAsking();
       },
+      onAsk: (ask) => showAskCard(ask),
       onDone: () => {
         field.value = '';
         finishSending();

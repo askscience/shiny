@@ -54,6 +54,22 @@ pub struct AgentRequest {
     /// an unapproved terminal command.
     #[serde(default)]
     pub approve_tools: bool,
+    /// True when this client can show a question, plan or choice card
+    /// mid-turn and answer it (`POST /api/agent/answer`). A turn that cannot
+    /// asks aloud when it is spoken, and in its reply otherwise.
+    #[serde(default)]
+    pub ask_cards: bool,
+}
+
+#[derive(Deserialize)]
+pub struct AgentAnswerRequest {
+    pub turn_id: String,
+    /// Id of the `ask` SSE event being answered.
+    pub request_id: String,
+    /// Id of the option picked, when one was.
+    pub option: Option<String>,
+    /// Text typed in the card, when it has a field.
+    pub text: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -174,6 +190,10 @@ enum AgentStreamEvent {
         action: String,
         command: String,
     },
+    /// The turn is parked on a question, a plan or a choice until the user
+    /// answers. The client shows the card and posts the answer to
+    /// `/api/agent/answer`.
+    Ask(crate::services::ask::AskPrompt),
     /// A tool's artifact, saved and streamed while the turn is still running.
     /// The UI ingests it immediately, so a plugin window opened by this card
     /// exists for the rest of the turn (the Browser's AI tab control depends
@@ -450,6 +470,8 @@ struct PreparedAgent {
     turn_id: Option<String>,
     /// The client can render the terminal allow/deny prompt mid-turn.
     can_approve: bool,
+    /// The client can render a question, plan or choice card mid-turn.
+    can_ask: bool,
 }
 
 /// Should this turn be refused a shell? A remote (Iroh/Funnel) client only gets
@@ -804,6 +826,27 @@ async fn prepare_agent(
     } else {
         None
     };
+    // What this chat is working on: the language its plugins are built in,
+    // the plan the assistant proposed. A question the last turn left open (a
+    // plan read aloud, a card nobody answered) is answered by this message,
+    // and that is decided here, in code, before the model reads anything.
+    let (work, settled) = crate::services::plugin_dev::state::settle_pending(
+        &state.pool,
+        &conversation_id,
+        &traveler.id,
+        &body.message,
+    )
+    .await?;
+    let work_block = crate::services::plugin_dev::state::prompt_block(&work, settled.as_deref());
+    // A chat that has its language also has the builder's command docs, for
+    // that language only: the other language's commands are not even named.
+    let skill = match work.language {
+        Some(language) => format!(
+            "{skill}\n\n---\n\n{}",
+            crate::services::plugin_dev::skill_docs(language)
+        ),
+        None => skill,
+    };
     let history_block = if history.is_empty() {
         String::new()
     } else {
@@ -845,7 +888,7 @@ async fn prepare_agent(
          \n\
          ## Tools\n{skill}\n\n\
          ## Context\n{today_line}\n{focus_line}User name: {user_first}\n{location_line}\n{trip_line}\nDiary: {diary_line}{context_block}\n\
-         Mode: {mode} — answer fully and clearly.{history_block}{plugin_windows_block}{craft_block}{focus_block}{plugin_catalog_block}{desktop_block}",
+         Mode: {mode} — answer fully and clearly.{history_block}{work_block}{plugin_windows_block}{craft_block}{focus_block}{plugin_catalog_block}{desktop_block}",
         ai_name = ai_name,
         persona = persona,
         lang_name = language_name(&lang),
@@ -863,6 +906,7 @@ async fn prepare_agent(
         context_block = context_block,
         mode = mode,
         history_block = history_block,
+        work_block = work_block,
         plugin_windows_block = plugin_windows_block,
         craft_block = craft_block,
         focus_block = focus_block,
@@ -872,10 +916,11 @@ async fn prepare_agent(
 
     Ok(PreparedAgent {
         trip_id: active_trip.as_ref().map(|t| t.id.clone()),
-        conversation_id,
+        conversation_id: conversation_id.clone(),
         requested_model,
         turn_id: body.turn_id.filter(|id| !id.trim().is_empty()),
         can_approve: body.approve_tools,
+        can_ask: body.ask_cards,
         input: AgentRunInput {
             message: body.message,
             mode,
@@ -895,6 +940,12 @@ async fn prepare_agent(
             approval: None,
             remote_shell_blocked: remote_shell_blocked(state, &traveler.id, headers).await,
             voice_consent,
+            // Attached by the transport handler, like `approval`.
+            ask: None,
+            remote: crate::api::remote::is_remote(headers),
+            work_block,
+            conversation_id,
+            builder: work.language.is_some(),
         },
     })
 }
@@ -941,6 +992,15 @@ pub async fn handle_agent(
     // unapproved (an "allow for this chat" conversation still runs).
     prepared.input.approval = Some(crate::services::approval::ApprovalGate::new(
         state.approvals.clone(),
+        turn_id.clone().unwrap_or_default(),
+        traveler.id.clone(),
+        conversation_id.clone(),
+        false,
+        Box::new(|_| {}),
+    ).spoken(prepared.input.voice));
+    // Nor can it show a question card: a spoken turn asks aloud instead.
+    prepared.input.ask = Some(crate::services::ask::AskGate::new(
+        state.asks.clone(),
         turn_id.clone().unwrap_or_default(),
         traveler.id.clone(),
         conversation_id.clone(),
@@ -1159,6 +1219,33 @@ pub async fn handle_agent_approve(
     })))
 }
 
+/// Longest text a card's field is read up to.
+const MAX_ANSWER_CHARS: usize = 2000;
+
+/// Answer the question, plan or choice card the turn is waiting on.
+pub async fn handle_agent_answer(
+    State(state): State<AppState>,
+    Extension(traveler): Extension<Traveler>,
+    Json(body): Json<AgentAnswerRequest>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let clean = |value: Option<String>, max: usize| {
+        value
+            .map(|text| text.trim().chars().take(max).collect::<String>())
+            .filter(|text| !text.is_empty())
+    };
+    let reply = crate::services::ask::AskReply {
+        option: clean(body.option, 64),
+        text: clean(body.text, MAX_ANSWER_CHARS),
+    };
+    // False when the turn already ended, the card was answered twice, or it
+    // belongs to another account: nothing is waiting for this answer.
+    let answered = state.asks.resolve(&body.turn_id, &body.request_id, &traveler.id, reply);
+    Ok(Json(serde_json::json!({
+        "success": answered,
+        "data": { "answered": answered },
+    })))
+}
+
 pub async fn handle_agent_stream(
     State(state): State<AppState>,
     Extension(traveler): Extension<Traveler>,
@@ -1180,6 +1267,7 @@ pub async fn handle_agent_stream(
     let ai = ai.clone();
     let trip_id = prepared.trip_id.clone();
     let can_approve = prepared.can_approve;
+    let can_ask = prepared.can_ask;
     let mut input = prepared.input;
     let conversation_id = prepared.conversation_id.clone();
     let user_message = input.message.clone();
@@ -1217,6 +1305,7 @@ pub async fn handle_agent_stream(
         let emit_step = emit.clone();
         let emit_thinking = emit.clone();
         let emit_approval = emit.clone();
+        let emit_ask = emit.clone();
         let emit_artifact = emit.clone();
         let emit_tool = emit.clone();
 
@@ -1236,6 +1325,16 @@ pub async fn handle_agent_stream(
                     command: prompt.command,
                 })
             }),
+        ).spoken(input.voice));
+        // Questions, plans and choices use the same kind of round trip, with
+        // an `ask` event answered through `/api/agent/answer`.
+        input.ask = Some(crate::services::ask::AskGate::new(
+            state.asks.clone(),
+            turn_id.clone().unwrap_or_default(),
+            traveler.id.clone(),
+            conversation_id.clone(),
+            can_ask,
+            Box::new(move |prompt| emit_ask(AgentStreamEvent::Ask(prompt))),
         ).spoken(input.voice));
 
         match run_agent(

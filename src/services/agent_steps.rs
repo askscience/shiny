@@ -591,6 +591,31 @@ pub fn describe_tool_step(action: &str, result: &str, data: &Value) -> String {
             }
             note
         }
+        // The dialog actions (`plugin_dev::dialog`) say in words what the user
+        // decided and what to do next: that sentence is the result.
+        "ask_user" | "plan_propose" | "plugin_dev_start"
+            if data.get("note").and_then(|v| v.as_str()).is_some() =>
+        {
+            data.get("note").and_then(|v| v.as_str()).unwrap_or_default().to_string()
+        }
+        // A builder command leads with its verdict in words ("3 errors to
+        // fix"), then gives the details the verdict refers to.
+        builder
+            if crate::services::plugin_dev::module_of(builder).is_some()
+                && data.get("note").and_then(|v| v.as_str()).is_some() =>
+        {
+            let note = data.get("note").and_then(|v| v.as_str()).unwrap_or_default();
+            let mut details = data.clone();
+            if let Some(map) = details.as_object_mut() {
+                map.remove("note");
+            }
+            let ser = serde_json::to_string(&details).unwrap_or_default();
+            if ser == "{}" {
+                format!("{builder}: {note}")
+            } else {
+                format!("{builder}: {note}\n{ser}")
+            }
+        }
         _ => {
             // Unknown/plugin tools: the outcome DATA is the result — hand the
             // FULL payload to the model so nothing is lost.
@@ -676,6 +701,17 @@ pub fn step_label_for_action(action: &str) -> StepText {
         "slide_list" => StepText::new("step.listingPresentations", "Listing presentations…"),
         "slide_delete" => StepText::new("step.deletingPresentation", "Deleting presentation…"),
         "workspaces_unavailable" => StepText::new("step.workspacesUnavailable", "Workspaces are unavailable on this screen"),
+        "ask_user" => StepText::new("step.askingUser", "Waiting for your answer…"),
+        "plan_propose" => StepText::new("step.proposingPlan", "Waiting for you to review the plan…"),
+        "plugin_dev_start" => StepText::new("step.startingPluginBuilder", "Opening the plugin builder…"),
+        "plugin_dev_new" => StepText::new("step.creatingPlugin", "Creating the plugin…"),
+        "plugin_dev_write" | "plugin_dev_patch" | "plugin_dev_delete" => {
+            StepText::new("step.editingPlugin", "Editing the plugin…")
+        }
+        "plugin_dev_check" => StepText::new("step.checkingPlugin", "Checking the plugin…"),
+        "rust_build" => StepText::new("step.buildingPlugin", "Compiling the plugin…"),
+        "plugin_dev_pack" => StepText::new("step.packingPlugin", "Packing the plugin…"),
+        "plugin_dev_install" => StepText::new("step.installingPlugin", "Installing the plugin…"),
         _ => StepText::new("step.working", "Working…"),
     }
 }
@@ -772,6 +808,9 @@ pub fn done_label_for_action(action: &str) -> StepText {
         "slide_read" => StepText::new("step.done.slideRead", "Deck read"),
         "slide_list" => StepText::new("step.done.slideList", "Decks listed"),
         "slide_delete" => StepText::new("step.done.slideDelete", "Deck gone"),
+        "ask_user" => StepText::new("step.done.askUser", "Got your answer"),
+        "plan_propose" => StepText::new("step.done.planPropose", "Plan reviewed"),
+        "plugin_dev_start" => StepText::new("step.done.pluginDevStart", "Plugin builder ready"),
         _ => stable_pick(action, DONE_QUIPS),
     }
 }
@@ -896,7 +935,9 @@ mod tests {
             "workspace_create", "workspace_remove", "workspace_switch", "workspace_move",
             "youtube_search", "youtube_play", "calc_create", "calc_write", "calc_clear", "calc_read",
             "calc_list", "calc_delete", "slide_create", "slide_write", "slide_edit", "slide_read",
-            "slide_list", "slide_delete", "workspaces_unavailable", "something_unknown",
+            "slide_list", "slide_delete", "workspaces_unavailable", "ask_user", "plan_propose",
+            "plugin_dev_start", "plugin_dev_new", "plugin_dev_write", "plugin_dev_check", "rust_build",
+            "plugin_dev_pack", "plugin_dev_install", "something_unknown",
         ];
         for action in actions {
             let step = step_label_for_action(action);

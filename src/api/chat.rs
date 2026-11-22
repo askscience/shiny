@@ -320,6 +320,8 @@ pub async fn delete_conversation(
         .await
         .map_err(AppError::Database)?;
 
+    crate::services::plugin_dev::state::forget(&state.pool, &path.id, &traveler.id).await?;
+
     sqlx::query("DELETE FROM chat_conversations WHERE id = ?1 AND traveler_id = ?2")
         .bind(&path.id)
         .bind(&traveler.id)

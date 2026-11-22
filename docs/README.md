@@ -78,6 +78,7 @@ small number of areas; each area has its own index and cross-links.
 | [Architecture](plugins/architecture.md) | Lifecycle, discovery, hot router swap, uninstall. |
 | [Authoring](plugins/authoring.md) | Build your first plugin, step by step. |
 | [API reference](plugins/reference.md) | Traits, types, manifest, routes, outcomes. |
+| [The plugin builder](plugins/builder.md) | The assistant's commands for building a plugin from a conversation. |
 | [Runtime & ABI](plugins/runtime-abi.md) | The dlopen boundary, `bridged()`, SQLite rules. |
 | [Migrations](plugins/migrations.md) | Per-plugin schema and the immutability rule. |
 | [Security](plugins/security.md) | Trust model, signatures, the install log. |

@@ -1,0 +1,11 @@
+name = "@@NAME@@"
+version = "0.1.0"
+api_level = 1
+runtime = "process"
+description = "@@DESCRIPTION@@"
+summary = "@@TITLE@@: @@DESCRIPTION@@"
+author = "@@AUTHOR@@"
+migrations_dir = "migrations"
+skills_dir = "skills"
+web_dir = "web"
+category = "@@CATEGORY@@"

@@ -16,13 +16,16 @@ and [`008_chat_indexes.sql`](../../migrations/008_chat_indexes.sql).
 | Table | Columns (essence) |
 |---|---|
 | `chat_conversations` | `id`, `traveler_id`, `title`, `created_at`, `updated_at`, `terminal_auto_approve` |
+| `chat_agent_state` | `conversation_id`, `traveler_id`, `dev_language`, `dev_plugin`, `plan`, `plan_state`, `plan_remark`, `pending`, `updated_at` |
 | `chat_messages` | `id`, `traveler_id`, `conversation_id`, `role`, `content`, `thinking`, `timestamp` |
 
-`role` is `user`, `assistant`, `system`, `approval`, `tool` or `media`.
+`role` is `user`, `assistant`, `system`, `approval`, `tool`, `ask` or `media`.
 **`system` rows are invisible notes** written for the model; the conversation
 list/detail endpoints filter them out, so the user never sees them as bubbles.
-`approval`, `tool` and `media` are mid-turn UI rows: a terminal command (JSON
-`{command, decision}`), one finished tool call (the tool-card record
+`approval`, `tool`, `ask` and `media` are mid-turn UI rows: a terminal command (JSON
+`{command, decision}`), a question, plan or choice the assistant put to the
+user (the `ask` event's card plus `answer: {option, text}`, or
+`abandoned: true` when the turn ended first), one finished tool call (the tool-card record
 `{action, result, plugin?, data?, params?, capped?}` — capped and stripped of
 credentials by `src/services/tool_cards.rs`, the same object the `tool` SSE
 event carries) and a generated image/track (JSON `{kind, url, file, path,
@@ -38,7 +41,7 @@ for that reply, when thinking was on. It is returned by
 disclosure above the answer — the same fold the live turn shows.
 
 A turn's rows are inserted in visual order in one transaction: the user message,
-any `approval` and `tool` rows in the order they happened, the assistant reply,
+any `approval`, `tool` and `ask` rows in the order they happened, the assistant reply,
 then any `media` rows. That is what makes a reopened chat show the terminal
 commands, tool cards and generated pictures in the same place the live turn
 showed them.
@@ -145,6 +148,20 @@ AI actions — Word's AI menu sends requests like *In the Word document "…":
 improve the selected text …* with the selection quoted; the agent acts on the
 open document (the window marks it with `POST /api/documents/:id/opened`, see
 the Word plugin's [tools](../../plugins/word/docs/tools.md)).
+
+A question, a plan or a choice (`web/js/askCards.js`) is a tool card the
+assistant waits on: the mono header names its kind, a plan lists its steps
+with Cancel / Ask for changes / Approve and an optional remark, a choice has
+one row per option with what it still needs. Answered, it keeps what was
+asked and shows the outcome in its header; it is stored as an `ask` row and
+rebuilt the same way on reopen. Behind a closed chat it uses the same quiet
+notification and breathing voice bar as a command.
+
+`chat_agent_state` is what a conversation is working on between turns: the
+language its plugins are built in, the plan the assistant proposed and where
+it stands, and a question whose turn ended before the answer. It is deleted
+with the conversation. See
+[agent § Questions, plans and choices](agent.md#47-questions-plans-and-choices).
 
 The approval card is a live thread element, not a modal: it appears above the
 composer exactly where the command will run, shows the command verbatim, and

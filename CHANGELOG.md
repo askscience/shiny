@@ -2,6 +2,36 @@
 
 ## [Unreleased]
 
+### Added
+
+- **The assistant can ask before it acts.** Three new core actions show a
+  card in the chat and wait for the answer, in the tool cards' own look:
+  - a **question** (`ask_user`), with suggested answers and a text field;
+  - a **plan** (`plan_propose`): the steps the assistant intends to take,
+    with Approve, Ask for changes and Cancel. Only Approve approves it;
+  - the **Python / Rust choice** that opens the plugin builder in a chat
+    (`plugin_dev_start`): each language says whether this machine is ready
+    for it and, if not, what is missing.
+  By voice there is no card: the assistant asks aloud and the next message
+  answers. A plan read aloud is approved by a plain yes and cancelled by a
+  plain no; anything else is taken as changes.
+- **The assistant builds plugins.** Asked for a new app, it opens the plugin
+  builder in the chat and works with a fixed set of core commands, never the
+  terminal: it creates the plugin from a working template, writes its
+  sources, checks them (manifest, window, translations, migrations, clashes
+  with other plugins), compiles the engine, packs the `.tar.gz` and installs
+  it. Errors come back with their file and line, the compiler's included.
+  Nothing is written before the plan is approved, the install asks for
+  consent, and none of it works over a remote connection. Each step shows as
+  a card in the chat. Rust plugins only for now, on a machine that has the
+  Rust compiler and the plugin SDK sources; see
+  [the plugin builder](docs/plugins/builder.md).
+- The language chosen for building plugins belongs to the conversation: it is
+  asked once per chat, kept when the chat is reopened, and another chat
+  chooses on its own. The plan and its state are kept the same way.
+- `POST /api/agent/answer`, the `ask` stream event and the `ask_cards` request
+  flag ([chat & agent API](docs/api/chat-agent.md)).
+
 ## [0.3.0] - 2026-11-22
 
 ### Added

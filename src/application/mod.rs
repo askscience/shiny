@@ -56,6 +56,7 @@ impl AppState {
             diary_gen,
             agent_turns: Default::default(),
             approvals: Default::default(),
+            asks: Default::default(),
             supertonic: SupertonicClient::new(
                 config.supertonic_url.clone(),
                 config.supertonic_voice.clone(),

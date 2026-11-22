@@ -212,6 +212,9 @@ pub struct AppState {
     /// Terminal commands waiting for the user's allow/deny answer, plus the
     /// conversations where commands were allowed for the whole chat.
     pub approvals: crate::services::approval::ApprovalRegistry,
+    /// Questions, plans and choices the assistant put to the user mid-turn,
+    /// waiting for their answer (`services::ask`).
+    pub asks: crate::services::ask::AskRegistry,
     pub supertonic: SupertonicClient,
     /// faster-whisper streaming STT sidecar (optional; Vosk is the fallback).
     pub whisper: WhisperClient,
@@ -733,6 +736,8 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/search", post(search::search_web))
         .route("/api/agent", post(agent::handle_agent_dispatch))
         .route("/api/agent/approve", post(agent::handle_agent_approve))
+        // Answer the question, plan or choice card the turn is waiting on.
+        .route("/api/agent/answer", post(agent::handle_agent_answer))
         // Stop the answer currently being generated (voice barge-in, or the
         // stop button in text mode).
         .route("/api/agent/stop", post(agent::handle_agent_stop))

@@ -368,6 +368,10 @@ async function readAgentStream(res, onStep, onThinking, onApproval, onArtifact, 
             action: event.action,
             command: event.command,
           });
+        } else if (event.type === 'ask' && event.request_id) {
+          // A question, a plan or a choice: the turn is parked until the card
+          // is answered through `/api/agent/answer`.
+          onAsk?.(event);
         } else if (event.type === 'artifact' && event.data) {
           onArtifact?.(event.data);
         } else if (event.type === 'tool' && event.action) {
@@ -389,7 +393,7 @@ async function readAgentStream(res, onStep, onThinking, onApproval, onArtifact, 
   throw new ApiError(t('agent.streamEnded', null, 'The assistant stopped responding unexpectedly'), 500);
 }
 
-async function requestAgent(body, onStep, signal, onThinking, onApproval, onArtifact, onTool) {
+async function requestAgent(body, onStep, signal, onThinking, onApproval, onArtifact, onTool, onAsk) {
   const res = await apiRequest('/api/agent', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -627,8 +631,24 @@ export async function respondToApproval({ turnId, requestId, decision }) {
   });
 }
 
+/**
+ * Answer the question, plan or choice card the turn is waiting on:
+ * the option picked, the text typed, or both.
+ */
+export async function respondToAsk({ turnId, requestId, option, text }) {
+  return apiFetch('/api/agent/answer', {
+    method: 'POST',
+    body: JSON.stringify({
+      turn_id: turnId,
+      request_id: requestId,
+      option: option || null,
+      text: text || null,
+    }),
+  });
+}
+
 /** Text compose mode: streams reply into compose panel */
-export async function sendToAgentCompose(message, context, { onStream, onDone, onError, onStopped, onThinking, onApproval }) {
+export async function sendToAgentCompose(message, context, { onStream, onDone, onError, onStopped, onThinking, onApproval, onAsk }) {
   onStream?.('');
   setAgentAwaiting(true);
   setSphereState('processing');
@@ -641,6 +661,9 @@ export async function sendToAgentCompose(message, context, { onStream, onDone, o
   // The text chat can render the terminal allow/deny card mid-turn; a turn
   // without this flag never runs an unapproved command.
   body.approve_tools = true;
+  // It can show a question, plan or choice card too; a turn without this
+  // flag asks aloud (voice) or in its reply.
+  body.ask_cards = true;
 
   try {
     const res = await requestAgent(
@@ -651,6 +674,7 @@ export async function sendToAgentCompose(message, context, { onStream, onDone, o
       (approval) => onApproval?.({ ...approval, turnId: turn.id }),
       handleAgentArtifact,
       appendToolCard,
+      (ask) => onAsk?.({ ...ask, turnId: turn.id }),
     );
 
     if (activeTurn !== turn) return null; // stopped while waiting

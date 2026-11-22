@@ -13,6 +13,7 @@ import {
 } from './agent.js';
 import { t } from './i18n.js';
 import { renderToolCard, insertToolCard } from './toolCards.js';
+import { renderAskRecord } from './askCards.js';
 
 let panel = null;
 /** The list pane and the messages pane: one at a time on a phone or in a
@@ -146,6 +147,12 @@ async function openMessages(c) {
     if (m.role === 'tool') {
       const card = renderToolCard(m.content);
       if (card) insertToolCard(msgs, card);
+      continue;
+    }
+    // A question, plan or choice the assistant put to the user, as answered.
+    if (m.role === 'ask') {
+      const card = renderAskRecord(m.content);
+      if (card) msgs.appendChild(card);
       continue;
     }
     const isUser = m.role === 'user';

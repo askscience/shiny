@@ -92,6 +92,7 @@ non-idempotent `ALTER TABLE` statements with `pragma_table_info` probes.
 | — | inline `ALTER` | if `chat_messages.conversation_id` missing | adds `conversation_id TEXT` (guarded; file 007 does **not** add it). |
 | 008 | [`migrations/008_chat_indexes.sql`](../../migrations/008_chat_indexes.sql) | always | index on `chat_messages(conversation_id, timestamp)`. |
 | 009 | [`migrations/009_linux_identity.sql`](../../migrations/009_linux_identity.sql) | if `travelers.unix_user` missing | adds `unix_user`, `unix_uid`, `unix_home`, `auth_source`; partial unique index on `unix_user`. |
+| 014 | [`migrations/014_chat_agent_state.sql`](../../migrations/014_chat_agent_state.sql) | always | `chat_agent_state`: a conversation's plugin-building language, its plan and a question left open. |
 
 Guards read the schema directly:
 

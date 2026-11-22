@@ -984,6 +984,150 @@ button.tool-card-row:focus-visible .tool-card-row-title { color: var(--accent); 
 .tool-card:has(> .tool-card-head:only-child) { padding-bottom: 10px; }
 
 /* The history modal stacks them between its bubbles. */
+/* ── Question, plan and choice cards (askCards.js) ───────────
+   A tool card the assistant waits on. It keeps the tool card's plate and mono
+   header; what it adds is the title, a plan's numbered steps, the options and
+   the compact buttons of the command approval. */
+.ask-card-title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.ask-card-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0 0 0 20px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.ask-card-steps li { padding-left: 2px; overflow-wrap: anywhere; }
+.ask-card-steps li::marker {
+  color: var(--muted);
+  font-family: var(--tool-card-mono);
+  font-size: 11px;
+}
+
+.ask-card-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ask-card-options,
+.ask-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.ask-card-actions { justify-content: flex-end; }
+
+.ask-card-options .ui-btn,
+.ask-card-actions .ui-btn,
+.ask-card-field .ui-btn {
+  gap: 4px;
+  padding: 4px 9px;
+  border-radius: 8px;
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+.ask-card-options .ui-btn { white-space: normal; text-align: left; }
+
+.ask-card-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ask-card-field .ask-card-input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 9px;
+  border-radius: 8px;
+  font-size: 12.5px;
+}
+
+.ask-card-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* One option per row, the whole row is the button. */
+.ask-card-choices .ask-card-choice {
+  display: block;
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm, 10px);
+  text-align: left;
+  white-space: normal;
+  font-weight: 400;
+}
+
+.ask-card-choices .ask-card-choice.is-unavailable { opacity: 0.6; cursor: default; }
+.ask-card-choices.is-resolved .ask-card-choice { opacity: 0.55; }
+.ask-card-choices.is-resolved .ask-card-choice.is-picked {
+  opacity: 1;
+  border-color: var(--accent);
+}
+
+.ask-card-choice-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.ask-card-choice-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ask-card-choice-name { font-size: 13.5px; font-weight: 600; }
+
+.ask-card-choice-detail,
+.ask-card-choice-notes {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.ask-card-choice-notes {
+  margin: 0;
+  padding: 0 0 0 16px;
+}
+
+/* The outcome, in the header's mono voice. */
+.ask-card-status {
+  flex: none;
+  font-family: var(--tool-card-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.ask-card-status.is-ok { color: var(--ok); }
+.ask-card-status.is-no { color: var(--error); }
+
+.ask-card-answer {
+  padding: 6px 9px;
+  border-radius: 8px;
+  background: var(--surface-strong, var(--glass-strong));
+  font-size: 12.5px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
 .chat-history-messages > .tool-card { max-width: 82%; }
 
 @media (prefers-reduced-motion: reduce) {

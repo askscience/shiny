@@ -20,6 +20,9 @@ use crate::services::artifacts::Artifact;
 use crate::services::navigation::NavigationSession;
 
 const MAX_TOOL_STEPS: usize = 40;
+/// A chat that builds a plugin reads, writes, checks and compiles many times
+/// in one turn: it gets a longer leash than a chat that calls a few tools.
+const MAX_BUILDER_STEPS: usize = 160;
 /// Identical repeats of a call that just succeeded before the turn is ended.
 const MAX_REPEATS: usize = 3;
 
@@ -157,6 +160,11 @@ fn string_list(value: Option<&Value>) -> Vec<String> {
 /// this function cannot describe is still asked about, never waved through.
 fn gated_action(state: &AppState, action: &str, params: &Value) -> Option<GatedAction> {
     let normalized = normalize_action_name(action);
+    // Installing a plugin the assistant built is a core command, not a
+    // plugin's tool: it has no registry entry to resolve through.
+    if normalized == "plugin_dev_install" {
+        return describe_gated(&normalized, params);
+    }
     let canonical = state
         .plugins
         .tools()
@@ -201,6 +209,13 @@ fn describe_gated(tool: &str, params: &Value) -> Option<GatedAction> {
                 .filter(|dir| !dir.trim().is_empty())
                 .map_or_else(|| "Downloads".to_string(), brief);
             format!("mail_save_attachment: save an attachment into {dir}")
+        }
+        "plugin_dev_install" => {
+            let name = ["name", "plugin"]
+                .iter()
+                .find_map(|key| params.get(*key).and_then(Value::as_str))
+                .map_or_else(|| "this chat built".to_string(), brief);
+            format!("plugin_dev_install: install the plugin {name} on this machine (its code will run here)")
         }
         _ => return None,
     };
@@ -248,6 +263,10 @@ mod gate_tests {
     }
 }
 
+/// Marks, among the plugins whose docs a turn was already given, the plugin
+/// builder's own command docs. Not a plugin name: no plugin is named so.
+const BUILDER_DOCS: &str = "<plugin builder>";
+
 pub struct AgentRunInput {
     pub message: String,
     pub mode: String,
@@ -289,6 +308,19 @@ pub struct AgentRunInput {
     pub voice_consent: Option<crate::services::approval::VoiceAsk>,
     /// The wearable face is on: no window is ever shown (`WEARABLE_BLOCK`).
     pub wearable: bool,
+    /// The question / plan / choice round trip for this turn (`services::ask`).
+    /// `None` only in tests: the dialog actions then cannot ask.
+    pub ask: Option<crate::services::ask::AskGate>,
+    /// The turn came from a remote client: the plugin builder is refused.
+    pub remote: bool,
+    /// What this conversation is working on (`plugin_dev::state::prompt_block`),
+    /// repeated in the continuation prompt so it survives the tool loop.
+    pub work_block: String,
+    /// The conversation this turn belongs to: the plugin builder's commands
+    /// act for it (its language, its plugin, its plan).
+    pub conversation_id: String,
+    /// This chat builds plugins (it has a language): more steps per turn.
+    pub builder: bool,
 }
 
 pub struct ActionTaken {
@@ -318,7 +350,8 @@ pub struct AgentRunResult {
     pub thinking: String,
     /// Mid-turn rows persisted with the conversation, in visual order:
     /// `("approval", {command, decision})`, `("tool", <card record>)` (see
-    /// `services::tool_cards`) and `("media", {kind, url, …})`.
+    /// `services::tool_cards`), `("ask", <the card and its answer>)` (see
+    /// `plugin_dev::dialog`) and `("media", {kind, url, …})`.
     pub events: Vec<(String, String)>,
     /// True when the user stopped this turn before it finished. The reply (if
     /// any) is a partial answer, and the caller records an invisible note so
@@ -389,6 +422,7 @@ where
     } else {
         continuation_system
     };
+    let continuation_system = format!("{continuation_system}{}", input.work_block);
     let mut continuation_messages = vec![
         ("system".to_string(), continuation_system),
         ("user".to_string(), input.message.clone()),
@@ -408,7 +442,8 @@ where
     let mut hinted: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
 
     let mut voice_consent = input.voice_consent.clone();
-    for iteration in 0..MAX_TOOL_STEPS {
+    let max_steps = if input.builder { MAX_BUILDER_STEPS } else { MAX_TOOL_STEPS };
+    for iteration in 0..max_steps {
         if turn_stopped(&cancel) {
             interrupted = true;
             break;
@@ -682,9 +717,66 @@ where
                 }
             }
 
-            on_step(&ui_step(state, &action), Some(action.as_str()));
+            // A question, a plan or the plugin builder's language card: core
+            // actions that wait for the user. Their own names are never a
+            // plugin's; a looser alias ("plan", "question") yields to a plugin
+            // tool that really has that name.
+            let dialog = crate::services::plugin_dev::dialog::canonical(&action).filter(|name| {
+                let normalized = normalize_action_name(&action);
+                *name == normalized || !state.plugins.tools().has(&normalized)
+            });
+            let mut dialog_record: Option<Value> = None;
+            // The plugin builder's commands are core commands too: which of
+            // them this conversation may call is decided in `commands::run`.
+            let builder_command = dialog.is_none()
+                && crate::services::plugin_dev::module_of(&normalize_action_name(&action)).is_some();
 
-            match execute_action(state, traveler, &input.ctx, &action, &params).await {
+            let executed = match dialog {
+                Some(name) => {
+                    let step = step_label_for_action(name);
+                    on_step(&UiText::keyed(step.key, step.text), Some(name));
+                    crate::services::plugin_dev::dialog::run(
+                        &crate::services::plugin_dev::dialog::Dialog {
+                            pool: &state.pool,
+                            traveler_id: &traveler.id,
+                            gate: input.ask.as_ref(),
+                            cancel: cancel.as_ref(),
+                            remote: input.remote,
+                            readiness: crate::services::plugin_dev::Language::readiness,
+                        },
+                        name,
+                        &params,
+                    )
+                    .await
+                    .map(|result| {
+                        dialog_record = result.record;
+                        result.outcome
+                    })
+                }
+                None if builder_command => {
+                    let command = normalize_action_name(&action);
+                    let step = step_label_for_action(&command);
+                    on_step(&UiText::keyed(step.key, step.text), Some(command.as_str()));
+                    crate::services::plugin_dev::commands::run(
+                        &crate::services::plugin_dev::commands::Builder {
+                            state,
+                            traveler,
+                            conversation_id: &input.conversation_id,
+                            cancel: cancel.as_ref(),
+                            remote: input.remote,
+                        },
+                        &command,
+                        &params,
+                    )
+                    .await
+                }
+                None => {
+                    on_step(&ui_step(state, &action), Some(action.as_str()));
+                    execute_action(state, traveler, &input.ctx, &action, &params).await
+                }
+            };
+
+            match executed {
             Ok(outcome) => {
                 // Always carry the full payload so the frontend can act on it
                 // (open a specific email/document, focus the touched item).
@@ -894,6 +986,28 @@ where
                     );
                 }
 
+                // The builder's command docs, once per turn, the first time
+                // the turn uses it: the continuation prompt carries no docs,
+                // and the language may only just have been chosen.
+                if (builder_command || outcome.action == "plugin_dev_start")
+                    && !injected_skills.contains(BUILDER_DOCS)
+                {
+                    let chat = crate::services::plugin_dev::state::load(
+                        &state.pool,
+                        &input.conversation_id,
+                        &traveler.id,
+                    )
+                    .await
+                    .unwrap_or_default();
+                    if let Some(language) = chat.language {
+                        injected_skills.insert(BUILDER_DOCS.to_string());
+                        note.push_str(&format!(
+                            "\n\nPlugin builder commands for this chat:\n{}",
+                            crate::services::plugin_dev::skill_docs(language)
+                        ));
+                    }
+                }
+
                 continuation_messages
                     .push(("user".to_string(), format!("[Done] {note}")));
                 completed_steps.push(note);
@@ -903,23 +1017,39 @@ where
                 } else {
                     last_ok_call = None;
                 }
-                // The chat's card for this call: capped and stripped of
-                // credentials, streamed now and stored with the turn.
-                let card = crate::services::tool_cards::card_record(
-                    &outcome.action,
-                    &outcome.result,
-                    outcome.owner.as_deref(),
-                    Some(&outcome.data),
-                    &params,
-                );
-                on_tool(&card);
-                turn_events.push(("tool".into(), card.to_string()));
+                if dialog.is_some() {
+                    // The card the user answered is this call's chat element:
+                    // stored as it ended, with no tool card next to it.
+                    if let Some(record) = dialog_record.take() {
+                        turn_events.push(("ask".into(), record.to_string()));
+                    }
+                } else {
+                    // The chat's card for this call: capped and stripped of
+                    // credentials, streamed now and stored with the turn.
+                    let card = crate::services::tool_cards::card_record(
+                        &outcome.action,
+                        &outcome.result,
+                        outcome.owner.as_deref(),
+                        Some(&outcome.data),
+                        &params,
+                    );
+                    on_tool(&card);
+                    turn_events.push(("tool".into(), card.to_string()));
+                }
                 // The model gets the full note above; the bubble gets a short
-                // human line (never the raw payload).
-                on_step(
-                    &ui_done(state, &outcome.action, &outcome.result, &outcome.data),
-                    Some(outcome.action.as_str()),
-                );
+                // human line (never the raw payload). A question asked aloud
+                // is still waiting for its answer.
+                let asked_aloud = dialog.is_some()
+                    && outcome.data.get("asked_aloud").and_then(Value::as_bool) == Some(true);
+                if asked_aloud {
+                    let step = step_label_for_action(&outcome.action);
+                    on_step(&UiText::keyed(step.key, step.text), Some(outcome.action.as_str()));
+                } else {
+                    on_step(
+                        &ui_done(state, &outcome.action, &outcome.result, &outcome.data),
+                        Some(outcome.action.as_str()),
+                    );
+                }
             }
             Err(e) => {
                 actions_taken.push(ActionTaken {

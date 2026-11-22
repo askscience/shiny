@@ -31,6 +31,7 @@ and the REST reference in [Chat & agent API](../api/chat-agent.md).
 | Action parsing & dispatch | `src/services/agent_tools.rs` | `parse_actions`, `strip_action_blocks`, `execute_action`, core built-ins, the focus-mode scope. |
 | Cancellation | `src/services/agent_cancel.rs` | `TurnRegistry`, `CancelHandle`, `StopOutcome`, late-stop annotation. |
 | Terminal approval | `src/services/approval.rs` | Pending allow/deny requests, per-chat consent, the `approval` round trip. |
+| Questions, plans, choices | `src/services/ask.rs`, `src/services/plugin_dev/` | The `ask` round trip; `ask_user`, `plan_propose`, `plugin_dev_start`; a conversation's language and plan. |
 | Terminal safety guard | `src/services/terminal_guard.rs` | Hard-coded refusal of system-destroying commands. |
 | Provider resolution | `src/services/ai.rs` | `AiClient`, `ResolvedAi`, `resolve_for_user`. |
 | Providers | `src/services/openai.rs`, `crates/shiny-plugin-sdk/src/services.rs` | OpenAI-compatible and Ollama clients. |
@@ -638,7 +639,68 @@ rendered from the row, so a reopened chat shows the command block with its
 green-check / red-cross and the media exactly once. See
 [chat § Tables](chat.md#tables).
 
-### 4.7 Final fallbacks
+### 4.7 Questions, plans and choices
+
+Three core actions put a card in front of the user and wait
+(`src/services/plugin_dev/dialog.rs`, on the round trip in
+`src/services/ask.rs`). The loop runs them **before** the tool registry, so a
+plugin cannot claim their names; a looser alias (`plan`, `question`) yields to
+a plugin tool that really has that name.
+
+| Action | Card | Result the model reads |
+|---|---|---|
+| `ask_user` `{question, options?, allow_text?}` | `question` | the user's answer |
+| `plan_propose` `{title?, summary?, steps}` | `plan` | `approved`, `changes` with the remark, or `cancelled` |
+| `plugin_dev_start` `{}` | `choice`: Python / Rust | the language of this chat and what it still needs |
+
+1. The action emits an `ask` SSE event through the turn's `AskGate` and parks
+   on a one-shot channel; `POST /api/agent/answer` resolves it. A stop, or a
+   closed stream, abandons it. Only the turn's own account answers.
+2. The card and its answer are stored as an `ask` row; the call gets no tool
+   card of its own.
+3. A turn that cannot show a card (`ask_cards` absent) does not park. A spoken
+   turn is told to ask aloud and stop; any other turn to ask in its reply.
+
+What a conversation decided is kept in `chat_agent_state`
+(`plugin_dev/state.rs`) and enforced in code, not left to the prompt:
+
+- **A plan** is stored when proposed. On its card only the `approve` option
+  approves it: text sent without it is a request for changes. When the turn
+  ended without an answer (a plan read aloud, a card nobody answered),
+  `prepare_agent` reads the user's next message with the strict rule a spoken
+  consent uses: a plain yes approves, a plain no cancels, anything else is
+  their remark. That is settled before the model reads the message.
+- **The language** plugins are built in is the user's choice, made once per
+  conversation: `plugin_dev_start` ignores a language the model passes, a chat
+  that has one keeps it, and asking again shows no card. Asked aloud, it is
+  set only by a short message that names exactly one language.
+- `plugin_dev_start` is refused for a remote client, like installing a plugin.
+
+`state::prompt_block` adds a `## This chat's work` section to the system
+prompt and to the continuation prompt: the chat's language and what the
+machine lacks for it, the plan and where it stands (its steps only once it is
+approved or sent back). A conversation with neither gets no section.
+
+The choice card's options come from `Language::readiness()`: Python needs the
+interpreter; Rust needs `cargo` and `rustc` (also looked for in
+`~/.cargo/bin`), a C linker, the system SQLite's development files and the
+plugin SDK bundle (`SHINY_PLUGIN_SDK_DIR`, then
+`/usr/share/shiny/plugin-sdk`, then a source checkout). An option that lacks
+something lists what is missing and cannot be picked.
+
+The builder's commands are split in modules (`plugin_dev/mod.rs`): `entry`
+(`plugin_dev_start`, the only one a chat knows before a language is chosen),
+`common`, and one per language. The loop hands them to
+`plugin_dev::commands::run`, which refuses a command of a module the
+conversation does not have, refuses everything for a remote client, and lets
+nothing be created, written, built, packed or installed until the chat's plan
+is approved. `plugin_dev_install` also passes the approval gate of §4.6. A
+conversation with a language gets the builder's docs for that language in its
+prompt, the same docs once in the continuation prompt when the turn first
+uses the builder, and 160 steps per turn instead of 40. See
+[the plugin builder](../plugins/builder.md).
+
+### 4.8 Final fallbacks
 
 After the loop:
 

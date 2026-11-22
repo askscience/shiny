@@ -1,0 +1,9 @@
+{
+  "plugin.@@NAME@@.title": "@@TITLE@@",
+  "plugin.@@NAME@@.add": "Add",
+  "plugin.@@NAME@@.placeholder": "New item…",
+  "plugin.@@NAME@@.empty": "Nothing here yet",
+  "plugin.@@NAME@@.emptyBody": "Add an item, or ask the assistant to.",
+  "plugin.@@NAME@@.loadFailed": "Could not load the items",
+  "plugin.@@NAME@@.addFailed": "Could not add the item"
+}

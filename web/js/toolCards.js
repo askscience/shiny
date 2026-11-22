@@ -38,6 +38,8 @@ const HOUSEKEEPING = [
 
 /** Longest-specific first: the family a tool's card is drawn as. */
 const FAMILIES = [
+  ['plugin_dev_', 'builder'],
+  ['rust_', 'builder'],
   ['radio_', 'radio'],
   ['calendar_', 'calendar'],
   ['mail_', 'mail'],
@@ -70,6 +72,7 @@ const PLUGIN_BY_PREFIX = [
 
 /** Header icons for families the shared tool-icon map leaves generic. */
 const FAMILY_ICON = {
+  builder: 'ui/puzzle',
   terminal: 'apps/terminal',
   weather: 'insights/weather-partly',
   route: 'ui/navigator',
@@ -92,8 +95,15 @@ function toolName(action) {
   return dot >= 0 ? key.slice(dot + 1) : key;
 }
 
+/** The plugin builder's steps that only look: reading says nothing the user
+ *  needs a card for. Its other steps are cards of the `builder` family. */
+const BUILDER_QUIET = new Set([
+  'plugin_dev_list', 'plugin_dev_tree', 'plugin_dev_read', 'plugin_dev_status', 'plugin_dev_logs',
+]);
+
 export function isHousekeepingTool(action) {
   const name = toolName(action);
+  if (name.startsWith('plugin_dev_')) return BUILDER_QUIET.has(name);
   return HOUSEKEEPING.some((p) => (p.endsWith('_') ? name.startsWith(p) : name === p));
 }
 
@@ -510,6 +520,55 @@ function calculatorCard(record, d, name, p) {
   return add(card, expr ? el('div', 'tool-card-expr', expr) : null, big(value || '—'));
 }
 
+/** One step of the plugin builder: what changed, or what has to be fixed. */
+function builderCard(record, d, name, p) {
+  const family = t('chat.toolCard.family.builder', null, 'Plugin');
+  const problem = (item) => row({
+    iconName: 'ui/warning',
+    title: item.file ? `${item.file}${item.line ? `:${item.line}` : ''}` : str(item.check),
+    meta: oneLine(item.message, 160),
+  });
+  if (name === 'plugin_dev_check') {
+    const errors = list(d.errors);
+    const card = shell(record, 'builder', [family, d.ok
+      ? t('chat.toolCard.builder.checksPassed', null, 'Checks passed')
+      : tp('chat.toolCard.builder.errors', errors.length, null, `${errors.length} errors`)]);
+    rows(card, errors, 4, problem);
+    return card;
+  }
+  if (name === 'rust_build') {
+    const errors = list(d.errors);
+    const card = shell(record, 'builder', [family, d.built
+      ? t('chat.toolCard.builder.built', { seconds: num(d.seconds) ?? 0 }, `Built in ${num(d.seconds) ?? 0} s`)
+      : tp('chat.toolCard.builder.errors', num(d.error_count) ?? errors.length, null, `${errors.length} errors`)]);
+    rows(card, errors, 4, problem);
+    if (!d.built && !errors.length) add(card, text(oneLine(d.detail || d.note, 240)));
+    return card;
+  }
+  if (name === 'plugin_dev_install') {
+    // The open arrow goes to the plugin that was just installed.
+    const card = shell({ ...record, plugin: str(d.plugin) }, 'builder',
+      [family, t('chat.toolCard.builder.installed', null, 'Installed')]);
+    return add(card, text(`${str(d.plugin)} ${str(d.version)}`.trim(), 'tool-card-title'));
+  }
+  if (name === 'plugin_dev_pack') {
+    const card = shell(record, 'builder', [family, t('chat.toolCard.builder.packed', null, 'Packed')]);
+    return add(card, text(basename(str(d.archive)), 'tool-card-title'));
+  }
+  if (name === 'plugin_dev_new') {
+    const card = shell(record, 'builder', [family, t('chat.toolCard.builder.created', null, 'Created')]);
+    return add(card, text(str(d.plugin), 'tool-card-title'));
+  }
+  if (name === 'plugin_dev_write' || name === 'plugin_dev_patch' || name === 'plugin_dev_delete') {
+    const verb = name === 'plugin_dev_delete'
+      ? t('chat.toolCard.builder.deleted', null, 'Deleted')
+      : t('chat.toolCard.builder.edited', null, 'Edited');
+    // One line: the file is the whole story.
+    return shell(record, 'builder', [family, verb, str(d.path) || str(p.path)]);
+  }
+  return genericCard(record, d, p, family);
+}
+
 function terminalCard(record, d, p) {
   const family = t('chat.toolCard.family.terminal', null, 'Terminal');
   const card = shell(record, 'terminal', [family, d.timed_out ? t('chat.toolCard.timedOut', null, 'Timed out') : '']);
@@ -903,6 +962,7 @@ function buildToolCard(raw) {
     case 'files': return filesCard(record, d, name);
     case 'calculator': return calculatorCard(record, d, name, p);
     case 'terminal': return terminalCard(record, d, p);
+    case 'builder': return builderCard(record, d, name, p);
     case 'browser': return browserCard(record, d, name, p);
     case 'web': return webCard(record, d, p);
     case 'youtube': return youtubeCard(record, d, name, p);

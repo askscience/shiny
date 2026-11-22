@@ -160,6 +160,46 @@ Get the current state of every installed plugin (name, description, active/inact
 
 Use it when you are unsure whether a plugin is installed or active before activating or using it.
 
+### ask_user
+
+Ask the user one question and wait for the answer. In the text chat it shows a card; the result gives you what they answered.
+
+```text
+{"action": "ask_user", "params": {"question": "Which folder should the notes go in?", "options": ["Documents", "A new folder"]}}
+```
+
+- `question` is required: one clear question, in the user's language.
+- `options` is optional: up to six short suggested answers. The user can still type their own unless you pass `"allow_text": false`.
+- Use it when a request has a choice only the user can make and guessing would waste their time or change something they care about. Do not ask what you can find out with a tool, and never ask more than one thing per call.
+- In a spoken turn there is no card: the result tells you to ask aloud. Do that in one short sentence and stop; their next message is the answer.
+
+### plan_propose
+
+Show the user the steps you intend to take and wait for their decision, before you start a larger piece of work.
+
+```text
+{"action": "plan_propose", "params": {"title": "Notes plugin", "summary": "A small window with a searchable list.", "steps": ["Create the plugin", "Write the window", "Check and install it"]}}
+```
+
+- `steps` is required: the steps in order, one short sentence each, in the user's language. `title` and `summary` are optional.
+- The result says what they decided: **approved** (carry the plan out), **changes** with their remark (revise the plan and call `plan_propose` again), or **cancelled** (stop).
+- Only the user approves a plan. Until the result says approved, do not start the work it describes.
+- Use it for work with several steps that creates or changes things. A question or a single action needs no plan.
+- In a spoken turn there is no card: say the plan in two or three short sentences, ask whether to go ahead, and stop.
+
+### plugin_dev_start
+
+Open the plugin builder in this chat, when the user asks you to create a plugin (a new app or window for this desktop) or to work on one you built earlier.
+
+```text
+{"action": "plugin_dev_start", "params": {}}
+```
+
+- It shows the user a card to choose the language the plugin is written in, and says what this machine still needs for each. **The user chooses, not you**: never pass or suggest a language yourself, and never choose for them in a spoken turn.
+- The choice holds for the whole chat. A chat that already has its language answers at once, without a card.
+- The result gives you the builder's commands for that language. Until then you have none: do not try to build a plugin with the terminal or the file tools.
+- It only works on the machine itself, not over a remote connection.
+
 ### Desktop control
 
 The screen is a Hyprland-style desktop: plugin windows tile into a master/stack

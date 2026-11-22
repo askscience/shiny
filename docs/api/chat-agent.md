@@ -32,6 +32,7 @@ Request:
   "turn_id": "<uuid>",           // client id, for /api/agent/stop
   "conversation_id": "<uuid>",   // continue an existing thread
   "approve_tools": true,         // this client can render the terminal approval card
+  "ask_cards": true,             // this client can render a question / plan / choice card
   "context": { "lat": 41.9, "lon": 12.5, "heading": 180 },
   "desktop": { "active": 1, "workspaces_enabled": true,
                "workspaces": [ { "index": 1, "windows": ["word", "files"] } ],
@@ -82,6 +83,9 @@ JSON response (`AgentResponse`):
 { "type": "thinking", "message": "…reasoning trace…" }   // thinking models, when `think` is on
 { "type": "artifact", "data": { /* saved, plugin-tagged artifact */ } }
 { "type": "approval", "request_id": "<uuid>", "action": "terminal_exec", "command": "rm -rf ./build" }
+{ "type": "ask", "request_id": "<uuid>", "kind": "plan", "title": { "text": "Notes plugin" },
+  "steps": ["Create the plugin", "Write the window"], "allow_text": true,
+  "options": [{ "id": "approve", "label": { "key": "chat.ask.plan.approve", "text": "Approve" } }] }
 { "type": "tool", "action": "calculator_eval", "result": "ok", "plugin": "calculator",
   "data": { "expression": "18% * 2340", "result": 421.2, "result_text": "421.2" },
   "params": { "expression": "18% * 2340" } }
@@ -136,6 +140,19 @@ transport and voice turns without that flag refuse the command instead of
 running it unapproved. Commands the hard-coded guard considers destructive never
 produce an `approval` event at all — they are refused outright. See
 [agent § Terminal command approval](../core/agent.md#46-terminal-command-approval).
+
+`ask` parks the turn the same way, on a card the assistant put to the user:
+`kind` is `question` (free text, optional suggested `options`), `plan`
+(`steps`, answered with the option `approve`, `changes` or `cancel`) or
+`choice` (one of `options`, each with a `state` of `ready` or `unavailable`, a
+`detail` line and `notes` listing what it still needs). `title`, an option's
+`label` and `detail`, and each note are `{ text, key? }`: a line the core
+wrote carries the catalogue `key` the client translates, a line the model
+wrote has `text` only. `allow_text` says the card has a text field. Answer it
+with `POST /api/agent/answer` (below). Only a request sent with
+`ask_cards: true` receives one; without it a spoken turn asks aloud and reads
+the next message as the answer, and any other turn asks in its reply. See
+[agent § Questions, plans and choices](../core/agent.md#47-questions-plans-and-choices).
 
 ---
 
@@ -218,6 +235,32 @@ Response:
 - A request that is unknown, already answered, or belongs to another traveler
   returns `{ "success": false, "data": { … } }` and changes nothing. Always a
   `200`: answering a prompt that expired with its turn is not an API error.
+
+---
+
+## `POST /api/agent/answer`
+
+Answer the `ask` event a running turn is parked on.
+
+```jsonc
+{
+  "turn_id": "<uuid>",        // the turn that sent the event
+  "request_id": "<uuid>",     // from the `ask` event
+  "option": "approve",        // id of the option picked, when one was
+  "text": "add a search box"  // text typed in the card, when it has a field (≤ 2000 chars)
+}
+```
+
+Response:
+
+```json
+{ "success": true, "data": { "answered": true } }
+```
+
+- A plan is approved by the option `approve` and by nothing else: text sent
+  without it is a request for changes.
+- A request that is unknown, already answered, or belongs to another traveler
+  or turn returns `"success": false` and changes nothing. Always a `200`.
 
 ---
 

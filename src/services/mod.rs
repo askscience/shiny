@@ -26,6 +26,8 @@ pub mod agent_steps;
 pub mod agent_runner;
 pub mod agent_cancel;
 pub mod approval;
+pub mod ask;
+pub mod plugin_dev;
 pub mod terminal_guard;
 pub mod chat_memory;
 pub mod tool_cards;

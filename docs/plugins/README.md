@@ -52,6 +52,7 @@ opt-in.
 | [Architecture](architecture.md) | Core vs plugin split, load/register lifecycle, hot router swap, discovery, uninstall. |
 | [Authoring](authoring.md) | Step-by-step authoring with a complete worked `hello` example, build, package, install. |
 | [API reference](reference.md) | Every trait, struct, field, method, and helper in the SDK. |
+| [The plugin builder](builder.md) | How the assistant builds a plugin: the commands, one language per conversation, the checks, build, pack and install. |
 | [Process plugins](process-plugins.md) | Plugins as their own process, the protocol, the catalogue and its archives. |
 | [Runtime & ABI](runtime-abi.md) | The dlopen boundary, `api_level`, `bridged()`, the SQLite caveat, accessor rules. |
 | [Migrations](migrations.md) | Per-plugin schema, `plugin_schema_versions`, immutability, idempotency, repair patterns. |
