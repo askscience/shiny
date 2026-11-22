@@ -37,7 +37,7 @@ The commands are split in modules (`plugin_dev/mod.rs`, the `COMMANDS` table):
 | Module | Commands | A conversation has it when |
 |---|---|---|
 | entry | `plugin_dev_start` | always |
-| common | `plugin_dev_new`, `plugin_dev_open`, `plugin_dev_list`, `plugin_dev_tree`, `plugin_dev_read`, `plugin_dev_write`, `plugin_dev_patch`, `plugin_dev_delete`, `check_all`, `check_manifest`, `check_web`, `check_i18n`, `check_migrations`, `check_conflicts`, `plugin_dev_pack`, `plugin_dev_install`, `plugin_dev_status`, `plugin_dev_logs`, `plugin_dev_console`, `plugin_dev_call`, `plugin_dev_http`, `plugin_dev_rollback`, `plugin_dev_uninstall` | it has chosen a language |
+| common | `plugin_dev_new`, `plugin_dev_open`, `plugin_dev_guide`, `plugin_dev_list`, `plugin_dev_tree`, `plugin_dev_read`, `plugin_dev_write`, `plugin_dev_patch`, `plugin_dev_delete`, `check_all`, `check_manifest`, `check_web`, `check_i18n`, `check_migrations`, `check_conflicts`, `plugin_dev_pack`, `plugin_dev_install`, `plugin_dev_status`, `plugin_dev_logs`, `plugin_dev_console`, `plugin_dev_call`, `plugin_dev_http`, `plugin_dev_rollback`, `plugin_dev_uninstall` | it has chosen a language |
 | rust | `rust_doctor`, `rust_build`, `rust_lint`, `rust_test` | it chose Rust |
 | python | `py_check`, `py_test` | it chose Python |
 
@@ -72,6 +72,14 @@ plugins and never inside them (the server reloads whatever changes there).
 (`web/plugin.js`, `plugin.css`, `icon.svg`, `i18n/en.json`), the skill, and the
 language's engine. The template is a working plugin (a list with two tools and
 two routes) that the assistant reads and then turns into what was asked.
+
+`plugin_dev_guide` is how the assistant learns what a window is built with:
+it lists and reads, read-only, the desktop's UI library (`web/ui/`), the icon
+index and the two modules a window imports (`js/api.js`, `js/i18n.js`). They
+are outside any plugin, so the workspace commands refuse them.
+
+`Cargo.lock` is not part of a workspace's fingerprint: cargo rewrites it while
+it builds, and a build must not make its own sources look changed.
 
 ## Checks
 

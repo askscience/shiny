@@ -101,7 +101,7 @@ function toolName(action) {
  *  needs a card for. Its other steps are cards of the `builder` family. */
 const BUILDER_QUIET = new Set([
   'plugin_dev_list', 'plugin_dev_tree', 'plugin_dev_read', 'plugin_dev_status', 'plugin_dev_logs',
-  'plugin_dev_console', 'plugin_dev_call', 'plugin_dev_http',
+  'plugin_dev_console', 'plugin_dev_call', 'plugin_dev_http', 'plugin_dev_guide',
 ]);
 
 export function isHousekeepingTool(action) {

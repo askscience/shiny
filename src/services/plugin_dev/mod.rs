@@ -174,6 +174,7 @@ const COMMANDS: &[(&str, Module)] = &[
     ("plugin_dev_install", Module::Common),
     ("plugin_dev_status", Module::Common),
     ("plugin_dev_logs", Module::Common),
+    ("plugin_dev_guide", Module::Common),
     ("plugin_dev_open", Module::Common),
     ("plugin_dev_console", Module::Common),
     ("plugin_dev_call", Module::Common),

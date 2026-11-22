@@ -26,6 +26,9 @@ pub const MAX_FILES: usize = 300;
 /// writes: compiled output, the staged executable, packed archives.
 const GENERATED_DIRS: &[&str] = &["target", "bin", "dist"];
 const META_FILE: &str = ".workspace.json";
+/// Files a tool rewrites on its own: listed and readable, but not part of
+/// what "the sources changed" means.
+const DERIVED_FILES: &[&str] = &["Cargo.lock"];
 /// The `language` of a workspace whose engine is an executable without sources.
 pub const PREBUILT: &str = "prebuilt";
 
@@ -429,6 +432,11 @@ impl Workspace {
     pub fn sources_digest(&self) -> String {
         let mut hasher = Sha256::new();
         for entry in self.files() {
+            // Derived, not written: cargo rewrites its lock file while it
+            // builds, and a build must not make its own sources look changed.
+            if DERIVED_FILES.contains(&entry.path.as_str()) {
+                continue;
+            }
             hasher.update(entry.path.as_bytes());
             hasher.update([0]);
             if let Ok(bytes) = std::fs::read(self.dir.join(&entry.path)) {
@@ -683,6 +691,9 @@ mod tests {
         std::fs::write(workspace.dir.join("bin/notes"), "binary").unwrap();
         assert_eq!(workspace.sources_digest(), first, "generated files are not sources");
         assert_eq!(workspace.files().len(), 1);
+        // Cargo rewrites its lock file during a build: that is not a change.
+        workspace.write("Cargo.lock", "version = 3").unwrap();
+        assert_eq!(workspace.sources_digest(), first);
         workspace.write("src/lib.rs", "b").unwrap();
         assert_ne!(workspace.sources_digest(), first);
     }

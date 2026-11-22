@@ -42,6 +42,7 @@ Rules the checks enforce: tools are named `<name>_…`; routes are under `/api/<
 - `plugin_dev_pack` — make the archive (`.tar.gz`) of the checked, built plugin. params: `{}`
 - `plugin_dev_install` — install the packed archive and turn the plugin on. params: `{}`
 - `plugin_dev_status` — whether the sources are checked, built and packed, and whether the installed plugin runs, with its tools and routes. params: `{}`
+- `plugin_dev_guide` — read the desktop's own files a window builds on, which are outside the plugin. params: `{}` lists them and shows what `../../ui/index.js` exports; `{ "file": "ui/components/button.js" }` reads one (a component's source shows its options; `ui/icons/INDEX.md` lists the icon names). Use it before using a UI factory or an icon you have not seen in the template.
 - `plugin_dev_logs` — the last lines the plugin printed and its install events. params: `{ "lines"?: number }`
 - `plugin_dev_console` — the errors the plugin's window reported while open in the desktop (a module that failed to load, an exception), with file and line. params: `{ "clear"?: boolean }`. Use it when a window is blank or a button does nothing.
 - `plugin_dev_call` — call one of the installed plugin's own tools, to see what it answers. params: `{ "tool": string, "params"?: object }`

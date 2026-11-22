@@ -1024,6 +1024,11 @@ async fn a_rust_plugin_is_built_installed_and_used() {
         &call("plugin_dev_start", json!({})),
         &call("plan_propose", json!({ "title": "Notes", "steps": ["Create", "Build", "Install"] })),
         &call("plugin_dev_new", json!({ "name": "notes", "title": "Notes", "description": "Quick notes" })),
+        // A first build straight from the template: cargo rewrites its lock
+        // file while building, which must not make the build look stale.
+        &call("check_all", json!({ "first": true })),
+        &call("rust_build", json!({ "first": true })),
+        &call("rust_test", json!({ "first": true })),
         // A mistake the compiler has to find.
         &call("plugin_dev_patch", json!({ "path": "src/store.rs", "find": "let id = uuid::Uuid::new_v4().to_string();", "replace": "let id: i64 = uuid::Uuid::new_v4().to_string();" })),
         &call("check_all", json!({})),
@@ -1041,19 +1046,25 @@ async fn a_rust_plugin_is_built_installed_and_used() {
     ]);
     let (_, tools) = builder_turn(&fixture, "b1", None, &answers).await;
 
-    let broken = &card(&tools, "rust_build", 0)["data"];
+    assert_eq!(card(&tools, "rust_build", 0)["data"]["built"], true);
+    let first = &card(&tools, "rust_test", 0)["data"];
+    assert_eq!(
+        first["started"], true,
+        "a build is not made stale by its own lock file: {first:#}"
+    );
+    let broken = &card(&tools, "rust_build", 1)["data"];
     assert_eq!(broken["built"], false, "{broken:#}");
     assert_eq!(broken["errors"][0]["file"], "src/store.rs", "{broken:#}");
     assert!(broken["errors"][0]["line"].as_u64().unwrap() > 0);
     assert_eq!(broken["errors"][0]["code"], "E0308");
-    let built = &card(&tools, "rust_build", 1)["data"];
+    let built = &card(&tools, "rust_build", 2)["data"];
     assert_eq!(built["built"], true, "{built:#}");
 
     assert_eq!(
         card(&tools, "plugin_dev_pack", 0)["data"]["archive"],
         "dist/notes-0.1.0.tar.gz"
     );
-    let tested = &card(&tools, "rust_test", 0)["data"];
+    let tested = &card(&tools, "rust_test", 1)["data"];
     assert_eq!(tested["started"], true, "{tested:#}");
     assert_eq!(tested["tools"], json!(["notes_add", "notes_list"]));
     let install = card(&tools, "plugin_dev_install", 0);

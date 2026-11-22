@@ -104,6 +104,7 @@ pub async fn run(builder: &Builder<'_>, action: &str, params: &Value) -> Result<
     match action {
         "plugin_dev_new" => new_plugin(builder, &workspaces, language, params).await,
         "plugin_dev_list" => Ok(list(&workspaces, &chat, language)),
+        "plugin_dev_guide" => guide(builder, params),
         "rust_doctor" => Ok(doctor(language)),
         "plugin_dev_open" => open(builder, &workspaces, &chat, language, params).await,
         "plugin_dev_rollback" => rollback(builder, &chat, params).await,
@@ -242,6 +243,68 @@ async fn new_plugin(
             ),
         }),
     ))
+}
+
+/// What a window is built with: the desktop's own UI library and the modules
+/// a plugin imports (`../../ui/…`, `../../js/…`). They are the desktop's
+/// files, outside any plugin, so the workspace commands cannot read them;
+/// this one does, read-only, and only these.
+fn guide(builder: &Builder<'_>, params: &Value) -> Result<ActionOutcome, AppError> {
+    const ACTION: &str = "plugin_dev_guide";
+    /// Modules a plugin's window may import, relative to the web directory.
+    const READABLE_DIRS: &[&str] = &["ui/", "ui/components/"];
+    const READABLE_FILES: &[&str] = &["js/api.js", "js/i18n.js", "js/files.js", "ui/icons/INDEX.md", "ui/ui.css"];
+    let web = std::path::Path::new(&builder.state.config.web_dir);
+    let listing = || -> Vec<String> {
+        let mut files: Vec<String> = READABLE_FILES.iter().map(|file| file.to_string()).collect();
+        for dir in READABLE_DIRS {
+            let Ok(entries) = std::fs::read_dir(web.join(dir)) else { continue };
+            for entry in entries.flatten() {
+                let name = entry.file_name().to_string_lossy().into_owned();
+                if name.ends_with(".js") && entry.path().is_file() {
+                    files.push(format!("{dir}{name}"));
+                }
+            }
+        }
+        files.sort();
+        files.dedup();
+        files
+    };
+    let Some(file) = text(params, "file") else {
+        let exports = std::fs::read_to_string(web.join("ui/index.js")).unwrap_or_default();
+        let (exports, _) = clip(&exports);
+        return Ok(outcome(
+            ACTION,
+            "ok",
+            json!({
+                "files": listing(),
+                "ui_index": exports,
+                "note": "ui_index is what '../../ui/index.js' exports. Pass \"file\" to read one of the files listed: \
+                         a component's source shows its options (ui/components/button.js, field.js, …), \
+                         ui/icons/INDEX.md lists the icon names, js/api.js is apiFetch and js/i18n.js is t().",
+            }),
+        ));
+    };
+    // "../../ui/index.js", as a window imports it, means the same file.
+    let wanted = file.trim().trim_start_matches("../").trim_start_matches("./").trim_start_matches('/').to_string();
+    if !listing().contains(&wanted) {
+        return Ok(refused(ACTION, format!("'{file}' is not one of the desktop's files a window builds on. Call plugin_dev_guide without \"file\" to list them.")));
+    }
+    let content = std::fs::read_to_string(web.join(&wanted)).map_err(|e| AppError::NotFound(format!("{wanted}: {e}")))?;
+    let offset = (params.get("offset").and_then(Value::as_u64).unwrap_or(0) as usize).min(content.len());
+    let mut start = offset;
+    while !content.is_char_boundary(start) {
+        start += 1;
+    }
+    let mut end = (start + super::workspace::READ_CHUNK_BYTES).min(content.len());
+    while !content.is_char_boundary(end) {
+        end -= 1;
+    }
+    let mut data = json!({ "file": wanted, "bytes": content.len(), "content": &content[start..end] });
+    if end < content.len() {
+        data["next_offset"] = json!(end);
+    }
+    Ok(outcome(ACTION, "ok", data))
 }
 
 fn list(workspaces: &Workspaces, chat: &AgentState, language: Language) -> ActionOutcome {
