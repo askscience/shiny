@@ -1126,3 +1126,64 @@ async fn a_rust_plugin_is_built_installed_and_used() {
     // The plugin's process is a child of this test: stop it before leaving.
     fixture.app.state.plugins.stop_processes().await;
 }
+
+/// A turn that opens the builder itself gets the builder's longer leash from
+/// that moment: building a plugin takes more steps than an ordinary turn may.
+#[tokio::test]
+async fn a_turn_that_opens_the_builder_may_run_long() {
+    let fixture = fixture().await;
+    let answers = Answers {
+        language: "python",
+        plan: "approve",
+        allow: true,
+    };
+    let mut script: Vec<String> = vec![
+        call("plugin_dev_start", json!({})),
+        call("plan_propose", json!({ "steps": ["Create it"] })),
+        call("plugin_dev_new", json!({ "name": "longjob" })),
+    ];
+    // Well past the forty steps of an ordinary turn.
+    script.extend((0..60).map(|step| call("plugin_dev_tree", json!({ "step": step }))));
+    script.push("All sixty looked at.".into());
+    let script: Vec<&str> = script.iter().map(String::as_str).collect();
+    fixture.model.script(&script);
+
+    let response = fixture
+        .router
+        .clone()
+        .oneshot(post_json(
+            "/api/agent",
+            "ada",
+            json!({ "message": "build it", "stream": true, "ask_cards": true, "approve_tools": true, "turn_id": "long" }),
+        ))
+        .await
+        .unwrap();
+    let mut turn = Turn {
+        body: response.into_body().into_data_stream(),
+        buffer: String::new(),
+    };
+    for _ in 0..2 {
+        let ask = turn.next("ask").await;
+        let option = if ask["kind"] == "choice" {
+            answers.language
+        } else {
+            answers.plan
+        };
+        let request = ask["request_id"].as_str().unwrap().to_string();
+        assert!(
+            answer(
+                &fixture,
+                "ada",
+                "long",
+                &request,
+                json!({ "option": option })
+            )
+            .await
+        );
+    }
+    let done = turn.next("done").await;
+    assert_eq!(
+        done["data"]["reply"], "All sixty looked at.",
+        "the turn was not cut at forty steps"
+    );
+}

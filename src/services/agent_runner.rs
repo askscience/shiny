@@ -453,8 +453,14 @@ where
     let mut hinted: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
 
     let mut voice_consent = input.voice_consent.clone();
-    let max_steps = if input.builder { MAX_BUILDER_STEPS } else { MAX_TOOL_STEPS };
-    for iteration in 0..max_steps {
+    // A chat that already builds plugins starts with the longer leash; one that
+    // opens the builder during this turn gets it from that moment.
+    let mut max_steps = if input.builder { MAX_BUILDER_STEPS } else { MAX_TOOL_STEPS };
+    let mut iteration = 0usize;
+    while iteration < max_steps {
+        let this_iteration = iteration;
+        iteration += 1;
+        let iteration = this_iteration;
         if turn_stopped(&cancel) {
             interrupted = true;
             break;
@@ -757,6 +763,9 @@ where
             // them this conversation may call is decided in `commands::run`.
             let builder_command = dialog.is_none()
                 && crate::services::plugin_dev::module_of(&normalize_action_name(&action)).is_some();
+            if builder_command || dialog == Some(crate::services::plugin_dev::dialog::PLUGIN_DEV_START) {
+                max_steps = MAX_BUILDER_STEPS;
+            }
 
             let executed = match dialog {
                 Some(name) => {
