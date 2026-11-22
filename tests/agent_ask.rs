@@ -577,6 +577,7 @@ async fn builder_turn(
                     );
                 }
                 "approval" => {
+                    tools.push(json!({ "action": "<consent asked>" }));
                     let body = json!({
                         "turn_id": turn_id,
                         "request_id": event["request_id"],
@@ -803,6 +804,8 @@ async fn a_python_plugin_is_checked_installed_and_used() {
         &call("plugin_dev_patch", json!({ "path": "engine/plugin.py", "find": "import uuid\nimport requests", "replace": "import uuid" })),
         &call("check_all", json!({})),
         &call("plugin_dev_pack", json!({})),
+        // Nothing is packed: this refuses without asking the user anything.
+        &call("plugin_dev_install", json!({ "early": true })),
         &call("py_check", json!({})),
         &call("py_test", json!({})),
         &call("plugin_dev_pack", json!({})),
@@ -813,6 +816,10 @@ async fn a_python_plugin_is_checked_installed_and_used() {
         "Installed.",
     ]);
     let (conversation, tools) = builder_turn(&fixture, "p1", None, &answers).await;
+    let consents = tools
+        .iter()
+        .filter(|tool| tool["action"] == "<consent asked>")
+        .count();
 
     assert_eq!(
         card(&tools, "plugin_dev_write", 0)["result"],
@@ -851,7 +858,16 @@ async fn a_python_plugin_is_checked_installed_and_used() {
         card(&tools, "plugin_dev_pack", 1)["data"]["archive"],
         "dist/tasks-0.1.0.tar.gz"
     );
-    let install = card(&tools, "plugin_dev_install", 0);
+    assert_eq!(
+        card(&tools, "plugin_dev_install", 0)["result"],
+        "error",
+        "not packed yet"
+    );
+    assert_eq!(
+        consents, 1,
+        "only the install that could happen asked for consent"
+    );
+    let install = card(&tools, "plugin_dev_install", 1);
     assert_eq!(install["result"], "ok", "{install:#}");
     let status = &card(&tools, "plugin_dev_status", 0)["data"];
     assert_eq!(status["installed"]["running"], true, "{status:#}");

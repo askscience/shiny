@@ -588,7 +588,23 @@ where
             // could destroy the system, then the user allows or denies what is
             // left (unless this chat already allows everything). A refused
             // call never runs.
-            let gated = gated_action(state, &action, &params);
+            let mut gated = gated_action(state, &action, &params);
+            // A builder command that would refuse anyway (nothing packed to
+            // install, no previous version to put back) says so itself: the
+            // user is not asked to allow something that will not happen.
+            if gated.as_ref().is_some_and(|gated| gated.tool.starts_with("plugin_dev_")) {
+                let command = normalize_action_name(&action);
+                let builder = crate::services::plugin_dev::commands::Builder {
+                    state,
+                    traveler,
+                    conversation_id: &input.conversation_id,
+                    cancel: cancel.as_ref(),
+                    remote: input.remote,
+                };
+                if crate::services::plugin_dev::commands::refuses_before_asking(&builder, &command, &params).await {
+                    gated = None;
+                }
+            }
             // The tool must run exactly the command that was shown: hand it
             // the approved string under `command` and nothing under `cmd`.
             let mut params = params;

@@ -71,6 +71,43 @@ fn required(params: &Value, key: &str) -> Result<String, AppError> {
     text(params, key).ok_or_else(|| AppError::BadRequest(format!("{key} required")))
 }
 
+/// Whether a command that asks the user's consent would be refused anyway.
+/// The agent loop asks before it runs a gated command; asking "install this
+/// plugin?" and then answering "it is not packed" wastes the user's yes.
+pub async fn refuses_before_asking(builder: &Builder<'_>, action: &str, params: &Value) -> bool {
+    if builder.remote {
+        return true;
+    }
+    let Ok(chat) = state::load(&builder.state.pool, builder.conversation_id, &builder.traveler.id).await else {
+        return false;
+    };
+    if super::scope_refusal(action, chat.language).is_some() {
+        return true;
+    }
+    if NEEDS_PLAN.contains(&action) && chat.plan_state != PlanState::Approved {
+        return true;
+    }
+    let Some(name) = named(&chat, params) else { return true };
+    let plugins = &builder.state.plugins;
+    match action {
+        "plugin_dev_install" => {
+            let workspaces = Workspaces::beside_plugins(&builder.state.config.plugins_dir);
+            workspaces.open(&name).map_or(true, |workspace| package::packed_archive(&workspace).is_err())
+        }
+        "plugin_dev_rollback" => {
+            off_limits(builder, &name).is_some()
+                || !std::path::Path::new(&builder.state.config.plugins_dir)
+                    .join(format!("{name}.bak"))
+                    .join("plugin.toml")
+                    .is_file()
+        }
+        "plugin_dev_uninstall" => {
+            off_limits(builder, &name).is_some() || !plugins.is_installed(&name) || plugins.is_system_only(&name)
+        }
+        _ => false,
+    }
+}
+
 /// Run one builder command for this conversation.
 pub async fn run(builder: &Builder<'_>, action: &str, params: &Value) -> Result<ActionOutcome, AppError> {
     if builder.remote {
