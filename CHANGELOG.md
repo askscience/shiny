@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-11-22
+
 ### Added
 
 - **The assistant can ask before it acts.** Three new core actions show a
