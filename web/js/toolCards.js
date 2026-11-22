@@ -39,7 +39,9 @@ const HOUSEKEEPING = [
 /** Longest-specific first: the family a tool's card is drawn as. */
 const FAMILIES = [
   ['plugin_dev_', 'builder'],
+  ['check_', 'builder'],
   ['rust_', 'builder'],
+  ['py_', 'builder'],
   ['radio_', 'radio'],
   ['calendar_', 'calendar'],
   ['mail_', 'mail'],
@@ -528,7 +530,7 @@ function builderCard(record, d, name, p) {
     title: item.file ? `${item.file}${item.line ? `:${item.line}` : ''}` : str(item.check),
     meta: oneLine(item.message, 160),
   });
-  if (name === 'plugin_dev_check') {
+  if (name.startsWith('check_')) {
     const errors = list(d.errors);
     const card = shell(record, 'builder', [family, d.ok
       ? t('chat.toolCard.builder.checksPassed', null, 'Checks passed')

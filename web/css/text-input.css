@@ -1070,7 +1070,13 @@ button.tool-card-row:focus-visible .tool-card-row-title { color: var(--accent); 
   text-align: left;
   white-space: normal;
   font-weight: 400;
+  /* A row of the card, not a button plate: a theme's button skin (Ink's is
+     light) would hide the muted lines inside it. */
+  background: var(--glass);
+  color: var(--text);
 }
+
+.ask-card-choices button.ask-card-choice:not(:disabled):hover { border-color: var(--accent); }
 
 .ask-card-choices .ask-card-choice.is-unavailable { opacity: 0.6; cursor: default; }
 .ask-card-choices.is-resolved .ask-card-choice { opacity: 0.55; }

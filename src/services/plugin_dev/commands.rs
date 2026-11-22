@@ -113,7 +113,10 @@ pub async fn run(builder: &Builder<'_>, action: &str, params: &Value) -> Result<
                 "plugin_dev_write" => write(&workspace, params),
                 "plugin_dev_patch" => patch(&workspace, params),
                 "plugin_dev_delete" => delete(&workspace, params),
-                "plugin_dev_check" => check(builder, workspace, params),
+                "check_all" => check(builder, workspace, action, None),
+                "check_manifest" | "check_web" | "check_i18n" | "check_migrations" | "check_conflicts" => {
+                    check(builder, workspace, action, action.strip_prefix("check_"))
+                }
                 "rust_build" => build(builder, &workspaces, workspace).await,
                 "plugin_dev_pack" => pack(workspace),
                 "plugin_dev_install" => install(builder, workspace).await,
@@ -320,10 +323,14 @@ fn surroundings(builder: &Builder<'_>, name: &str) -> checks::Surroundings {
     }
 }
 
-fn check(builder: &Builder<'_>, mut workspace: Workspace, params: &Value) -> Result<ActionOutcome, AppError> {
-    let only = text(params, "only");
-    let report = checks::run(&workspace, only.as_deref(), &surroundings(builder, &workspace.name))
-        .map_err(AppError::BadRequest)?;
+/// One check (`check_web`, …) or all of them (`check_all`).
+fn check(
+    builder: &Builder<'_>,
+    mut workspace: Workspace,
+    action: &str,
+    only: Option<&str>,
+) -> Result<ActionOutcome, AppError> {
+    let report = checks::run(&workspace, only, &surroundings(builder, &workspace.name)).map_err(AppError::BadRequest)?;
     // Only the whole set, passed, lets the plugin be packed.
     let whole = only.is_none();
     if whole {
@@ -334,10 +341,10 @@ fn check(builder: &Builder<'_>, mut workspace: Workspace, params: &Value) -> Res
     let mut data = report.to_json();
     data["note"] = json!(match (report.ok(), whole) {
         (true, true) => "Every check passed on the current sources.".to_string(),
-        (true, false) => "This check passed. Run plugin_dev_check without \"only\" before packing.".to_string(),
+        (true, false) => "This check passed. Run check_all before packing.".to_string(),
         (false, _) => format!("{errors} error(s) to fix, each with its file. Fix them and check again."),
     });
-    Ok(outcome("plugin_dev_check", "ok", data))
+    Ok(outcome(action, "ok", data))
 }
 
 async fn build(

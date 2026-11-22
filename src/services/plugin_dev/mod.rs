@@ -106,7 +106,12 @@ const COMMANDS: &[(&str, Module)] = &[
     ("plugin_dev_write", Module::Common),
     ("plugin_dev_patch", Module::Common),
     ("plugin_dev_delete", Module::Common),
-    ("plugin_dev_check", Module::Common),
+    ("check_manifest", Module::Common),
+    ("check_web", Module::Common),
+    ("check_i18n", Module::Common),
+    ("check_migrations", Module::Common),
+    ("check_conflicts", Module::Common),
+    ("check_all", Module::Common),
     ("plugin_dev_pack", Module::Common),
     ("plugin_dev_install", Module::Common),
     ("plugin_dev_status", Module::Common),
@@ -187,7 +192,7 @@ mod tests {
     fn a_chat_sees_the_common_commands_and_its_own_languages() {
         let rust = commands_for(Some(Language::Rust));
         let python = commands_for(Some(Language::Python));
-        for common in ["plugin_dev_new", "plugin_dev_check", "plugin_dev_install"] {
+        for common in ["plugin_dev_new", "check_all", "plugin_dev_install"] {
             assert!(rust.contains(&common) && python.contains(&common), "{common}");
         }
         assert!(rust.contains(&"rust_build") && !python.contains(&"rust_build"));

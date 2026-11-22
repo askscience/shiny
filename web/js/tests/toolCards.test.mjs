@@ -423,11 +423,11 @@ check('malformed record: no card', renderToolCard('not json') === null && render
     ['plugin_dev_read', 'plugin_dev_tree', 'plugin_dev_list', 'plugin_dev_status', 'plugin_dev_logs']
       .every((action) => renderToolCard({ action, result: 'ok', data: {} }) === null));
   check('builder: its other steps are not housekeeping, unlike plugin_activate',
-    !isHousekeepingTool('plugin_dev_check') && isHousekeepingTool('plugin_activate'));
-  check('builder: family', toolCardFamily('plugin_dev_check') === 'builder' && toolCardFamily('rust_build') === 'builder');
+    !isHousekeepingTool('check_all') && isHousekeepingTool('plugin_activate'));
+  check('builder: family', toolCardFamily('check_web') === 'builder' && toolCardFamily('rust_build') === 'builder');
 
   const failed = renderToolCard({
-    action: 'plugin_dev_check', result: 'ok',
+    action: 'check_all', result: 'ok',
     data: { ok: false, errors: [
       { check: 'web', file: 'web/plugin.js', line: 12, message: 'import "/ui/index.js" is not relative' },
       { check: 'manifest', file: 'plugin.toml', message: 'description is missing' },
@@ -438,7 +438,7 @@ check('malformed record: no card', renderToolCard('not json') === null && render
   check('builder check: each error with its file and line',
     rowTitles[0] === 'web/plugin.js:12' && rowTitles[1] === 'plugin.toml', rowTitles.join('|'));
 
-  const passed = renderToolCard({ action: 'plugin_dev_check', result: 'ok', data: { ok: true, errors: [] } });
+  const passed = renderToolCard({ action: 'check_all', result: 'ok', data: { ok: true, errors: [] } });
   check('builder check: passed is one line', label(passed) === 'Plugin · Checks passed' && passed.children.length === 1);
 
   const broken = renderToolCard({

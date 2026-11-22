@@ -689,9 +689,9 @@ async fn nothing_is_built_without_a_language_a_plan_and_the_right_module() {
         &call("plugin_dev_new", json!({ "name": "notes", "title": "Notes", "description": "Quick notes" })),
         &call("plugin_dev_read", json!({ "path": "plugin.toml" })),
         &call("plugin_dev_patch", json!({ "path": "web/plugin.js", "find": "'plugin.notes.add'", "replace": "'plugin.notes.addNew'" })),
-        &call("plugin_dev_check", json!({})),
+        &call("check_all", json!({})),
         &call("plugin_dev_patch", json!({ "path": "web/plugin.js", "find": "'plugin.notes.addNew'", "replace": "'plugin.notes.add'" })),
-        &call("plugin_dev_check", json!({})),
+        &call("check_all", json!({})),
         &call("plugin_dev_write", json!({ "path": "../escape.rs", "content": "x" })),
         &call("plugin_dev_pack", json!({})),
         &call("plugin_dev_status", json!({})),
@@ -709,14 +709,14 @@ async fn nothing_is_built_without_a_language_a_plan_and_the_right_module() {
         .as_str()
         .unwrap()
         .contains("name = \"notes\""));
-    let failed = &card(&tools, "plugin_dev_check", 0)["data"];
+    let failed = &card(&tools, "check_all", 0)["data"];
     assert_eq!(failed["ok"], false);
     assert_eq!(failed["errors"][0]["file"], "web/plugin.js");
     assert_eq!(
-        card(&tools, "plugin_dev_check", 1)["data"]["ok"],
+        card(&tools, "check_all", 1)["data"]["ok"],
         true,
         "{:#?}",
-        card(&tools, "plugin_dev_check", 1)
+        card(&tools, "check_all", 1)
     );
     assert_eq!(
         card(&tools, "plugin_dev_write", 0)["result"],
@@ -796,7 +796,7 @@ async fn nothing_is_built_without_a_language_a_plan_and_the_right_module() {
     );
     let docs = fixture.model.prompt(0);
     assert!(
-        docs.contains("plugin_dev_check") && !docs.contains("rust_build"),
+        docs.contains("check_all") && !docs.contains("rust_build"),
         "only this chat's commands: {docs}"
     );
 }
@@ -829,10 +829,10 @@ async fn a_rust_plugin_is_built_installed_and_used() {
         &call("plugin_dev_new", json!({ "name": "notes", "title": "Notes", "description": "Quick notes" })),
         // A mistake the compiler has to find.
         &call("plugin_dev_patch", json!({ "path": "src/store.rs", "find": "let id = uuid::Uuid::new_v4().to_string();", "replace": "let id: i64 = uuid::Uuid::new_v4().to_string();" })),
-        &call("plugin_dev_check", json!({})),
+        &call("check_all", json!({})),
         &call("rust_build", json!({})),
         &call("plugin_dev_patch", json!({ "path": "src/store.rs", "find": "let id: i64 = ", "replace": "let id = " })),
-        &call("plugin_dev_check", json!({})),
+        &call("check_all", json!({})),
         &call("rust_build", json!({})),
         &call("plugin_dev_pack", json!({})),
         &call("plugin_dev_install", json!({})),

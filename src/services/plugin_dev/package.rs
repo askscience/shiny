@@ -37,7 +37,7 @@ pub fn pack(workspace: &mut Workspace) -> Result<Packed, AppError> {
     let sources = workspace.sources_digest();
     if workspace.meta.checked.as_deref() != Some(sources.as_str()) {
         return Err(refused(
-            "the checks have not passed on these sources. Run plugin_dev_check (all of it) and fix what it \
+            "the checks have not passed on these sources. Run check_all and fix what it \
              reports, then pack.",
         ));
     }

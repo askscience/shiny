@@ -37,7 +37,7 @@ The commands are split in modules (`plugin_dev/mod.rs`, the `COMMANDS` table):
 | Module | Commands | A conversation has it when |
 |---|---|---|
 | entry | `plugin_dev_start` | always |
-| common | `plugin_dev_new`, `plugin_dev_list`, `plugin_dev_tree`, `plugin_dev_read`, `plugin_dev_write`, `plugin_dev_patch`, `plugin_dev_delete`, `plugin_dev_check`, `plugin_dev_pack`, `plugin_dev_install`, `plugin_dev_status`, `plugin_dev_logs` | it has chosen a language |
+| common | `plugin_dev_new`, `plugin_dev_list`, `plugin_dev_tree`, `plugin_dev_read`, `plugin_dev_write`, `plugin_dev_patch`, `plugin_dev_delete`, `check_all`, `check_manifest`, `check_web`, `check_i18n`, `check_migrations`, `check_conflicts`, `plugin_dev_pack`, `plugin_dev_install`, `plugin_dev_status`, `plugin_dev_logs` | it has chosen a language |
 | rust | `rust_doctor`, `rust_build` | it chose Rust |
 | python | — (the Python kit is not in this version yet) | it chose Python |
 
@@ -75,7 +75,8 @@ two routes) that the assistant reads and then turns into what was asked.
 
 ## Checks
 
-`plugin_dev_check` runs static checks (`checks.rs`); `only` runs one of them.
+`check_all` runs the static checks (`checks.rs`); `check_manifest`,
+`check_web`, `check_i18n`, `check_migrations` and `check_conflicts` run one.
 Every finding names a file and, where it can, a line.
 
 | Check | What it holds the plugin to |
@@ -96,7 +97,7 @@ Each step records the fingerprint of the sources it ran on
 (`Workspace::sources_digest`, in `.workspace.json`) and the next step refuses
 sources it did not see:
 
-1. `plugin_dev_check` without `only`, passed, records `checked`.
+1. `check_all`, passed, records `checked`.
 2. `rust_build` runs `cargo build --release` in the workspace (the command is
    fixed), into a target directory all workspaces share
    (`<data>/plugin-dev/.target`), and copies the executable to `bin/<name>`.
