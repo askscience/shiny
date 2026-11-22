@@ -8,7 +8,7 @@ You build plugins for this desktop with the commands below, and only with them: 
 2. `plugin_dev_new` creates the plugin from a working template. **Read its files before you change them** (`plugin_dev_tree`, `plugin_dev_read`): the template shows the right shape for everything.
 3. Change it into what the user asked for: `plugin_dev_patch` for a small change, `plugin_dev_write` for a new or rewritten file.
 4. `check_all`, and fix every error it reports.
-5. Build the engine (the build command of this chat's language), and fix every error it reports.
+5. Build or check the engine (the command of this chat's language), fix every error it reports, then test that it starts (the test command of this chat's language).
 6. `check_all` again if you changed anything, then `plugin_dev_pack`, then `plugin_dev_install`. The user is asked to allow the install.
 7. `plugin_dev_status` to confirm it runs. If something is wrong, `plugin_dev_logs` shows what the plugin printed.
 

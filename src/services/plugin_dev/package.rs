@@ -15,7 +15,9 @@ use super::workspace::{Packed, Workspace};
 use crate::errors::AppError;
 
 /// What goes in an archive besides `plugin.toml` and the executable.
-const CONTENT_DIRS: &[&str] = &["web", "skills", "migrations"];
+/// `engine/` is a Python plugin's code; a Rust plugin has none (its engine is
+/// the executable, and `src/` is not installed).
+const CONTENT_DIRS: &[&str] = &["web", "skills", "migrations", "engine"];
 
 fn refused(message: impl Into<String>) -> AppError {
     AppError::BadRequest(message.into())

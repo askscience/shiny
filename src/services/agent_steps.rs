@@ -711,6 +711,8 @@ pub fn step_label_for_action(action: &str) -> StepText {
         "check_all" | "check_manifest" | "check_web" | "check_i18n" | "check_migrations"
         | "check_conflicts" => StepText::new("step.checkingPlugin", "Checking the plugin…"),
         "rust_build" => StepText::new("step.buildingPlugin", "Compiling the plugin…"),
+        "py_check" => StepText::new("step.checkingPlugin", "Checking the plugin…"),
+        "rust_test" | "py_test" => StepText::new("step.testingPlugin", "Starting the plugin to test it…"),
         "plugin_dev_pack" => StepText::new("step.packingPlugin", "Packing the plugin…"),
         "plugin_dev_install" => StepText::new("step.installingPlugin", "Installing the plugin…"),
         _ => StepText::new("step.working", "Working…"),
@@ -937,7 +939,7 @@ mod tests {
             "youtube_search", "youtube_play", "calc_create", "calc_write", "calc_clear", "calc_read",
             "calc_list", "calc_delete", "slide_create", "slide_write", "slide_edit", "slide_read",
             "slide_list", "slide_delete", "workspaces_unavailable", "ask_user", "plan_propose",
-            "plugin_dev_start", "plugin_dev_new", "plugin_dev_write", "check_all", "check_web", "rust_build",
+            "plugin_dev_start", "plugin_dev_new", "plugin_dev_write", "check_all", "check_web", "rust_build", "py_check", "py_test",
             "plugin_dev_pack", "plugin_dev_install", "something_unknown",
         ];
         for action in actions {

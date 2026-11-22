@@ -23,8 +23,12 @@
   it. Errors come back with their file and line, the compiler's included.
   Nothing is written before the plan is approved, the install asks for
   consent, and none of it works over a remote connection. Each step shows as
-  a card in the chat. Rust plugins only for now; see
-  [the plugin builder](docs/plugins/builder.md).
+  a card in the chat. See [the plugin builder](docs/plugins/builder.md).
+- **Plugins in Python or in Rust.** The user chooses on a card. A Python
+  plugin needs nothing but the Python that comes with LiteAura: its engine is
+  one file using the standard library and a small kit that speaks the plugin
+  protocol; it is checked, started as a test and installed in seconds. A
+  Rust plugin is compiled, like the bundled ones.
 - **Choosing Rust installs what the machine lacks.** The package now ships
   the plugin SDK (`/usr/share/shiny/plugin-sdk`) and recommends `gcc`. When
   the Rust compiler is missing, choosing Rust on the card downloads it into

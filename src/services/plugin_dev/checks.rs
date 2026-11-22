@@ -510,7 +510,7 @@ type Declared = (String, usize, String);
 
 /// The tool names and route paths a plugin's engine declares, read from its
 /// sources: `fn name(&self) -> &str { "…" }` and `RouteSpec::get("…", …)` in
-/// Rust, `name = "…"` on a tool and `route("GET", "…")` in Python.
+/// Rust, `@plugin.tool("…")` and `@plugin.route("GET", "…")` in Python.
 fn declared(sources: &Sources) -> (Vec<Declared>, Vec<Declared>) {
     let mut tools = Vec::new();
     let mut routes = Vec::new();
@@ -529,12 +529,19 @@ fn declared(sources: &Sources) -> (Vec<Declared>, Vec<Declared>) {
             }
         }
     }
-    for (path, text) in sources.under("", ".py") {
-        for (at, name) in literals_after(text, "@tool(") {
+    for (path, text) in sources.under("engine/", ".py") {
+        // The kit's own docstring shows an example: it declares nothing.
+        if path == crate::services::plugin_dev::python::KIT_PATH {
+            continue;
+        }
+        for (at, name) in literals_after(text, "plugin.tool(") {
             tools.push((path.to_string(), line_of(text, at), name.to_string()));
         }
-        for marker in ["@route(\"GET\",", "@route(\"POST\",", "@route(\"PUT\",", "@route(\"DELETE\",", "@route(\"PATCH\","] {
-            for (at, route) in literals_after(text, marker) {
+        // `@plugin.route("GET", "/api/…")`: the path is the second literal.
+        for (at, method) in literals_after(text, "plugin.route(") {
+            let rest = &text[at..];
+            let after_method = rest.find(method).map(|index| &rest[index + method.len() + 1..]).unwrap_or("");
+            if let Some((_, route)) = literals_after(after_method, ",").first() {
                 routes.push((path.to_string(), line_of(text, at), route.to_string()));
             }
         }
@@ -765,6 +772,31 @@ mod tests {
 
         let report = run(&workspace, Some("conflicts"), &Surroundings { overrides_system: true, ..Surroundings::default() }).unwrap();
         assert!(report.findings.iter().any(|f| !f.error && f.message.contains("replaces the system plugin")));
+    }
+
+    #[test]
+    fn a_python_engine_is_held_to_the_same_names() {
+        let root = tempfile::tempdir().unwrap();
+        let workspace = Workspaces::at(root.path().join("plugin-dev")).create("notes", Language::Python).unwrap();
+        let values = TemplateValues::of(&NewPlugin {
+            name: "notes".into(),
+            title: "Notes".into(),
+            description: "Quick notes".into(),
+            category: "Office".into(),
+        });
+        scaffold_common(&workspace, &values).unwrap();
+        crate::services::plugin_dev::python::scaffold(&workspace, &values).unwrap();
+        let report = run(&workspace, None, &Surroundings::default()).unwrap();
+        assert!(report.findings.is_empty(), "the Python template passes every check: {:#?}", report.findings);
+
+        workspace.patch("engine/plugin.py", "@plugin.tool(\"notes_add\"", "@plugin.tool(\"purge\"", false).unwrap();
+        workspace
+            .patch("engine/plugin.py", "@plugin.route(\"POST\", \"/api/notes/items\")", "@plugin.route(\"POST\", \"/api/other\")", false)
+            .unwrap();
+        let found = errors(&workspace, "conflicts", &Surroundings::default());
+        assert!(found.iter().any(|l| l.contains("engine/plugin.py") && l.contains("the tool \"purge\" must be named \"notes_…\"")), "{found:#?}");
+        assert!(found.iter().any(|l| l.contains("the route \"/api/other\" must be under \"/api/notes/\"")), "{found:#?}");
+        assert!(found.iter().any(|l| l.contains("the skill never names the tool \"purge\"")), "{found:#?}");
     }
 
     #[test]

@@ -743,40 +743,20 @@ async fn nothing_is_built_without_a_language_a_plan_and_the_right_module() {
     assert_eq!(status["sources"]["built"], false);
     assert_eq!(status["installed"], Value::Null);
 
-    // Python has no kit in this version: the card shows it and an answer
-    // naming it binds the chat to nothing.
+    // Another chat chose Python: the Rust commands are not its own, and the
+    // Rust plugin belongs to the other chat's language.
     let python = Answers {
         language: "python",
         plan: "approve",
         allow: true,
     };
-    fixture
-        .model
-        .script(&[&call("plugin_dev_start", json!({})), "Not available."]);
-    let (other, _) = builder_turn(&fixture, "g3", None, &python).await;
-    assert_eq!(stored(&fixture, &other).await.0, None);
-    assert!(
-        fixture
-            .model
-            .prompt(1)
-            .contains("Python cannot be used on this machine yet"),
-        "{}",
-        fixture.model.prompt(1)
-    );
-
-    // A chat whose language is Python (as one will be once the kit ships):
-    // the Rust commands are not its own, and the Rust plugin is another chat's.
-    sqlx::query("INSERT INTO chat_agent_state (conversation_id, traveler_id, dev_language) VALUES (?, 'ada', 'python')")
-        .bind(&other)
-        .execute(&fixture.app.state.pool)
-        .await
-        .unwrap();
     fixture.model.script(&[
+        &call("plugin_dev_start", json!({})),
         &call("rust_build", json!({})),
         &call("plugin_dev_tree", json!({ "name": "notes" })),
         "Not here.",
     ]);
-    let (_, tools) = builder_turn(&fixture, "g4", Some(&other), &python).await;
+    let (_, tools) = builder_turn(&fixture, "g3", None, &python).await;
     let build = card(&tools, "rust_build", 0);
     assert_eq!(build["result"], "error");
     assert!(
@@ -794,11 +774,123 @@ async fn nothing_is_built_without_a_language_a_plan_and_the_right_module() {
             .contains("written in Rust"),
         "{tree}"
     );
-    let docs = fixture.model.prompt(0);
+    let docs = fixture.model.prompt(1);
     assert!(
-        docs.contains("check_all") && !docs.contains("rust_build"),
+        docs.contains("py_check") && !docs.contains("rust_build"),
         "only this chat's commands: {docs}"
     );
+}
+
+/// A Python plugin, the whole road: created, checked, started as a test,
+/// packed, installed with the user's consent, then used through its tool and
+/// its route. Nothing is compiled, so this runs with the other tests.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_python_plugin_is_checked_installed_and_used() {
+    let fixture = fixture().await;
+    let answers = Answers {
+        language: "python",
+        plan: "approve",
+        allow: true,
+    };
+    fixture.model.script(&[
+        &call("plugin_dev_start", json!({})),
+        &call("plan_propose", json!({ "title": "Tasks", "steps": ["Create", "Check", "Install"] })),
+        &call("plugin_dev_new", json!({ "name": "tasks", "title": "Tasks", "description": "A task list" })),
+        // A mistake the check has to find, and an edit the kit refuses.
+        &call("plugin_dev_patch", json!({ "path": "engine/plugin.py", "find": "import uuid", "replace": "import uuid\nimport requests" })),
+        &call("plugin_dev_write", json!({ "path": "engine/shiny_plugin.py", "content": "print('mine')" })),
+        &call("py_check", json!({})),
+        &call("plugin_dev_patch", json!({ "path": "engine/plugin.py", "find": "import uuid\nimport requests", "replace": "import uuid" })),
+        &call("check_all", json!({})),
+        &call("plugin_dev_pack", json!({})),
+        &call("py_check", json!({})),
+        &call("py_test", json!({})),
+        &call("plugin_dev_pack", json!({})),
+        &call("plugin_dev_install", json!({})),
+        &call("plugin_dev_status", json!({})),
+        &call("tasks_add", json!({ "text": "Water the plants" })),
+        &call("tasks_list", json!({})),
+        "Installed.",
+    ]);
+    let (_, tools) = builder_turn(&fixture, "p1", None, &answers).await;
+
+    assert_eq!(
+        card(&tools, "plugin_dev_write", 0)["result"],
+        "error",
+        "the kit is not edited"
+    );
+    let broken = &card(&tools, "py_check", 0)["data"];
+    assert_eq!(broken["ok"], false, "{broken:#}");
+    assert_eq!(broken["errors"][0]["file"], "engine/plugin.py");
+    assert!(
+        broken["errors"][0]["message"]
+            .as_str()
+            .unwrap()
+            .contains("import of 'requests'"),
+        "{broken:#}"
+    );
+    assert_eq!(
+        card(&tools, "check_all", 0)["data"]["ok"],
+        true,
+        "{:#}",
+        card(&tools, "check_all", 0)
+    );
+    // Its engine was not checked since the last change: no pack yet.
+    assert_eq!(card(&tools, "plugin_dev_pack", 0)["result"], "error");
+    assert_eq!(card(&tools, "py_check", 1)["data"]["ok"], true);
+    let tested = &card(&tools, "py_test", 0)["data"];
+    assert_eq!(tested["started"], true, "{tested:#}");
+    assert_eq!(tested["ok"], true, "{tested:#}");
+    assert_eq!(tested["tools"], json!(["tasks_add", "tasks_list"]));
+    assert_eq!(
+        tested["routes"],
+        json!(["GET /api/tasks/items", "POST /api/tasks/items"])
+    );
+
+    assert_eq!(
+        card(&tools, "plugin_dev_pack", 1)["data"]["archive"],
+        "dist/tasks-0.1.0.tar.gz"
+    );
+    let install = card(&tools, "plugin_dev_install", 0);
+    assert_eq!(install["result"], "ok", "{install:#}");
+    let status = &card(&tools, "plugin_dev_status", 0)["data"];
+    assert_eq!(status["installed"]["running"], true, "{status:#}");
+    assert_eq!(
+        status["installed"]["tools"],
+        json!(["tasks_add", "tasks_list"])
+    );
+
+    assert_eq!(
+        card(&tools, "tasks_add", 0)["result"],
+        "ok",
+        "{:#}",
+        card(&tools, "tasks_add", 0)
+    );
+    let listed = &card(&tools, "tasks_list", 0)["data"];
+    assert_eq!(listed["count"], 1);
+    assert_eq!(listed["items"][0]["text"], "Water the plants");
+
+    let router = shiny::api::build_router(fixture.app.state.clone());
+    let mut request = Request::builder()
+        .uri("/api/tasks/items")
+        .header("authorization", "Bearer ada")
+        .body(Body::empty())
+        .unwrap();
+    request.extensions_mut().insert(ConnectInfo(
+        "127.0.0.1:1234".parse::<std::net::SocketAddr>().unwrap(),
+    ));
+    let response = router.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        json_body(response).await["data"]["items"][0]["text"],
+        "Water the plants"
+    );
+
+    // The installed copy carries its kit.
+    let installed = fixture.app.root.path().join("plugins/tasks");
+    assert!(installed.join("engine/shiny_plugin.py").is_file());
+    assert!(installed.join("bin/tasks").is_file());
+    fixture.app.state.plugins.stop_processes().await;
 }
 
 /// The whole road with the real compiler: create, check, build, pack, install
@@ -834,6 +926,7 @@ async fn a_rust_plugin_is_built_installed_and_used() {
         &call("plugin_dev_patch", json!({ "path": "src/store.rs", "find": "let id: i64 = ", "replace": "let id = " })),
         &call("check_all", json!({})),
         &call("rust_build", json!({})),
+        &call("rust_test", json!({})),
         &call("plugin_dev_pack", json!({})),
         &call("plugin_dev_install", json!({})),
         &call("plugin_dev_status", json!({})),
@@ -855,6 +948,9 @@ async fn a_rust_plugin_is_built_installed_and_used() {
         card(&tools, "plugin_dev_pack", 0)["data"]["archive"],
         "dist/notes-0.1.0.tar.gz"
     );
+    let tested = &card(&tools, "rust_test", 0)["data"];
+    assert_eq!(tested["started"], true, "{tested:#}");
+    assert_eq!(tested["tools"], json!(["notes_add", "notes_list"]));
     let install = card(&tools, "plugin_dev_install", 0);
     assert_eq!(install["result"], "ok", "{install:#}");
     assert_eq!(install["data"]["tools"], json!(["notes_add", "notes_list"]));

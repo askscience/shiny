@@ -38,8 +38,8 @@ The commands are split in modules (`plugin_dev/mod.rs`, the `COMMANDS` table):
 |---|---|---|
 | entry | `plugin_dev_start` | always |
 | common | `plugin_dev_new`, `plugin_dev_list`, `plugin_dev_tree`, `plugin_dev_read`, `plugin_dev_write`, `plugin_dev_patch`, `plugin_dev_delete`, `check_all`, `check_manifest`, `check_web`, `check_i18n`, `check_migrations`, `check_conflicts`, `plugin_dev_pack`, `plugin_dev_install`, `plugin_dev_status`, `plugin_dev_logs` | it has chosen a language |
-| rust | `rust_doctor`, `rust_build` | it chose Rust |
-| python | — (the Python kit is not in this version yet) | it chose Python |
+| rust | `rust_doctor`, `rust_build`, `rust_test` | it chose Rust |
+| python | `py_check`, `py_test` | it chose Python |
 
 `scope_refusal` refuses a command of a module the conversation does not have,
 whatever the prompt says. The prompt follows the same split: a conversation
@@ -119,6 +119,36 @@ plugin runs (version, process id, tools, routes); `plugin_dev_logs` returns
 the last lines the plugin printed (`[<name>] …` in the server log) and its
 install events.
 
+## Python plugins
+
+A Python plugin needs only `python3`, which the LiteAura package depends on:
+nothing is compiled and nothing is downloaded.
+
+- `engine/plugin.py` is the engine: tools declared with `@plugin.tool(…)`,
+  routes with `@plugin.route("GET", "/api/<name>/…")`, data through
+  `ctx.query` / `ctx.execute` (the standard `sqlite3` module on the
+  application database).
+- `engine/shiny_plugin.py` is the **kit**
+  (`plugin_dev/templates/python/engine/shiny_plugin.py`): the plugin side of
+  the [process protocol](process-plugins.md#the-protocol), version 1, in the
+  standard library only. It answers the handshake, the lifecycle calls, tool
+  calls and forwarded route requests, serves one call at a time, and exits
+  when the server goes away or takes its socket. It is copied into every
+  plugin, so an installed plugin carries the kit it was written against; the
+  builder refuses to edit it and `py_check` restores it if it changed.
+- `py_check` parses every file of `engine/` (nothing is executed) and reports
+  syntax errors and imports of anything but the standard library and the
+  plugin's own files, with file and line. When it passes it writes the
+  launcher `bin/<name>` (`exec python3 -B -s engine/plugin.py`), which is what
+  makes the plugin packable, as a build does for Rust.
+- `py_test` (and `rust_test`) start the engine as the server would, without
+  installing it, and report whether it answers the handshake and which tools
+  and routes it declares. Nothing of it is called and it is stopped at once.
+
+The kit is a second implementation of the protocol next to the Rust SDK's:
+a change to the protocol has to reach both (`tests/agent_ask.rs` runs a
+Python plugin through the real server on every test run).
+
 ## What a Rust plugin needs on the machine
 
 `rust_doctor` and the choice card read `rust::readiness()`:
@@ -169,7 +199,5 @@ chosen, and the assistant says it is set up from the text chat.
 
 ## Not there yet
 
-- Python plugins: the choice card shows the language as not available yet and
-  says its kit is missing; it cannot be chosen.
 - Working on an installed plugin's window and skill, rolling back, the
   window's JavaScript errors, calling a route or a tool as a test.

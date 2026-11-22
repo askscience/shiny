@@ -21,6 +21,9 @@ Every plugin is a process plugin except **terminal**, **updates** and
 **installer**: they manage the server itself, ship in the Debian package and
 stay libraries.
 
+A process plugin need not be written in Rust: the plugin builder's Python
+kit speaks the same protocol ([builder.md](builder.md#python-plugins)).
+
 Source: [`crates/shiny-plugin-protocol`](../../crates/shiny-plugin-protocol/src/lib.rs)
 (the contract), [`crates/shiny-plugin-sdk/src/process.rs`](../../crates/shiny-plugin-sdk/src/process.rs)
 (plugin side), [`src/plugins/process.rs`](../../src/plugins/process.rs) (server

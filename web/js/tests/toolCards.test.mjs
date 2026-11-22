@@ -450,6 +450,18 @@ check('malformed record: no card', renderToolCard('not json') === null && render
   const built = renderToolCard({ action: 'rust_build', result: 'ok', data: { built: true, seconds: 14, errors: [] } });
   check('builder build: built in N s', label(built) === 'Plugin · Built in 14 s', label(built));
 
+  const pyBroken = renderToolCard({
+    action: 'py_check', result: 'ok',
+    data: { ok: false, errors: [{ file: 'engine/plugin.py', line: 5, message: 'syntax error: invalid syntax' }] },
+  });
+  check('builder py_check: errors with file and line', label(pyBroken) === 'Plugin · 1 error'
+    && pyBroken.find('.tool-card-row-title')?.textContent === 'engine/plugin.py:5', label(pyBroken));
+  const tested = renderToolCard({ action: 'py_test', result: 'ok', data: { started: true, ok: true, tools: ['notes_add'], errors: [] } });
+  check('builder test: starts correctly', label(tested) === 'Plugin · Starts correctly', label(tested));
+  const dead = renderToolCard({ action: 'rust_test', result: 'ok', data: { started: false, error: 'the process exited at once' } });
+  check('builder test: does not start, with the reason',
+    label(dead) === 'Plugin · Does not start' && allText(dead).includes('exited at once'), label(dead));
+
   const installed = renderToolCard({ action: 'plugin_dev_install', result: 'ok', data: { plugin: 'notes', version: '0.1.0' } });
   check('builder install: names the plugin', label(installed) === 'Plugin · Installed' && allText(installed).includes('notes 0.1.0'));
   dispatched.length = 0;

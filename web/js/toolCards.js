@@ -530,7 +530,19 @@ function builderCard(record, d, name, p) {
     title: item.file ? `${item.file}${item.line ? `:${item.line}` : ''}` : str(item.check),
     meta: oneLine(item.message, 160),
   });
-  if (name.startsWith('check_')) {
+  if (name.endsWith('_test')) {
+    const errors = list(d.errors).map((message) => ({ message: str(message) }));
+    const passed = d.started && d.ok;
+    const card = shell(record, 'builder', [family, passed
+      ? t('chat.toolCard.builder.testPassed', null, 'Starts correctly')
+      : (d.started
+        ? tp('chat.toolCard.builder.errors', errors.length, null, `${errors.length} errors`)
+        : t('chat.toolCard.builder.testFailed', null, 'Does not start'))]);
+    rows(card, errors, 4, (item) => row({ iconName: 'ui/warning', title: oneLine(item.message, 160) }));
+    if (!d.started) add(card, text(oneLine(d.error, 240)));
+    return card;
+  }
+  if (name.startsWith('check_') || name === 'py_check') {
     const errors = list(d.errors);
     const card = shell(record, 'builder', [family, d.ok
       ? t('chat.toolCard.builder.checksPassed', null, 'Checks passed')

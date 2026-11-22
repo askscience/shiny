@@ -703,6 +703,19 @@ impl ProcessPlugin {
     pub fn supervisor(&self) -> &Arc<Supervisor> {
         &self.supervisor
     }
+
+    /// The tool names and the routes (`METHOD path`) the process declared in
+    /// its handshake.
+    pub fn declared(&self) -> (Vec<String>, Vec<String>) {
+        (
+            self.welcome.tools.iter().map(|tool| tool.name.clone()).collect(),
+            self.welcome
+                .routes
+                .iter()
+                .map(|route| format!("{} {}", route.method.to_ascii_uppercase(), route.path))
+                .collect(),
+        )
+    }
 }
 
 impl Drop for ProcessPlugin {

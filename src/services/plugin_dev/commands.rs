@@ -12,7 +12,7 @@ use serde_json::{json, Value};
 
 use super::state::{self, AgentState, PlanState};
 use super::workspace::{NewPlugin, TemplateValues, Workspace, Workspaces};
-use super::{checks, package, rust, Language};
+use super::{checks, package, python, rust, Language};
 use crate::api::AppState;
 use crate::errors::AppError;
 use crate::models::Traveler;
@@ -38,6 +38,9 @@ const NEEDS_PLAN: &[&str] = &[
     "plugin_dev_pack",
     "plugin_dev_install",
     "rust_build",
+    "rust_test",
+    "py_check",
+    "py_test",
 ];
 
 fn outcome(action: &str, result: &str, data: Value) -> ActionOutcome {
@@ -118,6 +121,8 @@ pub async fn run(builder: &Builder<'_>, action: &str, params: &Value) -> Result<
                     check(builder, workspace, action, action.strip_prefix("check_"))
                 }
                 "rust_build" => build(builder, &workspaces, workspace).await,
+                "py_check" => py_check(workspace).await,
+                "rust_test" | "py_test" => dry_run(builder, &workspace, action).await,
                 "plugin_dev_pack" => pack(workspace),
                 "plugin_dev_install" => install(builder, workspace).await,
                 "plugin_dev_status" => Ok(status(builder, &workspace)),
@@ -185,12 +190,6 @@ async fn new_plugin(
             format!("a plugin named '{name}' is already installed. Choose another name for the new one."),
         ));
     }
-    if language == Language::Python {
-        return Ok(refused(
-            ACTION,
-            "Python plugins cannot be created in this version yet. Tell the user plainly; a Rust plugin needs a new chat.",
-        ));
-    }
     let title = text(params, "title").unwrap_or_else(|| {
         let mut chars = name.chars();
         chars.next().map(|first| first.to_ascii_uppercase().to_string() + chars.as_str()).unwrap_or_default()
@@ -203,7 +202,10 @@ async fn new_plugin(
     };
     let values = TemplateValues::of(&plugin);
     let workspace = workspaces.create(&name, language)?;
-    let filled = super::workspace::scaffold_common(&workspace, &values).and_then(|()| rust::scaffold(&workspace, &values));
+    let filled = super::workspace::scaffold_common(&workspace, &values).and_then(|()| match language {
+        Language::Rust => rust::scaffold(&workspace, &values),
+        Language::Python => python::scaffold(&workspace, &values),
+    });
     if let Err(error) = filled {
         // Half a template is worse than none: the name stays free.
         let _ = std::fs::remove_dir_all(&workspace.dir);
@@ -277,8 +279,20 @@ fn read(workspace: &Workspace, params: &Value) -> Result<ActionOutcome, AppError
     Ok(outcome("plugin_dev_read", "ok", data))
 }
 
+/// The Python kit is the contract with the server: it is copied in, never
+/// written by hand.
+fn is_kit(path: &str) -> bool {
+    path.trim().trim_start_matches("./") == python::KIT_PATH
+}
+
+const KIT_REFUSAL: &str = "engine/shiny_plugin.py is the kit that talks to the server: it is not edited. Put the \
+                           plugin's code in engine/plugin.py.";
+
 fn write(workspace: &Workspace, params: &Value) -> Result<ActionOutcome, AppError> {
     let path = required(params, "path")?;
+    if is_kit(&path) {
+        return Ok(refused("plugin_dev_write", KIT_REFUSAL));
+    }
     let content = raw(params, "content").ok_or_else(|| AppError::BadRequest("content required".into()))?;
     let replaced = workspace.write(&path, content)?;
     Ok(outcome(
@@ -290,6 +304,9 @@ fn write(workspace: &Workspace, params: &Value) -> Result<ActionOutcome, AppErro
 
 fn patch(workspace: &Workspace, params: &Value) -> Result<ActionOutcome, AppError> {
     let path = required(params, "path")?;
+    if is_kit(&path) {
+        return Ok(refused("plugin_dev_patch", KIT_REFUSAL));
+    }
     let find = raw(params, "find").ok_or_else(|| AppError::BadRequest("find required".into()))?;
     let replace = raw(params, "replace").ok_or_else(|| AppError::BadRequest("replace required".into()))?;
     let all = params.get("all").and_then(Value::as_bool).unwrap_or(false);
@@ -299,6 +316,9 @@ fn patch(workspace: &Workspace, params: &Value) -> Result<ActionOutcome, AppErro
 
 fn delete(workspace: &Workspace, params: &Value) -> Result<ActionOutcome, AppError> {
     let path = required(params, "path")?;
+    if is_kit(&path) {
+        return Ok(refused("plugin_dev_delete", KIT_REFUSAL));
+    }
     workspace.delete(&path)?;
     Ok(outcome("plugin_dev_delete", "ok", json!({ "path": path, "deleted": true })))
 }
@@ -366,6 +386,90 @@ async fn build(
         rust::BuildEnd::TimedOut => "The build ran out of time and was stopped. Nothing was built.".to_string(),
     });
     Ok(outcome("rust_build", "ok", data))
+}
+
+async fn py_check(mut workspace: Workspace) -> Result<ActionOutcome, AppError> {
+    let mut data = python::check(&mut workspace).await?;
+    let errors = data["errors"].as_array().map_or(0, Vec::len);
+    data["note"] = json!(if errors == 0 {
+        "The engine's sources are valid Python and use the standard library only. The plugin can be tested and packed.".to_string()
+    } else {
+        format!("{errors} error(s) to fix, each with its file and line. Fix them and check again.")
+    });
+    Ok(outcome("py_check", "ok", data))
+}
+
+/// Start the plugin's engine as the server would, without installing it: the
+/// handshake says whether it starts at all and what it declares. Nothing of
+/// it is called, and it is stopped at once.
+async fn dry_run(builder: &Builder<'_>, workspace: &Workspace, action: &str) -> Result<ActionOutcome, AppError> {
+    let fresh = workspace.meta.built.as_deref() == Some(workspace.sources_digest().as_str());
+    if !fresh || crate::plugins::process::find_executable(&workspace.dir, &workspace.name).is_none() {
+        return Ok(refused(
+            action,
+            "the engine is not built from the current sources. Build it (or run the language's check) first.",
+        ));
+    }
+    let manifest: shiny_plugin_sdk::manifest::Manifest =
+        match std::fs::read_to_string(workspace.dir.join("plugin.toml")).map_err(|e| e.to_string()).and_then(|text| {
+            toml::from_str(&text).map_err(|e: toml::de::Error| e.message().to_string())
+        }) {
+            Ok(manifest) => manifest,
+            Err(error) => return Ok(refused(action, format!("plugin.toml cannot be read: {error}. Run check_manifest."))),
+        };
+    let started = crate::plugins::process::ProcessPlugin::start(
+        &workspace.dir,
+        manifest,
+        &builder.state.config.snapshot(),
+    )
+    .await;
+    let plugin = match started {
+        Ok(plugin) => plugin,
+        Err(error) => {
+            return Ok(outcome(
+                action,
+                "ok",
+                json!({
+                    "started": false,
+                    "error": error.to_string(),
+                    "note": "The engine did not start. plugin_dev_logs shows what it printed; fix it and test again.",
+                }),
+            ));
+        }
+    };
+    let (tools, routes) = plugin.declared();
+    plugin.supervisor().shutdown().await;
+    drop(plugin);
+
+    // What the static checks read from the sources, the handshake confirms.
+    let registry = builder.state.plugins.tools();
+    let ident = workspace.name.replace('-', "_");
+    let base = format!("/api/{}", workspace.name);
+    let mut problems: Vec<String> = Vec::new();
+    for tool in &tools {
+        if !tool.starts_with(&format!("{ident}_")) {
+            problems.push(format!("the tool \"{tool}\" must be named \"{ident}_…\""));
+        }
+        if registry.has(tool) && registry.owner_of(tool) != workspace.name {
+            problems.push(format!("the tool \"{tool}\" already belongs to the plugin \"{}\"", registry.owner_of(tool)));
+        }
+    }
+    for route in &routes {
+        let path = route.split_once(' ').map_or(route.as_str(), |(_, path)| path);
+        if path != base && !path.starts_with(&format!("{base}/")) {
+            problems.push(format!("the route \"{route}\" must be under \"{base}/\""));
+        }
+    }
+    let note = if problems.is_empty() {
+        format!("The engine starts and declares {} tool(s) and {} route(s).", tools.len(), routes.len())
+    } else {
+        format!("The engine starts, but {} thing(s) have to be fixed before it can be installed.", problems.len())
+    };
+    Ok(outcome(
+        action,
+        "ok",
+        json!({ "started": true, "ok": problems.is_empty(), "tools": tools, "routes": routes, "errors": problems, "note": note }),
+    ))
 }
 
 fn pack(mut workspace: Workspace) -> Result<ActionOutcome, AppError> {

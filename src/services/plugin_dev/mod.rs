@@ -175,6 +175,9 @@ const COMMANDS: &[(&str, Module)] = &[
     ("plugin_dev_logs", Module::Common),
     ("rust_doctor", Module::Only(Language::Rust)),
     ("rust_build", Module::Only(Language::Rust)),
+    ("rust_test", Module::Only(Language::Rust)),
+    ("py_check", Module::Only(Language::Python)),
+    ("py_test", Module::Only(Language::Python)),
 ];
 
 /// The builder's command docs for one conversation: the common commands and
@@ -253,6 +256,7 @@ mod tests {
             assert!(rust.contains(&common) && python.contains(&common), "{common}");
         }
         assert!(rust.contains(&"rust_build") && !python.contains(&"rust_build"));
+        assert!(python.contains(&"py_check") && !rust.contains(&"py_check"));
 
         let refusal = scope_refusal("rust_build", Some(Language::Python)).expect("refused");
         assert!(refusal.contains("a Rust command") && refusal.contains("builds plugins in Python"), "{refusal}");
