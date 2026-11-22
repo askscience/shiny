@@ -50,6 +50,7 @@ import { initTextInput, openTextInput, isTextInputOpen, isComposeAwaiting } from
 import { initChatHistory } from './chatHistory.js';
 import { initThinkToggle } from './thinkToggle.js';
 import { initTouchBar } from './touchbar.js';
+import { initTouchBarHost } from './touchbarHost.js';
 import { reloadUserSession } from './session.js';
 import { loadUserPreferences, getRemember, getWakeWord, isAiEnabled, isUpdateReload, finishUpdateReload } from './preferences.js';
 import { initI18n, t } from './i18n.js';
@@ -245,6 +246,7 @@ async function initApp() {
   setWearableActions({ listen: () => (isAiEnabled() ? tapOrb() : null) });
   initWearable();
   initTouchBar({ talk: () => (isAiEnabled() ? tapOrb() : openLauncher()) });
+  initTouchBarHost({ talk: () => (isAiEnabled() ? tapOrb() : openLauncher()) });
   reveal();
   // Lands in the session log (/var/log/shiny/session-*.log): login timing is
   // measured there, on the real kiosk, not guessed.

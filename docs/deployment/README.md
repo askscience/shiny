@@ -43,7 +43,7 @@ Replace `sudo scripts/…` with the path under `scripts/` in the repo.
 | `scripts/install-t2-audio-watchdog.sh` | `/usr/local/bin/shiny-t2-audio-watchdog`, `/etc/systemd/user/shiny-t2-audio-watchdog.service` — restarts WirePlumber when the T2 card binds without its UCM profiles | `t2bce_audio` + WirePlumber | [`t2-mac.md`](t2-mac.md) |
 | `scripts/install-t2-audio-period-fix.sh` | DKMS module `t2bce-audio-period/1.0` + `/etc/modprobe.d/t2bce-audio-fallback.conf`; refuses to override an in-tree `t2bce_audio` 0.04+ | `t2bce_audio` < 0.04 + DKMS toolchain | [`t2-mac.md`](t2-mac.md) |
 | `scripts/install-t2-bluetooth-fix.sh` | `/etc/xdg/wireplumber/wireplumber.conf.d/52-bt-sbcxq.conf` | any `MacBook*` + WirePlumber | [`t2-mac.md`](t2-mac.md) |
-| `scripts/touchbar/install-touchbar.sh` | `/etc/tiny-dfr/config.toml` (backed up once), Shiny icons, `/etc/udev/rules.d/99-shiny-kbd-backlight.rules` | T2 `appletb` / iBridge hardware + `tiny-dfr` | [`t2-mac.md`](t2-mac.md) |
+| `scripts/touchbar/install-touchbar.sh` | `/etc/tiny-dfr/config.toml` (backed up once), Shiny icons, `/etc/udev/rules.d/99-shiny-kbd-backlight.rules`, `/etc/udev/rules.d/99-shiny-touchbar.rules`, `/usr/local/lib/shiny/shiny-touchbar-heal` + `shiny-touchbar-heal.service` | T2 `appletb` / iBridge hardware + `tiny-dfr` | [`t2-mac.md`](t2-mac.md) |
 | `scripts/bundle-app.sh` | macOS `.app` bundle (`dist/LiteAura.app`) with `Info.plist` + ad-hoc codesign, or a Linux `.desktop` | builds `liteaura-mac` | [`kiosk-shell.md`](kiosk-shell.md) |
 
 ## Processes and their supervision

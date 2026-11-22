@@ -385,9 +385,15 @@ export function mountVoiceDots(host, { demo: isDemo = false, options = null, fac
     const vertical = !face && h > w * 1.2;
     const long = vertical ? h : w;
     const short = vertical ? w : h;
-    // Five rows on a thin bar, more as it grows tall — the pitch stays near 7px.
+    // Five rows on a thin bar, more as it grows tall — the pitch stays near 7
+    // *device* pixels, so a scaled-up interface (the page zoom is part of the
+    // pixel ratio) gets a finer grid instead of fatter dots: the dock's bar
+    // then has the same grain as the Touch Bar's, which is drawn unscaled.
+    // Never under 3.5px, where the dots would close up.
     // A face sizes its dots to the screen: about 34 across its short side.
-    const target = face ? Math.min(34, Math.max(12, Math.min(w, h) / 34)) : 7;
+    const target = face
+      ? Math.min(34, Math.max(12, Math.min(w, h) / 34))
+      : Math.max(3.5, 7 / dpr);
     const rows = Math.max(5, Math.round(short / target));
     const pitch = short / rows;
     const cols = Math.ceil(long / pitch);

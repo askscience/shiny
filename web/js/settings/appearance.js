@@ -316,6 +316,8 @@ export function createAppearancePanelSection({ on, cleanups, resources }) {
         { value: 'dark', label: t('settings.appearance.orbStyle.dark', null, 'Dark') },
         { value: 'light', label: t('settings.appearance.orbStyle.light', null, 'Light') },
         { value: 'accent', label: t('settings.appearance.orbStyle.accent', null, 'Accent') },
+        // The Touch Bar's plate: dark, lit by the accent from one corner.
+        { value: 'aurora', label: t('settings.appearance.orbStyle.aurora', null, 'Aurora') },
       ],
       onChange: (value) => {
         setImmersive({ orb_style: value });

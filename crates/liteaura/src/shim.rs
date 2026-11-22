@@ -21,6 +21,10 @@ pub type DownloadCallback =
 /// One clipboard event from a page view: `(userdata, kind, text)`.
 pub type ClipboardCallback = extern "C" fn(*mut c_void, *const c_char, *const c_char);
 
+/// One Touch Bar frame: `(userdata, pixels, width, height, stride)`, 32-bit
+/// XRGB rows, valid only for the duration of the call.
+pub type BarFrameCallback = extern "C" fn(*mut c_void, *const u8, i32, i32, i32);
+
 extern "C" {
     pub fn liteaura_qt_run(
         url: *const c_char,
@@ -74,6 +78,16 @@ extern "C" {
     pub fn liteaura_qt_set_download_dir(dir: *const c_char);
     pub fn liteaura_qt_download_action(id: *const c_char, action: *const c_char);
     pub fn liteaura_qt_set_clipboard_cb(cb: ClipboardCallback, userdata: *mut c_void);
+    pub fn liteaura_qt_bar_create(
+        url: *const c_char,
+        width: i32,
+        height: i32,
+        cb: BarFrameCallback,
+        userdata: *mut c_void,
+    ) -> i32;
+    pub fn liteaura_qt_bar_run_js(script: *const c_char);
+    pub fn liteaura_qt_bar_reload();
+    pub fn liteaura_qt_send_function_key(number: i32);
 }
 
 fn cs(value: &str) -> CString {
@@ -276,4 +290,23 @@ pub fn download_action(id: &str, action: &str) {
 
 pub fn set_clipboard_cb(cb: ClipboardCallback) {
     unsafe { liteaura_qt_set_clipboard_cb(cb, std::ptr::null_mut()) }
+}
+
+/// Create the off-screen Touch Bar view; false until the scene is ready.
+pub fn bar_create(url: &str, width: i32, height: i32, cb: BarFrameCallback) -> bool {
+    unsafe { liteaura_qt_bar_create(cs(url).as_ptr(), width, height, cb, std::ptr::null_mut()) != 0 }
+}
+
+/// Evaluate a script in the Touch Bar page.
+pub fn bar_run_js(script: &str) {
+    unsafe { liteaura_qt_bar_run_js(cs(script).as_ptr()) }
+}
+
+pub fn bar_reload() {
+    unsafe { liteaura_qt_bar_reload() }
+}
+
+/// Press and release F1..F12 in whatever has the keyboard focus.
+pub fn send_function_key(number: i32) {
+    unsafe { liteaura_qt_send_function_key(number) }
 }

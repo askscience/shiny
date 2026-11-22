@@ -99,7 +99,7 @@ check('a garbage setting behaves as auto', isTouchBarActive('wat', false) === fa
 /* ── The tiny-dfr config (Linux T2) ─────────────────────────── */
 
 const toml = readFileSync(here('../../../scripts/touchbar/shiny-touchbar.toml'), 'utf8');
-const tomlButtons = [...toml.matchAll(/\{\s*Icon\s*=\s*"([^"]+)"\s*,\s*Action\s*=\s*\[([^\]]+)\]\s*\}/g)]
+const tomlButtons = [...toml.matchAll(/\{\s*Icon\s*=\s*"([^"]+)"\s*,\s*Action\s*=\s*\[([^\]]+)\]\s*(?:,\s*Stretch\s*=\s*\d+\s*)?\}/g)]
   .map((m) => ({
     icon: m[1],
     combo: (m[2].match(/"([^"]+)"/g) || []).map((s) => s.replace(/"/g, '')),
@@ -113,28 +113,30 @@ check(
   JSON.stringify(tomlButtons),
 );
 check('the tiny-dfr config replaces the primary layer', /PrimaryLayerKeys\s*=/.test(toml));
-check('the tiny-dfr config keeps the media layer', !/MediaLayerKeys\s*=/.test(toml));
+// Fn must reach the real function keys: the Shiny row already covers volume,
+// brightness and backlight, so the Fn layer is F1–F12 and nothing else.
+const fnLayer = (toml.match(/MediaLayerKeys\s*=\s*\[([\s\S]*?)\n\]/) || [])[1] || '';
+const fnKeys = [...fnLayer.matchAll(/Text\s*=\s*"(F\d+)"\s*,\s*Action\s*=\s*"(F\d+)"/g)];
+check(
+  'Fn shows F1–F12',
+  fnKeys.length === 12 && fnKeys.every((m, i) => m[1] === `F${i + 1}` && m[2] === m[1]),
+  fnKeys.map((m) => m[1]).join(' '),
+);
 
-// Every icon we ship must exist on disk, or tiny-dfr would render a blank
-// slot; and every icon the config references must resolve either to one of
-// ours or to a tiny-dfr built-in.
+// Every icon the row references is one of ours and must exist on disk, or
+// tiny-dfr would render a blank slot.
 const shipped = new Set(
   readdirSync(here('../../../scripts/touchbar/icons')).map((f) => f.replace(/\.svg$/, '')),
 );
-const BUILTIN_ICONS = new Set([
-  'volume_off', 'volume_down', 'volume_up', 'fast_rewind', 'fast_forward',
-  'backlight_low', 'backlight_high', 'brightness_low', 'brightness_high',
-]);
 check(
-  'every custom icon is shipped',
-  TOUCHBAR_ACTIONS.map((a) => a.icon)
-    .filter((name) => name.startsWith('shiny_'))
-    .every((name) => shipped.has(name)),
-  [...shipped].join(', '),
+  'every icon is shipped',
+  TOUCHBAR_ACTIONS.every((a) => a.icon.startsWith('shiny_') && shipped.has(a.icon)),
+  TOUCHBAR_ACTIONS.filter((a) => !shipped.has(a.icon)).map((a) => a.icon).join(', '),
 );
 check(
-  'every referenced icon resolves',
-  TOUCHBAR_ACTIONS.every((a) => shipped.has(a.icon) || BUILTIN_ICONS.has(a.icon)),
+  'no stray icon is shipped',
+  [...shipped].every((name) => TOUCHBAR_ACTIONS.some((a) => a.icon === name)),
+  [...shipped].join(', '),
 );
 
 /* ── The native macOS buttons ───────────────────────────────── */

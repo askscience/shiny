@@ -1432,5 +1432,14 @@
   "settings.pointer.leftHanded": "Per mancini",
   "settings.pointer.loading": "Ricerca dei dispositivi di puntamento…",
   "settings.pointer.unavailable": "Le impostazioni di mouse e touchpad sono disponibili sulla macchina stessa, nella sessione LiteAura.",
-  "settings.pointer.none": "Nessun mouse o touchpad trovato."
+  "settings.pointer.none": "Nessun mouse o touchpad trovato.",
+  "settings.touchbar.dock": "Dock sulla Touch Bar",
+  "settings.touchbar.dockHint": "Sposta tutta la dock sulla Touch Bar e libera il suo spazio sullo schermo. I menu si aprono comunque sullo schermo.",
+  "settings.touchbar.surfaceHint": "La barra mostra l'assistente, i comandi della finestra in primo piano, luminosità e volume (scorri il dito sopra), la batteria e l'orologio. Tieni premuto Fn per F1–F12.",
+  "touchbar.fullscreen": "Schermo intero",
+  "touchbar.exitFullscreen": "Esci da schermo intero",
+  "touchbar.closeWindow": "Chiudi finestra",
+  "touchbar.brightness": "Luminosità dello schermo",
+  "touchbar.volume": "Volume",
+  "settings.appearance.orbStyle.aurora": "Aurora"
 }

@@ -2,6 +2,67 @@
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-22
+
+### Added
+
+- **The Touch Bar is a Shiny surface (T2 MacBook on Linux).** The kiosk shell
+  now draws a page of the app on the bar instead of leaving it to `tiny-dfr`'s
+  fixed row of keys, so it is animated and it follows the desktop:
+  - the assistant button is the dock's own: the same field of dots, with the
+    effect and the reactions picked in Settings → Appearance, and the same
+    gestures (one tap opens the chat, two listen, a hold is the wake word);
+  - the window in front puts its own controls on the bar. Settings lists its
+    sections, the plugin manager its sections and Refresh; any other window
+    gets its menu entries, and every window gets full screen and close. A
+    window's surface module opts in with `touchBar()` (same entries as
+    `contextMenu()`);
+  - brightness and volume are sliders: slide a finger along them (a tap on
+    volume mutes). Volume wears the dock's icons (muted, silent, one per
+    level) and brightness goes all the way down to the backlight off;
+  - a tap on the battery or the clock opens its menu on the screen;
+  - a swipe scrolls the bar, with inertia; holding Fn shows F1–F12;
+  - the bar dims after a minute without input and goes dark after four.
+- **Settings → Touch Bar → Dock on the Touch Bar** moves the whole dock
+  onto the bar and frees its place on the screen: apps, workspaces (with the
+  button that adds one), network, Bluetooth, battery, and the weather next to
+  the clock. Chips show a name or a percentage only if the dock does
+  (Settings → Appearance). Updates, clipboard, theme, Settings, Plugins and
+  the session (lock, suspend, restart, power off) are behind one button that
+  opens a menu on the bar itself; it lights up when updates are waiting. The
+  workspace switcher keeps a fixed place on the bar, and it and the
+  assistant's button leave the screen. Offered only on a machine whose
+  shell draws the bar.
+- The assistant's dots keep their grain when the interface is scaled up: the
+  grid is sized in device pixels, so a zoomed dock shows the same fine dots
+  as the Touch Bar instead of larger ones.
+- **Voice bar colour: Aurora** (Settings → Appearance), now the default: the
+  plate of the assistant's button on the Touch Bar, for the one in the dock.
+  A colour chosen before stays as chosen.
+
+### Changed
+
+- **A dock that hides itself gives its band to the windows.** With autohide
+  on (Settings → Appearance) the desktop is framed by the gap alone; the dock
+  comes back over the windows when the pointer insists at its edge, instead
+  of the windows keeping an empty band for it.
+- `sudo scripts/touchbar/install-touchbar.sh` now hands the bar to the shell:
+  it grants the `video` group the bar's touch surface, the internal
+  keyboard's Fn key and the bar's backlight, and keeps `tiny-dfr` from
+  starting.
+  `--classic` keeps the bar with `tiny-dfr` and installs the row of keys,
+  which was redrawn: one icon set of our own, grouped buttons, a clock and
+  the battery, and F1–F12 on Fn (it showed the stock media keys, which
+  repeated the row and left no way to reach the function keys).
+
+### Fixed
+
+- **Touch Bar: the bar no longer goes missing after some boots and resumes.**
+  Its display driver (`appletbdrm`) sometimes leaves the display without a
+  driver, and then nothing can draw the bar. The installer adds
+  `shiny-touchbar-heal.service`, which re-attaches the display at boot and
+  after every resume; the shell picks the display up when it appears.
+
 ## [0.2.10] - 2026-11-21
 
 ### Security

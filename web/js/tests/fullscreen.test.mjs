@@ -516,7 +516,7 @@ check('out-of-range sizes are clamped and unknown values fall back',
   clamped.orb_width === 400 && clamped.orb_height === 24
   && clamped.orb_color === 'accent' && clamped.orb_border === 'palette'
   && clamped.orb_effect === 'glyph' && clamped.orb_react === 'both'
-  && clamped.orb_style === 'bar',
+  && clamped.orb_style === 'aurora',
   JSON.stringify(clamped));
 
 /* Top bar style (Settings → Appearance → "Top bar style"). */

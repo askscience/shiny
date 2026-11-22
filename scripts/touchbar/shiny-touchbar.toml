@@ -18,30 +18,63 @@
 # Digits are mapped in every layout, and the page matches on the physical
 # `event.code`, so the shifted character does not matter.
 #
-# Icons: `shiny_*` are ours (scripts/touchbar/icons/, copied to /etc/tiny-dfr);
-# the rest ship with tiny-dfr in /usr/share/tiny-dfr. An icon is looked up in
-# /etc/tiny-dfr first, then /usr/share/tiny-dfr.
+# Layout: the buttons are grouped (assistant · sound · screen · workspaces ·
+# keyboard light · tools · clock and battery) with one-unit spacers between the
+# groups. `Stretch` is relative: most buttons are 2 units, Ask is 3. A bare
+# `{ Stretch = 1 }` is a spacer.
+#
+# Icons: all `shiny_*`, ours (scripts/touchbar/icons/, copied to
+# /etc/tiny-dfr, which tiny-dfr searches before /usr/share/tiny-dfr). They are
+# 48px SVGs drawn on a 24-unit grid with a 1.8 round stroke; Ask and Stop carry
+# the only colour on the bar.
 #
 # Merge semantics: tiny-dfr merges this over /usr/share/tiny-dfr/config.toml
-# field by field, but `PrimaryLayerKeys` replaces the whole array. So this file
-# *owns* the primary layer (the F-key row). The media layer is left untouched,
-# so Fn still reaches brightness, keyboard backlight and the media controls.
+# field by field, but a layer's key array replaces the whole array. This file
+# owns both layers: the Shiny row, and F1–F12 while Fn is held (the row already
+# has volume, brightness and backlight, so tiny-dfr's stock media layer would
+# only duplicate it and leave no way to reach the function keys).
 # On a wide (2170px) bar tiny-dfr adds the Escape key automatically.
 
 MediaLayerDefault = false
+ShowButtonOutlines = true
+FontTemplate = "Inter:bold"
 
 PrimaryLayerKeys = [
-  { Icon = "shiny_talk",     Action = [ "LeftCtrl", "LeftAlt", "LeftShift", "Num1" ] },
-  { Icon = "shiny_stop",     Action = [ "LeftCtrl", "LeftAlt", "LeftShift", "Num2" ] },
-  { Icon = "volume_off",     Action = [ "LeftCtrl", "LeftAlt", "LeftShift", "Num3" ] },
-  { Icon = "volume_down",    Action = [ "LeftCtrl", "LeftAlt", "LeftShift", "Num4" ] },
-  { Icon = "volume_up",      Action = [ "LeftCtrl", "LeftAlt", "LeftShift", "Num5" ] },
-  { Icon = "brightness_low", Action = [ "LeftCtrl", "LeftAlt", "LeftShift", "Comma" ] },
-  { Icon = "brightness_high",Action = [ "LeftCtrl", "LeftAlt", "LeftShift", "Dot" ] },
-  { Icon = "fast_rewind",    Action = [ "LeftCtrl", "LeftAlt", "LeftShift", "Num6" ] },
-  { Icon = "fast_forward",   Action = [ "LeftCtrl", "LeftAlt", "LeftShift", "Num7" ] },
-  { Icon = "backlight_low",  Action = [ "LeftCtrl", "LeftAlt", "LeftShift", "Minus" ] },
-  { Icon = "backlight_high", Action = [ "LeftCtrl", "LeftAlt", "LeftShift", "Equal" ] },
-  { Icon = "shiny_keyboard", Action = [ "LeftCtrl", "LeftAlt", "LeftShift", "Num8" ] },
-  { Icon = "shiny_settings", Action = [ "LeftCtrl", "LeftAlt", "LeftShift", "Num9" ] },
+  { Icon = "shiny_talk",           Action = [ "LeftCtrl", "LeftAlt", "LeftShift", "Num1" ], Stretch = 3 },
+  { Icon = "shiny_stop",           Action = [ "LeftCtrl", "LeftAlt", "LeftShift", "Num2" ], Stretch = 2 },
+  { Stretch = 1 },
+  { Icon = "shiny_mute",           Action = [ "LeftCtrl", "LeftAlt", "LeftShift", "Num3" ], Stretch = 2 },
+  { Icon = "shiny_volume_down",    Action = [ "LeftCtrl", "LeftAlt", "LeftShift", "Num4" ], Stretch = 2 },
+  { Icon = "shiny_volume_up",      Action = [ "LeftCtrl", "LeftAlt", "LeftShift", "Num5" ], Stretch = 2 },
+  { Stretch = 1 },
+  { Icon = "shiny_screen_down",    Action = [ "LeftCtrl", "LeftAlt", "LeftShift", "Comma" ], Stretch = 2 },
+  { Icon = "shiny_screen_up",      Action = [ "LeftCtrl", "LeftAlt", "LeftShift", "Dot" ], Stretch = 2 },
+  { Stretch = 1 },
+  { Icon = "shiny_workspace_prev", Action = [ "LeftCtrl", "LeftAlt", "LeftShift", "Num6" ], Stretch = 2 },
+  { Icon = "shiny_workspace_next", Action = [ "LeftCtrl", "LeftAlt", "LeftShift", "Num7" ], Stretch = 2 },
+  { Stretch = 1 },
+  { Icon = "shiny_kbd_down",       Action = [ "LeftCtrl", "LeftAlt", "LeftShift", "Minus" ], Stretch = 2 },
+  { Icon = "shiny_kbd_up",         Action = [ "LeftCtrl", "LeftAlt", "LeftShift", "Equal" ], Stretch = 2 },
+  { Stretch = 1 },
+  { Icon = "shiny_keyboard",       Action = [ "LeftCtrl", "LeftAlt", "LeftShift", "Num8" ], Stretch = 2 },
+  { Icon = "shiny_settings",       Action = [ "LeftCtrl", "LeftAlt", "LeftShift", "Num9" ], Stretch = 2 },
+  { Stretch = 1 },
+  { Time = "%H:%M", Action = "Time", Stretch = 3 },
+  { Battery = "both", Action = "Battery", Stretch = 3 },
+]
+
+# Shown while Fn is held.
+MediaLayerKeys = [
+  { Text = "F1",  Action = "F1"  },
+  { Text = "F2",  Action = "F2"  },
+  { Text = "F3",  Action = "F3"  },
+  { Text = "F4",  Action = "F4"  },
+  { Text = "F5",  Action = "F5"  },
+  { Text = "F6",  Action = "F6"  },
+  { Text = "F7",  Action = "F7"  },
+  { Text = "F8",  Action = "F8"  },
+  { Text = "F9",  Action = "F9"  },
+  { Text = "F10", Action = "F10" },
+  { Text = "F11", Action = "F11" },
+  { Text = "F12", Action = "F12" },
 ]

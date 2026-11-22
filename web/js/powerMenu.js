@@ -228,6 +228,49 @@ function confirmAction(action) {
   dialog.open();
 }
 
+/* ── The same actions, for the Touch Bar's menu ────────────── */
+
+let sessionStatus = null;
+let sessionAsked = false;
+
+/**
+ * Lock and the power actions this machine allows, as plain entries
+ * (`{ id, label, icon, danger, onClick }`). An action that asks for
+ * confirmation still does, on the screen. The first call starts reading what
+ * is allowed and answers with Lock alone; `touchbar:refresh` follows.
+ */
+export function sessionEntries() {
+  if (!sessionAsked) {
+    sessionAsked = true;
+    apiFetch('/api/power/status', { authRedirect: false })
+      .then((res) => {
+        sessionStatus = res?.data || null;
+        window.dispatchEvent(new CustomEvent('touchbar:refresh'));
+      })
+      .catch(() => { sessionAsked = false; });
+  }
+  const entries = [];
+  if (getLockScreen().enabled) {
+    entries.push({
+      id: 'lock',
+      label: t('lock.lock', null, 'Lock'),
+      icon: 'ui/lock',
+      onClick: () => window.dispatchEvent(new CustomEvent('lock:now')),
+    });
+  }
+  for (const action of ACTIONS) {
+    if (!sessionStatus || !action.allows(sessionStatus)) continue;
+    entries.push({
+      id: action.id,
+      label: t(action.labelKey),
+      icon: action.icon,
+      danger: !!action.danger,
+      onClick: () => onAction(action),
+    });
+  }
+  return entries;
+}
+
 /* ── Boot ──────────────────────────────────────────────────── */
 
 export function initHudPower() {

@@ -25,6 +25,7 @@ mod gestures;
 mod host;
 mod i18n;
 mod shim;
+mod touchbar;
 mod youtube;
 
 use std::ffi::{c_char, c_void, CStr};
@@ -100,6 +101,17 @@ static GESTURES: OnceLock<gestures::GestureBridge> = OnceLock::new();
 static DISPLAY: OnceLock<Mutex<DisplayState>> = OnceLock::new();
 static BENCH: OnceLock<Mutex<bench::BenchState>> = OnceLock::new();
 static START_URL: OnceLock<String> = OnceLock::new();
+/// The Touch Bar surface (`touchbar.rs`): where its page lives and how big it
+/// is, the panel it is drawn on (absent in the test mode that only dumps
+/// frames), and the touches waiting for the pump.
+static BAR_PAGE: OnceLock<(String, i32, i32)> = OnceLock::new();
+static BAR_PANEL: OnceLock<Mutex<touchbar::Panel>> = OnceLock::new();
+static BAR_INPUT: OnceLock<touchbar::Bridge> = OnceLock::new();
+static BAR_CREATED: AtomicBool = AtomicBool::new(false);
+/// This machine has a Touch Bar and the shell means to draw it; the panel is
+/// looked for until its driver has produced it.
+static BAR_WANTED: OnceLock<String> = OnceLock::new();
+static BAR_LOOKED: Mutex<Option<Instant>> = Mutex::new(None);
 /// The boot URL: the app origin with the single-use auto-login token. Usable
 /// only until that token has been redeemed once.
 static BOOT_URL: OnceLock<String> = OnceLock::new();
@@ -192,6 +204,22 @@ extern "C" fn on_ipc(_userdata: *mut c_void, body: *const c_char) {
                 shim::set_color_scheme(scheme);
             }
             push_shield();
+        }
+        return;
+    }
+    // The app drives the Touch Bar's hardware side: its backlight, the
+    // function keys its Fn layer types, and a reload of the bar page.
+    if let Some(raw) = body.strip_prefix("liteaura:touchbar:") {
+        if let Ok(value) = serde_json::from_str::<serde_json::Value>(raw) {
+            if let Some(level) = value.get("backlight").and_then(|v| v.as_u64()) {
+                touchbar::set_backlight(level.min(2) as u8);
+            }
+            if let Some(number) = value.get("fkey").and_then(|v| v.as_i64()) {
+                shim::send_function_key(number as i32);
+            }
+            if value.get("reload").and_then(|v| v.as_bool()) == Some(true) {
+                shim::bar_reload();
+            }
         }
         return;
     }
@@ -407,8 +435,118 @@ extern "C" fn on_pump(_userdata: *mut c_void) {
             shim::main_run_js(&script, 0);
         }
     }
+    touchbar_tick();
     display_tick();
     bench_tick();
+}
+
+/// Create the Touch Bar view once the scene can host it, then forward the
+/// touches and the Fn state the readers queued.
+fn touchbar_tick() {
+    if BAR_PAGE.get().is_none() {
+        touchbar_find_panel();
+    }
+    let Some((url, width, height)) = BAR_PAGE.get() else {
+        return;
+    };
+    if !BAR_CREATED.load(Ordering::Relaxed) {
+        if !shim::bar_create(url, *width, *height, on_bar_frame) {
+            return;
+        }
+        BAR_CREATED.store(true, Ordering::Relaxed);
+        if BAR_PANEL.get().is_some() {
+            touchbar::set_backlight(2);
+            BAR_INPUT.set(touchbar::spawn_input(touchbar_waker)).ok();
+        }
+    }
+    if let Some(script) = BAR_INPUT.get().and_then(touchbar::Bridge::drain_script) {
+        shim::bar_run_js(&script);
+    }
+}
+
+/// Reader threads: deliver a touch now, and keep pumping at frame rate while
+/// a finger is on the bar.
+fn touchbar_waker(live: bool) {
+    shim::pump_rate(if live { 16 } else { 100 }, true);
+}
+
+extern "C" fn on_bar_frame(
+    _userdata: *mut c_void,
+    pixels: *const u8,
+    width: i32,
+    height: i32,
+    stride: i32,
+) {
+    let Some(panel) = BAR_PANEL.get() else { return };
+    if pixels.is_null() || width <= 0 || height <= 0 || stride <= 0 {
+        return;
+    }
+    let (width, height, stride) = (width as usize, height as usize, stride as usize);
+    let frame = unsafe { std::slice::from_raw_parts(pixels, stride * height) };
+    panel.lock().present(frame, width, height, stride);
+}
+
+/// Find the Touch Bar and decide whether this shell draws it.
+///
+/// `LITEAURA_TOUCHBAR=0` (or `--no-touchbar` on macOS) leaves the bar alone.
+/// `LITEAURA_TOUCHBAR_FAKE=WxH` creates the surface with no panel behind it,
+/// for looking at the page's frames (`LITEAURA_TOUCHBAR_DUMP`) off hardware.
+fn touchbar_setup(origin: &str) {
+    if std::env::var("LITEAURA_TOUCHBAR").as_deref() == Ok("0") {
+        return;
+    }
+    let page = format!("{}/touchbar.html", origin.trim_end_matches('/'));
+    if let Ok(fake) = std::env::var("LITEAURA_TOUCHBAR_FAKE") {
+        let size = fake
+            .split_once('x')
+            .and_then(|(w, h)| Some((w.parse::<i32>().ok()?, h.parse::<i32>().ok()?)));
+        if let Some((width, height)) = size {
+            BAR_PAGE.set((page, width, height)).ok();
+        }
+        return;
+    }
+    if !touchbar::expected() {
+        return;
+    }
+    BAR_WANTED.set(page).ok();
+    // The app's `auto` mode follows the first flag; the second says the bar
+    // is a full surface, not tiny-dfr's row of keys.
+    shim::inject_script(
+        "liteaura:touchbar",
+        "window.__shinyTouchBar = true; window.__shinyTouchBarSurface = true;",
+    );
+    touchbar_find_panel();
+}
+
+/// Open the bar's panel once its driver has created the card. Tried again
+/// every few seconds: the driver sometimes binds only after the shell is up.
+fn touchbar_find_panel() {
+    let Some(page) = BAR_WANTED.get() else { return };
+    {
+        let mut looked = BAR_LOOKED.lock();
+        if looked.is_some_and(|at| at.elapsed() < Duration::from_secs(3)) {
+            return;
+        }
+        *looked = Some(Instant::now());
+    }
+    let Some(card) = touchbar::find_panel() else { return };
+    match touchbar::Panel::open(&card) {
+        Ok(panel) => {
+            let (width, height) = panel.logical_size();
+            println!(
+                "liteaura: touch bar: {} is {width}x{height}",
+                card.display()
+            );
+            BAR_PANEL.set(Mutex::new(panel)).ok();
+            BAR_PAGE.set((page.clone(), width as i32, height as i32)).ok();
+        }
+        Err(err) => {
+            static TOLD: AtomicBool = AtomicBool::new(false);
+            if !TOLD.swap(true, Ordering::Relaxed) {
+                eprintln!("liteaura: touch bar: {err}");
+            }
+        }
+    }
 }
 
 /// Called on the gesture reader thread when a swipe goes live or idle: pump at
@@ -622,6 +760,7 @@ fn run(mut cfg: LiteAuraConfig) -> Result<i32, String> {
         .set(Mutex::new(Views::new(bus, QtHost)))
         .ok();
     GESTURES.set(gestures::spawn(gesture_waker)).ok();
+    touchbar_setup(&cfg.app_origin);
 
     let dpi = shim::screen_dpi();
     let (width, height) = shim::screen_size();

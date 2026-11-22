@@ -1192,7 +1192,7 @@ fn abs_ranges(fd: std::os::unix::io::RawFd) -> Option<((i32, i32), (i32, i32))> 
     Some((x, y))
 }
 
-fn abs_range(fd: std::os::unix::io::RawFd, axis: u32) -> Option<(i32, i32)> {
+pub(crate) fn abs_range(fd: std::os::unix::io::RawFd, axis: u32) -> Option<(i32, i32)> {
     // _IOR('E', 0x40 + axis, struct input_absinfo), spelled out so the crate
     // needs no bindgen for the one request it makes.
     const SIZE: libc::c_ulong = std::mem::size_of::<libc::input_absinfo>() as libc::c_ulong;

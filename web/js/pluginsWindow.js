@@ -1169,6 +1169,7 @@ function setSection(next) {
   if (!SECTIONS.includes(next)) return;
   if (next !== section || query.trim()) revealNext = true;
   section = next;
+  window.dispatchEvent(new CustomEvent('touchbar:refresh'));
   selected = null;
   if (query.trim()) {
     query = '';
@@ -1343,4 +1344,15 @@ export default {
   unmount: unmountPlugins,
   getElement: getPluginsElement,
   contextMenu: pluginsContextMenu,
+  // The Touch Bar: the window's sections, then what its menu offers.
+  touchBar: () => [
+    ...SECTIONS.map((id) => ({
+      id,
+      label: sectionLabel(id),
+      active: id === section,
+      showLabel: true,
+      onClick: () => setSection(id),
+    })),
+    ...pluginsContextMenu().filter((entry) => entry?.type === 'item' || entry?.label),
+  ],
 };

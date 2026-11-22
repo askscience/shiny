@@ -190,25 +190,52 @@ investigated first and is *not* the cause.)
 
 ## Touch Bar
 
-The T2 kernel (`hid-appletb-*` / `apple-ib-tb`) plus the `tiny-dfr` daemon own
-the bar. [`scripts/touchbar/install-touchbar.sh`](../../scripts/touchbar/install-touchbar.sh)
-installs a Shiny icon row and copies the custom SVGs into `/etc/tiny-dfr`:
+The Shiny shell draws the bar itself (see
+[display & input](../host/display-input.md#the-bar-as-a-surface)).
+[`scripts/touchbar/install-touchbar.sh`](../../scripts/touchbar/install-touchbar.sh)
+sets the machine up for it:
 
 ```bash
-sudo scripts/touchbar/install-touchbar.sh     # --uninstall restores
+sudo scripts/touchbar/install-touchbar.sh            # the shell draws the bar
+sudo scripts/touchbar/install-touchbar.sh --classic  # tiny-dfr's row of keys
+sudo scripts/touchbar/install-touchbar.sh --uninstall
 ```
 
-- It installs a udev rule letting the desktop user (via the `video` group) write
-  the `kbd_backlight` LED and the panel `backlight` — both plain sysfs, which is
-  why they work in the matchbox kiosk with no GTK/desktop daemon.
-- `tiny-dfr` can only emit key codes, so each button sends a
-  **Ctrl+Alt+Shift+1…9** combo that [`web/js/touchbar.js`](../../web/js/touchbar.js)
-  maps back to actions. (A combo rather than F13–F24 because the X keymap binds
-  those codes to `XF86*` keysyms, so the page would never see `F13`; digits are
-  mapped everywhere and the page matches `event.code`.)
-- The script is a clean no-op unless it sees T2 hardware, backs the existing
-  config up once, and `--uninstall` restores it. The media layer is left to the
-  distro, so Fn still reaches brightness and media keys.
+- The shell runs as the desktop user, so `99-shiny-touchbar.rules` gives the
+  `video` group the bar's touch surface, the internal keyboard (read only for
+  the Fn key; note that this lets members of `video` read that keyboard) and
+  the bar's backlight. The bar's display is `root:video` already.
+- `tiny-dfr` is **kept from starting** (a drop-in makes its unit conditional
+  on the marker `/etc/tiny-dfr/shiny-surface`): it and the shell cannot both
+  hold the display, udev would start a merely disabled unit again, and the
+  packaged unit lives in `/etc/systemd/system`, where a mask cannot go. The bar lights up the next
+  time the Shiny session starts; until the shell runs (or if it is an older
+  build) the bar keeps its last picture.
+- It also installs the udev rule that lets the desktop user write the
+  `kbd_backlight` LED and the panel `backlight`.
+- `--classic` lets `tiny-dfr` start again and installs Shiny's row instead: grouped
+  buttons with our own icons
+  ([`scripts/touchbar/icons/`](../../scripts/touchbar/icons)), a clock, the
+  battery, and F1–F12 on Fn. `tiny-dfr` can only emit key codes, so each
+  button sends a **Ctrl+Alt+Shift+1…9** combo that
+  [`web/js/touchbar.js`](../../web/js/touchbar.js) maps back to actions.
+- The script is a clean no-op unless it sees T2 hardware, and `--uninstall`
+  removes everything it installed and restores the previous `tiny-dfr` config.
+- **The bar comes back by itself.** `tiny-dfr` is bound to the DRM card that
+  `appletbdrm` creates for the bar's display. That driver sometimes leaves the
+  display interface (USB `05ac:8302`, interface class `0x10`) without a driver
+  at boot or after resume: the module is loaded, the touch surface works, no
+  card exists, and nothing can draw the bar, which keeps what the firmware
+  last drew. The installer adds `shiny-touchbar-heal.service`
+  (`/usr/local/lib/shiny/shiny-touchbar-heal`, run at boot and after every
+  resume), which binds the interface again or re-selects the USB
+  configuration. The shell keeps looking for the card and takes it when it
+  appears; in `--classic` mode a udev rule starts `tiny-dfr` instead. To check by hand:
+
+  ```bash
+  systemctl status tiny-dfr shiny-touchbar-heal
+  sudo dmesg | grep -i appletb
+  ```
 - The daemon needs the desktop user in `video` to reach the display devices.
 - Because `tiny-dfr` owns the bar globally, the row shows in every app, not only
   the kiosk.

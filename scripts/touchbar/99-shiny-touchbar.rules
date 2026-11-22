@@ -1,0 +1,24 @@
+# Shiny and the Touch Bar (T2 MacBooks). Installed by
+# scripts/touchbar/install-touchbar.sh.
+#
+# 1. The Shiny shell draws the bar itself (crates/liteaura/src/touchbar.rs) and
+#    runs as the desktop user, never root. The bar's display is already
+#    root:video; these give the `video` group the rest of what the shell needs:
+#
+#      * the bar's touch surface, to know where a finger is;
+#      * the internal keyboard, read only for the Fn key (F1-F12 on the bar).
+#        Note what this means: members of `video` can read that keyboard's
+#        keys. On this kiosk that is the desktop user, who owns the X session
+#        the keys go to anyway;
+#      * the bar's own backlight, so it can dim and sleep when idle.
+SUBSYSTEM=="input", KERNEL=="event*", ATTRS{name}=="Apple Inc. Touch Bar Display Touchpad", GROUP="video", MODE="0660"
+SUBSYSTEM=="input", KERNEL=="event*", ATTRS{name}=="MacBookPro17,1 Touch Bar", GROUP="video", MODE="0660"
+SUBSYSTEM=="input", KERNEL=="event*", ATTRS{name}=="Mac14,7 Touch Bar", GROUP="video", MODE="0660"
+SUBSYSTEM=="input", KERNEL=="event*", ATTRS{name}=="*Apple Internal Keyboard*", ENV{ID_INPUT_KEYBOARD}=="1", GROUP="video", MODE="0660"
+ACTION=="add|change", SUBSYSTEM=="backlight", KERNEL=="appletb_backlight", RUN+="/bin/sh -c 'chgrp video /sys/class/backlight/%k/brightness; chmod 0660 /sys/class/backlight/%k/brightness'"
+
+# 2. With `--classic` the bar is tiny-dfr's instead. The stock rules start
+#    tiny-dfr from the bar's touch input device only; when the display card
+#    shows up later than that (a late driver bind, see shiny-touchbar-heal),
+#    nothing started the daemon again. Harmless while tiny-dfr is switched off.
+SUBSYSTEM=="drm", KERNEL=="card[0-9]*", DRIVERS=="adp|appletbdrm", TAG+="systemd", ENV{SYSTEMD_WANTS}+="tiny-dfr.service"

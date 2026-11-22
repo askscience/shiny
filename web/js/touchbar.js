@@ -7,8 +7,11 @@
  *
  *  - `touchbar:action` CustomEvents — the native macOS bar (`liteaura`) evaluates
  *    these in the page.
- *  - `F13`–`F21` keydowns — the Linux T2 `tiny-dfr` buttons, which emit plain
- *    uinput key codes.
+ *  - Ctrl+Alt+Shift combos — the Linux T2 `tiny-dfr` row (`--classic`), whose
+ *    buttons can only emit key codes.
+ *
+ * On a T2 MacBook whose shell draws the bar itself, the bar is a page of its
+ * own and `touchbarHost.js` serves it; this module is the fixed rows only.
  *
  * It is active only when `isTouchBarActive()` says so, so a normal PC that
  * never sees those keys behaves exactly as before. The `talk` action is passed

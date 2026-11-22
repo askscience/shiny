@@ -133,6 +133,20 @@ void liteaura_qt_download_action(const char *id, const char *action);
 /// can never see). Registered before `liteaura_qt_run`.
 void liteaura_qt_set_clipboard_cb(liteaura_clipboard_cb cb, void *userdata);
 
+/// The Touch Bar surface: an app page rendered off screen at `width` x
+/// `height` px. Every new picture is handed to `cb` as 32-bit XRGB rows
+/// (`stride` bytes each), on the Qt main thread. Call once the event loop
+/// runs (from the pump); returns 1 when the view was created.
+typedef void (*liteaura_bar_frame_cb)(void *userdata, const unsigned char *pixels, int width,
+                                      int height, int stride);
+int liteaura_qt_bar_create(const char *url, int width, int height, liteaura_bar_frame_cb cb,
+                           void *userdata);
+/// Evaluate a script in the Touch Bar page (touches, Fn state).
+void liteaura_qt_bar_run_js(const char *script);
+void liteaura_qt_bar_reload(void);
+/// Press and release F`number` (1..12) in whatever has the keyboard focus.
+void liteaura_qt_send_function_key(int number);
+
 #ifdef __cplusplus
 }
 #endif

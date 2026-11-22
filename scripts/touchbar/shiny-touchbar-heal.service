@@ -1,0 +1,13 @@
+# Shiny: re-attach the Touch Bar display when its driver missed it, at boot and
+# after every resume. Installed by scripts/touchbar/install-touchbar.sh; the
+# work is in /usr/local/lib/shiny/shiny-touchbar-heal.
+[Unit]
+Description=Shiny: re-attach the Touch Bar display
+After=systemd-udevd.service suspend.target hibernate.target hybrid-sleep.target suspend-then-hibernate.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/lib/shiny/shiny-touchbar-heal
+
+[Install]
+WantedBy=multi-user.target suspend.target hibernate.target hybrid-sleep.target suspend-then-hibernate.target

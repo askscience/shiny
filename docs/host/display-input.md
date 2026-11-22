@@ -80,18 +80,70 @@ There are two transports but one action vocabulary
   each button evaluates a `touchbar:action` event in the page. A Mac with no
   Touch Bar hardware never shows the bar. Disable with `LITEAURA_TOUCHBAR=0` or
   `liteaura-mac --no-touchbar`.
-- **Linux T2** — the kernel (`hid-appletb-*` / `apple-ib-tb`) plus the
-  `tiny-dfr` daemon own the bar. `sudo scripts/touchbar/install-touchbar.sh`
-  installs a Shiny icon row and copies the custom SVGs into `/etc/tiny-dfr`. It
-  also installs a udev rule letting the desktop user (via the `video` group)
-  write the `kbd_backlight` LED and the panel `backlight`.
+- **Linux T2** — the kiosk shell draws the bar itself, as a page of the app
+  (see [The bar as a surface](#the-bar-as-a-surface)).
+  `sudo scripts/touchbar/install-touchbar.sh` grants the access it needs and
+  keeps `tiny-dfr` from starting. With `--classic` the bar stays with `tiny-dfr` and shows a
+  fixed row of keys: each sends a **Ctrl+Alt+Shift+1…9** combo that
+  [`web/js/touchbar.js`](../../web/js/touchbar.js) maps back to the action
+  vocabulary (a combo rather than F13–F24, which the X keymap binds to
+  `XF86*` keysyms), and Fn shows F1–F12.
 
-`tiny-dfr` can only emit key codes, so each button sends a
-**Ctrl+Alt+Shift+1…9** combo, which
-[`web/js/touchbar.js`](../../web/js/touchbar.js) maps back to actions. (A combo
-rather than F13–F24: on `us`/`es` the X keymap binds those codes to `XF86*`
-keysyms, so the page would never see `F13`; digits are mapped everywhere and the
-page matches the physical `event.code`.)
+### The bar as a surface
+
+On a T2 MacBook the bar is a second display (`appletbdrm`, 60x2008, mounted
+sideways) with its own touch digitizer. The shell renders
+[`web/touchbar.html`](../../web/touchbar.html) on it:
+
+| Piece | Where | What it does |
+|---|---|---|
+| Off-screen view | `crates/liteaura/shim/liteaura.cpp` (`liteaura_qt_bar_create`) | A web view in the scene, left of the window, on the app profile. Its picture is grabbed only while it changes: a burst after a touch, a script or a title change, and for as long as frames keep differing. |
+| Panel, touch, Fn | [`crates/liteaura/src/touchbar.rs`](../../crates/liteaura/src/touchbar.rs) | A DRM dumb buffer and `DIRTYFB` per frame (turned a quarter); the digitizer's evdev events as `window.__shinyBarTouch`; the internal keyboard's `KEY_FN` as `window.__shinyBarFn`. |
+| The bar page | [`web/js/touchbarSurface/bar.js`](../../web/js/touchbarSurface/bar.js) | Draws what it is told, handles taps, swipes and sliders. |
+| The desktop side | [`web/js/touchbarHost.js`](../../web/js/touchbarHost.js) | Publishes a snapshot over a `BroadcastChannel` and does what was touched. The protocol is in [`barShared.js`](../../web/js/touchbarSurface/barShared.js). |
+
+What is on the bar: the assistant (the dock's dot renderer, `voiceDots.js`,
+with the effect and reactions from Settings → Appearance), the focused
+window's controls, with **Dock on the Touch Bar** the whole dock, sliders for
+brightness and volume, the battery and the clock. A chip's name or percentage
+is on the bar only when the dock shows it. The dock's actions (updates,
+clipboard, theme, Settings, Plugins) and the session (`sessionEntries()` in
+`powerMenu.js`) sit behind one button that opens a menu on the bar. The dock is *mirrored* from
+`#hud-header`: an item on the bar is a control of the real dock, and a tap is a
+click on it, so its menu opens on the screen. With the setting on, the
+on-screen dock is parked invisibly along the bottom edge
+(`html[data-touchbar-dock='1']`) so those menus come up next to the bar; the
+workspace switcher and the assistant's button are hidden as well. That button
+stays in the document: a press and a release on the bar's button are replayed
+on it (`pressOrb`), so the gesture rules in `sphere.js` (tap, double tap,
+hold) are the only copy.
+
+A window puts controls on the bar by exporting `touchBar()` from its surface
+module, next to `contextMenu()` and with the same entries:
+
+```js
+export default {
+  // …
+  touchBar: () => [
+    { id: 'refresh', label: 'Refresh', icon: 'ui/refresh', onClick: refresh },
+    { id: 'grid', label: 'Grid', active: view === 'grid', showLabel: true, onClick: () => setView('grid') },
+  ],
+};
+```
+
+At most 12 entries are shown. When they change (not on focus changes, which
+are followed already) dispatch `touchbar:refresh` on `window`. A window with no
+`touchBar()` shows its `contextMenu()` entries; every window gets full screen
+and close.
+
+The desktop page also asks the shell for three things over IPC
+(`liteaura:touchbar:{…}`): the bar's `backlight` (2 on, 1 dim after a minute
+idle, 0 off after four), an `fkey` to type (the Fn layer), and a `reload`.
+
+`LITEAURA_TOUCHBAR=0` leaves the bar alone. Off hardware,
+`LITEAURA_TOUCHBAR_FAKE=2008x60 LITEAURA_TOUCHBAR_DUMP=/tmp/bar.png` renders
+the surface with no panel and writes its frames to the file; the page also
+works in a browser tab (a mouse is a finger, Alt is Fn).
 
 The page learns a bar exists from the kiosk shell's init flag or from the
 server's probe:
@@ -100,10 +152,12 @@ server's probe:
 |---|---|---|---|
 | `GET` | `/api/touchbar` | Bearer/cookie | `{ "available": bool }` — same sysfs check as the shell, so **Automatic** works in a plain browser too. |
 
-Buttons map to: tap-to-talk (barge-in included), stop the answer, output
-mute/volume, screen brightness, previous/next workspace, keyboard backlight,
-toggle the virtual keyboard, and open Settings. Per-user enablement lives in
-**Settings → Touch Bar** (`Automatic` / `Always on` / `Off`). See
+The fixed rows (macOS, `--classic`) map to: tap-to-talk (barge-in included),
+stop the answer, output mute/volume, screen brightness, previous/next
+workspace, keyboard backlight, toggle the virtual keyboard, and open Settings.
+Per-user enablement lives in **Settings → Touch Bar** (`Automatic` /
+`Always on` / `Off`), with **Dock on the Touch Bar** when the shell draws the
+bar. See
 [T2 Mac](../deployment/t2-mac.md).
 
 ---

@@ -238,6 +238,21 @@ html[data-orb-style='light'] {
 }
 html:is([data-orb-style='dark'], [data-orb-style='light']) #sphere-container { --voice-ink: var(--voice-plate-ink); }
 
+/* ── Aurora ─────────────────────────────────────────────────────
+ * The plate of the assistant's button on the Touch Bar
+ * (css/touchbar-surface.css `.orb`): dark, lit by the accent from one corner
+ * and by violet from the other, with the dots in the accent. */
+html[data-orb-style='aurora'] #sphere-container {
+  background:
+    radial-gradient(120% 160% at 0% 0%, color-mix(in srgb, var(--accent) 38%, transparent), transparent 62%),
+    radial-gradient(120% 160% at 100% 100%, rgba(190, 130, 255, 0.34), transparent 60%),
+    rgba(14, 15, 20, 0.9);
+  border-color: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  --voice-ink: var(--accent);
+}
+
 html:not([data-orb-style='accent'])[data-orb-border='none'] #sphere-container { border-color: transparent; }
 html:not([data-orb-style='accent'])[data-orb-border='palette'] #sphere-container { border-color: transparent; }
 

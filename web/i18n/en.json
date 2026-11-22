@@ -1414,5 +1414,14 @@
   "settings.pointer.leftHanded": "Left-handed",
   "settings.pointer.loading": "Looking for pointers…",
   "settings.pointer.unavailable": "Mouse and touchpad settings are available on the machine itself, in the LiteAura session.",
-  "settings.pointer.none": "No mouse or touchpad found."
+  "settings.pointer.none": "No mouse or touchpad found.",
+  "settings.touchbar.dock": "Dock on the Touch Bar",
+  "settings.touchbar.dockHint": "Move the whole dock to the Touch Bar and free its place on the screen. Menus still open on the screen.",
+  "settings.touchbar.surfaceHint": "The bar shows the assistant, the controls of the window in front, brightness and volume (slide a finger along them), the battery and the clock. Hold Fn for F1–F12.",
+  "touchbar.fullscreen": "Full screen",
+  "touchbar.exitFullscreen": "Exit full screen",
+  "touchbar.closeWindow": "Close window",
+  "touchbar.brightness": "Screen brightness",
+  "touchbar.volume": "Volume",
+  "settings.appearance.orbStyle.aurora": "Aurora"
 }

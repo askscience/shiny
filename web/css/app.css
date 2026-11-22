@@ -1699,3 +1699,75 @@ body.orb-speaking #artifact-dock {
 @keyframes hud-capture-pulse { 50% { opacity: .35; } }
 @media (prefers-reduced-motion: reduce) { .hud-capture-dot { animation: none; } }
 .capture-hud-menu { z-index: 9000; }
+
+/* ── Dock on the Touch Bar (Settings → Touch Bar, T2 MacBooks) ──────────
+ * The dock is mirrored on the Touch Bar (js/touchbarHost.js), so the screen
+ * gives its place back. The bar is not removed, only parked invisibly along
+ * the bottom edge: its controls keep a real position, and a menu opened from
+ * the Touch Bar comes up from the edge of the screen nearest to the finger. */
+html[data-touchbar-dock='1'] .hud-header-main {
+  position: fixed !important;
+  inset: auto 0 0 0 !important;
+  width: auto !important;
+  height: 1px !important;
+  margin: 0 !important;
+  padding: 0 24px !important;
+  display: flex !important;
+  flex-direction: row !important;
+  justify-content: space-between;
+  align-items: flex-end;
+  overflow: visible;
+  opacity: 0;
+  pointer-events: none;
+  transform: none !important;
+  background: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+html[data-touchbar-dock='1'] #hud-header {
+  --hud-header-pad: 0px;
+  background: none;
+  border: 0;
+  box-shadow: none;
+  pointer-events: none;
+}
+html[data-touchbar-dock='1'] #hud-header > :not(.hud-header-main) { pointer-events: auto; }
+/* The workspace switcher and the assistant's button are on the Touch Bar too.
+   `display` with `!important`, not `visibility`: the autohide rules
+   (fullscreen.css) turn a docked button visible again whenever the pointer
+   reaches the bar's edge, with a selector that outranks anything here. The
+   button stays in the document, so the bar's button can still replay its
+   presses on it (touchbarHost.js `pressOrb`). */
+html[data-touchbar-dock='1'] #workspace-bar,
+html[data-touchbar-dock='1'] #sphere-container {
+  display: none !important;
+}
+
+/* With no dock on the screen its band belongs to the windows: the desktop is
+   framed by the gap alone on every side, wherever the dock was set to sit,
+   with or without autohide, and a full-screen window never moves to make
+   room for a bar that will not come. */
+html[data-touchbar-dock='1'] {
+  --hud-header-total: max(var(--desktop-gap, 16px), env(safe-area-inset-top, 0px)) !important;
+  --hud-bar-extent: 0px !important;
+}
+html[data-touchbar-dock='1'] body:not(.fs-active) #tile-grid {
+  top: max(var(--desktop-gap, 16px), env(safe-area-inset-top)) !important;
+  left: max(var(--desktop-gap, 16px), env(safe-area-inset-left)) !important;
+  right: max(var(--desktop-gap, 16px), env(safe-area-inset-right)) !important;
+  bottom: max(var(--desktop-gap, 16px), env(safe-area-inset-bottom)) !important;
+}
+html[data-touchbar-dock='1'] body.fs-active #tile-grid { top: 0 !important; }
+
+/* ── Autohide: a hidden dock gives its band to the windows ──────────────
+ * With the dock set to hide itself (Settings → Appearance) the desktop is
+ * framed by the gap alone, like with the dock on the Touch Bar. The dock
+ * comes back *over* the windows when the pointer insists at its edge, the way
+ * a hidden dock does everywhere: the windows are not resized each time it
+ * shows. The phone layout keeps its own rules (mobile.css). */
+html[data-autohide-bar='1']:not([data-phone='1']) body:not(.fs-active) #tile-grid {
+  top: max(var(--desktop-gap, 16px), env(safe-area-inset-top)) !important;
+  left: max(var(--desktop-gap, 16px), env(safe-area-inset-left)) !important;
+  right: max(var(--desktop-gap, 16px), env(safe-area-inset-right)) !important;
+  bottom: max(var(--desktop-gap, 16px), env(safe-area-inset-bottom)) !important;
+}

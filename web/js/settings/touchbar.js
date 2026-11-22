@@ -1,6 +1,6 @@
-import { select } from '../../ui/index.js';
+import { select, toggle } from '../../ui/index.js';
 import { t } from '../i18n.js';
-import { getTouchBarEnabled, setTouchBarEnabled } from '../preferences.js';
+import { getTouchBarDock, getTouchBarEnabled, setTouchBarDock, setTouchBarEnabled } from '../preferences.js';
 import { TOUCHBAR_ACTIONS } from '../touchbarShared.js';
 import { el, field, heading } from './controls.js';
 
@@ -22,6 +22,14 @@ export function createTouchBarSection({ on, cleanups, resources }) {
     });
     mode.select.value = getTouchBarEnabled();
 
+    // Only a bar the shell draws can hold the dock; tiny-dfr's row of keys
+    // (and the macOS bar) cannot.
+    const surface = document.documentElement.dataset.touchbarSurface === '1';
+    const dock = toggle({
+      checked: getTouchBarDock(),
+      onChange: (on) => setTouchBarDock(on),
+    });
+
     const state = el('p', 'settings-hint');
     const buttons = el('p', 'settings-hint');
     const install = el('p', 'settings-hint');
@@ -38,10 +46,12 @@ export function createTouchBarSection({ on, cleanups, resources }) {
       } else {
         state.textContent = t('settings.touchbar.notDetected', null, 'No Touch Bar detected on this machine. The buttons stay dormant, so a normal PC is unaffected.');
       }
-      buttons.textContent = TOUCHBAR_ACTIONS
-        .map((entry) => `${entry.label} (${entry.code})`)
-        .join(' · ');
-      install.textContent = host
+      buttons.textContent = surface
+        ? t('settings.touchbar.surfaceHint', null, 'The bar shows the assistant, the controls of the window in front, brightness and volume (slide a finger along them), the battery and the clock. Hold Fn for F1–F12.')
+        : TOUCHBAR_ACTIONS
+          .map((entry) => `${entry.label} (${entry.code})`)
+          .join(' · ');
+      install.textContent = surface ? '' : host
         ? t('settings.touchbar.installHost', null, 'On a T2 Mac running Linux, scripts/touchbar/install-touchbar.sh installs this row through tiny-dfr.')
         : t('settings.touchbar.install', null, 'On a T2 Mac running Linux, scripts/touchbar/install-touchbar.sh puts this row on the bar through tiny-dfr.');
     }
@@ -54,6 +64,11 @@ export function createTouchBarSection({ on, cleanups, resources }) {
       field(t('settings.touchbar.setting', null, 'Touch Bar'), mode, {
         hint: t('settings.touchbar.settingHint', null, 'Show the assistant controls on a MacBook Touch Bar. Automatic only uses the bar when this machine has one.'),
       }),
+      ...(surface
+        ? [field(t('settings.touchbar.dock', null, 'Dock on the Touch Bar'), dock, {
+          hint: t('settings.touchbar.dockHint', null, 'Move the whole dock to the Touch Bar and free its place on the screen. Menus still open on the screen.'),
+        })]
+        : []),
       state,
       heading(t('settings.touchbar.buttons', null, 'Buttons')),
       buttons,

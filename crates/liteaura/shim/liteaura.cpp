@@ -30,6 +30,7 @@
 #include <QClipboard>
 #include <QCoreApplication>
 #include <QDir>
+#include <QElapsedTimer>
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -50,6 +51,7 @@
 #include <QQmlEngine>
 #include <QQuickImageProvider>
 #include <QQuickItem>
+#include <QQuickItemGrabResult>
 #include <QQuickWidget>
 #include <QRegularExpression>
 #include <QScreen>
@@ -701,6 +703,45 @@ WebEngineView {
 }
 )QML";
 
+/// The Touch Bar surface's hooks (defined with the surface, below the Shell).
+void bar_wake(int burst_ms);
+void bar_title_changed(const QString &title);
+void bar_crashed();
+
+/// The Touch Bar surface: an app page the shell renders off screen and hands
+/// to Rust frame by frame (`liteaura_qt_bar_create`). It lives in the scene, to
+/// the left of the window where nothing shows it, and uses the app profile, so
+/// it shares the session and can talk to the app view over a BroadcastChannel.
+/// It never takes focus: touches reach it as script calls, not Qt events.
+const char *kBarQml = R"QML(
+import QtQuick
+import QtWebEngine
+
+WebEngineView {
+    id: bar
+    objectName: "barView"
+    backgroundColor: "#000000"
+    activeFocusOnPress: false
+    focus: false
+    zoomFactor: 1.0
+    onTitleChanged: shell.barTitle(title)
+    // Chromium keeps zoom per host and the app view scales the same host, so
+    // the bar puts its own zoom back after every load.
+    onLoadingChanged: (info) => { if (zoomFactor !== 1.0) zoomFactor = 1.0; shell.barTitle("load") }
+    onRenderProcessTerminated: (status, code) => shell.barCrashed()
+    onNavigationRequested: (request) => {
+        if (request.isMainFrame && !shell.isAppOrigin(request.url)) request.reject();
+        else request.accept();
+    }
+    onNewWindowRequested: (request) => {}
+    onJavaScriptConsoleMessage: (level, message, line, source) => shell.consoleMessage(level, message, line, source)
+    onContextMenuRequested: (request) => { request.accepted = true }
+    onPermissionRequested: (permission) => permission.deny()
+    settings.playbackRequiresUserGesture: false
+    function evaluate(script) { runJavaScript(script) }
+}
+)QML";
+
 /// Everything the scene calls back into. One instance, exposed as `shell`.
 class Shell : public QObject {
     Q_OBJECT
@@ -815,6 +856,11 @@ public:
         // session cookie durable across a reload.
         set_app_url(g_app_origin);
     }
+
+    /// The Touch Bar page changed its title: its way of saying that it has
+    /// something new to show (see `bar_title_changed`).
+    Q_INVOKABLE void barTitle(const QString &title) { bar_title_changed(title); }
+    Q_INVOKABLE void barCrashed() { bar_crashed(); }
 
     Q_INVOKABLE void viewTitle(const QString &id, const QString &title) {
         emit_view(id, "title", title);
@@ -1135,6 +1181,164 @@ void IpcBridge::postMessage(const QString &body) {
     }
     if (callback_) callback_(userdata_, body.toUtf8().constData());
 }
+
+// ── The Touch Bar surface ────────────────────────────────────────────────
+
+namespace {
+
+/// How the surface is sampled. Grabbing is the only way to get the page's
+/// pixels out of the scene, so it is done only while there is something to
+/// see: at frame rate for a short burst after anything that can change the
+/// picture (a touch, a script, a title change from the page; the page keeps
+/// bumping its title while it animates), and at a slower rate for as long as
+/// consecutive frames keep differing.
+/// Otherwise a slow tick re-sends the picture, so a panel that only became
+/// ours later (tiny-dfr stopped) still gets it.
+struct Bar {
+    QQuickItem *view = nullptr;
+    QTimer *timer = nullptr;
+    QSharedPointer<QQuickItemGrabResult> pending;
+    QImage last;
+    liteaura_bar_frame_cb cb = nullptr;
+    void *userdata = nullptr;
+    QSize size;
+    QUrl url;
+    QElapsedTimer clock;
+    qint64 burst_until = 0;
+    qint64 ambient_until = 0;
+    QString dump;
+};
+Bar *g_bar = nullptr;
+
+const int kBarFrameMs = 16;
+const int kBarAmbientMs = 66;
+const int kBarIdleMs = 2000;
+const int kBarBurstMs = 700;
+
+void bar_tick() {
+    Bar *bar = g_bar;
+    if (!bar || !bar->view || bar->pending) return;
+    // Three rates: frame rate right after something asked for it, a slower
+    // one while the picture merely keeps moving on its own (the assistant's
+    // dots shimmer a dozen times a second at rest), and the idle tick.
+    const qint64 now = bar->clock.elapsed();
+    const bool bursting = now < bar->burst_until;
+    const int wanted = bursting ? kBarFrameMs : now < bar->ambient_until ? kBarAmbientMs : kBarIdleMs;
+    if (bar->timer->interval() != wanted) bar->timer->setInterval(wanted);
+    auto grab = bar->view->grabToImage(bar->size);
+    if (!grab) return;
+    bar->pending = grab;
+    QObject::connect(grab.data(), &QQuickItemGrabResult::ready, bar->timer, [grab, bursting]() {
+        Bar *bar = g_bar;
+        if (!bar) return;
+        bar->pending.reset();
+        QImage image = grab->image().convertToFormat(QImage::Format_RGB32);
+        if (image.isNull()) return;
+        const bool changed = image != bar->last;
+        if (changed) {
+            bar->last = image;
+            // Still moving: keep sampling, at the slower rate unless the
+            // page or a touch asks for more.
+            bar->ambient_until = bar->clock.elapsed() + kBarBurstMs;
+            if (!bar->dump.isEmpty()) image.save(bar->dump);
+        }
+        if ((changed || !bursting) && bar->cb) {
+            bar->cb(bar->userdata, bar->last.constBits(), bar->last.width(), bar->last.height(),
+                    int(bar->last.bytesPerLine()));
+        }
+    });
+}
+
+void bar_wake(int burst_ms) {
+    Bar *bar = g_bar;
+    if (!bar || !bar->timer) return;
+    bar->burst_until = qMax(bar->burst_until, bar->clock.elapsed() + burst_ms);
+    if (bar->timer->interval() != kBarFrameMs) bar->timer->start(kBarFrameMs);
+}
+
+/// The page bumps its title whenever its picture changes for a reason the
+/// shell cannot see (new state from the app, a clock tick).
+void bar_title_changed(const QString &) { bar_wake(kBarBurstMs); }
+
+/// A dead renderer leaves a frozen bar; load the page again after a moment.
+void bar_crashed() {
+    QTimer::singleShot(2000, qApp, []() {
+        if (g_bar && g_bar->view) g_bar->view->setProperty("url", g_bar->url);
+    });
+}
+
+}  // namespace
+
+extern "C" {
+
+int liteaura_qt_bar_create(const char *url, int width, int height, liteaura_bar_frame_cb cb,
+                           void *userdata) {
+    if (!g_ctx || !g_ctx->scene_root || !g_ctx->profile || g_bar) return 0;
+    auto *component = new QQmlComponent(g_ctx->scene->engine(), g_ctx->scene);
+    component->setData(QByteArray(kBarQml), QUrl(QStringLiteral("qrc:/liteaura/bar.qml")));
+    if (component->isError()) {
+        for (const QQmlError &error : component->errors())
+            std::fprintf(stderr, "liteaura: bar: %s\n", error.toString().toUtf8().constData());
+        return 0;
+    }
+    QVariantMap initial;
+    initial.insert(QStringLiteral("profile"), QVariant::fromValue<QObject *>(g_ctx->profile));
+    auto *view = qobject_cast<QQuickItem *>(
+        component->createWithInitialProperties(initial, qmlContext(g_ctx->scene_root)));
+    if (!view) {
+        std::fprintf(stderr, "liteaura: could not create the Touch Bar view\n");
+        return 0;
+    }
+    view->setParentItem(g_ctx->scene_root);
+    // Left of the window: in the scene (so the engine keeps rendering it) but
+    // never on the screen.
+    view->setX(-(width + 64));
+    view->setY(0);
+    view->setWidth(width);
+    view->setHeight(height);
+
+    auto *bar = new Bar;
+    bar->view = view;
+    bar->cb = cb;
+    bar->userdata = userdata;
+    bar->size = QSize(width, height);
+    bar->url = QUrl(QString::fromUtf8(url));
+    if (const char *dump = std::getenv("LITEAURA_TOUCHBAR_DUMP")) bar->dump = QString::fromLocal8Bit(dump);
+    bar->clock.start();
+    bar->timer = new QTimer(qApp);
+    QObject::connect(bar->timer, &QTimer::timeout, qApp, []() { bar_tick(); });
+    g_bar = bar;
+    bar->timer->start(kBarIdleMs);
+    view->setProperty("url", bar->url);
+    bar_wake(3000);
+    return 1;
+}
+
+void liteaura_qt_bar_run_js(const char *script) {
+    if (!g_bar || !g_bar->view) return;
+    QMetaObject::invokeMethod(g_bar->view, "evaluate",
+                              Q_ARG(QVariant, QString::fromUtf8(script)));
+    bar_wake(kBarBurstMs);
+}
+
+void liteaura_qt_bar_reload(void) {
+    if (g_bar && g_bar->view) g_bar->view->setProperty("url", g_bar->url);
+}
+
+void liteaura_qt_send_function_key(int number) {
+    if (!g_ctx || !g_ctx->scene || number < 1 || number > 12) return;
+    // The X11 keycode and keysym go along, so the page sees a complete event
+    // (`code` comes from the scan code).
+    const quint32 scan = number <= 10 ? 66 + number : 84 + number;
+    const quint32 keysym = 0xffbe + (number - 1);
+    const int key = Qt::Key_F1 + (number - 1);
+    for (QEvent::Type type : {QEvent::KeyPress, QEvent::KeyRelease}) {
+        QCoreApplication::postEvent(
+            g_ctx->scene, new QKeyEvent(type, key, Qt::NoModifier, scan, keysym, 0));
+    }
+}
+
+}  // extern "C"
 
 void liteaura_qt_inject_script(const char *name, const char *source) {
     g_pending_scripts.append(InjectedScript{QString::fromUtf8(name), QString::fromUtf8(source)});

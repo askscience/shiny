@@ -38,6 +38,7 @@ const IMAGE_MODEL_KEY = 'image.model';
 const IMAGE_QUALITY_KEY = 'image.quality';
 const MUSIC_QUALITY_KEY = 'music.quality';
 const TOUCHBAR_KEY = 'touchbar.enabled';
+const TOUCHBAR_DOCK_KEY = 'touchbar.dock';
 const AI_ENABLED_KEY = 'ai.enabled';
 const UI_LOCALE_KEY = 'ui.locale';
 const STORE_AUTO_UPDATE_KEY = 'store.autoUpdate';
@@ -629,7 +630,7 @@ const DEFAULT_IMMERSIVE = {
    *  surface, the theme's text for the dots) — a fixed `dark` or `light`
    *  plate whatever the theme, or `accent`, the body filled with the accent
    *  (or the palette, `orb_color`). */
-  orb_style: 'bar',
+  orb_style: 'aurora',
   /** Border of the bar: none, the accent hairline, or the palette ring. */
   orb_border: 'palette',
   /** The dot grid that fills the bar (voiceDots.js): how it moves… */
@@ -639,7 +640,7 @@ const DEFAULT_IMMERSIVE = {
 };
 
 const ORB_COLORS = ['accent', 'palette'];
-const ORB_STYLES = ['accent', 'bar', 'dark', 'light'];
+const ORB_STYLES = ['accent', 'bar', 'dark', 'light', 'aurora'];
 const ORB_BORDERS = ['none', 'hairline', 'palette'];
 /** The voice bar's dot effects (voiceDots.js) and what they react to. */
 export const ORB_EFFECTS = ['glyph', 'eq', 'ripple', 'firefly'];
@@ -1239,6 +1240,22 @@ export function setTouchBarEnabled(mode) {
   else localStorage.setItem(key, value);
   persist(TOUCHBAR_KEY, value === 'auto' ? '' : value);
   // The runtime listens for this so a change applies without a reload.
+  window.dispatchEvent(new CustomEvent('touchbar:settings'));
+}
+
+/**
+ * Whether the dock lives on the Touch Bar instead of the screen. Only a
+ * machine whose shell draws the bar honours it (`touchbarHost.js`).
+ */
+export function getTouchBarDock() {
+  return localStorage.getItem(scopedKey(TOUCHBAR_DOCK_KEY)) === '1';
+}
+
+export function setTouchBarDock(on) {
+  const key = scopedKey(TOUCHBAR_DOCK_KEY);
+  if (on) localStorage.setItem(key, '1');
+  else localStorage.removeItem(key);
+  persist(TOUCHBAR_DOCK_KEY, on ? '1' : '');
   window.dispatchEvent(new CustomEvent('touchbar:settings'));
 }
 

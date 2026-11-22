@@ -38,23 +38,23 @@ export const TOUCHBAR_MODIFIERS = { ctrlKey: true, altKey: true, shiftKey: true 
  *  - `labelKey` — the catalogue key of the Settings label; `label` is its
  *                 English fallback. The native bar (`crates/liteaura-mac`) reads
  *                 the same keys, so both sides always show the same word.
- *  - `icon`     — the tiny-dfr icon name (`shiny_*` is ours, shipped in
- *                 `scripts/touchbar/icons/`; anything else is a tiny-dfr built-in).
+ *  - `icon`     — the tiny-dfr icon name; every one is ours, shipped in
+ *                 `scripts/touchbar/icons/`.
  *  - `code`     — the DOM `KeyboardEvent.code` the page listens for.
  *  - `combo`    — the uinput keys tiny-dfr presses (names from input-linux).
  */
 export const TOUCHBAR_ACTIONS = [
   { action: 'talk', labelKey: 'touchbar.talk.label', label: 'Ask', icon: 'shiny_talk', code: 'Digit1', combo: ['LeftCtrl', 'LeftAlt', 'LeftShift', 'Num1'] },
   { action: 'stop', labelKey: 'touchbar.stop.label', label: 'Stop', icon: 'shiny_stop', code: 'Digit2', combo: ['LeftCtrl', 'LeftAlt', 'LeftShift', 'Num2'] },
-  { action: 'mute', labelKey: 'touchbar.mute.label', label: 'Mute', icon: 'volume_off', code: 'Digit3', combo: ['LeftCtrl', 'LeftAlt', 'LeftShift', 'Num3'] },
-  { action: 'volume-down', labelKey: 'touchbar.volume-down.label', label: 'Vol-', icon: 'volume_down', code: 'Digit4', combo: ['LeftCtrl', 'LeftAlt', 'LeftShift', 'Num4'] },
-  { action: 'volume-up', labelKey: 'touchbar.volume-up.label', label: 'Vol+', icon: 'volume_up', code: 'Digit5', combo: ['LeftCtrl', 'LeftAlt', 'LeftShift', 'Num5'] },
-  { action: 'screen-down', labelKey: 'touchbar.screen-down.label', label: 'Scr-', icon: 'brightness_low', code: 'Comma', combo: ['LeftCtrl', 'LeftAlt', 'LeftShift', 'Comma'] },
-  { action: 'screen-up', labelKey: 'touchbar.screen-up.label', label: 'Scr+', icon: 'brightness_high', code: 'Period', combo: ['LeftCtrl', 'LeftAlt', 'LeftShift', 'Dot'] },
-  { action: 'workspace-prev', labelKey: 'touchbar.workspace-prev.label', label: 'Prev', icon: 'fast_rewind', code: 'Digit6', combo: ['LeftCtrl', 'LeftAlt', 'LeftShift', 'Num6'] },
-  { action: 'workspace-next', labelKey: 'touchbar.workspace-next.label', label: 'Next', icon: 'fast_forward', code: 'Digit7', combo: ['LeftCtrl', 'LeftAlt', 'LeftShift', 'Num7'] },
-  { action: 'kbd-backlight-down', labelKey: 'touchbar.kbd-backlight-down.label', label: 'Kbd-', icon: 'backlight_low', code: 'Minus', combo: ['LeftCtrl', 'LeftAlt', 'LeftShift', 'Minus'] },
-  { action: 'kbd-backlight-up', labelKey: 'touchbar.kbd-backlight-up.label', label: 'Kbd+', icon: 'backlight_high', code: 'Equal', combo: ['LeftCtrl', 'LeftAlt', 'LeftShift', 'Equal'] },
+  { action: 'mute', labelKey: 'touchbar.mute.label', label: 'Mute', icon: 'shiny_mute', code: 'Digit3', combo: ['LeftCtrl', 'LeftAlt', 'LeftShift', 'Num3'] },
+  { action: 'volume-down', labelKey: 'touchbar.volume-down.label', label: 'Vol-', icon: 'shiny_volume_down', code: 'Digit4', combo: ['LeftCtrl', 'LeftAlt', 'LeftShift', 'Num4'] },
+  { action: 'volume-up', labelKey: 'touchbar.volume-up.label', label: 'Vol+', icon: 'shiny_volume_up', code: 'Digit5', combo: ['LeftCtrl', 'LeftAlt', 'LeftShift', 'Num5'] },
+  { action: 'screen-down', labelKey: 'touchbar.screen-down.label', label: 'Scr-', icon: 'shiny_screen_down', code: 'Comma', combo: ['LeftCtrl', 'LeftAlt', 'LeftShift', 'Comma'] },
+  { action: 'screen-up', labelKey: 'touchbar.screen-up.label', label: 'Scr+', icon: 'shiny_screen_up', code: 'Period', combo: ['LeftCtrl', 'LeftAlt', 'LeftShift', 'Dot'] },
+  { action: 'workspace-prev', labelKey: 'touchbar.workspace-prev.label', label: 'Prev', icon: 'shiny_workspace_prev', code: 'Digit6', combo: ['LeftCtrl', 'LeftAlt', 'LeftShift', 'Num6'] },
+  { action: 'workspace-next', labelKey: 'touchbar.workspace-next.label', label: 'Next', icon: 'shiny_workspace_next', code: 'Digit7', combo: ['LeftCtrl', 'LeftAlt', 'LeftShift', 'Num7'] },
+  { action: 'kbd-backlight-down', labelKey: 'touchbar.kbd-backlight-down.label', label: 'Kbd-', icon: 'shiny_kbd_down', code: 'Minus', combo: ['LeftCtrl', 'LeftAlt', 'LeftShift', 'Minus'] },
+  { action: 'kbd-backlight-up', labelKey: 'touchbar.kbd-backlight-up.label', label: 'Kbd+', icon: 'shiny_kbd_up', code: 'Equal', combo: ['LeftCtrl', 'LeftAlt', 'LeftShift', 'Equal'] },
   { action: 'keyboard', labelKey: 'touchbar.keyboard.label', label: 'Keys', icon: 'shiny_keyboard', code: 'Digit8', combo: ['LeftCtrl', 'LeftAlt', 'LeftShift', 'Num8'] },
   { action: 'settings', labelKey: 'touchbar.settings.label', label: 'Setup', icon: 'shiny_settings', code: 'Digit9', combo: ['LeftCtrl', 'LeftAlt', 'LeftShift', 'Num9'] },
 ];

@@ -1,0 +1,124 @@
+#!/bin/sh
+# shiny-touchbar-heal — bring the T2 Touch Bar display back when its driver
+# missed it.
+#
+# The T2 Touch Bar is one USB device (05ac:8302) with two interfaces in its
+# "display" configuration (2): a HID touch surface and the display itself,
+# driven by `appletbdrm`. tiny-dfr is bound to the DRM card that driver
+# creates (BindsTo=dev-tiny_dfr_display.device), so when the display interface
+# is left without a driver — seen at boot and after resume, with the module
+# loaded and the interface simply unbound — tiny-dfr never starts and the bar
+# stays on whatever the firmware last drew. The Shiny shell, when it draws the
+# bar itself, needs the same card.
+#
+# This runs at boot and after every resume (shiny-touchbar-heal.service). If
+# the display is bound it only makes sure tiny-dfr is running. If not, it asks
+# the driver to bind the interface, and if that fails re-selects the USB
+# configuration (what the stock udev rule does on "add"), a few times.
+#
+# A clean no-op on any machine without that USB device.
+
+set -u
+
+TRIES=5
+SERVICE=tiny-dfr.service
+
+log() {
+  echo "shiny-touchbar-heal: $*"
+}
+
+usb_device() {
+  for dev in /sys/bus/usb/devices/*; do
+    [ -f "$dev/idVendor" ] && [ -f "$dev/idProduct" ] || continue
+    if [ "$(cat "$dev/idVendor")" = 05ac ] && [ "$(cat "$dev/idProduct")" = 8302 ]; then
+      echo "$dev"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# The display interface is vendor class 0x10; print its sysfs path.
+display_interface() {
+  for intf in "$1":*; do
+    [ -f "$intf/bInterfaceClass" ] || continue
+    if [ "$(cat "$intf/bInterfaceClass")" = 10 ]; then
+      echo "$intf"
+      return 0
+    fi
+  done
+  return 1
+}
+
+display_bound() {
+  intf=$(display_interface "$1") || return 1
+  [ -e "$intf/driver" ] && ls "$intf"/drm/card* >/dev/null 2>&1
+}
+
+# Poll for the card: binding and the DRM registration are asynchronous.
+wait_bound() {
+  n=0
+  while [ "$n" -lt "$2" ]; do
+    display_bound "$1" && return 0
+    n=$((n + 1))
+    sleep 0.5
+  done
+  return 1
+}
+
+start_daemon() {
+  command -v systemctl >/dev/null 2>&1 || return 0
+  systemctl is-active --quiet "$SERVICE" && return 0
+  # Marker of install-touchbar.sh: the Shiny shell draws the bar itself and finds the display on its
+  # own once it is back.
+  [ -e /etc/tiny-dfr/shiny-surface ] && return 0
+  # --no-block: tiny-dfr waits on its device units and must not hold us up.
+  systemctl start --no-block "$SERVICE" 2>/dev/null || true
+}
+
+# Let the stock udev rule (configuration 1 -> 2) finish before judging.
+command -v udevadm >/dev/null 2>&1 && udevadm settle --timeout=10 2>/dev/null
+
+dev=$(usb_device) || exit 0
+
+if wait_bound "$dev" 6; then
+  start_daemon
+  exit 0
+fi
+
+command -v modprobe >/dev/null 2>&1 && modprobe appletbdrm 2>/dev/null
+
+attempt=1
+while [ "$attempt" -le "$TRIES" ]; do
+  dev=$(usb_device) || exit 0
+  config=$(cat "$dev/bConfigurationValue" 2>/dev/null || echo "")
+  intf=$(display_interface "$dev" || echo "")
+  log "display has no driver (configuration ${config:-none}), attempt $attempt of $TRIES"
+
+  # Cheapest first: ask the driver to take the interface it skipped.
+  if [ -n "$intf" ] && [ ! -e "$intf/driver" ] && [ -w /sys/bus/usb/drivers/appletbdrm/bind ]; then
+    { basename "$intf" > /sys/bus/usb/drivers/appletbdrm/bind; } 2>/dev/null || true
+    if wait_bound "$dev" 6; then
+      log "bound the display interface"
+      start_daemon
+      exit 0
+    fi
+  fi
+
+  # Otherwise re-select the display configuration, which re-creates both
+  # interfaces and probes them again.
+  { echo 0 > "$dev/bConfigurationValue"; } 2>/dev/null || true
+  sleep 1
+  { echo 2 > "$dev/bConfigurationValue"; } 2>/dev/null || true
+  if wait_bound "$dev" 10; then
+    log "re-selected the display configuration"
+    start_daemon
+    exit 0
+  fi
+
+  attempt=$((attempt + 1))
+  sleep 2
+done
+
+log "the Touch Bar display still has no driver; see 'dmesg | grep -i appletb'"
+exit 1

@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Touch Bar</title>
+  <link rel="stylesheet" href="/css/touchbar-surface.css">
+</head>
+<body>
+  <!-- The MacBook Touch Bar, drawn by the kiosk shell from this page
+       (crates/liteaura/src/touchbar.rs). It holds no state of its own: the
+       desktop page publishes what to show (js/touchbarHost.js) and this page
+       sends back what was touched (js/touchbarSurface/bar.js). -->
+  <main id="bar" data-layer="main" data-linked="0">
+    <button type="button" id="orb" class="orb" data-tap="talk" aria-label="Assistant"></button>
+    <div id="strip" class="strip"><div id="strip-track" class="strip-track"></div></div>
+    <div id="tray" class="tray"></div>
+    <div id="menu-layer" class="menu-layer" aria-hidden="true"></div>
+    <div id="fn-layer" class="fn-layer" aria-hidden="true"></div>
+  </main>
+  <script type="module" src="/js/touchbarSurface/bar.js"></script>
+</body>
+</html>

@@ -134,6 +134,7 @@ let tileEl = null;
 let windowResources = null;
 let sectionResources = null;
 let selectSectionFn = null;
+let touchBarFn = null;
 let pendingSection = null;
 
 /**
@@ -475,6 +476,8 @@ function mountSettings() {
   function show(id, { animate = true, open = false } = {}) {
     if (!sections.some((section) => section.id === id)) return;
     activePanel = id;
+    // The Touch Bar lists the sections and marks this one.
+    window.dispatchEvent(new CustomEvent('touchbar:refresh'));
     paneTitle.textContent = t(activeSection().labelKey);
     nav.querySelectorAll('.settings-nav-item').forEach((item) => {
       const selected = item.dataset.panelTarget === id;
@@ -581,6 +584,13 @@ function mountSettings() {
   // settings") is what the window shows, over the list on a phone.
   if (requested) panes.show('main');
   selectSectionFn = (id) => show(id, { open: true });
+  touchBarFn = () => sections.map((section) => ({
+    id: section.id,
+    label: t(section.labelKey),
+    icon: section.icon,
+    active: section.id === activePanel,
+    onClick: () => show(section.id, { open: true }),
+  }));
   return tileEl;
 }
 
@@ -589,6 +599,7 @@ function unmountSettings() {
   windowResources = null;
   sectionResources = null;
   selectSectionFn = null;
+  touchBarFn = null;
   tileEl?.remove();
   tileEl = null;
 }
@@ -609,5 +620,7 @@ export default {
   unmount: unmountSettings,
   getElement: getSettingsElement,
   contextMenu: settingsContextMenu,
+  // The Touch Bar: one button per section, the open one lit.
+  touchBar: () => (touchBarFn ? touchBarFn() : []),
   selectSection: selectSettingsSection,
 };

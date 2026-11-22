@@ -105,7 +105,7 @@ required for macOS to grant microphone/camera access (`getUserMedia` needs
 |---|---|
 | `main.rs` | App + window. |
 | `browse.rs` | Child web views (WBWebView). |
-| `touchbar.rs` | Native `NSTouchBar`; buttons evaluate `touchbar:action`. |
+| `touchbar.rs` | macOS (`liteaura-mac`): native `NSTouchBar`; buttons evaluate `touchbar:action`. Linux (`liteaura`): draws the app's Touch Bar page on the T2 panel and feeds it touches and Fn. |
 | `display.rs` | Display scale. |
 | `config.rs` | CLI/env config. |
 
