@@ -84,6 +84,16 @@ export function isThemed(design) {
   return !!THEMES[(design?.template || '').toLowerCase()] && (design.template || '').toLowerCase() !== 'plain';
 }
 
+/**
+ * A margin as the Design dialog saves it: 0 means "the default" (25 mm) and is
+ * what an untouched field holds, so it stays 0, as does an explicit 25;
+ * anything else is kept within the engine's 5–80 mm.
+ */
+export function savedMargin(value) {
+  const v = Number(value) || 0;
+  return v === 0 || v === DEFAULT_MARGIN ? 0 : Math.min(80, Math.max(5, v));
+}
+
 /** Paper size and margins in millimetres. */
 export function geometry(design = {}) {
   const paper = PAPERS[(design.paper || 'a4').toLowerCase()] || PAPERS.a4;

@@ -12,6 +12,7 @@ import { askInChat } from '../../js/textInput.js';
 import {
   MM, PT, PAPERS, TEMPLATE_IDS, ACCENTS, DOCUMENT_FAMILIES,
   geometry, themeVars, applyVars, isThemed, contentsLabel, installDocumentFonts,
+  savedMargin,
 } from './page.js';
 
 /**
@@ -1406,10 +1407,7 @@ async function openDesignDialog() {
   });
   const save = async (thenPreview) => {
     for (const k of ['margin_top', 'margin_right', 'margin_bottom', 'margin_left']) {
-      // 0 is "the default" (25 mm): a field the user never touched stays 0,
-      // and must not be clamped up to the 5 mm minimum.
-      const v = Number(d[k]) || 0;
-      d[k] = v === 0 || v === 25 ? 0 : Math.min(80, Math.max(5, v));
+      d[k] = savedMargin(d[k]);
     }
     dialog.close();
     await commitDesign(d);
