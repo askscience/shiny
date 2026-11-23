@@ -448,9 +448,15 @@ function localFieldErrors() {
   if (!state.keyboard.trim()) add('keyboard', T('region.keyboard.required', 'Keyboard layout is required'));
   if (!state.timezone.trim()) add('timezone', T('region.timezone.required', 'Timezone is required'));
 
+  // While typing; the plugin's plan validation (shiny-installer-protocol,
+  // `basic_errors`) applies the same rules — keep the two in step.
   if (!state.fullName.trim()) add('fullName', T('account.fullName.required', 'Full name is required'));
+  // eslint-disable-next-line no-control-regex
+  else if (/[:\u0000-\u001f\u007f]/.test(state.fullName)) add('fullName', T('account.fullName.invalid', 'The name cannot contain ":"'));
   if (!/^[a-z_][a-z0-9_-]{0,31}$/.test(state.username)) {
     add('username', T('account.username.invalid', 'Start with a lowercase letter or _; use lowercase letters, digits, _ or -'));
+  } else if (state.username === 'root') {
+    add('username', T('account.username.root', 'The first account cannot be called root'));
   }
   if (!/^[A-Za-z0-9](?:[A-Za-z0-9.-]{0,61}[A-Za-z0-9])?$/.test(state.hostname)) {
     add('hostname', T('account.hostname.invalid', 'Use 1–63 letters, digits, - or ., starting and ending with a letter or digit'));

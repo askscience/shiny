@@ -443,5 +443,7 @@
   "plugin.installer.profile.ai.off.meta": "Tista' tixgħelha aktar tard",
   "plugin.installer.disk.reason.apple": "Fih partizzjonijiet macOS (APFS/HFS), li qatt ma jitħassru",
   "plugin.installer.disk.reason.busy": "Partizzjoni qed tintuża mis-sistema (kriptaġġ, LVM jew RAID)",
-  "plugin.installer.disk.reason.unknown": "Ma setax jiġi ċċekkjat dan id-diska — aġġorna l-lista"
+  "plugin.installer.disk.reason.unknown": "Ma setax jiġi ċċekkjat dan id-diska — aġġorna l-lista",
+  "plugin.installer.account.fullName.invalid": "L-isem ma jistax ikun fih \":\"",
+  "plugin.installer.account.username.root": "L-ewwel kont ma jistax jissejjaħ root"
 }

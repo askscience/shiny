@@ -443,5 +443,7 @@
   "plugin.installer.profile.ai.off.meta": "Is féidir é a chur ar siúl níos déanaí",
   "plugin.installer.disk.reason.apple": "Tá deighiltí macOS (APFS/HFS) air, nach scriostar riamh",
   "plugin.installer.disk.reason.busy": "Tá deighilt in úsáid ag an gcóras (criptiú, LVM nó RAID)",
-  "plugin.installer.disk.reason.unknown": "Níorbh fhéidir an diosca a sheiceáil — athnuaigh an liosta"
+  "plugin.installer.disk.reason.unknown": "Níorbh fhéidir an diosca a sheiceáil — athnuaigh an liosta",
+  "plugin.installer.account.fullName.invalid": "Ní féidir \":\" a bheith san ainm",
+  "plugin.installer.account.username.root": "Ní féidir root a thabhairt ar an gcéad chuntas"
 }

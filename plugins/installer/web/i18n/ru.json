@@ -443,5 +443,7 @@
   "plugin.installer.profile.ai.off.meta": "Можно включить позже",
   "plugin.installer.disk.reason.apple": "Содержит разделы macOS (APFS/HFS), которые никогда не стираются",
   "plugin.installer.disk.reason.busy": "Раздел используется системой (шифрование, LVM или RAID)",
-  "plugin.installer.disk.reason.unknown": "Не удалось проверить диск — обновите список"
+  "plugin.installer.disk.reason.unknown": "Не удалось проверить диск — обновите список",
+  "plugin.installer.account.fullName.invalid": "Имя не может содержать «:»",
+  "plugin.installer.account.username.root": "Первую учётную запись нельзя назвать root"
 }

@@ -443,5 +443,7 @@
   "plugin.installer.profile.ai.off.meta": "You can turn it on later",
   "plugin.installer.disk.reason.apple": "Holds macOS (APFS/HFS) partitions, which are never erased",
   "plugin.installer.disk.reason.busy": "A partition is in use by the system (encryption, LVM or RAID)",
-  "plugin.installer.disk.reason.unknown": "Could not check this disk — refresh the list"
+  "plugin.installer.disk.reason.unknown": "Could not check this disk — refresh the list",
+  "plugin.installer.account.fullName.invalid": "The name cannot contain \":\"",
+  "plugin.installer.account.username.root": "The first account cannot be called root"
 }

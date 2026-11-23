@@ -443,5 +443,7 @@
   "plugin.installer.profile.ai.off.meta": "Puedes activarla más tarde",
   "plugin.installer.disk.reason.apple": "Contiene particiones de macOS (APFS/HFS), que nunca se borran",
   "plugin.installer.disk.reason.busy": "Una partición está en uso por el sistema (cifrado, LVM o RAID)",
-  "plugin.installer.disk.reason.unknown": "No se pudo comprobar este disco — actualiza la lista"
+  "plugin.installer.disk.reason.unknown": "No se pudo comprobar este disco — actualiza la lista",
+  "plugin.installer.account.fullName.invalid": "El nombre no puede contener «:»",
+  "plugin.installer.account.username.root": "La primera cuenta no puede llamarse root"
 }

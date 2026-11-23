@@ -590,6 +590,9 @@ impl InstallPlan {
             errors.push("an account password is required".into());
         } else if self.password.len() < 8 {
             errors.push("the account password must be at least 8 characters".into());
+        } else if self.password.chars().all(|c| c.is_ascii_alphabetic()) {
+            // The window asks for this while typing: letters alone are weak.
+            errors.push("the account password needs a digit or a symbol".into());
         }
 
         if !self.username.is_empty() && !valid_username(&self.username) {
@@ -809,7 +812,10 @@ fn valid_hostname(value: &str) -> bool {
     if value.is_empty() || value.len() > 63 {
         return false;
     }
-    if value.starts_with('-') || value.ends_with('-') {
+    // Starts and ends with a letter or digit, as the message says (and as
+    // the installer window checks while typing).
+    let edge = |c: Option<char>| c.is_some_and(|c| c.is_ascii_alphanumeric());
+    if !edge(value.chars().next()) || !edge(value.chars().last()) {
         return false;
     }
     value
@@ -942,6 +948,14 @@ impl RpcResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn account_rules_match_the_window() {
+        assert!(valid_hostname("liteaura") && valid_hostname("lite-aura.local") && valid_hostname("a"));
+        assert!(!valid_hostname(".liteaura") && !valid_hostname("liteaura.") && !valid_hostname("-x") && !valid_hostname("x-"));
+        assert!(!valid_hostname("lite_aura") && !valid_hostname(&"a".repeat(64)));
+        assert!(valid_username("anna") && valid_username("_svc-1") && !valid_username("Anna") && !valid_username("1anna"));
+    }
 
     fn part(path: &str, fstype: &str, size_gib: u64) -> DiskInfo {
         DiskInfo { path: path.into(), kind: "part".into(), fstype: fstype.into(), size_bytes: size_gib << 30, ..Default::default() }

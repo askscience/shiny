@@ -443,5 +443,7 @@
   "plugin.installer.profile.ai.off.meta": "Später aktivierbar",
   "plugin.installer.disk.reason.apple": "Enthält macOS-Partitionen (APFS/HFS), die nie gelöscht werden",
   "plugin.installer.disk.reason.busy": "Eine Partition wird vom System verwendet (Verschlüsselung, LVM oder RAID)",
-  "plugin.installer.disk.reason.unknown": "Dieses Laufwerk konnte nicht geprüft werden — Liste aktualisieren"
+  "plugin.installer.disk.reason.unknown": "Dieses Laufwerk konnte nicht geprüft werden — Liste aktualisieren",
+  "plugin.installer.account.fullName.invalid": "Der Name darf kein „:“ enthalten",
+  "plugin.installer.account.username.root": "Das erste Konto darf nicht root heißen"
 }

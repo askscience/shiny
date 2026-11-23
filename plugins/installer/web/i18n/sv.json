@@ -443,5 +443,7 @@
   "plugin.installer.profile.ai.off.meta": "Kan slås på senare",
   "plugin.installer.disk.reason.apple": "Innehåller macOS-partitioner (APFS/HFS), som aldrig raderas",
   "plugin.installer.disk.reason.busy": "En partition används av systemet (kryptering, LVM eller RAID)",
-  "plugin.installer.disk.reason.unknown": "Det gick inte att kontrollera disken — uppdatera listan"
+  "plugin.installer.disk.reason.unknown": "Det gick inte att kontrollera disken — uppdatera listan",
+  "plugin.installer.account.fullName.invalid": "Namnet får inte innehålla \":\"",
+  "plugin.installer.account.username.root": "Det första kontot får inte heta root"
 }

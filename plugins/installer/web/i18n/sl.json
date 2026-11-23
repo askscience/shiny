@@ -443,5 +443,7 @@
   "plugin.installer.profile.ai.off.meta": "Vklopite ga lahko pozneje",
   "plugin.installer.disk.reason.apple": "Vsebuje razdelke macOS (APFS/HFS), ki se nikoli ne izbrišejo",
   "plugin.installer.disk.reason.busy": "Razdelek uporablja sistem (šifriranje, LVM ali RAID)",
-  "plugin.installer.disk.reason.unknown": "Diska ni bilo mogoče preveriti — osvežite seznam"
+  "plugin.installer.disk.reason.unknown": "Diska ni bilo mogoče preveriti — osvežite seznam",
+  "plugin.installer.account.fullName.invalid": "Ime ne sme vsebovati »:«",
+  "plugin.installer.account.username.root": "Prvi račun ne sme biti root"
 }

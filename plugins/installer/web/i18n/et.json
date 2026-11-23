@@ -443,5 +443,7 @@
   "plugin.installer.profile.ai.off.meta": "Saab hiljem sisse lülitada",
   "plugin.installer.disk.reason.apple": "Sisaldab macOS-i partitsioone (APFS/HFS), mida kunagi ei kustutata",
   "plugin.installer.disk.reason.busy": "Süsteem kasutab partitsiooni (krüpteering, LVM või RAID)",
-  "plugin.installer.disk.reason.unknown": "Ketast ei õnnestunud kontrollida — värskenda loendit"
+  "plugin.installer.disk.reason.unknown": "Ketast ei õnnestunud kontrollida — värskenda loendit",
+  "plugin.installer.account.fullName.invalid": "Nimi ei tohi sisaldada märki \":\"",
+  "plugin.installer.account.username.root": "Esimese konto nimi ei tohi olla root"
 }

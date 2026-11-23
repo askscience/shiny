@@ -443,5 +443,7 @@
   "plugin.installer.profile.ai.off.meta": "Îl puteți activa mai târziu",
   "plugin.installer.disk.reason.apple": "Conține partiții macOS (APFS/HFS), care nu sunt șterse niciodată",
   "plugin.installer.disk.reason.busy": "O partiție este folosită de sistem (criptare, LVM sau RAID)",
-  "plugin.installer.disk.reason.unknown": "Discul nu a putut fi verificat — reîmprospătați lista"
+  "plugin.installer.disk.reason.unknown": "Discul nu a putut fi verificat — reîmprospătați lista",
+  "plugin.installer.account.fullName.invalid": "Numele nu poate conține „:”",
+  "plugin.installer.account.username.root": "Primul cont nu se poate numi root"
 }

@@ -443,5 +443,7 @@
   "plugin.installer.profile.ai.off.meta": "Μπορείς να το ενεργοποιήσεις αργότερα",
   "plugin.installer.disk.reason.apple": "Περιέχει διαμερίσματα macOS (APFS/HFS), που δεν διαγράφονται ποτέ",
   "plugin.installer.disk.reason.busy": "Ένα διαμέρισμα χρησιμοποιείται από το σύστημα (κρυπτογράφηση, LVM ή RAID)",
-  "plugin.installer.disk.reason.unknown": "Δεν ήταν δυνατός ο έλεγχος του δίσκου — ανανεώστε τη λίστα"
+  "plugin.installer.disk.reason.unknown": "Δεν ήταν δυνατός ο έλεγχος του δίσκου — ανανεώστε τη λίστα",
+  "plugin.installer.account.fullName.invalid": "Το όνομα δεν μπορεί να περιέχει «:»",
+  "plugin.installer.account.username.root": "Ο πρώτος λογαριασμός δεν μπορεί να λέγεται root"
 }

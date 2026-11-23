@@ -443,5 +443,7 @@
   "plugin.installer.profile.ai.off.meta": "Dá sa zapnúť neskôr",
   "plugin.installer.disk.reason.apple": "Obsahuje oddiely macOS (APFS/HFS), ktoré sa nikdy nemažú",
   "plugin.installer.disk.reason.busy": "Oddiel používa systém (šifrovanie, LVM alebo RAID)",
-  "plugin.installer.disk.reason.unknown": "Disk sa nepodarilo skontrolovať — obnovte zoznam"
+  "plugin.installer.disk.reason.unknown": "Disk sa nepodarilo skontrolovať — obnovte zoznam",
+  "plugin.installer.account.fullName.invalid": "Meno nesmie obsahovať „:“",
+  "plugin.installer.account.username.root": "Prvý účet sa nesmie volať root"
 }

@@ -443,5 +443,7 @@
   "plugin.installer.profile.ai.off.meta": "Може да се включи по-късно",
   "plugin.installer.disk.reason.apple": "Съдържа дялове на macOS (APFS/HFS), които никога не се изтриват",
   "plugin.installer.disk.reason.busy": "Дял се използва от системата (шифроване, LVM или RAID)",
-  "plugin.installer.disk.reason.unknown": "Дискът не можа да бъде проверен — обновете списъка"
+  "plugin.installer.disk.reason.unknown": "Дискът не можа да бъде проверен — обновете списъка",
+  "plugin.installer.account.fullName.invalid": "Името не може да съдържа „:“",
+  "plugin.installer.account.username.root": "Първият акаунт не може да се казва root"
 }

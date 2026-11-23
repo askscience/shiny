@@ -443,5 +443,7 @@
   "plugin.installer.profile.ai.off.meta": "Kan slås til senere",
   "plugin.installer.disk.reason.apple": "Indeholder macOS-partitioner (APFS/HFS), som aldrig slettes",
   "plugin.installer.disk.reason.busy": "En partition er i brug af systemet (kryptering, LVM eller RAID)",
-  "plugin.installer.disk.reason.unknown": "Disken kunne ikke kontrolleres — opdater listen"
+  "plugin.installer.disk.reason.unknown": "Disken kunne ikke kontrolleres — opdater listen",
+  "plugin.installer.account.fullName.invalid": "Navnet må ikke indeholde \":\"",
+  "plugin.installer.account.username.root": "Den første konto må ikke hedde root"
 }
