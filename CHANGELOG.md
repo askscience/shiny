@@ -4,6 +4,10 @@
 
 ### Changed
 
+- **Capture: caption and style edits are single operations.** Moving,
+  resizing or retyping a caption and changing your style guidelines or its
+  lock no longer send the whole project back; the AI can move a caption too,
+  and can never unlock a style you locked.
 - **Installer: the disk step knows what the last step will refuse.** Which
   disks can be erased, which partitions can take the system and which EFI
   partition is reused are decided by the installer's Rust and sent with the

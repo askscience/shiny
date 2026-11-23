@@ -38,10 +38,13 @@ model reads [`skills/capture.md`](../skills/capture.md).
 `add_clip`, `place_media`, `move_clip`, `trim_clip`, `set_clip`, `split_clip`,
 `delete_clip`, `cut_ranges` (timeline ranges on every track, gaps closed),
 `add_overlay`, `update_overlay`, `delete_overlay`, `add_caption`,
-`set_captions`, `delete_caption`, `add_marker`, `set_style`, `set_track`,
-`set_project`. Each is validated and clamped ([`src/editor/project.rs`](../src/editor/project.rs));
+`update_caption`, `set_captions`, `delete_caption`, `add_marker`, `set_style`,
+`set_track`, `set_project`. Each is validated and clamped ([`src/editor/project.rs`](../src/editor/project.rs));
 a list applies all or nothing, and an error names the operation that failed so
-the model can correct itself. The editor window sends the same operations.
+the model can correct itself. The editor window sends the same operations,
+plus `set_style_user{user?, locked?}` — the person's own guidelines and the
+style lock — which the tools refuse (`apply_all_ai`): the AI never unlocks a
+style. The timeline's length is `Project::duration`, sent with every project.
 
 ## How the AI edits
 

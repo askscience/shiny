@@ -864,10 +864,33 @@ pub fn apply(p: &mut Project, op: &Value) -> Result<Vec<String>, String> {
             let id = s(op, "id").ok_or("missing \"id\"")?;
             p.captions.retain(|c| c.id != id);
         }
+        "update_caption" => {
+            let id = s(op, "id").ok_or("missing \"id\"")?;
+            let c = p.captions.iter_mut().find(|c| c.id == id).ok_or("no such caption")?;
+            if let Some(v) = num(op, "at") {
+                c.at = v.max(0.0);
+            }
+            if let Some(v) = num(op, "dur") {
+                c.dur = v.max(0.1);
+            }
+            if let Some(t) = s(op, "text") {
+                c.text = t.to_string();
+            }
+        }
         "add_marker" => p.markers.push(Marker {
             t: num(op, "t").ok_or("missing \"t\"")?,
             label: s(op, "label").unwrap_or("").to_string(),
         }),
+        // The user's own side of the style: their guidelines and the lock.
+        // Only the window sends it (`apply_all_ai` refuses it from the AI).
+        "set_style_user" => {
+            if let Some(u) = op.get("user").and_then(|v| v.as_str()) {
+                p.style.user = u.to_string();
+            }
+            if let Some(l) = op.get("locked").and_then(|v| v.as_bool()) {
+                p.style.locked = l;
+            }
+        }
         "set_style" => {
             if p.style.locked && op.get("force").and_then(|v| v.as_bool()) != Some(true) {
                 return Err("the style is locked by the user; ask before changing it".into());
@@ -915,6 +938,21 @@ pub fn apply(p: &mut Project, op: &Value) -> Result<Vec<String>, String> {
 }
 
 /// Apply a list atomically: all or nothing.
+/// Operations only the person may send: the AI never unlocks a style or
+/// rewrites the user's own guidelines.
+pub const USER_ONLY_OPS: &[&str] = &["set_style_user"];
+
+/// `apply_all` for the AI tools: the user-only operations are refused.
+pub fn apply_all_ai(p: &mut Project, ops: &[Value]) -> Result<Vec<String>, String> {
+    for (i, op) in ops.iter().enumerate() {
+        let kind = op.get("op").and_then(|v| v.as_str()).unwrap_or("");
+        if USER_ONLY_OPS.contains(&kind) {
+            return Err(format!("operation {}: {kind} is the user's own setting", i + 1));
+        }
+    }
+    apply_all(p, ops)
+}
+
 pub fn apply_all(p: &mut Project, ops: &[Value]) -> Result<Vec<String>, String> {
     let mut work = p.clone();
     let mut ids = Vec::new();
@@ -1072,6 +1110,33 @@ pub fn create(home: &Path, title: Option<&str>) -> Result<Project, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn captions_update_in_place() {
+        let mut p = Project::default();
+        apply(&mut p, &json!({"op": "add_caption", "at": 1.0, "dur": 2.0, "text": "Ciao"})).unwrap();
+        let id = p.captions[0].id.clone();
+        apply(&mut p, &json!({"op": "update_caption", "id": id, "at": 3.0, "text": "Salve"})).unwrap();
+        assert_eq!((p.captions[0].at, p.captions[0].dur, p.captions[0].text.as_str()), (3.0, 2.0, "Salve"));
+        apply(&mut p, &json!({"op": "update_caption", "id": id, "dur": 0.0, "at": -2.0})).unwrap();
+        assert_eq!((p.captions[0].at, p.captions[0].dur), (0.0, 0.1));
+        assert!(apply(&mut p, &json!({"op": "update_caption", "id": "nope"})).is_err());
+    }
+
+    #[test]
+    fn the_style_lock_is_the_users() {
+        let mut p = Project::default();
+        apply_all(&mut p, &[json!({"op": "set_style_user", "user": "warm colours", "locked": true})]).unwrap();
+        assert!(p.style.locked);
+        assert_eq!(p.style.user, "warm colours");
+        // The AI can neither change a locked style nor unlock it.
+        assert!(apply_all_ai(&mut p, &[json!({"op": "set_style", "guide": "neon"})]).is_err());
+        assert!(apply_all_ai(&mut p, &[json!({"op": "set_style_user", "locked": false})]).is_err());
+        assert!(p.style.locked);
+        // The person can.
+        apply_all(&mut p, &[json!({"op": "set_style_user", "locked": false})]).unwrap();
+        assert!(!p.style.locked);
+    }
     use serde_json::json;
 
     fn proj() -> Project {

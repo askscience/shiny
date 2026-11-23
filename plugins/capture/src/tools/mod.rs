@@ -232,7 +232,7 @@ tool!(CaptureTranscribe, "capture_transcribe", "Transcribing…",
         Ok(ActionOutcome::ok("capture_transcribe", json!({ "media": started })))
     });
 
-const OPS_DOC: &str = "ops: add_clip{media,track?,at?,in?,out?,speed?,volume?,rect?{x,y,w,h 0..1},radius?}, place_media{media,at?}, move_clip{clip,at?,track?}, trim_clip{clip,in?,out?,at?}, set_clip{clip,speed?,volume?,fade_in?,fade_out?,opacity?,rect?,radius?}, split_clip{clip,t}, delete_clip{clip}, cut_ranges{ranges:[[from,to]] timeline seconds, closes gaps}, add_overlay{html,at,dur,rect?,name?}, update_overlay{id,…}, delete_overlay{id}, add_caption{at,dur,text}, set_captions{captions:[{at,dur,text}]}, add_marker{t,label}, set_style{guide?,css?}, set_track{track,volume?,muted?,hidden?}";
+const OPS_DOC: &str = "ops: add_clip{media,track?,at?,in?,out?,speed?,volume?,rect?{x,y,w,h 0..1},radius?}, place_media{media,at?}, move_clip{clip,at?,track?}, trim_clip{clip,in?,out?,at?}, set_clip{clip,speed?,volume?,fade_in?,fade_out?,opacity?,rect?,radius?}, split_clip{clip,t}, delete_clip{clip}, cut_ranges{ranges:[[from,to]] timeline seconds, closes gaps}, add_overlay{html,at,dur,rect?,name?}, update_overlay{id,…}, delete_overlay{id}, add_caption{at,dur,text}, update_caption{id,at?,dur?,text?}, set_captions{captions:[{at,dur,text}]}, add_marker{t,label}, set_style{guide?,css?}, set_track{track,volume?,muted?,hidden?}";
 
 pub struct CaptureEdit;
 #[async_trait]
@@ -263,7 +263,7 @@ impl Tool for CaptureEdit {
         if ops.is_empty() {
             return err("capture_edit", "missing \"ops\"");
         }
-        let ids = match project::apply_all(&mut p, &ops) {
+        let ids = match project::apply_all_ai(&mut p, &ops) {
             Ok(i) => i,
             Err(e) => return err("capture_edit", e),
         };
@@ -308,7 +308,7 @@ impl Tool for CapturePropose {
         }
         // Validate on a copy first: a proposal that cannot apply is refused now.
         let mut check = p.clone();
-        if let Err(e) = project::apply_all(&mut check, &ops) {
+        if let Err(e) = project::apply_all_ai(&mut check, &ops) {
             return err("capture_propose", e);
         }
         // Ghost previews for what adds something.
@@ -510,7 +510,7 @@ tool!(CaptureVoice, "capture_voice", "Recording the voice…",
                 ops.push(json!({ "op": "add_caption", "at": at + t.at, "dur": t.dur.max(0.6), "text": text }));
             }
         }
-        let created = match project::apply_all(&mut p, &ops) { Ok(i) => i, Err(e) => return err("capture_voice", e) };
+        let created = match project::apply_all_ai(&mut p, &ops) { Ok(i) => i, Err(e) => return err("capture_voice", e) };
         if let Err(e) = save(&req, &mut p) { return err("capture_voice", e); }
         let lines: Vec<Value> = timed.iter().map(|t| json!({ "speaker": t.speaker, "voice": t.voice, "text": t.text, "at": ((at + t.at) * 100.0).round() / 100.0, "dur": (t.dur * 100.0).round() / 100.0 })).collect();
         let end = timed.last().map(|t| at + t.at + t.dur).unwrap_or(at);

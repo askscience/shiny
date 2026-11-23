@@ -109,13 +109,10 @@ const track = (id) => project?.tracks?.find((x) => x.id === id);
 const clipLen = (c) => Math.max(0, (c.out - c.in) / c.speed);
 const mediaUrl = (m) => `/api/capture/media?path=${encodeURIComponent(m.path)}`;
 
+/** The timeline's length, as the engine computes it (`Project::duration`,
+ *  sent with every project). */
 function duration() {
-  if (!project) return 0;
-  let d = 0;
-  for (const c of project.clips) d = Math.max(d, c.at + clipLen(c));
-  for (const o of project.overlays) d = Math.max(d, o.at + o.dur);
-  for (const c of project.captions) d = Math.max(d, c.at + c.dur);
-  return d;
+  return Number(project?.duration) || 0;
 }
 
 function itemsFromProject() {
@@ -244,8 +241,7 @@ function buildTimeline() {
       } else if (item?.kind === 'overlay') {
         ops([{ op: 'update_overlay', id, at: start, dur: end - start }]);
       } else if (item?.kind === 'caption') {
-        const cap = project.captions.find((x) => x.id === id);
-        send({ project: { ...project, captions: project.captions.map((x) => (x.id === id ? { ...cap, at: start, dur: end - start } : x)) } });
+        ops([{ op: 'update_caption', id, at: start, dur: end - start }]);
       }
     },
     contextMenu: (id, e) => clipMenu(id, e),
@@ -255,7 +251,7 @@ function buildTimeline() {
 }
 
 function moveCaption(id, at) {
-  send({ project: { ...project, captions: project.captions.map((x) => (x.id === id ? { ...x, at } : x)) } });
+  ops([{ op: 'update_caption', id, at }]);
 }
 
 function clipMenu(id, e) {
@@ -607,7 +603,7 @@ function renderInspector(body) {
   } else {
     const c = project.captions.find((x) => x.id === item.id);
     const text = textarea({ value: c.text });
-    text.addEventListener('change', () => send({ project: { ...project, captions: project.captions.map((x) => (x.id === c.id ? { ...x, text: text.value } : x)) } }));
+    text.addEventListener('change', () => ops([{ op: 'update_caption', id: c.id, text: text.value }]));
     body.append(field({ label: t('plugin.capture.editor.caption', null, 'Caption'), control: text }));
   }
 }
@@ -723,8 +719,8 @@ function renderAI(body) {
   else body.append(h('p', 'capture-hint', t('plugin.capture.ai.styleEmpty', null, 'The AI writes the style after the first graphic you keep, then every graphic follows it.')));
   const user = textarea({ value: st.user || '', placeholder: t('plugin.capture.ai.stylePh', null, 'Your guidelines for every graphic: colours, fonts, mood…') });
   user.rows = 2;
-  user.addEventListener('change', () => send({ project: { ...project, style: { ...st, user: user.value } } }));
-  const lock = toggleRow({ label: t('plugin.capture.ai.lock', null, 'Keep this style'), checked: !!st.locked, onChange: (v) => send({ project: { ...project, style: { ...st, locked: v } } }) });
+  user.addEventListener('change', () => ops([{ op: 'set_style_user', user: user.value }]));
+  const lock = toggleRow({ label: t('plugin.capture.ai.lock', null, 'Keep this style'), checked: !!st.locked, onChange: (v) => ops([{ op: 'set_style_user', locked: v }]) });
   const fresh = button({ icon: 'ui/refresh', label: t('plugin.capture.ai.newStyle', null, 'Something completely different'), variant: 'ghost', size: 'sm', onClick: () => {
     askInChat(t('plugin.capture.ai.newStyleMsg', { project: project.id }, `For the Capture project ${project.id}, design a completely different graphics style, write it with capture_style and propose one graphic in it.`));
   } });
