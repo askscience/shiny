@@ -199,6 +199,15 @@ pub fn skill_docs(language: Language) -> String {
     [common.trim(), own.trim()].iter().filter(|part| !part.is_empty()).copied().collect::<Vec<_>>().join("\n\n")
 }
 
+/// The sentence every prompt carries next to the plugin catalogue. Small
+/// models read the catalogue as the complete list of what they can do and
+/// answer "I cannot create plugins" even with `plugin_dev_start` documented
+/// far up in the tool docs: measured with a 2 GB local model and eighteen
+/// active plugins, it refused two requests out of three.
+pub const CAN_BUILD_LINE: &str = "Creating a NEW plugin (a new app or window for this desktop) is something you can \
+     do yourself: when the user asks for one, call {\"action\":\"plugin_dev_start\",\"params\":{}} first. Never \
+     answer that you cannot create plugins, and do not activate an existing plugin instead.";
+
 /// The module of a builder command, `None` for any other action.
 pub fn module_of(action: &str) -> Option<Module> {
     COMMANDS.iter().find(|(name, _)| *name == action).map(|(_, module)| *module)

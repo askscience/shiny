@@ -112,13 +112,14 @@ pub fn build_continuation_system(
     correction: bool,
 ) -> String {
     let plugins_line = if plugins_hint.is_empty() {
-        String::new()
+        format!("{}\n", crate::services::plugin_dev::CAN_BUILD_LINE)
     } else {
         format!(
             "Plugin windows: {plugins_hint}. Call show_plugin only when the user asks to open, \
              show or focus a plugin's window — do not call it just because you used its tools. \
              An (inactive) plugin needs {{\"action\":\"plugin_activate\",\"params\":{{\"name\":\"<plugin>\"}}}} \
-             before you can use its tools.\n"
+             before you can use its tools. {}\n",
+            crate::services::plugin_dev::CAN_BUILD_LINE
         )
     };
     let history_line = if history.is_empty() {
@@ -852,7 +853,9 @@ mod tests {
         );
         // Slim prompt: the full tool reference must NOT be repeated.
         assert!(!msgs[0].1.contains("## Tool call format"));
-        assert!(msgs[0].1.len() < 1000);
+        // The full reference is thousands of characters; the slim prompt
+        // stays well under that, the plugin builder's one line included.
+        assert!(msgs[0].1.len() < 1400, "{}", msgs[0].1.len());
         assert!(msgs.iter().any(|(_, c)| c.contains("[Done]")));
     }
 
@@ -860,6 +863,14 @@ mod tests {
     fn continuation_without_plugins_omits_hint() {
         let msgs = build_continuation_messages("Shiny", "en", "single", "Hi", &[], "", &[], false, false);
         assert!(!msgs[0].1.contains("Plugin windows"));
+    }
+
+    #[test]
+    fn every_continuation_says_plugins_can_be_built() {
+        for hint in ["", "word: Word processor"] {
+            let msgs = build_continuation_messages("Shiny", "en", "single", "Hi", &[], hint, &[], false, false);
+            assert!(msgs[0].1.contains("plugin_dev_start"), "{hint:?}: {}", msgs[0].1);
+        }
     }
 
     #[test]

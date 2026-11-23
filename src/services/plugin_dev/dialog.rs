@@ -531,7 +531,10 @@ async fn plugin_dev_start<P: FnMut(StepText)>(
                 return Ok(not_chosen(
                     &content,
                     Some(&reply),
-                    "the user closed the card without choosing a language. Nothing was started.".into(),
+                    "the user closed the card without choosing a language. Nothing was started. Plugins are \
+                     built in Python or in Rust only: if the user still wants one, call plugin_dev_start again so \
+                     they can choose on the card; do not offer other languages."
+                        .into(),
                 ));
             };
             let readiness = dialog.machine.readiness(language);

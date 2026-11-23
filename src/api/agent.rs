@@ -726,7 +726,7 @@ async fn prepare_agent(
     };
 
     let plugin_catalog_block = if catalog.is_empty() {
-        "\n## Plugins\nNo plugins installed.".to_string()
+        format!("\n## Plugins\nNo plugins installed.\n{}", crate::services::plugin_dev::CAN_BUILD_LINE)
     } else {
         // In focus mode the catalog must not promise tools the registry will
         // refuse: say plainly that only the focused plugins' tools work.
@@ -740,9 +740,10 @@ async fn prepare_agent(
              {active_label}\n{}\n\
              Available (inactive) plugins — activate with \
              {{\"action\":\"plugin_activate\",\"params\":{{\"name\":\"<plugin>\"}}}} if the request \
-             needs one; deactivate with plugin_deactivate when the user asks to turn one off:\n{}",
+             needs one; deactivate with plugin_deactivate when the user asks to turn one off:\n{}\n{}",
             if active_lines.is_empty() { "- none".to_string() } else { active_lines.join("\n") },
             if inactive_lines.is_empty() { "- none".to_string() } else { inactive_lines.join("\n") },
+            crate::services::plugin_dev::CAN_BUILD_LINE,
         )
     };
 
