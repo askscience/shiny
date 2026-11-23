@@ -85,10 +85,18 @@ function updateGlow({ error = false } = {}) {
   setTileGlow(tileEl, glowGradient('var(--accent)', 'var(--accent-2)'));
 }
 
+/**
+ * An expression as the keys show it: × ÷ − instead of * / -. Display only;
+ * what is evaluated and stored keeps the plain characters.
+ */
+export function prettyExpr(src) {
+  return String(src ?? '').replace(/\*/g, '×').replace(/\//g, '÷').replace(/-/g, '−');
+}
+
 /** Repaint the display. `roll` animates a freshly set result (rollNumber). */
 function renderDisplay({ roll = false } = {}) {
   if (!exprEl || !resultEl) return;
-  exprEl.textContent = expression || '\u200b';
+  exprEl.textContent = prettyExpr(expression) || '\u200b';
   const text = lastResult == null ? '' : String(lastResult);
   // An empty display shows a muted 0, like a pocket calculator at rest.
   resultEl.textContent = text || '0';
@@ -137,7 +145,7 @@ async function equals() {
     renderDisplay({ roll: true });
     // Keep the evaluated expression visible above the result until the next
     // key press (the expression state itself is already cleared).
-    exprEl.textContent = src;
+    exprEl.textContent = prettyExpr(src);
     await refreshHistory();
   } catch (e) {
     resultEl.textContent = t('plugin.calculator.display.error', null, 'Error');
@@ -286,7 +294,7 @@ async function refreshHistory({ reveal = false } = {}) {
       row.title = t('plugin.calculator.history.reuse', null, 'Reuse this result');
       const expr = document.createElement('span');
       expr.className = 'calculator-history-expr';
-      expr.textContent = item.expression;
+      expr.textContent = prettyExpr(item.expression);
       const res = document.createElement('span');
       res.className = 'calculator-history-res';
       res.textContent = String(item.result);
@@ -482,7 +490,7 @@ function onAgentActions(e) {
     expression = '';
     lastResult = evaled.data?.result_text ?? null;
     renderDisplay({ roll: true });
-    if (evaled.data?.expression) exprEl.textContent = evaled.data.expression;
+    if (evaled.data?.expression) exprEl.textContent = prettyExpr(evaled.data.expression);
   }
   if (historyOpen) void refreshHistory();
 }

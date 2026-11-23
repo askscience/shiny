@@ -1,8 +1,11 @@
 # Calculator plugin — window surface (`web/plugin.js`)
 
-The Calculator window, in the editorial language: a display with a small mono
-uppercase expression line over a large, tight display-font result (rolled up
-with `rollNumber` whenever a result is set), a keypad of flat grey pills with
+The Calculator window, in the editorial language: a display with the typed
+expression in the display face, sized with the window (`clamp(18px, 4.6cqi,
+32px)`, a step below the result) over a large, tight display-font result
+(rolled up with `rollNumber` whenever a result is set). The expression line
+and the history show the operators as the keys do (`× ÷ −`, via
+`prettyExpr`); what is evaluated and stored keeps `* / -`. Then a keypad of flat grey pills with
 `=` as the single ink pill, a collapsible scientific pad, and a collapsible
 hairline history. The body is a pane stack (`paneStack`, see
 `docs/core/ui-components.md` § Panes): the pad (display, scientific row,
@@ -73,7 +76,7 @@ section.tile.calculator-tile[data-plugin=calculator]
         └── div.calculator-history-body
             └── div.ui-hairline-list.calculator-history-list
                 └── button.calculator-history-item
-                    ├── span.calculator-history-expr   (mono, uppercase)
+                    ├── span.calculator-history-expr   (display face, 14 px)
                     └── span.calculator-history-res    (display face)
 ```
 

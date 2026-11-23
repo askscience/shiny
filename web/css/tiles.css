@@ -4163,14 +4163,16 @@ html[data-phone='1'] .impress-anim-apply { width: 44px; height: 44px; min-height
   background: transparent;
 }
 
+/* What was typed: readable at a glance, a step below the result. */
 .calculator-display-expr {
   max-width: 100%;
-  min-height: 14px;
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--muted);
+  min-height: 1.2em;
+  font-family: var(--font-display);
+  font-size: clamp(18px, 4.6cqi, 32px);
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--text-secondary, var(--muted));
   text-align: right;
   word-break: break-all;
   font-variant-numeric: tabular-nums;
@@ -4314,10 +4316,9 @@ html[data-phone='1'] .calculator-sci .calculator-key { min-height: 38px; }
 .calculator-history-expr {
   min-width: 0;
   overflow: hidden;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
   color: var(--muted);
   text-overflow: ellipsis;
   white-space: nowrap;

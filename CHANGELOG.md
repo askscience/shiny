@@ -4,6 +4,10 @@
 
 ### Changed
 
+- **Calculator: the typed numbers are readable.** The expression above the
+  result was tiny grey capitals; it is now in the same face as the result,
+  sized with the window, a step smaller. It and the history show `×`, `÷`
+  and `−` as the keys do, instead of `*`, `/` and `-`.
 - **A quieter search field everywhere** (Files, Mail, Browser, Radio,
   YouTube, Studio, the Plugins window): a soft pill in the grey of the window
   bar's buttons, the magnifier a small glyph at its start instead of a black
