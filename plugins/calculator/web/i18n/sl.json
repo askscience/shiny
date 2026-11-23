@@ -15,5 +15,13 @@
   "plugin.calculator.toast.evaluateFailed": "Izraza ni bilo mogoče izračunati",
   "plugin.calculator.toast.historyFailed": "Zgodovine ni bilo mogoče naložiti",
   "plugin.calculator.toast.historyCleared": "Zgodovina počiščena",
-  "plugin.calculator.toast.clearFailed": "Zgodovine ni bilo mogoče počistiti"
+  "plugin.calculator.toast.clearFailed": "Zgodovine ni bilo mogoče počistiti",
+  "plugin.calculator.toolbar.angleDeg": "Koti v stopinjah — preklopi na radiane",
+  "plugin.calculator.toolbar.angleRad": "Koti v radianih — preklopi na stopinje",
+  "plugin.calculator.error.divideByZero": "Z nič ni mogoče deliti",
+  "plugin.calculator.error.incomplete": "Izraz ni dokončan",
+  "plugin.calculator.error.domain": "Za to vrednost ni definirano",
+  "plugin.calculator.error.tooLarge": "Rezultat je prevelik",
+  "plugin.calculator.error.tooLong": "Izraz je predolg",
+  "plugin.calculator.error.invalid": "Preverite izraz"
 }

@@ -15,5 +15,13 @@
   "plugin.calculator.toast.evaluateFailed": "Nem sikerült kiértékelni",
   "plugin.calculator.toast.historyFailed": "Nem sikerült betölteni az előzményeket",
   "plugin.calculator.toast.historyCleared": "Előzmények törölve",
-  "plugin.calculator.toast.clearFailed": "Nem sikerült törölni az előzményeket"
+  "plugin.calculator.toast.clearFailed": "Nem sikerült törölni az előzményeket",
+  "plugin.calculator.toolbar.angleDeg": "Szögek fokban — váltás radiánra",
+  "plugin.calculator.toolbar.angleRad": "Szögek radiánban — váltás fokra",
+  "plugin.calculator.error.divideByZero": "Nullával nem lehet osztani",
+  "plugin.calculator.error.incomplete": "A kifejezés nincs befejezve",
+  "plugin.calculator.error.domain": "Erre az értékre nincs értelmezve",
+  "plugin.calculator.error.tooLarge": "Az eredmény túl nagy",
+  "plugin.calculator.error.tooLong": "A kifejezés túl hosszú",
+  "plugin.calculator.error.invalid": "Ellenőrizze a kifejezést"
 }

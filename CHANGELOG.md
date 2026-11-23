@@ -4,6 +4,14 @@
 
 ### Changed
 
+- **Calculator behaves like a pocket calculator.** It takes the keyboard
+  (digits, operators, Enter, Backspace, Escape) while it is the window in
+  front; `%` is a percentage (`50+10%` is 55, `200×15%` is 30); `2π` and
+  `3(4+1)` multiply; `±` flips the sign of the number being typed; a bracket
+  left open is closed at `=`; the answer shows, muted, while you type. A
+  DEG/RAD switch in the bar sets the angle unit (degrees by default, so
+  `sin(30)` is 0.5); the deg/rad keys gave way to `10ˣ` and `∛`. Errors are
+  said in your language ("Non si può dividere per zero").
 - **Calculator: the typed numbers are readable.** The expression above the
   result was tiny grey capitals; it is now in the same face as the result,
   sized with the window, a step smaller. It and the history show `×`, `÷`

@@ -15,5 +15,13 @@
   "plugin.calculator.toast.evaluateFailed": "Не удалось вычислить",
   "plugin.calculator.toast.historyFailed": "Не удалось загрузить историю",
   "plugin.calculator.toast.historyCleared": "История очищена",
-  "plugin.calculator.toast.clearFailed": "Не удалось очистить историю"
+  "plugin.calculator.toast.clearFailed": "Не удалось очистить историю",
+  "plugin.calculator.toolbar.angleDeg": "Углы в градусах — переключить на радианы",
+  "plugin.calculator.toolbar.angleRad": "Углы в радианах — переключить на градусы",
+  "plugin.calculator.error.divideByZero": "На ноль делить нельзя",
+  "plugin.calculator.error.incomplete": "Выражение не закончено",
+  "plugin.calculator.error.domain": "Не определено для этого значения",
+  "plugin.calculator.error.tooLarge": "Результат слишком большой",
+  "plugin.calculator.error.tooLong": "Выражение слишком длинное",
+  "plugin.calculator.error.invalid": "Проверьте выражение"
 }

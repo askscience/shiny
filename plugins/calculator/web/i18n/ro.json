@@ -15,5 +15,13 @@
   "plugin.calculator.toast.evaluateFailed": "Expresia nu a putut fi evaluată",
   "plugin.calculator.toast.historyFailed": "Istoricul nu a putut fi încărcat",
   "plugin.calculator.toast.historyCleared": "Istoric golit",
-  "plugin.calculator.toast.clearFailed": "Istoricul nu a putut fi golit"
+  "plugin.calculator.toast.clearFailed": "Istoricul nu a putut fi golit",
+  "plugin.calculator.toolbar.angleDeg": "Unghiuri în grade — treci la radiani",
+  "plugin.calculator.toolbar.angleRad": "Unghiuri în radiani — treci la grade",
+  "plugin.calculator.error.divideByZero": "Nu se poate împărți la zero",
+  "plugin.calculator.error.incomplete": "Expresia nu este terminată",
+  "plugin.calculator.error.domain": "Nedefinit pentru această valoare",
+  "plugin.calculator.error.tooLarge": "Rezultatul este prea mare",
+  "plugin.calculator.error.tooLong": "Expresia este prea lungă",
+  "plugin.calculator.error.invalid": "Verificați expresia"
 }

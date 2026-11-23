@@ -32,8 +32,14 @@ Common helpers in `src/routes.rs`:
 JSON body (`EvalBody`, all optional with `#[serde(default)]`):
 
 ```json
-{ "expression": "(2+3)*4" }
+{ "expression": "(2+3)*4", "angle": "deg", "preview": false }
 ```
+
+- `angle` — `"deg"` evaluates `sin cos tan asin acos atan atan2` in degrees
+  (the window's DEG mode); anything else, or nothing, is radians (what the AI
+  tool uses).
+- `preview` — `true` evaluates without writing history: the window's live
+  answer while the user types.
 
 ### Response
 
@@ -44,7 +50,7 @@ JSON body (`EvalBody`, all optional with `#[serde(default)]`):
 }
 ```
 
-Side effect: inserts a `calculator_history` row for the caller.
+Side effect: inserts a `calculator_history` row for the caller, unless `preview` is set.
 
 ### Error cases
 

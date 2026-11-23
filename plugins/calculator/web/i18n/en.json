@@ -15,5 +15,13 @@
   "plugin.calculator.toast.evaluateFailed": "Could not evaluate",
   "plugin.calculator.toast.historyFailed": "Could not load history",
   "plugin.calculator.toast.historyCleared": "History cleared",
-  "plugin.calculator.toast.clearFailed": "Could not clear history"
+  "plugin.calculator.toast.clearFailed": "Could not clear history",
+  "plugin.calculator.toolbar.angleDeg": "Angles in degrees — switch to radians",
+  "plugin.calculator.toolbar.angleRad": "Angles in radians — switch to degrees",
+  "plugin.calculator.error.divideByZero": "You can't divide by zero",
+  "plugin.calculator.error.incomplete": "The expression is not finished",
+  "plugin.calculator.error.domain": "Not defined for this value",
+  "plugin.calculator.error.tooLarge": "The result is too large",
+  "plugin.calculator.error.tooLong": "The expression is too long",
+  "plugin.calculator.error.invalid": "Check the expression"
 }

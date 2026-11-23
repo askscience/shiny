@@ -4149,6 +4149,24 @@ html[data-phone='1'] .impress-anim-apply { width: 44px; height: 44px; min-height
   color: var(--text);
 }
 .calculator-bar-btn.ui-btn.is-active:hover { background: var(--ed-pill-hover); }
+/* DEG / RAD: the angle unit in use, as a word, toggled by a click. */
+.calculator-angle {
+  height: 32px;
+  min-width: 44px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--radius-pill, 999px);
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: background var(--motion-feedback) var(--motion-ease);
+}
+.calculator-angle:hover { background: var(--glass-hover); color: var(--text); }
+.calculator-angle:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 .calculator-display {
   flex: 1 1 auto;
@@ -4192,6 +4210,8 @@ html[data-phone='1'] .impress-anim-apply { width: 44px; height: 44px; min-height
 }
 .calculator-display-result.is-long { font-size: clamp(32px, 7cqi, 60px); }
 .calculator-display-result.is-empty { color: var(--muted); }
+/* The live answer while typing, until `=` sets it. */
+.calculator-display-result.is-preview { color: var(--muted); }
 .calculator-display-result.is-error { color: var(--text-secondary); }
 
 .calculator-sci {

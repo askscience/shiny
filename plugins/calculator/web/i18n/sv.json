@@ -15,5 +15,13 @@
   "plugin.calculator.toast.evaluateFailed": "Kunde inte beräkna",
   "plugin.calculator.toast.historyFailed": "Kunde inte läsa in historiken",
   "plugin.calculator.toast.historyCleared": "Historiken rensad",
-  "plugin.calculator.toast.clearFailed": "Kunde inte rensa historiken"
+  "plugin.calculator.toast.clearFailed": "Kunde inte rensa historiken",
+  "plugin.calculator.toolbar.angleDeg": "Vinklar i grader — byt till radianer",
+  "plugin.calculator.toolbar.angleRad": "Vinklar i radianer — byt till grader",
+  "plugin.calculator.error.divideByZero": "Det går inte att dela med noll",
+  "plugin.calculator.error.incomplete": "Uttrycket är inte färdigt",
+  "plugin.calculator.error.domain": "Inte definierat för det här värdet",
+  "plugin.calculator.error.tooLarge": "Resultatet är för stort",
+  "plugin.calculator.error.tooLong": "Uttrycket är för långt",
+  "plugin.calculator.error.invalid": "Kontrollera uttrycket"
 }

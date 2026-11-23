@@ -15,5 +15,13 @@
   "plugin.calculator.toast.evaluateFailed": "Nije moguće izračunati",
   "plugin.calculator.toast.historyFailed": "Nije moguće učitati povijest",
   "plugin.calculator.toast.historyCleared": "Povijest izbrisana",
-  "plugin.calculator.toast.clearFailed": "Nije moguće izbrisati povijest"
+  "plugin.calculator.toast.clearFailed": "Nije moguće izbrisati povijest",
+  "plugin.calculator.toolbar.angleDeg": "Kutovi u stupnjevima — prebaci na radijane",
+  "plugin.calculator.toolbar.angleRad": "Kutovi u radijanima — prebaci na stupnjeve",
+  "plugin.calculator.error.divideByZero": "Nulom se ne može dijeliti",
+  "plugin.calculator.error.incomplete": "Izraz nije dovršen",
+  "plugin.calculator.error.domain": "Nije definirano za ovu vrijednost",
+  "plugin.calculator.error.tooLarge": "Rezultat je prevelik",
+  "plugin.calculator.error.tooLong": "Izraz je predug",
+  "plugin.calculator.error.invalid": "Provjerite izraz"
 }

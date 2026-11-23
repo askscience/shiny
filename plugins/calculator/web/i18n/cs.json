@@ -15,5 +15,13 @@
   "plugin.calculator.toast.evaluateFailed": "Výpočet se nezdařil",
   "plugin.calculator.toast.historyFailed": "Historii se nepodařilo načíst",
   "plugin.calculator.toast.historyCleared": "Historie vymazána",
-  "plugin.calculator.toast.clearFailed": "Historii se nepodařilo vymazat"
+  "plugin.calculator.toast.clearFailed": "Historii se nepodařilo vymazat",
+  "plugin.calculator.toolbar.angleDeg": "Úhly ve stupních — přepnout na radiány",
+  "plugin.calculator.toolbar.angleRad": "Úhly v radiánech — přepnout na stupně",
+  "plugin.calculator.error.divideByZero": "Nulou nelze dělit",
+  "plugin.calculator.error.incomplete": "Výraz není dokončený",
+  "plugin.calculator.error.domain": "Pro tuto hodnotu není definováno",
+  "plugin.calculator.error.tooLarge": "Výsledek je příliš velký",
+  "plugin.calculator.error.tooLong": "Výraz je příliš dlouhý",
+  "plugin.calculator.error.invalid": "Zkontrolujte výraz"
 }

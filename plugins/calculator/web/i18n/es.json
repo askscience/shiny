@@ -15,5 +15,13 @@
   "plugin.calculator.toast.evaluateFailed": "No se ha podido evaluar",
   "plugin.calculator.toast.historyFailed": "No se ha podido cargar el historial",
   "plugin.calculator.toast.historyCleared": "Historial borrado",
-  "plugin.calculator.toast.clearFailed": "No se ha podido borrar el historial"
+  "plugin.calculator.toast.clearFailed": "No se ha podido borrar el historial",
+  "plugin.calculator.toolbar.angleDeg": "Ángulos en grados — cambiar a radianes",
+  "plugin.calculator.toolbar.angleRad": "Ángulos en radianes — cambiar a grados",
+  "plugin.calculator.error.divideByZero": "No se puede dividir entre cero",
+  "plugin.calculator.error.incomplete": "La expresión no está completa",
+  "plugin.calculator.error.domain": "No definido para este valor",
+  "plugin.calculator.error.tooLarge": "El resultado es demasiado grande",
+  "plugin.calculator.error.tooLong": "La expresión es demasiado larga",
+  "plugin.calculator.error.invalid": "Revisa la expresión"
 }

@@ -23,6 +23,7 @@ import {
 
 import { apiFetch } from '../../js/api.js';
 import { t } from '../../js/i18n.js';
+import { prettyExpr, closeParens, toggleSign, negateText, errorKind } from './expr.js';
 
 export const CALCULATOR_PLUGIN = 'calculator';
 
@@ -36,19 +37,29 @@ let historyBodyEl = null;
 let historyCountEl = null;
 let historyToggleBtn = null;
 let sciToggleBtn = null;
+let angleBtn = null;
 let nav = null; // paneStack() handle: pad (floor) → history
 
 let expression = '';
 let lastResult = null; // number|null — "Ans" for chained calculations
 let sciMode = false;
 let historyOpen = false;
+// Trigonometry in degrees (DEG) or radians (RAD); remembered on this device.
+const ANGLE_KEY = 'calculator.angle';
+let angleMode = (() => {
+  try { return localStorage.getItem(ANGLE_KEY) === 'rad' ? 'rad' : 'deg'; } catch { return 'deg'; }
+})();
+// The live result of what is being typed, shown muted until `=`.
+let previewText = '';
+let previewSeq = 0;
+let previewTimer = null;
 
 /* ── API ────────────────────────────────────────────────────── */
 
-async function apiEval(expression) {
+async function apiEval(expression, { preview = false } = {}) {
   const res = await apiFetch('/api/calculator/eval', {
     method: 'POST',
-    body: JSON.stringify({ expression }),
+    body: JSON.stringify({ expression, angle: angleMode, preview }),
   });
   return res?.data ?? null;
 }
@@ -85,42 +96,86 @@ function updateGlow({ error = false } = {}) {
   setTileGlow(tileEl, glowGradient('var(--accent)', 'var(--accent-2)'));
 }
 
-/**
- * An expression as the keys show it: × ÷ − instead of * / -. Display only;
- * what is evaluated and stored keeps the plain characters.
- */
-export function prettyExpr(src) {
-  return String(src ?? '').replace(/\*/g, '×').replace(/\//g, '÷').replace(/-/g, '−');
-}
-
 /** Repaint the display. `roll` animates a freshly set result (rollNumber). */
 function renderDisplay({ roll = false } = {}) {
   if (!exprEl || !resultEl) return;
   exprEl.textContent = prettyExpr(expression) || '\u200b';
   const text = lastResult == null ? '' : String(lastResult);
-  // An empty display shows a muted 0, like a pocket calculator at rest.
-  resultEl.textContent = text || '0';
-  resultEl.classList.toggle('is-empty', !text);
+  // While typing, the result line previews the answer, muted; an empty
+  // display shows a muted 0, like a pocket calculator at rest.
+  const preview = !text && expression ? previewText : '';
+  const shown = text || preview || '0';
+  resultEl.textContent = shown;
+  resultEl.classList.toggle('is-empty', !text && !preview);
+  resultEl.classList.toggle('is-preview', !!preview);
   resultEl.classList.remove('is-error');
-  resultEl.classList.toggle('is-long', text.length > 12);
+  resultEl.classList.toggle('is-long', shown.length > 12);
   if (roll && text) rollNumber(resultEl);
   updateGlow();
 }
 
-function append(text) {
-  expression += text;
+/** Evaluate what is being typed, shortly after the last key, for the muted
+ *  preview. Nothing is written to history; an incomplete expression keeps
+ *  the last preview that worked. */
+function schedulePreview() {
+  clearTimeout(previewTimer);
+  const seq = ++previewSeq;
+  const src = expression.trim();
+  if (!src) {
+    previewText = '';
+    return;
+  }
+  previewTimer = setTimeout(async () => {
+    let text = null;
+    try {
+      const r = await apiEval(closeParens(src), { preview: true });
+      text = r?.result_text ?? null;
+    } catch { /* incomplete — keep the last preview */ }
+    if (seq !== previewSeq || text == null) return;
+    previewText = text;
+    if (lastResult == null) renderDisplay();
+  }, 90);
+}
+
+function setExpression(next) {
+  expression = next;
+  schedulePreview();
   renderDisplay();
 }
 
+function append(text) {
+  setExpression(expression + text);
+}
+
+/** Type a key: continue from or replace the last answer, then append. */
+function input(text) {
+  continueFromResult(text);
+  append(text);
+}
+
+// A function name goes with its bracket, `pi` as one symbol.
+const TRAILING_SYMBOL = /([a-z]+[0-9]*\(|pi)$/;
+
 function backspace() {
-  expression = expression.slice(0, -1);
-  renderDisplay();
+  const m = expression.match(TRAILING_SYMBOL);
+  setExpression(m ? expression.slice(0, m.index) : expression.slice(0, -1));
 }
 
 function clearAll() {
-  expression = '';
   lastResult = null;
-  renderDisplay();
+  previewText = '';
+  setExpression('');
+}
+
+/** ± — flip the last answer, or the number being typed. */
+function plusMinus() {
+  if (expression === '' && lastResult != null) {
+    const flipped = negateText(lastResult);
+    lastResult = null;
+    setExpression(flipped);
+    return;
+  }
+  setExpression(toggleSign(expression));
 }
 
 /**
@@ -130,16 +185,21 @@ function clearAll() {
  */
 function continueFromResult(text) {
   if (lastResult != null && expression === '') {
-    if (/^[+\-*/%^]/.test(text)) expression = String(lastResult);
-    else lastResult = null;
+    // The answer becomes the start of the new expression, previewed below.
+    if (/^[+\-*/%^!]/.test(text)) expression = String(lastResult);
+    lastResult = null;
   }
 }
 
 async function equals() {
-  const src = expression.trim();
+  // A bracket left open is closed, as the user meant it.
+  const src = closeParens(expression.trim());
   if (!src) return;
   try {
     const r = await apiEval(src);
+    clearTimeout(previewTimer);
+    previewSeq += 1;
+    previewText = '';
     expression = '';
     lastResult = r?.result_text ?? null;
     renderDisplay({ roll: true });
@@ -153,8 +213,73 @@ async function equals() {
     resultEl.classList.add('is-error');
     // Sticky until the next successful renderDisplay() repaints the glow.
     updateGlow({ error: true });
-    toast(e.message || t('plugin.calculator.toast.evaluateFailed', null, 'Could not evaluate'), { type: 'error' });
+    toast(errorMessage(e?.message), { type: 'error' });
   }
+}
+
+const ERROR_TEXT = {
+  divideByZero: "You can't divide by zero",
+  incomplete: 'The expression is not finished',
+  domain: 'Not defined for this value',
+  tooLarge: 'The result is too large',
+  tooLong: 'The expression is too long',
+  invalid: 'Check the expression',
+};
+
+/** An evaluator error, said in the interface language. */
+function errorMessage(message) {
+  const kind = errorKind(message);
+  return t(`plugin.calculator.error.${kind}`, null, ERROR_TEXT[kind]);
+}
+
+/** DEG ⇄ RAD for the trigonometric functions. */
+function toggleAngle() {
+  angleMode = angleMode === 'deg' ? 'rad' : 'deg';
+  try { localStorage.setItem(ANGLE_KEY, angleMode); } catch { /* private mode */ }
+  paintAngle();
+  schedulePreview();
+}
+
+function paintAngle() {
+  if (!angleBtn) return;
+  const deg = angleMode === 'deg';
+  angleBtn.textContent = deg ? 'DEG' : 'RAD';
+  const label = deg
+    ? t('plugin.calculator.toolbar.angleDeg', null, 'Angles in degrees — switch to radians')
+    : t('plugin.calculator.toolbar.angleRad', null, 'Angles in radians — switch to degrees');
+  angleBtn.title = label;
+  angleBtn.setAttribute('aria-label', label);
+}
+
+/* ── Keyboard ───────────────────────────────────────────────── */
+
+const KEY_INPUT = {
+  '+': '+', '-': '-', '*': '*', x: '*', X: '*', '/': '/', ':': '/',
+  '^': '^', '%': '%', '(': '(', ')': ')', '!': '!', '.': '.', ',': '.',
+};
+
+/** Typing into the Calculator while it is the window in front. */
+function onKeydown(e) {
+  if (!tileEl?.isConnected || !tileEl.classList.contains('tile--focused')) return;
+  if (e.ctrlKey || e.metaKey || e.altKey || e.defaultPrevented) return;
+  const target = e.target;
+  if (target instanceof HTMLElement
+    && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return;
+  // Keys meant for something else open in front (a menu, a dialog).
+  if (target instanceof HTMLElement && target !== document.body && !tileEl.contains(target)) return;
+
+  const k = e.key;
+  let handled = true;
+  if (/^[0-9]$/.test(k)) input(k);
+  else if (k in KEY_INPUT) {
+    const text = KEY_INPUT[k];
+    if (text === ')') append(text);
+    else input(text);
+  } else if (k === 'Enter' || k === '=') void equals();
+  else if (k === 'Backspace') backspace();
+  else if (k === 'Delete' || (k === 'Escape' && !historyOpen)) clearAll();
+  else handled = false;
+  if (handled) e.preventDefault();
 }
 
 /* ── Keypad ─────────────────────────────────────────────────── */
@@ -190,37 +315,37 @@ function buildKeypad() {
     [
       keyBtn('C', clearAll, 'is-clear'),
       keyBtn(t('plugin.calculator.key.backspace', null, 'Backspace'), backspace, '', 'ui/arrow-left'),
-      keyBtn('(', () => append('(')),
+      keyBtn('(', () => input('(')),
       keyBtn(')', () => append(')')),
-      keyBtn('÷', () => { continueFromResult('/'); append('/'); }),
+      keyBtn('÷', () => input('/')),
     ],
     [
-      keyBtn('7', () => { continueFromResult('7'); append('7'); }),
-      keyBtn('8', () => { continueFromResult('8'); append('8'); }),
-      keyBtn('9', () => { continueFromResult('9'); append('9'); }),
-      keyBtn('×', () => { continueFromResult('*'); append('*'); }),
-      keyBtn('%', () => { continueFromResult('%'); append('%'); }),
+      keyBtn('7', () => input('7')),
+      keyBtn('8', () => input('8')),
+      keyBtn('9', () => input('9')),
+      keyBtn('×', () => input('*')),
+      keyBtn('%', () => input('%')),
     ],
     [
-      keyBtn('4', () => { continueFromResult('4'); append('4'); }),
-      keyBtn('5', () => { continueFromResult('5'); append('5'); }),
-      keyBtn('6', () => { continueFromResult('6'); append('6'); }),
-      keyBtn('−', () => { continueFromResult('-'); append('-'); }),
-      keyBtn('^', () => { continueFromResult('^'); append('^'); }),
+      keyBtn('4', () => input('4')),
+      keyBtn('5', () => input('5')),
+      keyBtn('6', () => input('6')),
+      keyBtn('−', () => input('-')),
+      keyBtn('^', () => input('^')),
     ],
     [
-      keyBtn('1', () => { continueFromResult('1'); append('1'); }),
-      keyBtn('2', () => { continueFromResult('2'); append('2'); }),
-      keyBtn('3', () => { continueFromResult('3'); append('3'); }),
-      keyBtn('+', () => { continueFromResult('+'); append('+'); }),
-      keyBtn('π', () => append('pi')),
+      keyBtn('1', () => input('1')),
+      keyBtn('2', () => input('2')),
+      keyBtn('3', () => input('3')),
+      keyBtn('+', () => input('+')),
+      keyBtn('π', () => input('pi')),
     ],
     [
-      keyBtn('±', () => { if (expression === '' && lastResult != null) { expression = String(-Number(lastResult)); lastResult = null; } else append('-'); renderDisplay(); }),
-      keyBtn('0', () => { continueFromResult('0'); append('0'); }),
-      keyBtn('.', () => { continueFromResult('.'); append('.'); }),
+      keyBtn('±', plusMinus),
+      keyBtn('0', () => input('0')),
+      keyBtn('.', () => input('.')),
       keyBtn('=', equals, 'is-equals'),
-      keyBtn('e', () => append('e')),
+      keyBtn('e', () => input('e')),
     ],
   ];
   for (const row of rows) {
@@ -234,26 +359,26 @@ function buildKeypad() {
 function buildSciPad() {
   sciEl.textContent = '';
   const fns = [
-    ['sin', () => append('sin(')],
-    ['cos', () => append('cos(')],
-    ['tan', () => append('tan(')],
-    ['√', () => append('sqrt(')],
-    ['asin', () => append('asin(')],
-    ['acos', () => append('acos(')],
-    ['atan', () => append('atan(')],
-    ['x²', () => append('^2')],
-    ['ln', () => append('ln(')],
-    ['log', () => append('log(')],
-    ['log₂', () => append('log2(')],
-    ['exp', () => append('exp(')],
-    ['deg', () => append('deg(')],
-    ['rad', () => append('rad(')],
-    ['!', () => append('!')],
-    ['abs', () => append('abs(')],
-    ['floor', () => append('floor(')],
-    ['ceil', () => append('ceil(')],
-    ['round', () => append('round(')],
-    ['fact', () => append('fact(')],
+    ['sin', () => input('sin(')],
+    ['cos', () => input('cos(')],
+    ['tan', () => input('tan(')],
+    ['√', () => input('sqrt(')],
+    ['asin', () => input('asin(')],
+    ['acos', () => input('acos(')],
+    ['atan', () => input('atan(')],
+    ['x²', () => input('^2')],
+    ['ln', () => input('ln(')],
+    ['log', () => input('log(')],
+    ['log₂', () => input('log2(')],
+    ['exp', () => input('exp(')],
+    ['10ˣ', () => input('10^')],
+    ['∛', () => input('cbrt(')],
+    ['!', () => input('!')],
+    ['abs', () => input('abs(')],
+    ['floor', () => input('floor(')],
+    ['ceil', () => input('ceil(')],
+    ['round', () => input('round(')],
+    ['fact', () => input('fact(')],
   ];
   const row = document.createElement('div');
   row.className = 'calculator-key-row';
@@ -384,7 +509,13 @@ export function mountCalculatorTile() {
   sciToggleBtn = barBtn('ui/scientific', t('plugin.calculator.toolbar.scientific', null, 'Scientific'), toggleSci);
   historyToggleBtn.setAttribute('aria-pressed', 'false');
   sciToggleBtn.setAttribute('aria-pressed', 'false');
-  bar.append(spacer, historyToggleBtn, sciToggleBtn);
+  // DEG / RAD: a word, not an icon, so the unit in use is always in view.
+  angleBtn = controlButton();
+  angleBtn.type = 'button';
+  angleBtn.className = 'calculator-bar-btn calculator-angle';
+  angleBtn.addEventListener('click', toggleAngle);
+  paintAngle();
+  bar.append(spacer, angleBtn, historyToggleBtn, sciToggleBtn);
   tileEl.appendChild(bar);
 
   /* Body: the pane stack's root — the pad is the floor, the history a pane. */
@@ -450,11 +581,14 @@ export function mountCalculatorTile() {
   paintHistory();
 
   renderDisplay();
+  document.addEventListener('keydown', onKeydown);
   return tileEl;
 }
 
 /** Deactivated: drop the window. */
 export function unmountCalculatorTile() {
+  document.removeEventListener('keydown', onKeydown);
+  clearTimeout(previewTimer);
   nav?.destroy();
   nav = null;
   tileEl?.remove();
@@ -468,6 +602,7 @@ export function unmountCalculatorTile() {
   historyCountEl = null;
   historyToggleBtn = null;
   sciToggleBtn = null;
+  angleBtn = null;
   historyOpen = false;
 }
 

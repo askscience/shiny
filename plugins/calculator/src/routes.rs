@@ -14,7 +14,7 @@ use shiny_plugin_sdk::util::as_text;
 use shiny_plugin_sdk::routes::{bridged_route, RouteHandler, ok, user_id, take_query};
 use shiny_plugin_sdk::services::PluginCtx;
 
-use crate::eval::{evaluate, format_number};
+use crate::eval::{evaluate_with, format_number, Angle};
 
 pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
     let ctx = ctx.clone();
@@ -30,6 +30,10 @@ fn eval(ctx: Arc<PluginCtx>) -> RouteHandler {
     #[serde(default)]
     struct EvalBody {
         expression: Option<String>,
+        /// `"deg"` for the window's DEG mode; anything else is radians.
+        angle: Option<String>,
+        /// A live preview while typing: evaluated, never written to history.
+        preview: bool,
     }
 
     bridged_route(move |req: axum::extract::Request| {
@@ -44,8 +48,15 @@ fn eval(ctx: Arc<PluginCtx>) -> RouteHandler {
                 return Err(AppError::BadRequest("expression required".into()));
             }
 
-            let result = evaluate(&expression).map_err(AppError::BadRequest)?;
+            let angle = match body.angle.as_deref() {
+                Some("deg") => Angle::Degrees,
+                _ => Angle::Radians,
+            };
+            let result = evaluate_with(&expression, angle).map_err(AppError::BadRequest)?;
             let result_text = format_number(result);
+            if body.preview {
+                return Ok(ok(json!({ "expression": expression, "result": result, "result_text": result_text })));
+            }
 
             ctx.db().execute(
                 "INSERT INTO calculator_history (user_id, expression, result, created_at) \

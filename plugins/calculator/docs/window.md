@@ -91,7 +91,9 @@ All classes are prefixed **`calculator-`**: `calculator-tile`, `calculator-bar`,
 `calculator-history-body`, `calculator-history-item`,
 `calculator-history-expr`, `calculator-history-res`.
 Modifiers: `is-fn`, `is-op`, `is-clear`, `is-equals`, `is-active`, `hidden`;
-on the result `is-empty` (muted 0 at rest), `is-long`, `is-error`. Plugins
+on the result `is-empty` (muted 0 at rest), `is-preview` (the muted live
+answer while typing), `is-long`, `is-error`. The bar's DEG/RAD word is
+`calculator-angle`. Plugins
 ship no CSS — core styles these class names thematically.
 
 ## Behaviour & state
@@ -99,15 +101,31 @@ ship no CSS — core styles these class names thematically.
 Module state: `expression` (string), `lastResult` (number-as-string or `null`),
 `sciMode`, `historyOpen`, `nav` (the `paneStack` handle).
 
-- `append(text)` / `backspace()` / `clearAll()` mutate the expression and
-  repaint.
-- `continueFromResult(text)`: after `=`, pressing an operator continues from
-  the answer (pocket-calculator behaviour); pressing a digit starts fresh.
-- `equals()`: trims the expression, `apiEval`, clears the expression, sets
+- `input(text)` is every key that types: `continueFromResult` then
+  `append`. `append` / `backspace()` / `clearAll()` go through
+  `setExpression`, which repaints and schedules the preview. Backspace takes
+  a function name with its bracket (`sin(`) and `pi` in one press.
+- `continueFromResult(text)`: after `=`, an operator (`+ - * / % ^ !`, and
+  `x²`) continues from the answer; anything else (a digit, π, e, `(`, a
+  function) starts fresh. Either way the old answer leaves the result line.
+- `schedulePreview()`: 90 ms after the last key, `apiEval(…, { preview: true
+  })` on the expression with its brackets closed; the answer shows muted
+  (`is-preview`) until `=`. An incomplete expression keeps the last preview
+  that worked; nothing is written to history.
+- `plusMinus()` (±): flips the last answer, or the number or bracket being
+  typed (`toggleSign` in `expr.js`: `5` → `-5`, `5+3` → `5+(-3)`, and back).
+- DEG / RAD: `angleMode`, kept in `localStorage['calculator.angle']`
+  (default DEG), sent with every evaluation; the bar's word toggles it.
+- Keyboard: `onKeydown` on `document` while the window is in front
+  (`tile--focused`) and focus is not in a text field: digits, `+ - * / ^ % (
+  ) ! .` (`,` is `.`, `x` and `:` are `*` and `/`), Enter or `=`, Backspace,
+  Delete / Escape to clear (Escape closes the history first).
+- `equals()`: closes open brackets (`closeParens`), `apiEval`, clears the expression, sets
   `lastResult` to `result_text`, repaints with `rollNumber`, keeps the
   evaluated expression on the mono line, and refreshes history. On failure it
   shows `Error`, switches the glow to the error token, and `toast`s the
-  message.
+  evaluator's message in the interface language (`errorKind` in `expr.js`
+  sorts it into `plugin.calculator.error.*`).
 - `updateGlow()` uses `setTileGlow` + `glowGradient` with theme tokens only:
   `--error` on error, the `--accent`/`--accent-2` pair otherwise (a result
   moves the blobs by its magnitude).
@@ -130,8 +148,11 @@ Module state: `expression` (string), `lastResult` (number-as-string or `null`),
 - Base rows cover `C`, Backspace (the `ui/arrow-left` catalog icon, labelled
   `plugin.calculator.key.backspace`), `( ) ÷`, `7 8 9 × %`, `4 5 6 − ^`, `1 2 3 + π`,
   `± 0 . = e`.
-- Scientific pad: `sin cos tan √ asin acos atan x² ln log log₂ exp deg rad ! abs
-  floor ceil round fact`, each appending the matching `fn(` token.
+- Scientific pad: `sin cos tan √ asin acos atan x² ln log log₂ exp 10ˣ ∛ ! abs
+  floor ceil round fact`, each appending the matching `fn(` token (`10ˣ`
+  appends `10^`). The angle unit is the bar's DEG/RAD, not a key.
+- `expr.js` holds the DOM-free text helpers (`prettyExpr`, `closeParens`,
+  `toggleSign`, `negateText`, `errorKind`), tested by `expr.test.mjs`.
 
 ## Events
 
@@ -150,7 +171,7 @@ non-2xx).
 
 | Function | Call | Returns |
 |---|---|---|
-| `apiEval(expression)` | `POST /api/calculator/eval` `{ expression }` | `res.data` → `{ expression, result, result_text }`. |
+| `apiEval(expression, { preview })` | `POST /api/calculator/eval` `{ expression, angle, preview }` | `res.data` → `{ expression, result, result_text }`. |
 | `apiHistory()` | `GET /api/calculator/history?limit=50` | `res.data` → `{ history }` (defaults to `{ history: [] }`). |
 | `apiClearHistory()` | `DELETE /api/calculator/history` | ignores the body. |
 

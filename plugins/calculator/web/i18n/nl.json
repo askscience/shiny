@@ -15,5 +15,13 @@
   "plugin.calculator.toast.evaluateFailed": "Kon niet berekenen",
   "plugin.calculator.toast.historyFailed": "Kon de geschiedenis niet laden",
   "plugin.calculator.toast.historyCleared": "Geschiedenis gewist",
-  "plugin.calculator.toast.clearFailed": "Kon de geschiedenis niet wissen"
+  "plugin.calculator.toast.clearFailed": "Kon de geschiedenis niet wissen",
+  "plugin.calculator.toolbar.angleDeg": "Hoeken in graden — overschakelen naar radialen",
+  "plugin.calculator.toolbar.angleRad": "Hoeken in radialen — overschakelen naar graden",
+  "plugin.calculator.error.divideByZero": "Delen door nul kan niet",
+  "plugin.calculator.error.incomplete": "De uitdrukking is niet af",
+  "plugin.calculator.error.domain": "Niet gedefinieerd voor deze waarde",
+  "plugin.calculator.error.tooLarge": "Het resultaat is te groot",
+  "plugin.calculator.error.tooLong": "De uitdrukking is te lang",
+  "plugin.calculator.error.invalid": "Controleer de uitdrukking"
 }

@@ -15,5 +15,13 @@
   "plugin.calculator.toast.evaluateFailed": "Laskenta epäonnistui",
   "plugin.calculator.toast.historyFailed": "Historiaa ei voitu ladata",
   "plugin.calculator.toast.historyCleared": "Historia tyhjennetty",
-  "plugin.calculator.toast.clearFailed": "Historiaa ei voitu tyhjentää"
+  "plugin.calculator.toast.clearFailed": "Historiaa ei voitu tyhjentää",
+  "plugin.calculator.toolbar.angleDeg": "Kulmat asteina — vaihda radiaaneihin",
+  "plugin.calculator.toolbar.angleRad": "Kulmat radiaaneina — vaihda asteisiin",
+  "plugin.calculator.error.divideByZero": "Nollalla ei voi jakaa",
+  "plugin.calculator.error.incomplete": "Lauseke on kesken",
+  "plugin.calculator.error.domain": "Ei määritelty tälle arvolle",
+  "plugin.calculator.error.tooLarge": "Tulos on liian suuri",
+  "plugin.calculator.error.tooLong": "Lauseke on liian pitkä",
+  "plugin.calculator.error.invalid": "Tarkista lauseke"
 }

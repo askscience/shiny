@@ -50,21 +50,43 @@ enum Tok { Num(f64), Ident(String), Op(char) }
   (`1.5e3`, `2E-4`).
 - Identifiers are `[A-Za-z_][A-Za-z0-9_]*`, lowercased before lookup.
 - Operators: `+ - * / % ^ ! ( ) ,`. Any other character is `unexpected character`.
+- `implicit_multiplication` then inserts the `*` a person leaves out: after a
+  number, a constant, `)` or `!`, before a number, a name or `(` (`2pi`,
+  `3(4+1)`, `(1+1)(2+2)`, `2sqrt(9)`). A name before `(` stays a function
+  call; two bare numbers (`2 3`) stay an error.
 
 ### Precedence / associativity (lowest → highest)
 
 | Level | Function | Operators | Associativity |
 |---|---|---|---|
 | 1 | `parse_expr` → `parse_add` | `+ -` | left |
-| 2 | `parse_mul` | `* / %` | left |
+| 2 | `parse_mul` | `* /`, `%` between two operands (remainder) | left |
 | 3 | `parse_unary` | unary `+ -` | right (recursive) |
 | 4 | `parse_pow` | `^` | **right** (`base` then `parse_unary` exponent, so `2^-3` works) |
-| 5 | `parse_postfix` | postfix `!` | — |
+| 5 | `parse_postfix` | postfix `!`, and `%` with no operand after it (percentage: ÷100, sets `percent`) | — |
 | 6 | `parse_primary` | numbers, `( … )`, `ident( args )`, constants | — |
 
 So `-2^2 = -4` (unary binds tighter than `^` in this implementation: `parse_unary`
 sees `-`, recurses into `parse_unary` → `parse_pow`, giving `-(2^2)`), and `2^3^2`
 is right-associative.
+
+### Percentages
+
+`%` followed by an operand (a number, a name or `(`) is the remainder;
+otherwise it closes a percentage: the factor is divided by 100 and the
+parser's `percent` flag is set. `parse_add` reads the flag for the term after
+`+` or `-`: then the term is that share of the left side, so `50+10%` is
+`50 + 50×0.1` = 55 and `50-10%` is 45. With `*` and `/` the plain ÷100
+already gives the pocket-calculator answer (`200*15%` = 30). A bracket, a
+function call or an exponent clears the flag, so `50+(10%)` is 50.1.
+
+### Angles
+
+`evaluate_with(input, Angle::Degrees)` maps `sin cos tan asin acos atan
+atan2` to their degree forms (`sind` …, `atan2d`); `evaluate` is radians.
+Trigonometric results within 1e-12 of zero are snapped to 0 (`sin(pi)`,
+`cos(90°)`), and `tan` at an odd multiple of 90° is an error rather than
+1.6e16.
 
 ### Primary
 

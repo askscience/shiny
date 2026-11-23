@@ -15,5 +15,13 @@
   "plugin.calculator.toast.evaluateFailed": "Impossibile calcolare",
   "plugin.calculator.toast.historyFailed": "Impossibile caricare la cronologia",
   "plugin.calculator.toast.historyCleared": "Cronologia cancellata",
-  "plugin.calculator.toast.clearFailed": "Impossibile cancellare la cronologia"
+  "plugin.calculator.toast.clearFailed": "Impossibile cancellare la cronologia",
+  "plugin.calculator.toolbar.angleDeg": "Angoli in gradi — passa ai radianti",
+  "plugin.calculator.toolbar.angleRad": "Angoli in radianti — passa ai gradi",
+  "plugin.calculator.error.divideByZero": "Non si può dividere per zero",
+  "plugin.calculator.error.incomplete": "L'espressione non è finita",
+  "plugin.calculator.error.domain": "Non definito per questo valore",
+  "plugin.calculator.error.tooLarge": "Il risultato è troppo grande",
+  "plugin.calculator.error.tooLong": "L'espressione è troppo lunga",
+  "plugin.calculator.error.invalid": "Controlla l'espressione"
 }

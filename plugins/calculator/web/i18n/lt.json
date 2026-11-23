@@ -15,5 +15,13 @@
   "plugin.calculator.toast.evaluateFailed": "Nepavyko apskaičiuoti",
   "plugin.calculator.toast.historyFailed": "Nepavyko įkelti istorijos",
   "plugin.calculator.toast.historyCleared": "Istorija išvalyta",
-  "plugin.calculator.toast.clearFailed": "Nepavyko išvalyti istorijos"
+  "plugin.calculator.toast.clearFailed": "Nepavyko išvalyti istorijos",
+  "plugin.calculator.toolbar.angleDeg": "Kampai laipsniais — perjungti į radianus",
+  "plugin.calculator.toolbar.angleRad": "Kampai radianais — perjungti į laipsnius",
+  "plugin.calculator.error.divideByZero": "Dalyti iš nulio negalima",
+  "plugin.calculator.error.incomplete": "Reiškinys nebaigtas",
+  "plugin.calculator.error.domain": "Šiai reikšmei neapibrėžta",
+  "plugin.calculator.error.tooLarge": "Rezultatas per didelis",
+  "plugin.calculator.error.tooLong": "Reiškinys per ilgas",
+  "plugin.calculator.error.invalid": "Patikrinkite reiškinį"
 }

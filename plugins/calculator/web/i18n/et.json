@@ -15,5 +15,13 @@
   "plugin.calculator.toast.evaluateFailed": "Ei saanud arvutada",
   "plugin.calculator.toast.historyFailed": "Ajalugu ei saanud laadida",
   "plugin.calculator.toast.historyCleared": "Ajalugu tühjendatud",
-  "plugin.calculator.toast.clearFailed": "Ajalugu ei saanud tühjendada"
+  "plugin.calculator.toast.clearFailed": "Ajalugu ei saanud tühjendada",
+  "plugin.calculator.toolbar.angleDeg": "Nurgad kraadides — lülitu radiaanidele",
+  "plugin.calculator.toolbar.angleRad": "Nurgad radiaanides — lülitu kraadidele",
+  "plugin.calculator.error.divideByZero": "Nulliga ei saa jagada",
+  "plugin.calculator.error.incomplete": "Avaldis pole lõpetatud",
+  "plugin.calculator.error.domain": "Selle väärtuse jaoks pole määratud",
+  "plugin.calculator.error.tooLarge": "Tulemus on liiga suur",
+  "plugin.calculator.error.tooLong": "Avaldis on liiga pikk",
+  "plugin.calculator.error.invalid": "Kontrolli avaldist"
 }

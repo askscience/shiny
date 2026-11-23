@@ -15,5 +15,13 @@
   "plugin.calculator.toast.evaluateFailed": "Níorbh fhéidir é a ríomh",
   "plugin.calculator.toast.historyFailed": "Níorbh fhéidir an stair a lódáil",
   "plugin.calculator.toast.historyCleared": "Glanadh an stair",
-  "plugin.calculator.toast.clearFailed": "Níorbh fhéidir an stair a ghlanadh"
+  "plugin.calculator.toast.clearFailed": "Níorbh fhéidir an stair a ghlanadh",
+  "plugin.calculator.toolbar.angleDeg": "Uillinneacha i gcéimeanna — athraigh go raidiain",
+  "plugin.calculator.toolbar.angleRad": "Uillinneacha i raidiain — athraigh go céimeanna",
+  "plugin.calculator.error.divideByZero": "Ní féidir roinnt ar nialas",
+  "plugin.calculator.error.incomplete": "Níl an slonn críochnaithe",
+  "plugin.calculator.error.domain": "Gan sainmhíniú don luach seo",
+  "plugin.calculator.error.tooLarge": "Tá an toradh rómhór",
+  "plugin.calculator.error.tooLong": "Tá an slonn rófhada",
+  "plugin.calculator.error.invalid": "Seiceáil an slonn"
 }

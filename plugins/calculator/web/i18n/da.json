@@ -15,5 +15,13 @@
   "plugin.calculator.toast.evaluateFailed": "Kunne ikke beregne",
   "plugin.calculator.toast.historyFailed": "Kunne ikke indlæse historikken",
   "plugin.calculator.toast.historyCleared": "Historikken er ryddet",
-  "plugin.calculator.toast.clearFailed": "Kunne ikke rydde historikken"
+  "plugin.calculator.toast.clearFailed": "Kunne ikke rydde historikken",
+  "plugin.calculator.toolbar.angleDeg": "Vinkler i grader — skift til radianer",
+  "plugin.calculator.toolbar.angleRad": "Vinkler i radianer — skift til grader",
+  "plugin.calculator.error.divideByZero": "Man kan ikke dividere med nul",
+  "plugin.calculator.error.incomplete": "Udtrykket er ikke færdigt",
+  "plugin.calculator.error.domain": "Ikke defineret for denne værdi",
+  "plugin.calculator.error.tooLarge": "Resultatet er for stort",
+  "plugin.calculator.error.tooLong": "Udtrykket er for langt",
+  "plugin.calculator.error.invalid": "Tjek udtrykket"
 }

@@ -12,21 +12,43 @@ enum Tok {
     Op(char),
 }
 
-/// Evaluate a math expression and return a finite result.
+/// How the trigonometric functions read and give angles.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Angle {
+    /// `sin(pi/2)` is 1 — the default, and what the AI tool uses.
+    #[default]
+    Radians,
+    /// `sin(90)` is 1 — the Calculator window's DEG mode.
+    Degrees,
+}
+
+/// Evaluate a math expression and return a finite result (angles in radians).
 pub fn evaluate(input: &str) -> Result<f64, String> {
+    evaluate_with(input, Angle::Radians)
+}
+
+/// Evaluate with the given angle unit for `sin cos tan asin acos atan atan2`.
+///
+/// Beyond plain arithmetic it reads the way a pocket calculator does:
+/// - a number next to a constant, a function or a parenthesis multiplies
+///   (`2pi`, `3(4+1)`, `2sqrt(9)`, `(1+1)(2+2)`);
+/// - `%` closing a term is a percentage: `50+10%` is 55, `50-10%` 45,
+///   `200*15%` 30, `3%` 0.03. Between two operands it stays the remainder
+///   (`10 % 3` is 1).
+pub fn evaluate_with(input: &str, angle: Angle) -> Result<f64, String> {
     if input.len() > MAX_EXPR_LEN {
         return Err(format!(
             "expression is too long (max {MAX_EXPR_LEN} bytes)"
         ));
     }
-    let tokens = tokenize(input)?;
+    let tokens = implicit_multiplication(tokenize(input)?);
     if tokens.is_empty() {
         return Err("empty expression".into());
     }
     if tokens.len() > MAX_TOKENS {
         return Err("expression has too many tokens".into());
     }
-    let mut p = Parser { tokens, pos: 0, depth: 0 };
+    let mut p = Parser { tokens, pos: 0, depth: 0, degrees: angle == Angle::Degrees, percent: false };
     let value = p.parse_expr()?;
     if p.pos != p.tokens.len() {
         return Err(format!("unexpected trailing input at position {}", p.pos));
@@ -128,6 +150,35 @@ fn tokenize(input: &str) -> Result<Vec<Tok>, String> {
     Ok(out)
 }
 
+/// Insert the `*` a person leaves out: after a number, a constant, `)` or
+/// `!`, when a number, a name or `(` follows. A name followed by `(` is a
+/// function call and keeps its parenthesis; two bare numbers (`2 3`) stay an
+/// error rather than silently multiplying.
+fn implicit_multiplication(tokens: Vec<Tok>) -> Vec<Tok> {
+    let mut out: Vec<Tok> = Vec::with_capacity(tokens.len());
+    for tok in &tokens {
+        if let Some(prev) = out.last() {
+            let prev_ends_operand = match prev {
+                Tok::Num(_) => true,
+                Tok::Op(')') | Tok::Op('!') => true,
+                // A name ends an operand unless it is a function being called.
+                Tok::Ident(_) => !matches!(tok, Tok::Op('(')),
+                _ => false,
+            };
+            let starts_operand = match tok {
+                Tok::Num(_) => !matches!(prev, Tok::Num(_)),
+                Tok::Ident(_) | Tok::Op('(') => true,
+                _ => false,
+            };
+            if prev_ends_operand && starts_operand {
+                out.push(Tok::Op('*'));
+            }
+        }
+        out.push(tok.clone());
+    }
+    out
+}
+
 // ---------- Parser -----------------------------------------------------------
 
 struct Parser {
@@ -138,6 +189,11 @@ struct Parser {
     /// thousands of characters overflow the stack. A stack overflow is a
     /// SIGSEGV, not a Rust panic, so it would abort the whole host process.
     depth: u32,
+    /// Trigonometry in degrees (the window's DEG mode).
+    degrees: bool,
+    /// The factor just parsed ended in a percentage (`10%`), so a `+` or `-`
+    /// before its term takes that share of the left side (`50+10%` = 55).
+    percent: bool,
 }
 
 /// More nesting than any real expression needs, and far below the ~10k frames
@@ -176,18 +232,20 @@ impl Parser {
     fn parse_add(&mut self) -> Result<f64, String> {
         let mut v = self.parse_mul()?;
         loop {
-            match self.peek() {
-                Some(Tok::Op('+')) => {
-                    self.next();
-                    v += self.parse_mul()?;
-                }
-                Some(Tok::Op('-')) => {
-                    self.next();
-                    v -= self.parse_mul()?;
-                }
+            let sign = match self.peek() {
+                Some(Tok::Op('+')) => 1.0,
+                Some(Tok::Op('-')) => -1.0,
                 _ => break,
-            }
+            };
+            self.next();
+            self.percent = false;
+            let term = self.parse_mul()?;
+            // `a + b%` adds b percent of a, like a pocket calculator.
+            let term = if self.percent { v * term } else { term };
+            self.percent = false;
+            v += sign * term;
         }
+        self.percent = false;
         Ok(v)
     }
 
@@ -197,10 +255,12 @@ impl Parser {
             match self.peek() {
                 Some(Tok::Op('*')) => {
                     self.next();
+                    self.percent = false;
                     v *= self.parse_unary()?;
                 }
                 Some(Tok::Op('/')) => {
                     self.next();
+                    self.percent = false;
                     let d = self.parse_unary()?;
                     if d == 0.0 {
                         return Err("division by zero".into());
@@ -208,7 +268,10 @@ impl Parser {
                     v /= d;
                 }
                 Some(Tok::Op('%')) => {
+                    // Only reached between two operands (see parse_postfix):
+                    // the remainder.
                     self.next();
+                    self.percent = false;
                     let d = self.parse_unary()?;
                     if d == 0.0 {
                         return Err("modulo by zero".into());
@@ -251,18 +314,37 @@ impl Parser {
             self.next();
             // Right-associative; the exponent may itself be unary (`2^-3`).
             let exp = self.parse_unary()?;
+            // A percentage inside the exponent is not a share of the sum.
+            self.percent = false;
             return Ok(base.powf(exp));
         }
         Ok(base)
     }
 
     fn parse_postfix(&mut self) -> Result<f64, String> {
-        let v = self.parse_primary()?;
-        if let Some(Tok::Op('!')) = self.peek() {
-            self.next();
-            return factorial(v);
+        let mut v = self.parse_primary()?;
+        loop {
+            match self.peek() {
+                Some(Tok::Op('!')) => {
+                    self.next();
+                    v = factorial(v)?;
+                }
+                // `%` with no operand after it closes a percentage; with one
+                // (`10 % 3`) it is the remainder, left to parse_mul.
+                Some(Tok::Op('%')) if !self.operand_at(self.pos + 1) => {
+                    self.next();
+                    v /= 100.0;
+                    self.percent = true;
+                }
+                _ => break,
+            }
         }
         Ok(v)
+    }
+
+    /// Whether the token at `i` starts an operand.
+    fn operand_at(&self, i: usize) -> bool {
+        matches!(self.tokens.get(i), Some(Tok::Num(_) | Tok::Ident(_) | Tok::Op('(')))
     }
 
     fn parse_primary(&mut self) -> Result<f64, String> {
@@ -271,6 +353,8 @@ impl Parser {
             Some(Tok::Op('(')) => {
                 let v = self.parse_expr()?;
                 self.expect_close_paren()?;
+                // `50+(10%)` is 50.1: a bracket closes its own percentages.
+                self.percent = false;
                 Ok(v)
             }
             Some(Tok::Ident(name)) => {
@@ -289,7 +373,8 @@ impl Parser {
                             }
                         }
                     }
-                    call_function(&name, &args)
+                    self.percent = false;
+                    call_function(&name, &args, self.degrees)
                 } else {
                     constant(&name).ok_or_else(|| format!("unknown symbol \"{name}\""))
                 }
@@ -335,7 +420,28 @@ fn factorial(n: f64) -> Result<f64, String> {
     Ok(acc)
 }
 
-fn call_function(name: &str, args: &[f64]) -> Result<f64, String> {
+/// A trigonometric result within rounding of zero is zero: `sin(pi)` and
+/// `cos(90°)` are 0, not 1.2e-16.
+fn snap(v: f64) -> f64 {
+    if v.abs() < 1e-12 { 0.0 } else { v }
+}
+
+fn call_function(name: &str, args: &[f64], degrees: bool) -> Result<f64, String> {
+    // In DEG mode the plain names read and give degrees.
+    let name = if degrees {
+        match name {
+            "sin" => "sind",
+            "cos" => "cosd",
+            "tan" => "tand",
+            "asin" => "asind",
+            "acos" => "acosd",
+            "atan" => "atand",
+            "atan2" => "atan2d",
+            other => other,
+        }
+    } else {
+        name
+    };
     let need = |n: usize| -> Result<(), String> {
         if args.len() != n {
             return Err(format!("{name} expects {n} argument(s), got {}", args.len()));
@@ -343,9 +449,9 @@ fn call_function(name: &str, args: &[f64]) -> Result<f64, String> {
         Ok(())
     };
     match name {
-        "sin" => { need(1)?; Ok(args[0].sin()) }
-        "cos" => { need(1)?; Ok(args[0].cos()) }
-        "tan" => { need(1)?; Ok(args[0].tan()) }
+        "sin" => { need(1)?; Ok(snap(args[0].sin())) }
+        "cos" => { need(1)?; Ok(snap(args[0].cos())) }
+        "tan" => { need(1)?; Ok(snap(args[0].tan())) }
         "asin" => { need(1)?; Ok(args[0].asin()) }
         "acos" => { need(1)?; Ok(args[0].acos()) }
         "atan" => { need(1)?; Ok(args[0].atan()) }
@@ -355,9 +461,15 @@ fn call_function(name: &str, args: &[f64]) -> Result<f64, String> {
         "asinh" => { need(1)?; Ok(args[0].asinh()) }
         "acosh" => { need(1)?; Ok(args[0].acosh()) }
         "atanh" => { need(1)?; Ok(args[0].atanh()) }
-        "sind" => { need(1)?; Ok(args[0].to_radians().sin()) }
-        "cosd" => { need(1)?; Ok(args[0].to_radians().cos()) }
-        "tand" => { need(1)?; Ok(args[0].to_radians().tan()) }
+        "sind" => { need(1)?; Ok(snap(args[0].to_radians().sin())) }
+        "cosd" => { need(1)?; Ok(snap(args[0].to_radians().cos())) }
+        "tand" => {
+            need(1)?;
+            if (args[0] % 180.0).abs() == 90.0 {
+                return Err("tan is not defined at 90 degrees".into());
+            }
+            Ok(snap(args[0].to_radians().tan()))
+        }
         "asind" => { need(1)?; Ok(args[0].asin().to_degrees()) }
         "acosd" => { need(1)?; Ok(args[0].acos().to_degrees()) }
         "atand" => { need(1)?; Ok(args[0].atan().to_degrees()) }
@@ -402,6 +514,7 @@ fn call_function(name: &str, args: &[f64]) -> Result<f64, String> {
         "sign" => { need(1)?; Ok(args[0].signum()) }
         "fact" | "factorial" => { need(1)?; factorial(args[0]) }
         "atan2" => { need(2)?; Ok(args[0].atan2(args[1])) }
+        "atan2d" => { need(2)?; Ok(args[0].atan2(args[1]).to_degrees()) }
         "pow" => { need(2)?; Ok(args[0].powf(args[1])) }
         "mod" => {
             need(2)?;
@@ -435,6 +548,49 @@ mod tests {
         assert!((evaluate("log(1000)").unwrap() - 3.0).abs() < 1e-12);
         assert!((evaluate("deg(pi)").unwrap() - 180.0).abs() < 1e-12);
         assert!((evaluate("pow(2,8)").unwrap() - 256.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn percentages_read_like_a_pocket_calculator() {
+        assert_eq!(evaluate("50+10%").unwrap(), 55.0);
+        assert_eq!(evaluate("50-10%").unwrap(), 45.0);
+        assert!((evaluate("200*15%").unwrap() - 30.0).abs() < 1e-12);
+        assert!((evaluate("3%").unwrap() - 0.03).abs() < 1e-12);
+        assert!((evaluate("50+(10%)").unwrap() - 50.1).abs() < 1e-12);
+        assert!((evaluate("80/50%").unwrap() - 160.0).abs() < 1e-12);
+        // Between two operands it is still the remainder.
+        assert_eq!(evaluate("10%3").unwrap(), 1.0);
+        assert_eq!(evaluate("10%3+1").unwrap(), 2.0);
+        assert_eq!(evaluate("100-10%+5").unwrap(), 95.0);
+    }
+
+    #[test]
+    fn a_missing_times_sign_multiplies() {
+        assert!((evaluate("2pi").unwrap() - 2.0 * std::f64::consts::PI).abs() < 1e-12);
+        assert_eq!(evaluate("3(4+1)").unwrap(), 15.0);
+        assert_eq!(evaluate("(1+1)(2+2)").unwrap(), 8.0);
+        assert_eq!(evaluate("2sqrt(9)").unwrap(), 6.0);
+        assert_eq!(evaluate("3!2").unwrap(), 12.0);
+        // Scientific notation is still a number, and `2e` is 2 times e.
+        assert_eq!(evaluate("2e3").unwrap(), 2000.0);
+        assert!((evaluate("2e").unwrap() - 2.0 * std::f64::consts::E).abs() < 1e-12);
+        // A function keeps its call; two bare numbers stay an error.
+        assert_eq!(evaluate("sqrt(16)").unwrap(), 4.0);
+        assert!(evaluate("2 3").is_err());
+    }
+
+    #[test]
+    fn degrees_mode() {
+        let d = |s: &str| evaluate_with(s, Angle::Degrees).unwrap();
+        assert!((d("sin(30)") - 0.5).abs() < 1e-12);
+        assert_eq!(d("cos(90)"), 0.0);
+        assert_eq!(d("sin(180)"), 0.0);
+        assert!((d("asin(1)") - 90.0).abs() < 1e-12);
+        assert!((d("atan2(1,1)") - 45.0).abs() < 1e-12);
+        assert!(evaluate_with("tan(90)", Angle::Degrees).is_err());
+        // Radians stay the default, and sin(pi) is exactly 0.
+        assert!((evaluate("sin(30)").unwrap() + 0.988_031_624_092_861_8).abs() < 1e-12);
+        assert_eq!(evaluate("sin(pi)").unwrap(), 0.0);
     }
 
     #[test]

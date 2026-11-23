@@ -15,5 +15,13 @@
   "plugin.calculator.toast.evaluateFailed": "Δεν ήταν δυνατή η αξιολόγηση",
   "plugin.calculator.toast.historyFailed": "Δεν ήταν δυνατή η φόρτωση του ιστορικού",
   "plugin.calculator.toast.historyCleared": "Το ιστορικό εκκαθαρίστηκε",
-  "plugin.calculator.toast.clearFailed": "Δεν ήταν δυνατή η εκκαθάριση του ιστορικού"
+  "plugin.calculator.toast.clearFailed": "Δεν ήταν δυνατή η εκκαθάριση του ιστορικού",
+  "plugin.calculator.toolbar.angleDeg": "Γωνίες σε μοίρες — αλλαγή σε ακτίνια",
+  "plugin.calculator.toolbar.angleRad": "Γωνίες σε ακτίνια — αλλαγή σε μοίρες",
+  "plugin.calculator.error.divideByZero": "Δεν γίνεται διαίρεση με το μηδέν",
+  "plugin.calculator.error.incomplete": "Η παράσταση δεν έχει ολοκληρωθεί",
+  "plugin.calculator.error.domain": "Δεν ορίζεται για αυτή την τιμή",
+  "plugin.calculator.error.tooLarge": "Το αποτέλεσμα είναι πολύ μεγάλο",
+  "plugin.calculator.error.tooLong": "Η παράσταση είναι πολύ μεγάλη",
+  "plugin.calculator.error.invalid": "Ελέγξτε την παράσταση"
 }

@@ -15,5 +15,13 @@
   "plugin.calculator.toast.evaluateFailed": "Die Berechnung ist fehlgeschlagen",
   "plugin.calculator.toast.historyFailed": "Der Verlauf konnte nicht geladen werden",
   "plugin.calculator.toast.historyCleared": "Verlauf geleert",
-  "plugin.calculator.toast.clearFailed": "Der Verlauf konnte nicht geleert werden"
+  "plugin.calculator.toast.clearFailed": "Der Verlauf konnte nicht geleert werden",
+  "plugin.calculator.toolbar.angleDeg": "Winkel in Grad — zu Bogenmaß wechseln",
+  "plugin.calculator.toolbar.angleRad": "Winkel in Bogenmaß — zu Grad wechseln",
+  "plugin.calculator.error.divideByZero": "Durch null kann man nicht teilen",
+  "plugin.calculator.error.incomplete": "Der Ausdruck ist nicht vollständig",
+  "plugin.calculator.error.domain": "Für diesen Wert nicht definiert",
+  "plugin.calculator.error.tooLarge": "Das Ergebnis ist zu groß",
+  "plugin.calculator.error.tooLong": "Der Ausdruck ist zu lang",
+  "plugin.calculator.error.invalid": "Ausdruck überprüfen"
 }

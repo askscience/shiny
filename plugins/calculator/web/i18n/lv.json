@@ -15,5 +15,13 @@
   "plugin.calculator.toast.evaluateFailed": "Nevarēja aprēķināt",
   "plugin.calculator.toast.historyFailed": "Nevarēja ielādēt vēsturi",
   "plugin.calculator.toast.historyCleared": "Vēsture notīrīta",
-  "plugin.calculator.toast.clearFailed": "Nevarēja notīrīt vēsturi"
+  "plugin.calculator.toast.clearFailed": "Nevarēja notīrīt vēsturi",
+  "plugin.calculator.toolbar.angleDeg": "Leņķi grādos — pārslēgt uz radiāniem",
+  "plugin.calculator.toolbar.angleRad": "Leņķi radiānos — pārslēgt uz grādiem",
+  "plugin.calculator.error.divideByZero": "Ar nulli dalīt nevar",
+  "plugin.calculator.error.incomplete": "Izteiksme nav pabeigta",
+  "plugin.calculator.error.domain": "Šai vērtībai nav definēts",
+  "plugin.calculator.error.tooLarge": "Rezultāts ir pārāk liels",
+  "plugin.calculator.error.tooLong": "Izteiksme ir pārāk gara",
+  "plugin.calculator.error.invalid": "Pārbaudiet izteiksmi"
 }

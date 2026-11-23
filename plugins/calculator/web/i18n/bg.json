@@ -15,5 +15,13 @@
   "plugin.calculator.toast.evaluateFailed": "Изчислението не успя",
   "plugin.calculator.toast.historyFailed": "Историята не можа да се зареди",
   "plugin.calculator.toast.historyCleared": "Историята е изчистена",
-  "plugin.calculator.toast.clearFailed": "Историята не можа да се изчисти"
+  "plugin.calculator.toast.clearFailed": "Историята не можа да се изчисти",
+  "plugin.calculator.toolbar.angleDeg": "Ъгли в градуси — превключи на радиани",
+  "plugin.calculator.toolbar.angleRad": "Ъгли в радиани — превключи на градуси",
+  "plugin.calculator.error.divideByZero": "Не може да се дели на нула",
+  "plugin.calculator.error.incomplete": "Изразът не е завършен",
+  "plugin.calculator.error.domain": "Не е дефинирано за тази стойност",
+  "plugin.calculator.error.tooLarge": "Резултатът е твърде голям",
+  "plugin.calculator.error.tooLong": "Изразът е твърде дълъг",
+  "plugin.calculator.error.invalid": "Проверете израза"
 }

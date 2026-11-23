@@ -15,5 +15,13 @@
   "plugin.calculator.toast.evaluateFailed": "Ma setax jiġi kkalkulat",
   "plugin.calculator.toast.historyFailed": "Il-kronoloġija ma setgħetx titgħabba",
   "plugin.calculator.toast.historyCleared": "Il-kronoloġija tħassret",
-  "plugin.calculator.toast.clearFailed": "Il-kronoloġija ma setgħetx titħassar"
+  "plugin.calculator.toast.clearFailed": "Il-kronoloġija ma setgħetx titħassar",
+  "plugin.calculator.toolbar.angleDeg": "Angoli fi gradi — aqleb għal radjani",
+  "plugin.calculator.toolbar.angleRad": "Angoli f'radjani — aqleb għal gradi",
+  "plugin.calculator.error.divideByZero": "Ma tistax taqsam b'żero",
+  "plugin.calculator.error.incomplete": "L-espressjoni mhix lesta",
+  "plugin.calculator.error.domain": "Mhux definit għal dan il-valur",
+  "plugin.calculator.error.tooLarge": "Ir-riżultat huwa kbir wisq",
+  "plugin.calculator.error.tooLong": "L-espressjoni hija twila wisq",
+  "plugin.calculator.error.invalid": "Iċċekkja l-espressjoni"
 }

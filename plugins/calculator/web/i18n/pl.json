@@ -15,5 +15,13 @@
   "plugin.calculator.toast.evaluateFailed": "Nie udało się obliczyć",
   "plugin.calculator.toast.historyFailed": "Nie udało się wczytać historii",
   "plugin.calculator.toast.historyCleared": "Wyczyszczono historię",
-  "plugin.calculator.toast.clearFailed": "Nie udało się wyczyścić historii"
+  "plugin.calculator.toast.clearFailed": "Nie udało się wyczyścić historii",
+  "plugin.calculator.toolbar.angleDeg": "Kąty w stopniach — przełącz na radiany",
+  "plugin.calculator.toolbar.angleRad": "Kąty w radianach — przełącz na stopnie",
+  "plugin.calculator.error.divideByZero": "Nie można dzielić przez zero",
+  "plugin.calculator.error.incomplete": "Wyrażenie jest niedokończone",
+  "plugin.calculator.error.domain": "Nieokreślone dla tej wartości",
+  "plugin.calculator.error.tooLarge": "Wynik jest zbyt duży",
+  "plugin.calculator.error.tooLong": "Wyrażenie jest zbyt długie",
+  "plugin.calculator.error.invalid": "Sprawdź wyrażenie"
 }
