@@ -403,9 +403,9 @@ function applyPackageStates() {
   for (const [name, entry] of pkgRows) {
     let state = null;
     if (active) {
+      // A package still mid-step when the job ended is in `failed` (the
+      // plugin's Progress::end), as the AI tools see it too.
       state = failed.has(name) ? 'error' : (states.get(name) || (busy ? 'queued' : null));
-      // A package still mid-step when the job ended did not finish.
-      if (!busy && (state === 'unpacking' || state === 'configuring')) state = 'error';
     }
     if (entry.state === state) continue;
     entry.state = state;

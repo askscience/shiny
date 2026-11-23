@@ -4,6 +4,8 @@
 
 ### Changed
 
+- **Updates: a package cut off mid-install counts as failed for the
+  assistant too**, as the window already showed it.
 - **Impress: slides are stored the same way whoever writes them.** The
   plugin keeps every slide's layout, animation and text fit valid on save
   (the assistant's slides included); the window takes the lists of themes,

@@ -74,6 +74,7 @@ impl Job {
             g.state = if success { State::Done } else { State::Failed };
             g.success = Some(success);
             g.error = error;
+            g.progress.end();
         }
     }
 

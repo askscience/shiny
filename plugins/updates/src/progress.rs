@@ -69,6 +69,18 @@ pub struct Progress {
 }
 
 impl Progress {
+    /// The job is over: a package still mid-step (unpacking or configuring)
+    /// did not finish, so it counts as failed — for the window and for the
+    /// AI tools that read the same snapshot.
+    pub fn end(&mut self) {
+        for p in &self.packages {
+            if matches!(p.state, PkgState::Unpacking | PkgState::Configuring) && !self.failed.contains(&p.name) {
+                self.failed.push(p.name.clone());
+            }
+        }
+        self.current = None;
+    }
+
     pub fn apply(&mut self, event: Event) {
         match event {
             Event::Download { percent, message } => {
@@ -110,5 +122,22 @@ impl Progress {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_package_still_mid_step_at_the_end_failed() {
+        let mut p = Progress::default();
+        for (name, state) in [("a", PkgState::Done), ("b", PkgState::Unpacking), ("c", PkgState::Configuring), ("d", PkgState::Removed)] {
+            p.apply(Event::Install { percent: 50.0, package: Some(name.into()), state: Some(state), message: String::new() });
+        }
+        p.apply(Event::Error { package: Some("c".into()), message: "boom".into() });
+        p.end();
+        assert_eq!(p.failed, vec!["c".to_string(), "b".to_string()]);
+        assert!(p.current.is_none());
     }
 }
