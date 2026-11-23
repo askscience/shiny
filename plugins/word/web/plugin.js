@@ -107,7 +107,6 @@ let popupAnchor = null;
 const MIN_ZOOM = 0.3;
 /** Window width (px) at or under which the page reflows to it (keep in step
  *  with the `plugin-window` 560px container query in ui/responsive.css). */
-const REFLOW_MAX = 560;
 const ZOOM_STEPS = [0.3, 0.4, 0.5, 0.67, 0.75, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2];
 /** Fit the page to the window until the user picks a zoom. */
 let zoomFit = readPref('word.zoom', 'fit') === 'fit';
@@ -724,10 +723,10 @@ function zoomBy(dir) {
 function fitWidth() {
   const g = geometry(currentDoc?.design);
   const host = view === 'preview' ? previewEl : deskEl;
-  // A phone-narrow window reflows the text to its width instead of shrinking
-  // a whole page into it (responsive.css, `plugin-window` ≤ 560px): there
-  // "fit" is simply the text at its own size.
-  if (view !== 'preview' && host && host.clientWidth && host.clientWidth <= REFLOW_MAX) {
+  // A phone reflows the text to its width instead of shrinking a whole page
+  // into it (responsive.css): there "fit" is simply the text at its own size.
+  // A narrow window on a desktop keeps the page, zoomed to fit.
+  if (view !== 'preview' && isPhone()) {
     setZoom(1, { fit: true });
     return;
   }
@@ -1407,8 +1406,10 @@ async function openDesignDialog() {
   });
   const save = async (thenPreview) => {
     for (const k of ['margin_top', 'margin_right', 'margin_bottom', 'margin_left']) {
+      // 0 is "the default" (25 mm): a field the user never touched stays 0,
+      // and must not be clamped up to the 5 mm minimum.
       const v = Number(d[k]) || 0;
-      d[k] = v === 25 ? 0 : Math.min(80, Math.max(5, v));
+      d[k] = v === 0 || v === 25 ? 0 : Math.min(80, Math.max(5, v));
     }
     dialog.close();
     await commitDesign(d);

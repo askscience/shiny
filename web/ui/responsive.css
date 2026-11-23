@@ -71,12 +71,15 @@
   .word-editor { padding: 16px; }
   /* A phone reflows the document to the window: one continuous column of
      text at its own size (plugin.js fitWidth keeps the zoom at 100%), no
-     paper, rulers or page guides. The print preview still shows pages. */
+     paper, rulers or page guides. The print preview still shows pages.
+     A narrow window on a desktop keeps the page, smaller and in proportion
+     (fitWidth zooms it to the window's width): a short text there must not
+     turn the page into a strip. */
   /* The sheet fills the window, so the whole view is paper to write on. */
-  .word-stage { display: flex; flex-direction: column; min-width: 0; min-height: 100%; padding: 0; }
-  .word-sheets { flex: 1 1 auto; align-items: stretch; gap: 12px; }
-  .word-sheet--body { flex: 1 1 auto; }
-  .word-sheet {
+  html[data-phone='1'] .word-stage { display: flex; flex-direction: column; min-width: 0; min-height: 100%; padding: 0; }
+  html[data-phone='1'] .word-sheets { flex: 1 1 auto; align-items: stretch; gap: 12px; }
+  html[data-phone='1'] .word-sheet--body { flex: 1 1 auto; }
+  html[data-phone='1'] .word-sheet {
     width: auto;
     min-height: 0 !important;
     padding: 20px 18px 28px;
@@ -84,8 +87,8 @@
     border-radius: 0;
     box-shadow: none;
   }
-  .word-ruler,
-  .word-guide { display: none; }
+  html[data-phone='1'] .word-ruler,
+  html[data-phone='1'] .word-guide { display: none; }
   .image-dock-body { padding: 8px; gap: 8px; }
 }
 /* Landscape phones must retain phone window switching and enough content height. */

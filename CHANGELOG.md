@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **Word: a narrow window keeps the page.** Below 560 px a window on a
+  desktop turned the sheet into a strip as tall as the text (a short
+  document looked like a white band, not a page). The page now stays in
+  proportion, zoomed to the window; only a phone reflows the text.
+- **Word: saving the Design dialog no longer sets 5 mm margins.** Margins
+  the user had not touched were saved as the 5 mm minimum on every side,
+  in the editor, the preview and the exported files.
+
 ## [0.3.1] - 2026-11-22
 
 ### Added

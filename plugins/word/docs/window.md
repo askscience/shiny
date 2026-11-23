@@ -81,7 +81,10 @@ and saved with `PUT /design` on release. Rulers step aside below 720 px.
 
 **Zoom.** 30–200 %; Ctrl/⌘+wheel, the − / + buttons or a click on the label
 (fit to width). Until a zoom is picked the page fits the window (capped at
-100 %) and refits on resize (`word.zoom = 'fit'` in `localStorage`).
+100 %) and refits on resize (`word.zoom = 'fit'` in `localStorage`). A narrow
+window on a desktop shows the whole page, smaller and in its proportions,
+whatever the amount of text; only a phone (`html[data-phone='1']`) drops the
+paper and reflows the text into one column at 100 %.
 
 ## Preview
 
