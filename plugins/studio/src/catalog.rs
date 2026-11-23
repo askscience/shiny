@@ -31,6 +31,13 @@ fn params_json(defs: &[ParamDef]) -> Value {
     Value::Array(defs.iter().map(param_json).collect())
 }
 
+/// Ready-made sounds per voice kind (`{ kind: [{ name, params }] }`), the
+/// window's Presets list and something the AI can start from: `params`
+/// is what `applyPreset` merges into a voice (`synth`, `fx`, `level`, …).
+pub fn factory_presets() -> Value {
+    serde_json::from_str(include_str!("factory_presets.json")).unwrap_or_else(|_| json!({}))
+}
+
 /// The full catalog as JSON.
 pub fn catalog_json() -> Value {
     let kinds: Vec<Value> = voices::KINDS
@@ -96,6 +103,7 @@ pub fn catalog_json() -> Value {
         "midi_fx": midi_fx,
         "soundfonts": crate::dsp::sampler::list(),
         "tunings": TUNINGS,
+        "factory_presets": factory_presets(),
         "master_fx": [
             {"key": "delay_mix", "min": 0.0, "max": 1.0, "default": 0.0, "help": "Pattern: send into the shared delay return (arrangements: use track sends)"},
             {"key": "delay_time", "min": 1.0, "max": 4000.0, "default": 250.0, "help": "Master delay time (ms)"},
@@ -167,5 +175,36 @@ mod tests {
             assert!(!e["params"].as_array().unwrap().is_empty());
         }
         assert!(c["master_fx"].as_array().unwrap().len() > 10);
+    }
+
+    #[test]
+    fn factory_presets_only_set_parameters_their_kind_has() {
+        let c = catalog_json();
+        let presets = c["factory_presets"].as_object().expect("factory_presets is a map");
+        assert!(!presets.is_empty());
+        let mut wrong = Vec::new();
+        for (kind, list) in presets {
+            let kind_entry = c["kinds"].as_array().unwrap().iter().find(|k| k["kind"] == kind.as_str());
+            let kind_entry = kind_entry.unwrap_or_else(|| panic!("preset kind {kind} is not a voice kind"));
+            let params = kind_entry["params"].as_array().unwrap();
+            let keys: Vec<&str> = params.iter().filter_map(|p| p["key"].as_str()).collect();
+            for preset in list.as_array().unwrap() {
+                let name = preset["name"].as_str().unwrap_or("?");
+                if let Some(synth) = preset["params"]["synth"].as_object() {
+                    for key in synth.keys() {
+                        let Some(def) = params.iter().find(|p| p["key"] == key.as_str()) else {
+                            wrong.push(format!("{kind}/{name}: `{key}` is not a {kind} parameter"));
+                            continue;
+                        };
+                        let v = synth[key].as_f64().unwrap_or(f64::NAN);
+                        let (lo, hi) = (def["min"].as_f64().unwrap(), def["max"].as_f64().unwrap());
+                        if !(lo..=hi).contains(&v) {
+                            wrong.push(format!("{kind}/{name}: `{key}` = {v} is outside {lo}..{hi}"));
+                        }
+                    }
+                }
+            }
+        }
+        assert!(wrong.is_empty(), "presets set parameters their kind lacks:\n{}", wrong.join("\n"));
     }
 }

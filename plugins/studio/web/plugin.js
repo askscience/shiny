@@ -30,6 +30,8 @@ import {
  */
 
 import { apiFetch } from '../../js/api.js';
+import { rhythmToCells, cellsToRhythm } from './rhythm.js';
+import { macroTarget } from './macro.js';
 import { saveOrDownload } from '../../js/files.js';
 import { t, tp } from '../../js/i18n.js';
 
@@ -60,153 +62,13 @@ const RULER_H = 26;    // ruler row height
 const TRACK_H = 52;    // track lane height
 const AUTO_H = 34;     // automation lane height
 
-/* Synth parameter catalog — fallback mirror of the Rust DSP catalog (the live
- * `/api/studio/catalog` is preferred when available). */
-const SYNTH = {
-  kick: [
-    { key: 'pitch', label: 'Pitch', min: 20, max: 200, step: 1, def: 50 },
-    { key: 'decay', label: 'Decay', min: 2, max: 30, step: 0.1, def: 8 },
-    { key: 'sweep', label: 'Sweep', min: 5, max: 80, step: 0.5, def: 30 },
-  ],
-  snare: [
-    { key: 'tone', label: 'Tone', min: 80, max: 400, step: 1, def: 200 },
-    { key: 'body', label: 'Body', min: 5, max: 60, step: 0.1, def: 25 },
-    { key: 'noise', label: 'Noise', min: 5, max: 40, step: 0.1, def: 15 },
-  ],
-  hat: [
-    { key: 'decay', label: 'Decay', min: 10, max: 100, step: 0.5, def: 40 },
-  ],
-  clap: [
-    { key: 'tone', label: 'Tone', min: 80, max: 400, step: 1, def: 180 },
-    { key: 'body', label: 'Body', min: 5, max: 60, step: 0.1, def: 10 },
-    { key: 'noise', label: 'Noise', min: 5, max: 40, step: 0.1, def: 35 },
-  ],
-  tom: [
-    { key: 'pitch', label: 'Pitch', min: 20, max: 400, step: 1, def: 150 },
-    { key: 'decay', label: 'Decay', min: 2, max: 40, step: 0.1, def: 20 },
-    { key: 'sweep', label: 'Sweep', min: 5, max: 100, step: 0.5, def: 50 },
-  ],
-  perc: [
-    { key: 'decay', label: 'Decay', min: 10, max: 200, step: 0.5, def: 60 },
-  ],
-  bass: [
-    { key: 'detune', label: 'Detune', min: -24, max: 24, step: 0.1, def: 0 },
-    { key: 'cutoff', label: 'Cutoff', min: 20, max: 20000, step: 10, def: 700 },
-    { key: 'resonance', label: 'Res', min: 0.1, max: 20, step: 0.1, def: 0.9 },
-    { key: 'attack', label: 'Attack', min: 0.001, max: 5, step: 0.005, def: 0.004 },
-    { key: 'decay', label: 'Decay', min: 0.001, max: 5, step: 0.01, def: 0.12 },
-    { key: 'sustain', label: 'Sustain', min: 0, max: 1, step: 0.05, def: 0.5 },
-    { key: 'release', label: 'Release', min: 0.001, max: 5, step: 0.01, def: 0.12 },
-  ],
-  pluck: [
-    { key: 'detune', label: 'Detune', min: -24, max: 24, step: 0.1, def: 0.1 },
-    { key: 'osc_mix', label: 'Osc Mix', min: 0, max: 1, step: 0.05, def: 0.5 },
-    { key: 'cutoff', label: 'Cutoff', min: 20, max: 20000, step: 10, def: 2000 },
-    { key: 'resonance', label: 'Res', min: 0.1, max: 20, step: 0.1, def: 1.5 },
-    { key: 'attack', label: 'Attack', min: 0.001, max: 5, step: 0.005, def: 0.005 },
-    { key: 'decay', label: 'Decay', min: 0.001, max: 5, step: 0.01, def: 0.2 },
-    { key: 'sustain', label: 'Sustain', min: 0, max: 1, step: 0.05, def: 0.6 },
-    { key: 'release', label: 'Release', min: 0.001, max: 5, step: 0.01, def: 0.3 },
-  ],
-  lead: [
-    { key: 'detune', label: 'Detune', min: -24, max: 24, step: 0.1, def: 0.1 },
-    { key: 'osc_mix', label: 'Osc Mix', min: 0, max: 1, step: 0.05, def: 0.52 },
-    { key: 'wt_mix', label: 'WT Mix', min: 0, max: 1, step: 0.05, def: 0.88 },
-    { key: 'wt_shape', label: 'WT Shape', min: 0, max: 3, step: 0.05, def: 1.4 },
-    { key: 'cutoff', label: 'Cutoff', min: 20, max: 20000, step: 10, def: 2800 },
-    { key: 'resonance', label: 'Res', min: 0.1, max: 20, step: 0.1, def: 1.65 },
-    { key: 'lfo_rate', label: 'LFO Rate', min: 0.01, max: 50, step: 0.01, def: 0.28 },
-    { key: 'lfo_depth', label: 'LFO Depth', min: 0, max: 2000, step: 1, def: 520 },
-    { key: 'attack', label: 'Attack', min: 0.001, max: 5, step: 0.005, def: 0.004 },
-    { key: 'decay', label: 'Decay', min: 0.001, max: 5, step: 0.01, def: 0.18 },
-    { key: 'sustain', label: 'Sustain', min: 0, max: 1, step: 0.05, def: 0.55 },
-    { key: 'release', label: 'Release', min: 0.001, max: 5, step: 0.01, def: 0.22 },
-  ],
-  pad: [
-    { key: 'detune', label: 'Detune', min: -24, max: 24, step: 0.1, def: 0.4 },
-    { key: 'cutoff', label: 'Cutoff', min: 20, max: 20000, step: 10, def: 1200 },
-    { key: 'resonance', label: 'Res', min: 0.1, max: 20, step: 0.1, def: 0.8 },
-    { key: 'attack', label: 'Attack', min: 0.001, max: 5, step: 0.005, def: 0.4 },
-    { key: 'decay', label: 'Decay', min: 0.001, max: 5, step: 0.01, def: 0.5 },
-    { key: 'sustain', label: 'Sustain', min: 0, max: 1, step: 0.05, def: 0.8 },
-    { key: 'release', label: 'Release', min: 0.001, max: 5, step: 0.01, def: 0.9 },
-  ],
-  sub: [
-    { key: 'drive', label: 'Drive', min: 0.25, max: 24, step: 0.05, def: 3 },
-    { key: 'attack', label: 'Attack', min: 0.001, max: 5, step: 0.005, def: 0.002 },
-    { key: 'decay', label: 'Decay', min: 0.001, max: 5, step: 0.01, def: 0.3 },
-    { key: 'sustain', label: 'Sustain', min: 0, max: 1, step: 0.05, def: 0.7 },
-    { key: 'release', label: 'Release', min: 0.001, max: 5, step: 0.01, def: 0.2 },
-  ],
-  organ: [
-    { key: 'detune', label: 'Detune', min: -24, max: 24, step: 0.1, def: 12 },
-    { key: 'osc_mix', label: 'Drawbar', min: 0, max: 1, step: 0.05, def: 0.4 },
-    { key: 'attack', label: 'Attack', min: 0.001, max: 5, step: 0.005, def: 0.01 },
-    { key: 'release', label: 'Release', min: 0.001, max: 5, step: 0.01, def: 0.15 },
-  ],
-  ep: [
-    { key: 'detune', label: 'Detune', min: -24, max: 24, step: 0.1, def: 12 },
-    { key: 'osc_mix', label: 'Tine Mix', min: 0, max: 1, step: 0.05, def: 0.7 },
-    { key: 'cutoff', label: 'Cutoff', min: 20, max: 20000, step: 10, def: 3000 },
-    { key: 'resonance', label: 'Res', min: 0.1, max: 20, step: 0.1, def: 1 },
-    { key: 'decay', label: 'Decay', min: 0.001, max: 5, step: 0.01, def: 0.4 },
-    { key: 'release', label: 'Release', min: 0.001, max: 5, step: 0.01, def: 0.3 },
-  ],
-  bell: [
-    { key: 'detune', label: 'Detune', min: -24, max: 24, step: 0.1, def: 7 },
-    { key: 'osc_mix', label: 'Partial', min: 0, max: 1, step: 0.05, def: 0.5 },
-    { key: 'decay', label: 'Decay', min: 0.001, max: 5, step: 0.01, def: 1.2 },
-    { key: 'release', label: 'Release', min: 0.001, max: 5, step: 0.01, def: 1.5 },
-  ],
-  strings: [
-    { key: 'detune', label: 'Detune', min: -24, max: 24, step: 0.1, def: 0.12 },
-    { key: 'cutoff', label: 'Cutoff', min: 20, max: 20000, step: 10, def: 1800 },
-    { key: 'attack', label: 'Attack', min: 0.001, max: 5, step: 0.005, def: 0.8 },
-    { key: 'sustain', label: 'Sustain', min: 0, max: 1, step: 0.05, def: 0.8 },
-    { key: 'release', label: 'Release', min: 0.001, max: 5, step: 0.01, def: 1.2 },
-  ],
-  brass: [
-    { key: 'detune', label: 'Detune', min: -24, max: 24, step: 0.1, def: -0.06 },
-    { key: 'cutoff', label: 'Cutoff', min: 20, max: 20000, step: 10, def: 1200 },
-    { key: 'resonance', label: 'Res', min: 0.1, max: 20, step: 0.1, def: 2 },
-    { key: 'attack', label: 'Attack', min: 0.001, max: 5, step: 0.005, def: 0.05 },
-    { key: 'sustain', label: 'Sustain', min: 0, max: 1, step: 0.05, def: 0.7 },
-    { key: 'release', label: 'Release', min: 0.001, max: 5, step: 0.01, def: 0.3 },
-  ],
-  synthme: [
-    { key: 'o1w', label: 'Osc 1', min: 0, max: 3, step: 1, def: 2 },
-    { key: 'o2w', label: 'Osc 2', min: 0, max: 3, step: 1, def: 3 },
-    { key: 'detune', label: 'Detune', min: -24, max: 24, step: 0.1, def: 0.1 },
-    { key: 'mix', label: 'Osc Mix', min: 0, max: 1, step: 0.05, def: 0.5 },
-    { key: 'noise', label: 'Noise', min: 0, max: 1, step: 0.05, def: 0 },
-    { key: 'ftype', label: 'Filter', min: 0, max: 2, step: 1, def: 0 },
-    { key: 'cutoff', label: 'Cutoff', min: 20, max: 20000, step: 10, def: 2000 },
-    { key: 'res', label: 'Res', min: 0.1, max: 20, step: 0.1, def: 1 },
-    { key: 'drive', label: 'Drive', min: 0.25, max: 24, step: 0.05, def: 2 },
-    { key: 'attack', label: 'Attack', min: 0.001, max: 5, step: 0.005, def: 0.005 },
-    { key: 'decay', label: 'Decay', min: 0.001, max: 5, step: 0.01, def: 0.2 },
-    { key: 'sustain', label: 'Sustain', min: 0, max: 1, step: 0.05, def: 0.6 },
-    { key: 'release', label: 'Release', min: 0.001, max: 5, step: 0.01, def: 0.3 },
-  ],
-};
+/* Synth parameters, effects, MIDI effects and the master bus all come from
+ * the engine's catalog (/api/studio/catalog, applied by applyCatalog). */
+const SYNTH = {};
 
-const FX = [
-  { key: 'delay_mix', label: 'Delay Mix', min: 0, max: 1, step: 0.01, def: 0 },
-  { key: 'delay_time', label: 'Delay Time', min: 1, max: 2000, step: 1, def: 250 },
-  { key: 'feedback', label: 'Feedback', min: 0, max: 0.95, step: 0.01, def: 0.4 },
-  { key: 'reverb_mix', label: 'Reverb Mix', min: 0, max: 1, step: 0.01, def: 0 },
-  { key: 'reverb_size', label: 'Reverb Size', min: 0, max: 1, step: 0.01, def: 0.5 },
-  { key: 'reverb_damp', label: 'Reverb Damp', min: 0, max: 1, step: 0.01, def: 0.5 },
-];
+const FX = [];
 
-const PARAM_GROUP = {
-  detune: 'Oscillator', osc_mix: 'Oscillator', wt_mix: 'Oscillator', wt_shape: 'Oscillator',
-  o1w: 'Oscillator', o2w: 'Oscillator', mix: 'Oscillator', noise: 'Oscillator',
-  cutoff: 'Filter', resonance: 'Filter', lfo_rate: 'Filter', lfo_depth: 'Filter', ftype: 'Filter', res: 'Filter',
-  attack: 'Envelope', decay: 'Envelope', sustain: 'Envelope', release: 'Envelope',
-  drive: 'Drive',
-  pitch: 'Drum', sweep: 'Drum', tone: 'Drum', body: 'Drum',
-};
+const PARAM_GROUP = {}; // parameter → group, from the catalog
 const GROUP_ORDER = ['Oscillator', 'Filter', 'Drive', 'Envelope', 'Drum'];
 
 const KIND_DESC = {
@@ -218,128 +80,16 @@ const KIND_DESC = {
   drumkit: 'plugin.studio.kindDesc.drumkit',
 };
 
-const EFFECTS = {
-  distortion: { label: 'Distortion', params: [
-    { key: 'mode', label: 'Mode', min: 0, max: 4, step: 1, def: 0 },
-    { key: 'drive', label: 'Drive', min: 0.25, max: 24, step: 0.05, def: 2 },
-    { key: 'mix', label: 'Mix', min: 0, max: 1, step: 0.01, def: 0.5 },
-    { key: 'out', label: 'Out', min: 0.1, max: 3, step: 0.05, def: 1 },
-  ] },
-  filter: { label: 'Filter', params: [
-    { key: 'type', label: 'Type', min: 0, max: 2, step: 1, def: 0 },
-    { key: 'cutoff', label: 'Cutoff', min: 20, max: 20000, step: 10, def: 2000 },
-    { key: 'resonance', label: 'Res', min: 0.1, max: 20, step: 0.1, def: 1 },
-  ] },
-  eq: { label: 'EQ', params: [
-    { key: 'low_gain', label: 'Lo Gain', min: -24, max: 24, step: 0.5, def: 0 },
-    { key: 'mid_freq', label: 'Mid Freq', min: 20, max: 20000, step: 10, def: 1000 },
-    { key: 'mid_gain', label: 'Mid Gain', min: -24, max: 24, step: 0.5, def: 0 },
-    { key: 'hi_gain', label: 'Hi Gain', min: -24, max: 24, step: 0.5, def: 0 },
-  ] },
-  compressor: { label: 'Compressor', params: [
-    { key: 'threshold', label: 'Threshold', min: -60, max: 0, step: 0.5, def: -18 },
-    { key: 'ratio', label: 'Ratio', min: 1, max: 20, step: 0.1, def: 4 },
-    { key: 'attack', label: 'Attack', min: 0.1, max: 200, step: 0.5, def: 10 },
-    { key: 'release', label: 'Release', min: 1, max: 2000, step: 1, def: 150 },
-    { key: 'makeup', label: 'Makeup', min: 0, max: 30, step: 0.5, def: 0 },
-  ] },
-  delay: { label: 'Delay', params: [
-    { key: 'time', label: 'Time', min: 1, max: 2000, step: 1, def: 250 },
-    { key: 'feedback', label: 'Feedback', min: 0, max: 0.95, step: 0.01, def: 0.4 },
-    { key: 'mix', label: 'Mix', min: 0, max: 1, step: 0.01, def: 0.3 },
-  ] },
-  reverb: { label: 'Reverb', params: [
-    { key: 'size', label: 'Size', min: 0, max: 1, step: 0.01, def: 0.5 },
-    { key: 'damping', label: 'Damping', min: 0, max: 1, step: 0.01, def: 0.5 },
-    { key: 'mix', label: 'Mix', min: 0, max: 1, step: 0.01, def: 0.2 },
-  ] },
-};
+const EFFECTS = {};
 const EFFECT_KINDS = Object.keys(EFFECTS);
 
 /* MIDI (note-processing) effects applied before synthesis. */
-const MIDI_FX = {
-  transpose: { label: 'Transpose', params: [
-    { key: 'steps', label: 'Steps', min: -24, max: 24, step: 1, def: 0 },
-  ] },
-  velocity: { label: 'Velocity', params: [
-    { key: 'amount', label: 'Amount', min: 0, max: 1, step: 0.01, def: 1 },
-  ] },
-  gate: { label: 'Gate', params: [
-    { key: 'amount', label: 'Amount', min: 0.1, max: 2, step: 0.01, def: 1 },
-  ] },
-  ratchet: { label: 'Ratchet', params: [
-    { key: 'count', label: 'Count', min: 2, max: 8, step: 1, def: 2 },
-  ] },
-};
+const MIDI_FX = {};
 const MIDI_FX_KINDS = Object.keys(MIDI_FX);
 
-const FACTORY_PRESETS = {
-  kick: [
-    { name: '808', params: { synth: { pitch: 45, decay: 12, sweep: 20 } } },
-    { name: 'Punch', params: { synth: { pitch: 80, decay: 6, sweep: 40 } } },
-    { name: 'Deep', params: { synth: { pitch: 35, decay: 20, sweep: 25 } } },
-  ],
-  snare: [
-    { name: 'Crisp', params: { synth: { tone: 240, body: 20, noise: 18 } } },
-    { name: 'Fat', params: { synth: { tone: 160, body: 45, noise: 10 } } },
-  ],
-  hat: [
-    { name: 'Tight', params: { synth: { decay: 20 } } },
-    { name: 'Open', params: { synth: { decay: 80 } } },
-  ],
-  clap: [
-    { name: 'Clap', params: { synth: { tone: 180, body: 10, noise: 35 } } },
-  ],
-  tom: [
-    { name: 'Tom', params: { synth: { pitch: 150, decay: 20, sweep: 50 } } },
-  ],
-  perc: [
-    { name: 'Perc', params: { synth: { decay: 60 } } },
-  ],
-  bass: [
-    { name: 'Deep Sub', params: { wave: 'sine', synth: { cutoff: 400, resonance: 0.5, decay: 0.2, sustain: 0.6 } } },
-    { name: 'Acid Square', params: { wave: 'square', synth: { cutoff: 900, resonance: 4, decay: 0.1, sustain: 0.4 } } },
-    { name: 'Triangle Pluck', params: { wave: 'triangle', synth: { cutoff: 1200, resonance: 1, attack: 0.002, decay: 0.15, sustain: 0.2, release: 0.1 } } },
-  ],
-  pluck: [
-    { name: 'Soft Pluck', params: { synth: { cutoff: 1800, resonance: 1.2, attack: 0.003, decay: 0.2, sustain: 0.1, release: 0.3 } } },
-    { name: 'Bright Pluck', params: { synth: { cutoff: 6000, resonance: 2, attack: 0.002, decay: 0.15, sustain: 0, release: 0.25 } } },
-  ],
-  lead: [
-    { name: 'Warm Saw', params: { synth: { cutoff: 2200, resonance: 1.2, detune: 0.2, attack: 0.01, decay: 0.3, sustain: 0.6, release: 0.4 } } },
-    { name: 'Plucky Keys', params: { synth: { cutoff: 5200, resonance: 1.5, wt_mix: 0.3, attack: 0.002, decay: 0.12, sustain: 0, release: 0.18 } } },
-    { name: 'Big Lead', params: { synth: { cutoff: 3000, resonance: 3, lfo_depth: 800, lfo_rate: 0.5, sustain: 0.7 } } },
-  ],
-  pad: [
-    { name: 'Warm Pad', params: { synth: { cutoff: 1200, resonance: 0.8, attack: 0.6, release: 1.2 } } },
-    { name: 'Bright Pad', params: { synth: { cutoff: 3200, resonance: 1.5, detune: 0.4, attack: 0.2, release: 0.8 } } },
-  ],
-  sub: [
-    { name: 'Clean Sub', params: { synth: { drive: 3, attack: 0.002, sustain: 0.7 } } },
-    { name: 'Dirty Sub', params: { synth: { drive: 10, attack: 0.001, sustain: 0.6 } } },
-  ],
-  organ: [
-    { name: 'Full Drawbar', params: { synth: { detune: 12, osc_mix: 0.55, attack: 0.01, release: 0.15 } } },
-    { name: 'Soft', params: { synth: { detune: 12, osc_mix: 0.25, attack: 0.02, release: 0.2 } } },
-    { name: 'Percussive', params: { synth: { detune: 19, osc_mix: 0.4, attack: 0.002, release: 0.1 } } },
-  ],
-  ep: [
-    { name: 'Rhodes', params: { synth: { osc_mix: 0.7, cutoff: 3000, resonance: 1, decay: 0.4, release: 0.3 } } },
-    { name: 'Bell Tine', params: { synth: { osc_mix: 0.5, cutoff: 5000, resonance: 1.5, decay: 0.6, release: 0.4 } } },
-  ],
-  bell: [
-    { name: 'FM Bell', params: { synth: { detune: 7, osc_mix: 0.5, decay: 1.2, release: 1.5 } } },
-    { name: 'Glass', params: { synth: { detune: 12, osc_mix: 0.4, decay: 0.8, release: 1.0 } } },
-  ],
-  strings: [
-    { name: 'Warm Strings', params: { synth: { cutoff: 1800, attack: 0.8, sustain: 0.8, release: 1.2 } } },
-    { name: 'Bright Ensemble', params: { synth: { detune: 0.4, cutoff: 4000, attack: 0.5, sustain: 0.8, release: 1.0 } } },
-  ],
-  brass: [
-    { name: 'Stab', params: { synth: { cutoff: 1200, resonance: 2, attack: 0.02, sustain: 0.6, release: 0.2 } } },
-    { name: 'Swell', params: { synth: { cutoff: 900, resonance: 1.5, attack: 0.3, sustain: 0.8, release: 0.4 } } },
-  ],
-};
+/* Factory presets come with the catalog (`factory_presets`, built into the
+   engine and checked against each kind's parameters there). */
+let FACTORY_PRESETS = {};
 
 /* ── dom helpers ────────────────────────────────────────────── */
 
@@ -349,36 +99,6 @@ function fmt(n) {
   return String(Math.round(n * 1000) / 1000);
 }
 
-/* ── euclidean / rhythm helpers (mirror the engine) ────── */
-
-function euclid(hits, steps) {
-  const p = new Array(steps).fill(false);
-  if (steps <= 0 || hits <= 0) return p;
-  if (hits >= steps) return p.fill(true);
-  for (let i = 0; i < hits; i++) p[Math.floor((i * steps) / hits)] = true;
-  return p;
-}
-function rotateRight(p, offset) {
-  const n = p.length;
-  if (!n) return [];
-  const off = n - (offset % n);
-  return [...p.slice(off), ...p.slice(0, off)];
-}
-function rhythmToCells(rhythm, steps) {
-  const r = (rhythm || '').trim();
-  const out = new Array(steps).fill(false);
-  if (r.startsWith('e')) {
-    const m = r.match(/^e(\d+)(?:,(\d+))?$/);
-    if (m) return rotateRight(euclid(Math.min(parseInt(m[1], 10) || 0, steps), steps), parseInt(m[2] || '0', 10) || 0);
-    return out;
-  }
-  const chars = r.split('');
-  for (let i = 0; i < steps && i < chars.length; i++) out[i] = chars[i] === 'x';
-  return out;
-}
-function cellsToRhythm(cells) {
-  return cells.map((b) => (b ? 'x' : '.')).join('');
-}
 function trackColor(i) {
   return TRACK_COLORS[(i ?? 0) % TRACK_COLORS.length];
 }
@@ -531,7 +251,8 @@ function normalizeMacros(m) {
       ? e.entries.map((x) => ({
           path: typeof x?.path === 'string' ? x.path : '',
           amount: Number.isFinite(x?.amount) ? x.amount : 1,
-          base: Number.isFinite(x?.base) ? x.base : 0,
+          // Absent stays absent: the engine then starts from the target's value.
+          ...(Number.isFinite(x?.base) ? { base: x.base } : {}),
         }))
       : [],
   }));
@@ -672,12 +393,6 @@ function normalizeEffects(list) {
   })) : [];
 }
 /* Render-only payload: solo/mute logic applied without persisting it. */
-function arrangementRenderPayload() {
-  const p = arrangementPayload();
-  const anySolo = arrangement.tracks.some((t) => soloTracks.has(t.id));
-  p.tracks = p.tracks.map((t) => ({ ...t, mute: anySolo ? (!soloTracks.has(t.id) || !!t.mute) : !!t.mute }));
-  return p;
-}
 function trackAudible(tr) {
   const anySolo = launcher.tracks.some((t) => soloTracks.has(t.id)) || arrangement.tracks.some((t) => soloTracks.has(t.id));
   return anySolo ? (soloTracks.has(tr.id) && !tr.mute) : !tr.mute;
@@ -843,6 +558,21 @@ function applyCatalog(cat) {
     MELODIC.add('fm');
   }
 
+  /* the Grid's modules */
+  if (Array.isArray(cat.grid_modules) && cat.grid_modules.length) {
+    GRID_MODULES = {};
+    GRID_KINDS = [];
+    for (const m of cat.grid_modules) {
+      GRID_KINDS.push(m.kind);
+      GRID_MODULES[m.kind] = {
+        params: (m.params || []).map(catalogParam),
+        inputs: m.inputs || [],
+        outputs: m.outputs || [],
+        has_mod: !!m.has_mod,
+      };
+    }
+  }
+
   /* effects */
   if (Array.isArray(cat.effects) && cat.effects.length) {
     EFFECT_KINDS.length = 0;
@@ -871,6 +601,9 @@ function applyCatalog(cat) {
       });
     }
   }
+
+  /* factory presets */
+  if (cat.factory_presets && typeof cat.factory_presets === 'object') FACTORY_PRESETS = cat.factory_presets;
 
   /* tunings */
   if (Array.isArray(cat.tunings) && cat.tunings.length) {
@@ -1111,7 +844,7 @@ async function ensureMix({ allowStale = false } = {}) {
       // Too much audio to hold every stem: fall back to one mixed render
       // (mixer changes then apply on the next play).
       stemBuffers = new Map();
-      const blob = await apiFetch('/api/studio/arrangement/render', { method: 'POST', body: JSON.stringify(arrangementRenderPayload()), responseType: 'blob' });
+      const blob = await apiFetch('/api/studio/arrangement/render', { method: 'POST', body: JSON.stringify(arrangementPayload()), responseType: 'blob' });
       mixdown = await audioCtxOr().decodeAudioData(await blob.arrayBuffer());
     } else {
       const want = [
@@ -2209,7 +1942,22 @@ function trackParamCatalog(tr) {
       });
     });
   }
-  for (const p of FX) out.push({ path: `master.${p.key}`, label: t('plugin.studio.automation.masterParam', { param: p.label }, `Master ${p.label}`), min: p.min, max: p.max });
+  // The track's own sends and insert effects.
+  out.push(
+    { path: 'send.reverb', label: t('plugin.studio.automation.sendReverb', null, 'Reverb Send'), min: 0, max: 1 },
+    { path: 'send.delay', label: t('plugin.studio.automation.sendDelay', null, 'Delay Send'), min: 0, max: 1 },
+  );
+  (tr.fx || []).forEach((f, fi) => {
+    const fxLabel = EFFECTS[f.kind]?.label || f.kind;
+    for (const p of (EFFECTS[f.kind]?.params || [])) out.push({ path: `fx.${fi}.${p.key}`, label: t('plugin.studio.automation.trackFxParam', { n: fi + 1, fx: fxLabel, param: p.label }, `Insert ${fi + 1} ${fxLabel} ${p.label}`), min: p.min, max: p.max });
+  });
+  // Of the master section a track lane can only move what the renderer reads
+  // per track (the catalog's `track_automation`: gain and width).
+  const masterKeys = (CATALOG?.track_automation || ['master.master_gain', 'master.master_width'])
+    .filter((path) => path.startsWith('master.')).map((path) => path.slice(7));
+  for (const p of FX) {
+    if (masterKeys.includes(p.key)) out.push({ path: `master.${p.key}`, label: t('plugin.studio.automation.masterParam', { param: p.label }, `Master ${p.label}`), min: p.min, max: p.max });
+  }
   return out;
 }
 function autoRange(tr, param) {
@@ -3966,9 +3714,9 @@ function applyMacro(mac, flat, k) {
   for (const e of (mac.entries || [])) {
     const t = flat.find((f) => f.path === e.path);
     if (!t) continue;
-    const span = t.max - t.min;
-    const offset = (k - 0.5) * 2 * (e.amount ?? 1) * span;
-    t.set(clamp(e.base + offset, t.min, t.max));
+    // No stored base: the target's value now is the knob's centre.
+    if (!Number.isFinite(e.base)) e.base = t.get();
+    t.set(macroTarget(e.base, k, e.amount ?? 1, t.min, t.max));
   }
   markDirty();
 }
@@ -4620,15 +4368,22 @@ function renderMixer() {
 
 /* Sends a track gets when it has none set: the max pattern reverb/delay mix
    of its clips (how projects stored their sends before the mixer had them). */
+/** A track's sends when it has none of its own: the engine's
+ *  `effective_sends` (src/mix.rs) — the most any of its pattern clips (not
+ *  audio clips) sends, or the arrangement's older global mix, within 0–1.
+ *  The mixer draws them on every repaint, so the rule is mirrored here. */
 function effectiveSends(tr) {
+  const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
   let reverb = 0;
   let delay = 0;
   for (const c of arrangement.clips) {
-    if (c.track !== tr.id || !c.pattern) continue;
-    reverb = Math.max(reverb, Number(c.pattern.fx?.reverb_mix) || 0);
-    delay = Math.max(delay, Number(c.pattern.fx?.delay_mix) || 0);
+    if (c.track !== tr.id || !c.pattern || c.audio) continue;
+    reverb = Math.max(reverb, num(c.pattern.fx?.reverb_mix));
+    delay = Math.max(delay, num(c.pattern.fx?.delay_mix));
   }
-  return { reverb, delay };
+  reverb = Math.max(reverb, num(arrangement.fx?.reverb_mix));
+  delay = Math.max(delay, num(arrangement.fx?.delay_mix));
+  return { reverb: clamp(reverb, 0, 1), delay: clamp(delay, 0, 1) };
 }
 
 /* ── pop-up browser ─────────────────────────────────────────── */
@@ -4931,42 +4686,44 @@ function gridPresetVoice(p) {
 /* ── WaveMe — modular patch editor (The Grid) ────────────────── */
 
 const GRID_SIG = { audio: '#ff9f43', ctrl: '#57a0ff', pitch: '#ffe156', gate: '#8dff9e' };
-const GRID_MODULE_LABELS = { osc: 'plugin.studio.grid.module.osc', noise: 'plugin.studio.grid.module.noise', filter: 'plugin.studio.grid.module.filter', drive: 'plugin.studio.grid.module.drive', gain: 'plugin.studio.grid.module.gain', mixer: 'plugin.studio.grid.module.mixer', env: 'plugin.studio.grid.module.env', lfo: 'plugin.studio.grid.module.lfo', out: 'plugin.studio.grid.module.out' };
+/* The Grid's modules — their ports, parameters and which ones exist — come
+   from the engine's catalog (`grid_modules`, src/grid.rs), the definitions
+   the patch is compiled with. Only their names and colours live here. */
+let GRID_MODULES = {};
+let GRID_KINDS = [];
 
-function gridPorts(kind) {
-  switch (kind) {
-    case 'osc': return { inputs: [], outputs: [{ name: 'out', type: 'audio' }], precord: 'pitch' };
-    case 'noise': return { inputs: [], outputs: [{ name: 'out', type: 'audio' }], precord: null };
-    case 'filter': return { inputs: [{ name: 'in', type: 'audio' }, { name: 'mod', type: 'ctrl' }], outputs: [{ name: 'out', type: 'audio' }], precord: null };
-    case 'drive': return { inputs: [{ name: 'in', type: 'audio' }, { name: 'mod', type: 'ctrl' }], outputs: [{ name: 'out', type: 'audio' }], precord: null };
-    case 'gain': return { inputs: [{ name: 'in', type: 'audio' }, { name: 'mod', type: 'ctrl' }], outputs: [{ name: 'out', type: 'audio' }], precord: null };
-    case 'mixer': return { inputs: [{ name: 'a', type: 'audio' }, { name: 'b', type: 'audio' }], outputs: [{ name: 'out', type: 'audio' }], precord: null };
-    case 'env': return { inputs: [{ name: 'in', type: 'audio' }], outputs: [{ name: 'out', type: 'audio' }, { name: 'ctrl', type: 'ctrl' }], precord: 'gate' };
-    case 'lfo': return { inputs: [], outputs: [{ name: 'ctrl', type: 'ctrl' }], precord: null };
-    case 'out': return { inputs: [{ name: 'in', type: 'audio' }], outputs: [], precord: null };
-    default: return { inputs: [], outputs: [], precord: null };
-  }
+/** A module kind's name in the interface language. */
+function gridModuleLabel(kind) {
+  const fallback = String(kind || '').charAt(0).toUpperCase() + String(kind || '').slice(1);
+  return t(`plugin.studio.grid.module.${kind}`, null, fallback);
 }
+
+/** Input and output ports of a module kind: audio by default, `mod` and
+ *  `ctrl` carry control signals. */
+function gridPorts(kind) {
+  const m = GRID_MODULES[kind];
+  if (!m) return { inputs: [], outputs: [] };
+  const inputs = (m.inputs || []).map((name) => ({ name, type: 'audio' }));
+  if (m.has_mod) inputs.push({ name: 'mod', type: 'ctrl' });
+  const outputs = (m.outputs || []).map((name) => ({ name, type: name === 'ctrl' ? 'ctrl' : 'audio' }));
+  return { inputs, outputs };
+}
+
+/** A module kind's parameters, labelled in the interface language. */
 function gridModuleParams(kind) {
-  switch (kind) {
-    case 'osc': return [{ key: 'wave', label: t('plugin.studio.param.wave', null, 'Wave'), min: 0, max: 3, step: 1, def: 2 }, { key: 'detune', label: t('plugin.studio.param.detune', null, 'Detune'), min: -24, max: 24, step: 0.1, def: 0 }];
-    case 'filter': return [{ key: 'type', label: t('plugin.studio.param.type', null, 'Type'), min: 0, max: 2, step: 1, def: 0 }, { key: 'cutoff', label: t('plugin.studio.param.cutoff', null, 'Cutoff'), min: 20, max: 20000, step: 10, def: 2000 }, { key: 'res', label: t('plugin.studio.param.res', null, 'Res'), min: 0.1, max: 20, step: 0.1, def: 1 }];
-    case 'drive': return [{ key: 'drive', label: t('plugin.studio.param.drive', null, 'Drive'), min: 0.25, max: 24, step: 0.05, def: 2 }];
-    case 'gain': return [{ key: 'level', label: t('plugin.studio.param.level', null, 'Level'), min: 0, max: 2, step: 0.01, def: 0.8 }];
-    case 'mixer': return [{ key: 'balance', label: t('plugin.studio.param.balance', null, 'Balance'), min: 0, max: 1, step: 0.05, def: 0.5 }];
-    case 'env': return [{ key: 'attack', label: 'A', min: 0.001, max: 5, step: 0.005, def: 0.005 }, { key: 'decay', label: 'D', min: 0.001, max: 5, step: 0.01, def: 0.2 }, { key: 'sustain', label: 'S', min: 0, max: 1, step: 0.05, def: 0.6 }, { key: 'release', label: 'R', min: 0.001, max: 5, step: 0.01, def: 0.3 }];
-    case 'lfo': return [{ key: 'rate', label: t('plugin.studio.param.rate', null, 'Rate'), min: 0.05, max: 20, step: 0.01, def: 1 }, { key: 'depth', label: t('plugin.studio.param.depth', null, 'Depth'), min: 0, max: 1, step: 0.01, def: 0.5 }, { key: 'wave', label: t('plugin.studio.param.wave', null, 'Wave'), min: 0, max: 2, step: 1, def: 0 }];
-    default: return [];
-  }
+  return (GRID_MODULES[kind]?.params || []).map((p) => ({
+    ...p,
+    label: t(`plugin.studio.param.${p.key}`, null, p.label),
+  }));
 }
 function gridDefaultDraft() {
   return {
     name: 'My Grid',
     modules: [
       { id: 'm1', kind: 'osc', x: 16, y: 60, params: {} },
-      { id: 'm2', kind: 'filter', x: 150, y: 60, params: {} },
-      { id: 'm3', kind: 'env', x: 300, y: 60, params: {} },
-      { id: 'm4', kind: 'out', x: 440, y: 60, params: {} },
+      { id: 'm2', kind: 'filter', x: 196, y: 60, params: {} },
+      { id: 'm3', kind: 'env', x: 376, y: 60, params: {} },
+      { id: 'm4', kind: 'out', x: 556, y: 60, params: {} },
     ],
     cables: [
       { from: ['m1', 'out'], to: ['m2', 'in'] },
@@ -5010,10 +4767,11 @@ function renderGrid() {
 
   /* palette */
   const palette = h('div', 'studio-grid-palette');
-  for (const k of ['osc', 'noise', 'filter', 'drive', 'gain', 'mixer', 'env', 'lfo', 'out']) {
-    const b = h('button', 'studio-btn studio-grid-palette-item', t(GRID_MODULE_LABELS[k]));
+  for (const k of GRID_KINDS) {
+    const label = gridModuleLabel(k);
+    const b = h('button', 'studio-btn studio-grid-palette-item', label);
     b.type = 'button';
-    b.title = t('plugin.studio.grid.addModule', { name: t(GRID_MODULE_LABELS[k]) }, `Add ${GRID_MODULE_LABELS[k]}`);
+    b.title = t('plugin.studio.grid.addModule', { name: label }, `Add ${label}`);
     b.addEventListener('click', () => { addGridModule(k); });
     palette.appendChild(b);
   }
@@ -5054,7 +4812,7 @@ function renderGridModule(m) {
     startGridModuleDrag(e, m, el);
   });
 
-  const head = h('div', 'studio-grid-module-head', t(GRID_MODULE_LABELS[m.kind]));
+  const head = h('div', 'studio-grid-module-head', gridModuleLabel(m.kind));
   if (ports.precord) head.appendChild(h('span', 'studio-grid-precord', ports.precord === 'pitch' ? '♪' : '▮'));
   if (m.kind !== 'out') {
     const rm = iconCtl('ui/close', 'studio-head-btn studio-grid-module-x');
@@ -5074,8 +4832,9 @@ function renderGridModule(m) {
   const body = h('div', 'studio-grid-module-params');
   for (const p of gridModuleParams(m.kind)) {
     const value = m.params[p.key] != null ? m.params[p.key] : p.def;
-    if ((m.kind === 'osc' && p.key === 'wave') || (m.kind === 'filter' && p.key === 'type') || (m.kind === 'lfo' && p.key === 'wave')) {
-      const opts = p.key === 'wave' ? [[0, 'plugin.studio.wave.sine'], [1, 'plugin.studio.wave.tri'], [2, 'plugin.studio.wave.saw'], [3, 'plugin.studio.wave.sq']].map(([v, k]) => [String(v), t(k)]) : [[0, 'plugin.studio.filter.lp'], [1, 'plugin.studio.filter.hp'], [2, 'plugin.studio.filter.bp']].map(([v, k]) => [String(v), t(k)]);
+    if (p.choices.length) {
+      // A discrete parameter: its value is the index of a named choice.
+      const opts = p.choices.map((label, i) => [String(i), label]);
       body.appendChild(nativeSelect(opts, String(Math.round(value)), (val) => { m.params[p.key] = parseFloat(val); renderGrid(); }, p.label));
     } else {
       body.appendChild(knob(p.label, p.min, p.max, p.step, value, (n) => { m.params[p.key] = n; }, p.def));
@@ -5099,7 +4858,7 @@ function renderGridPort(m, port, isInput, idx) {
 }
 function addGridModule(kind) {
   const id = 'm' + Date.now().toString(36) + Math.floor(Math.random() * 999);
-  gridDraft.modules.push({ id, kind, x: 40 + (gridDraft.modules.length % 4) * 130, y: 60 + Math.floor(gridDraft.modules.length / 4) * 120, params: {} });
+  gridDraft.modules.push({ id, kind, x: 40 + (gridDraft.modules.length % 4) * 180, y: 60 + Math.floor(gridDraft.modules.length / 4) * 200, params: {} });
   gridSel = id;   // open the new module's parameter panel
   renderGrid();
 }
@@ -5918,7 +5677,7 @@ async function downloadWav() {
     let blob;
     let name;
     if (panels.arranger || !current) {
-      blob = await apiFetch('/api/studio/arrangement/render', { method: 'POST', body: JSON.stringify(arrangementRenderPayload()), responseType: 'blob' });
+      blob = await apiFetch('/api/studio/arrangement/render', { method: 'POST', body: JSON.stringify(arrangementPayload()), responseType: 'blob' });
       name = arrangement.title || 'arrangement';
     } else {
       blob = await apiFetch('/api/studio/preview', { method: 'POST', body: JSON.stringify(serializePattern(current)), responseType: 'blob' });

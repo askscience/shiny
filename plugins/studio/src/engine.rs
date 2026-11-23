@@ -151,8 +151,10 @@ pub struct MacroAssignment {
     /// Bipolar depth in [-1, 1]: how much the macro sweeps the target.
     #[serde(default = "default_amount")]
     pub amount: f64,
-    /// The target's value at macro centre (knob = 0.5).
-    pub base: f64,
+    /// The target's value at macro centre (knob = 0.5). Absent: the
+    /// target's own value (a base of 0 is a real 0).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub base: Option<f64>,
 }
 
 fn default_amount() -> f64 {
@@ -161,7 +163,7 @@ fn default_amount() -> f64 {
 
 impl Default for MacroAssignment {
     fn default() -> Self {
-        Self { path: String::new(), amount: 1.0, base: 0.0 }
+        Self { path: String::new(), amount: 1.0, base: None }
     }
 }
 
@@ -438,7 +440,7 @@ pub fn rhythm_hits(rhythm: &str, steps: u32) -> Vec<u32> {
         let mut parts = rest.split(',');
         let h: u32 = parts.next().and_then(|s| s.trim().parse().ok()).unwrap_or(0).min(steps);
         let rot: u32 = parts.next().map(|s| s.trim().parse().unwrap_or(0)).unwrap_or(0);
-        // Bjorklund's algorithm, inlined (no external dependency).
+        // Evenly spread onsets, the first on the beat (see `euclidean`).
         let pattern = euclidean(h, steps);
         let rot = if steps == 0 { 0 } else { rot % steps };
         for (i, b) in pattern.iter().enumerate() {
@@ -458,33 +460,17 @@ pub fn rhythm_hits(rhythm: &str, steps: u32) -> Vec<u32> {
     hits
 }
 
-/// Euclidean rhythm: `hits` onsets spread over `steps`.
+/// Euclidean rhythm: `hits` onsets spread as evenly as possible over
+/// `steps`, the first on step 0 — `e4` over 16 steps is four on the floor
+/// (0, 4, 8, 12), `e3` over 8 is the tresillo (0, 2, 5). Onset `i` sits on
+/// step `floor(i * steps / hits)`. The window's grid draws the same cells
+/// (`web/rhythm.js`, pinned to these cases by its test).
 pub fn euclidean(hits: u32, steps: u32) -> Vec<bool> {
     let steps = steps.max(1);
     let hits = hits.min(steps);
     let mut out = vec![false; steps as usize];
-    if hits == 0 {
-        return out;
-    }
-    // Bresenham-style distribution: onset when the accumulator wraps.
-    let mut acc = 0u32;
-    for (i, slot) in out.iter_mut().enumerate() {
-        acc += hits;
-        if acc >= steps {
-            acc -= steps;
-            *slot = true;
-        }
-        let _ = i;
-    }
-    // Guarantee exactly `hits` onsets (the wrap test can drop or add one at
-    // the very start depending on phase).
-    let count = out.iter().filter(|b| **b).count() as u32;
-    if count < hits {
-        for slot in out.iter_mut() {
-            if !*slot && count < hits {
-                *slot = true;
-            }
-        }
+    for i in 0..hits {
+        out[(i as u64 * steps as u64 / hits as u64) as usize] = true;
     }
     out
 }
@@ -978,20 +964,28 @@ impl Channel {
     }
 }
 
-/// Expand a macro rack into parameter values.
+/// One macro target's value: `base + (knob - 0.5) * 2 * amount * range`,
+/// clamped to `[min, max]`. The window's knob (web/macro.js) uses the same
+/// formula, pinned by the same cases.
+pub fn macro_target(base: f64, knob: f64, amount: f64, min: f64, max: f64) -> f64 {
+    let norm = (knob.clamp(0.0, 1.0) - 0.5) * 2.0;
+    (base + norm * amount * (max - min)).clamp(min.min(max), max.max(min))
+}
+
+/// Expand a macro rack into parameter values. Each entry starts from its
+/// stored base — the value at the knob's centre — so a target the window
+/// already moved is not moved twice.
 fn apply_macros(params: &mut HashMap<String, f64>, macros: &[MacroConfig]) {
     for mac in macros.iter().take(8) {
-        let norm = (mac.value.clamp(0.0, 1.0) - 0.5) * 2.0;
         for entry in &mac.entries {
             if entry.path.is_empty() {
                 continue;
             }
-            let base = if entry.base != 0.0 { entry.base } else { params.get(&entry.path).copied().unwrap_or(0.0) };
-            let range = voices::param_range(&entry.path).unwrap_or(1.0);
-            let mut v = base + norm * entry.amount * range * 0.5;
-            if let Some(d) = voices::param_def(&entry.path) {
-                v = v.clamp(d.min, d.max);
-            }
+            let base = entry.base.unwrap_or_else(|| params.get(&entry.path).copied().unwrap_or(0.0));
+            let v = match voices::param_def(&entry.path) {
+                Some(d) => macro_target(base, mac.value, entry.amount, d.min, d.max),
+                None => base + (mac.value.clamp(0.0, 1.0) - 0.5) * 2.0 * entry.amount,
+            };
             params.insert(entry.path.clone(), v);
         }
     }
@@ -1600,6 +1594,60 @@ fn band_energy(channels: &[Vec<f32>], sr: f64) -> [f64; 5] {
         }
     }
     energy
+}
+
+#[cfg(test)]
+mod rhythm_tests {
+    use super::*;
+
+    /// The same cases as `web/macro.test.mjs`: the knob and the sound agree.
+    #[test]
+    fn macro_targets_follow_the_documented_formula() {
+        assert_eq!(macro_target(1000.0, 0.5, 1.0, 20.0, 20000.0), 1000.0);
+        assert_eq!(macro_target(0.5, 1.0, 0.25, 0.0, 1.0), 0.75);
+        assert_eq!(macro_target(0.5, 0.0, 0.25, 0.0, 1.0), 0.25);
+        assert_eq!(macro_target(0.5, 1.0, -0.5, 0.0, 1.0), 0.0);
+        assert_eq!(macro_target(0.0, 0.75, 0.5, -1.0, 1.0), 0.5);
+        assert_eq!(macro_target(0.9, 1.0, 1.0, 0.0, 1.0), 1.0);
+    }
+
+    #[test]
+    fn a_base_of_zero_is_not_moved_twice() {
+        let mut params = HashMap::new();
+        // The window already wrote the macro's result into the parameter.
+        params.insert("b_semi".to_string(), 12.0);
+        let mac = MacroConfig {
+            value: 0.75,
+            entries: vec![MacroAssignment { path: "b_semi".into(), amount: 0.25, base: Some(0.0) }],
+        };
+        apply_macros(&mut params, &[mac]);
+        // 0 + 0.5 * 0.25 * 48 = 6, not 12 + 6.
+        assert_eq!(params["b_semi"], 6.0);
+    }
+
+    /// The same cases as `web/rhythm.test.mjs`: the grid and the sound agree.
+    #[test]
+    fn euclidean_rhythms_start_on_the_beat() {
+        assert_eq!(rhythm_hits("e4,0", 16), vec![0, 4, 8, 12]);
+        assert_eq!(rhythm_hits("e4", 16), vec![0, 4, 8, 12]);
+        assert_eq!(rhythm_hits("e3", 8), vec![0, 2, 5]);
+        assert_eq!(rhythm_hits("e5,0", 8), vec![0, 1, 3, 4, 6]);
+        assert_eq!(rhythm_hits("e4,2", 16), vec![2, 6, 10, 14]);
+        assert_eq!(rhythm_hits("e3,1", 8), vec![1, 3, 6]);
+        assert_eq!(rhythm_hits("e0", 16), Vec::<u32>::new());
+        assert_eq!(rhythm_hits("e16", 16).len(), 16);
+        assert_eq!(rhythm_hits("e20", 16).len(), 16);
+        assert_eq!(rhythm_hits(" e 2 , 1 ", 8), vec![1, 5]);
+    }
+
+    #[test]
+    fn explicit_rhythms_read_only_hits_and_rests() {
+        assert_eq!(rhythm_hits("x...x...", 8), vec![0, 4]);
+        assert_eq!(rhythm_hits("x.x.|x.x.", 8), vec![0, 2, 4, 6]);
+        assert_eq!(rhythm_hits("x x . x", 4), vec![0, 1, 3]);
+        assert_eq!(rhythm_hits("xxxxxxxxxx", 4), vec![0, 1, 2, 3]);
+        assert_eq!(rhythm_hits("", 8), Vec::<u32>::new());
+    }
 }
 
 #[cfg(test)]

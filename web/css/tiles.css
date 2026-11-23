@@ -6191,7 +6191,8 @@ html[data-phone='1'] .studio-footer { display: none; }
 .studio-grid-cable--drag { stroke-dasharray: 4 3; opacity: 0.8; }
 .studio-grid-module {
   position: absolute;
-  min-width: 88px;
+  /* Three knobs to a row: the catalog decides how many a module has. */
+  width: 148px;
   background: var(--bg-elevated, var(--surface, var(--glass)));
   border: 1px solid var(--studio-line);
   border-radius: 0;

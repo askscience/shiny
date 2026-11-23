@@ -22,9 +22,13 @@ export default {
 - **Clip Launcher** — scene/clip grid for launching patterns.
 - **Detail panel**, switched by tabs:
   - **Editor** — step grid / piano-roll for the selected voice; `notes[]`
-    overrides, velocity, length.
+    overrides, velocity, length. A rhythm's cells come from `web/rhythm.js`,
+    the engine's `rhythm_hits` (Euclidean onsets on `floor(i·steps/hits)`, the
+    first on the beat), pinned to it by the same test cases.
   - **Devices** — per-voice synth parameters, `fx` inserts, `midi` processors,
-    `macros` (8 engine-applied knobs).
+    `macros` (8 engine-applied knobs: a target moves to
+    `base + (knob − 0.5) × 2 × amount × range`, the engine's `macro_target`,
+    mirrored live by `web/macro.js`).
   - **Mixer** — levels, pans, solo/mute, master bus.
 - **Transport** — play/stop, BPM, swing, position; ruler-click sets the play
   start.

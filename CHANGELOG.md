@@ -4,6 +4,14 @@
 
 ### Changed
 
+- **Studio: what you see is what plays.** Euclidean rhythms play where the
+  grid draws them (the kick of `e4` was three sixteenths late); a macro knob
+  moves its targets by the documented amount, once; WaveMe offers every
+  module the engine has (Delay, Reverb, Chorus included) with their real
+  ports, ranges and twelve waveforms; automation lanes list the track's
+  sends and inserts and no longer master controls the renderer ignores. The
+  factory presets come from the engine (the assistant can see them) and
+  twenty of them no longer set parameters that do not exist.
 - **PDF: page numbers on an exported document are stamped once.** The
   plugin adds them in the same step as the export (one undo instead of two);
   without the print engine the numbers were drawn twice.

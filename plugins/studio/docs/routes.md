@@ -204,8 +204,10 @@ Each bucket is a `[min, max]` pair in linear sample units.
 The engine's self-describing catalog. **Tag:** `studio_catalog`.
 **Source:** `studio_catalog` → `catalog::catalog_json()` (identical to the `studio_catalog`
 tool). Top-level keys: `kinds`, `effects`, `grid_modules`, `midi_fx`, `soundfonts`, `tunings`,
-`master_fx`, `limits`. The window fetches this on mount and rebuilds its parameter tables from
-it.
+`factory_presets` (`{ kind: [{ name, params }] }`, from `src/factory_presets.json`, every
+parameter checked against its kind by a test), `master_fx`, `track_automation`, `limits`. The
+window has no tables of its own: it fetches this on mount and builds every parameter list, the
+WaveMe palette, ports and knobs, the factory presets and the track automation lanes from it.
 
 ## Arrangement routes
 

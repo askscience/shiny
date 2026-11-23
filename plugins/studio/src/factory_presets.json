@@ -1,0 +1,403 @@
+{
+ "kick": [
+  {
+   "name": "808",
+   "params": {
+    "synth": {
+     "pitch": 45,
+     "decay": 12,
+     "sweep": 20
+    }
+   }
+  },
+  {
+   "name": "Punch",
+   "params": {
+    "synth": {
+     "pitch": 80,
+     "decay": 6,
+     "sweep": 40
+    }
+   }
+  },
+  {
+   "name": "Deep",
+   "params": {
+    "synth": {
+     "pitch": 35,
+     "decay": 20,
+     "sweep": 25
+    }
+   }
+  }
+ ],
+ "snare": [
+  {
+   "name": "Crisp",
+   "params": {
+    "synth": {
+     "tone": 240,
+     "body": 20,
+     "noise": 18
+    }
+   }
+  },
+  {
+   "name": "Fat",
+   "params": {
+    "synth": {
+     "tone": 160,
+     "body": 45,
+     "noise": 10
+    }
+   }
+  }
+ ],
+ "hat": [
+  {
+   "name": "Tight",
+   "params": {
+    "synth": {
+     "decay": 20
+    }
+   }
+  },
+  {
+   "name": "Open",
+   "params": {
+    "synth": {
+     "decay": 80
+    }
+   }
+  }
+ ],
+ "clap": [
+  {
+   "name": "Clap",
+   "params": {
+    "synth": {
+     "tone": 400,
+     "body": 10,
+     "noise": 35
+    }
+   }
+  }
+ ],
+ "tom": [
+  {
+   "name": "Tom",
+   "params": {
+    "synth": {
+     "pitch": 150,
+     "decay": 20,
+     "sweep": 50
+    }
+   }
+  }
+ ],
+ "perc": [
+  {
+   "name": "Perc",
+   "params": {
+    "synth": {
+     "decay": 60
+    }
+   }
+  }
+ ],
+ "bass": [
+  {
+   "name": "Deep Sub",
+   "params": {
+    "wave": "sine",
+    "synth": {
+     "cutoff": 400,
+     "res": 0.5,
+     "decay": 0.2,
+     "sustain": 0.6
+    }
+   }
+  },
+  {
+   "name": "Acid Square",
+   "params": {
+    "wave": "square",
+    "synth": {
+     "cutoff": 900,
+     "res": 4,
+     "decay": 0.1,
+     "sustain": 0.4
+    }
+   }
+  },
+  {
+   "name": "Triangle Pluck",
+   "params": {
+    "wave": "triangle",
+    "synth": {
+     "cutoff": 1200,
+     "res": 1,
+     "attack": 0.002,
+     "decay": 0.15,
+     "sustain": 0.2,
+     "release": 0.1
+    }
+   }
+  }
+ ],
+ "pluck": [
+  {
+   "name": "Soft Pluck",
+   "params": {
+    "synth": {
+     "cutoff": 1800,
+     "res": 1.2,
+     "attack": 0.003,
+     "decay": 0.2,
+     "sustain": 0.1,
+     "release": 0.3
+    }
+   }
+  },
+  {
+   "name": "Bright Pluck",
+   "params": {
+    "synth": {
+     "cutoff": 6000,
+     "res": 2,
+     "attack": 0.002,
+     "decay": 0.15,
+     "sustain": 0,
+     "release": 0.25
+    }
+   }
+  }
+ ],
+ "lead": [
+  {
+   "name": "Warm Saw",
+   "params": {
+    "synth": {
+     "cutoff": 2200,
+     "res": 1.2,
+     "unison": 2,
+     "uni_detune": 20.0,
+     "attack": 0.01,
+     "decay": 0.3,
+     "sustain": 0.6,
+     "release": 0.4
+    }
+   }
+  },
+  {
+   "name": "Plucky Keys",
+   "params": {
+    "synth": {
+     "cutoff": 5200,
+     "res": 1.5,
+     "attack": 0.002,
+     "decay": 0.12,
+     "sustain": 0,
+     "release": 0.18
+    }
+   }
+  },
+  {
+   "name": "Big Lead",
+   "params": {
+    "synth": {
+     "cutoff": 3000,
+     "res": 3,
+     "lfo_depth": 0.4,
+     "lfo_rate": 0.5,
+     "sustain": 0.7
+    }
+   }
+  }
+ ],
+ "pad": [
+  {
+   "name": "Warm Pad",
+   "params": {
+    "synth": {
+     "cutoff": 1200,
+     "res": 0.8,
+     "attack": 0.6,
+     "release": 1.2
+    }
+   }
+  },
+  {
+   "name": "Bright Pad",
+   "params": {
+    "synth": {
+     "cutoff": 3200,
+     "res": 1.5,
+     "unison": 2,
+     "uni_detune": 40.0,
+     "attack": 0.2,
+     "release": 0.8
+    }
+   }
+  }
+ ],
+ "sub": [
+  {
+   "name": "Clean Sub",
+   "params": {
+    "synth": {
+     "drive": 3,
+     "attack": 0.002,
+     "sustain": 0.7
+    }
+   }
+  },
+  {
+   "name": "Dirty Sub",
+   "params": {
+    "synth": {
+     "drive": 10,
+     "attack": 0.001,
+     "sustain": 0.6
+    }
+   }
+  }
+ ],
+ "organ": [
+  {
+   "name": "Full Drawbar",
+   "params": {
+    "synth": {
+     "b_semi": 12,
+     "b_level": 0.55,
+     "attack": 0.01,
+     "release": 0.15
+    }
+   }
+  },
+  {
+   "name": "Soft",
+   "params": {
+    "synth": {
+     "b_semi": 12,
+     "b_level": 0.25,
+     "attack": 0.02,
+     "release": 0.2
+    }
+   }
+  },
+  {
+   "name": "Percussive",
+   "params": {
+    "synth": {
+     "b_semi": 19,
+     "b_level": 0.4,
+     "attack": 0.002,
+     "release": 0.1
+    }
+   }
+  }
+ ],
+ "ep": [
+  {
+   "name": "Rhodes",
+   "params": {
+    "synth": {
+     "b_level": 0.7,
+     "cutoff": 3000,
+     "res": 1,
+     "decay": 0.4,
+     "release": 0.3
+    }
+   }
+  },
+  {
+   "name": "Bell Tine",
+   "params": {
+    "synth": {
+     "b_level": 0.5,
+     "cutoff": 5000,
+     "res": 1.5,
+     "decay": 0.6,
+     "release": 0.4
+    }
+   }
+  }
+ ],
+ "bell": [
+  {
+   "name": "FM Bell",
+   "params": {
+    "synth": {
+     "b_semi": 7,
+     "b_level": 0.5,
+     "decay": 1.2,
+     "release": 1.5
+    }
+   }
+  },
+  {
+   "name": "Glass",
+   "params": {
+    "synth": {
+     "b_semi": 12,
+     "b_level": 0.4,
+     "decay": 0.8,
+     "release": 1
+    }
+   }
+  }
+ ],
+ "strings": [
+  {
+   "name": "Warm Strings",
+   "params": {
+    "synth": {
+     "cutoff": 1800,
+     "attack": 0.8,
+     "sustain": 0.8,
+     "release": 1.2
+    }
+   }
+  },
+  {
+   "name": "Bright Ensemble",
+   "params": {
+    "synth": {
+     "unison": 2,
+     "uni_detune": 40.0,
+     "cutoff": 4000,
+     "attack": 0.5,
+     "sustain": 0.8,
+     "release": 1
+    }
+   }
+  }
+ ],
+ "brass": [
+  {
+   "name": "Stab",
+   "params": {
+    "synth": {
+     "cutoff": 1200,
+     "res": 2,
+     "attack": 0.02,
+     "sustain": 0.6,
+     "release": 0.2
+    }
+   }
+  },
+  {
+   "name": "Swell",
+   "params": {
+    "synth": {
+     "cutoff": 900,
+     "res": 1.5,
+     "attack": 0.3,
+     "sustain": 0.8,
+     "release": 0.4
+    }
+   }
+  }
+ ]
+}

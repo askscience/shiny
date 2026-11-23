@@ -100,6 +100,10 @@ A `VoiceConfig`:
 }
 ```
 
+A macro entry's `base` is the target's value with the knob at 0.5; leave it
+out to start from the parameter's own value. The target moves to
+`base + (value − 0.5) × 2 × amount × range`.
+
 Master `fx` keys (all optional, clamped during render): `delay_mix`, `delay_time`, `feedback`,
 `delay_ping_pong`, `delay_damp`, `reverb_mix`, `reverb_size`, `reverb_damp`,
 `reverb_predelay`, `reverb_width`, `master_gain`, `master_drive`, `master_width`, `glue`,
