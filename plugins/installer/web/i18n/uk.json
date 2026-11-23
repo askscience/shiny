@@ -440,5 +440,8 @@
   "plugin.installer.disk.toggle.home": "Особисті файли окремо",
   "plugin.installer.profile.ai.off.title": "Без ШІ",
   "plugin.installer.profile.ai.off.desc": "Зовсім без ШІ. Кнопка ШІ відкриває панель запуску.",
-  "plugin.installer.profile.ai.off.meta": "Можна ввімкнути пізніше"
+  "plugin.installer.profile.ai.off.meta": "Можна ввімкнути пізніше",
+  "plugin.installer.disk.reason.apple": "Містить розділи macOS (APFS/HFS), які ніколи не стираються",
+  "plugin.installer.disk.reason.busy": "Розділ використовується системою (шифрування, LVM або RAID)",
+  "plugin.installer.disk.reason.unknown": "Не вдалося перевірити диск — оновіть список"
 }

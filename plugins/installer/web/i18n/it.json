@@ -440,5 +440,8 @@
   "plugin.installer.disk.toggle.home": "File personali separati",
   "plugin.installer.profile.ai.off.title": "Nessuna AI",
   "plugin.installer.profile.ai.off.desc": "Nessuna AI. Il pulsante AI apre il launcher.",
-  "plugin.installer.profile.ai.off.meta": "Attivabile in seguito"
+  "plugin.installer.profile.ai.off.meta": "Attivabile in seguito",
+  "plugin.installer.disk.reason.apple": "Contiene partizioni macOS (APFS/HFS), che non vengono mai cancellate",
+  "plugin.installer.disk.reason.busy": "Una partizione è in uso dal sistema (cifratura, LVM o RAID)",
+  "plugin.installer.disk.reason.unknown": "Impossibile controllare questo disco — aggiorna l'elenco"
 }

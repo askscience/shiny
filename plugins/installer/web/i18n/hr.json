@@ -440,5 +440,8 @@
   "plugin.installer.disk.toggle.home": "Osobne datoteke zasebno",
   "plugin.installer.profile.ai.off.title": "Bez AI-ja",
   "plugin.installer.profile.ai.off.desc": "Potpuno bez AI-ja. Gumb AI otvara pokretač.",
-  "plugin.installer.profile.ai.off.meta": "Može se uključiti kasnije"
+  "plugin.installer.profile.ai.off.meta": "Može se uključiti kasnije",
+  "plugin.installer.disk.reason.apple": "Sadrži macOS particije (APFS/HFS), koje se nikad ne brišu",
+  "plugin.installer.disk.reason.busy": "Particiju koristi sustav (šifriranje, LVM ili RAID)",
+  "plugin.installer.disk.reason.unknown": "Disk nije moguće provjeriti — osvježite popis"
 }

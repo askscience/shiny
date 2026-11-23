@@ -440,5 +440,8 @@
   "plugin.installer.disk.toggle.home": "Osebne datoteke ločeno",
   "plugin.installer.profile.ai.off.title": "Brez AI",
   "plugin.installer.profile.ai.off.desc": "Brez AI. Gumb AI odpre zaganjalnik.",
-  "plugin.installer.profile.ai.off.meta": "Vklopite ga lahko pozneje"
+  "plugin.installer.profile.ai.off.meta": "Vklopite ga lahko pozneje",
+  "plugin.installer.disk.reason.apple": "Vsebuje razdelke macOS (APFS/HFS), ki se nikoli ne izbrišejo",
+  "plugin.installer.disk.reason.busy": "Razdelek uporablja sistem (šifriranje, LVM ali RAID)",
+  "plugin.installer.disk.reason.unknown": "Diska ni bilo mogoče preveriti — osvežite seznam"
 }

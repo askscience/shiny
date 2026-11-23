@@ -440,5 +440,8 @@
   "plugin.installer.disk.toggle.home": "Separat partition til personlige filer",
   "plugin.installer.profile.ai.off.title": "Ingen AI",
   "plugin.installer.profile.ai.off.desc": "Ingen AI overhovedet. AI-knappen åbner programstarteren.",
-  "plugin.installer.profile.ai.off.meta": "Kan slås til senere"
+  "plugin.installer.profile.ai.off.meta": "Kan slås til senere",
+  "plugin.installer.disk.reason.apple": "Indeholder macOS-partitioner (APFS/HFS), som aldrig slettes",
+  "plugin.installer.disk.reason.busy": "En partition er i brug af systemet (kryptering, LVM eller RAID)",
+  "plugin.installer.disk.reason.unknown": "Disken kunne ikke kontrolleres — opdater listen"
 }

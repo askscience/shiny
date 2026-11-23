@@ -416,6 +416,10 @@ async function runWizardIntegration() {
   };
   const probe = {
     live_medium: null,
+    // The plugin's verdict on each disk (shiny-installer-protocol).
+    eligibility: {
+      '/dev/nvme0n1': { reasons: { erase: [], existing: [], manual: [] }, root_candidates: ['/dev/nvme0n1p2'], esp: null },
+    },
     hardware: health.hardware,
     disks: [{
       name: 'nvme0n1', path: '/dev/nvme0n1', kind: 'disk',

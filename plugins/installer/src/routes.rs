@@ -81,7 +81,15 @@ fn probe_handler() -> RouteHandler {
     bridged_route(|req: Request| async move {
         let _uid = user_id(&req)?;
         deny_remote(&req)?;
-        let data = crate::client::call(methods::PROBE, serde_json::Value::Null).await?;
+        let mut data = crate::client::call(methods::PROBE, serde_json::Value::Null).await?;
+        // Which disks and partitions the window may offer, by the same rules
+        // the helper validates the plan with (shiny-installer-protocol). Done
+        // here, so a window always gets them whatever the helper's version.
+        if let Ok(probe) = serde_json::from_value::<shiny_installer_protocol::ProbeResponse>(data.clone()) {
+            if let Some(obj) = data.as_object_mut() {
+                obj.insert("eligibility".into(), json!(shiny_installer_protocol::eligibility(&probe)));
+            }
+        }
         Ok(ok(data))
     })
 }

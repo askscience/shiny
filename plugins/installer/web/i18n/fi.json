@@ -440,5 +440,8 @@
   "plugin.installer.disk.toggle.home": "Henkilökohtaiset tiedostot erikseen",
   "plugin.installer.profile.ai.off.title": "Ei tekoälyä",
   "plugin.installer.profile.ai.off.desc": "Ei tekoälyä lainkaan. Tekoälypainike avaa käynnistimen.",
-  "plugin.installer.profile.ai.off.meta": "Voit ottaa sen käyttöön myöhemmin"
+  "plugin.installer.profile.ai.off.meta": "Voit ottaa sen käyttöön myöhemmin",
+  "plugin.installer.disk.reason.apple": "Sisältää macOS-osioita (APFS/HFS), joita ei koskaan poisteta",
+  "plugin.installer.disk.reason.busy": "Järjestelmä käyttää osiota (salaus, LVM tai RAID)",
+  "plugin.installer.disk.reason.unknown": "Levyä ei voitu tarkistaa — päivitä luettelo"
 }

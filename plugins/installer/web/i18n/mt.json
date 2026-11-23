@@ -440,5 +440,8 @@
   "plugin.installer.disk.toggle.home": "Fajls personali separati",
   "plugin.installer.profile.ai.off.title": "L-ebda AI",
   "plugin.installer.profile.ai.off.desc": "L-ebda AI. Il-buttuna tal-AI tiftaħ il-launcher.",
-  "plugin.installer.profile.ai.off.meta": "Tista' tixgħelha aktar tard"
+  "plugin.installer.profile.ai.off.meta": "Tista' tixgħelha aktar tard",
+  "plugin.installer.disk.reason.apple": "Fih partizzjonijiet macOS (APFS/HFS), li qatt ma jitħassru",
+  "plugin.installer.disk.reason.busy": "Partizzjoni qed tintuża mis-sistema (kriptaġġ, LVM jew RAID)",
+  "plugin.installer.disk.reason.unknown": "Ma setax jiġi ċċekkjat dan id-diska — aġġorna l-lista"
 }

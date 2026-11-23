@@ -24,7 +24,7 @@ and the remote-access crates.
 | `shiny-iroh-client` | [`crates/shiny-iroh-client`](../../crates/shiny-iroh-client) | bin + lib | Local proxy that dials a remote Iroh endpoint and serves the app on a loopback port. |
 | `shiny-iroh-proto` | [`crates/shiny-iroh-proto`](../../crates/shiny-iroh-proto) | lib | Shared protocol types for Iroh remote access (built behind the `iroh` feature). |
 | `shiny-server-mode` | [`crates/shiny-server-mode`](../../crates/shiny-server-mode) | bin | The kiosk window shown while the server is in Iroh server mode (link + controls). |
-| `shiny-installer-protocol` | [`crates/shiny-installer-protocol`](../../crates/shiny-installer-protocol) | lib | The install plan and the RPC messages shared by the Installer plugin and its root helper, with the plan's validation. |
+| `shiny-installer-protocol` | [`crates/shiny-installer-protocol`](../../crates/shiny-installer-protocol) | lib | The install plan and the RPC messages shared by the Installer plugin and its root helper, with the plan's validation and the disk rules (`DiskInfo::reasons`, `root_candidate`, `usable_esp`, `eligibility`): the plugin sends them with the probe, the helper validates with them. |
 | `shiny-installer-helper` | [`crates/shiny-installer-helper`](../../crates/shiny-installer-helper) | bin | Root helper of the live image's installer: probes disks and writes the system to the chosen target, over a Unix socket. |
 
 ## Plugin crates

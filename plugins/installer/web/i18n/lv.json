@@ -440,5 +440,8 @@
   "plugin.installer.disk.toggle.home": "Personīgie faili atsevišķi",
   "plugin.installer.profile.ai.off.title": "Bez AI",
   "plugin.installer.profile.ai.off.desc": "Nekāda AI. AI poga atver palaidēju.",
-  "plugin.installer.profile.ai.off.meta": "Var ieslēgt vēlāk"
+  "plugin.installer.profile.ai.off.meta": "Var ieslēgt vēlāk",
+  "plugin.installer.disk.reason.apple": "Satur macOS nodalījumus (APFS/HFS), kas nekad netiek dzēsti",
+  "plugin.installer.disk.reason.busy": "Nodalījumu izmanto sistēma (šifrēšana, LVM vai RAID)",
+  "plugin.installer.disk.reason.unknown": "Šo disku neizdevās pārbaudīt — atsvaidziniet sarakstu"
 }

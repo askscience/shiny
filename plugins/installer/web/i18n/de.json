@@ -440,5 +440,8 @@
   "plugin.installer.disk.toggle.home": "Eigene Partition für persönliche Dateien",
   "plugin.installer.profile.ai.off.title": "Keine KI",
   "plugin.installer.profile.ai.off.desc": "Gar keine KI. Die KI-Taste öffnet den App-Starter.",
-  "plugin.installer.profile.ai.off.meta": "Später aktivierbar"
+  "plugin.installer.profile.ai.off.meta": "Später aktivierbar",
+  "plugin.installer.disk.reason.apple": "Enthält macOS-Partitionen (APFS/HFS), die nie gelöscht werden",
+  "plugin.installer.disk.reason.busy": "Eine Partition wird vom System verwendet (Verschlüsselung, LVM oder RAID)",
+  "plugin.installer.disk.reason.unknown": "Dieses Laufwerk konnte nicht geprüft werden — Liste aktualisieren"
 }

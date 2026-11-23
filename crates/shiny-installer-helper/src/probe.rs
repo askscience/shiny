@@ -12,10 +12,9 @@ use std::process::Command;
 use serde_json::Value;
 use shiny_installer_protocol::{
     DiskInfo, FreeExtent, GpuInfo, HardwareInfo, InstallPlan, PartitionRef, ProbeResponse,
-    SystemOptions, ValidationResult, MODE_ERASE, MODE_EXISTING, MODE_MANUAL,
+    SystemOptions, ValidationResult, MIN_DISK_BYTES, MODE_ERASE, MODE_EXISTING, MODE_MANUAL,
 };
 
-const MIN_DISK_BYTES: u64 = 8 * 1024 * 1024 * 1024;
 const WARN_DISK_BYTES: u64 = 20 * 1024 * 1024 * 1024;
 const MIN_ROOT_BYTES: u64 = 20 * 1024 * 1024 * 1024;
 /// Headroom for the MiB rounding the engine applies to the chosen extent.
@@ -227,7 +226,7 @@ fn validate_erase(
     if target.has_mounts() {
         errors.push("target disk or one of its partitions is mounted; unmount it first".into());
     }
-    if target.children.iter().any(is_apfs) {
+    if target.children.iter().any(DiskInfo::is_apple) {
         errors.push(
             "the target contains APFS/HFS partitions; this build never erases an Apple layout"
                 .into(),
@@ -277,10 +276,10 @@ fn validate_existing(
     if !root.holders.is_empty() {
         errors.push("the selected root partition has active holders".into());
     }
-    if is_apfs(root) {
+    if root.is_apple() {
         errors.push("an APFS/HFS partition cannot be the root target".into());
     }
-    if is_foreign_root(root) {
+    if root.is_foreign_root() {
         errors.push(format!(
             "partition {} has an unsupported filesystem or role",
             root.path
@@ -323,7 +322,7 @@ fn validate_existing(
     }
 
     errors.extend(preserve_errors(plan, target, Some(&root.path), true));
-    if target.children.iter().any(is_apfs) {
+    if target.children.iter().any(DiskInfo::is_apple) {
         warnings.push("APFS/HFS partitions are preserved and will not be modified".into());
     }
 }
@@ -371,7 +370,7 @@ fn validate_manual(
     }
 
     errors.extend(preserve_errors(plan, target, None, true));
-    if target.children.iter().any(is_apfs)
+    if target.children.iter().any(DiskInfo::is_apple)
         && !target.children.iter().all(|child| {
             plan.layout
                 .preserve
@@ -381,7 +380,7 @@ fn validate_manual(
     {
         errors.push("manual mode must preserve every APFS/HFS partition".into());
     }
-    if target.children.iter().any(is_apfs) {
+    if target.children.iter().any(DiskInfo::is_apple) {
         warnings.push("APFS/HFS partitions are preserved; free-space layout only".into());
     }
     if target.pttype.is_empty() {
@@ -497,41 +496,6 @@ fn partition_ref_matches(partition: &DiskInfo, reference: &PartitionRef) -> bool
         return false;
     }
     true
-}
-
-fn is_apfs(partition: &DiskInfo) -> bool {
-    let fstype = partition.fstype.to_ascii_lowercase();
-    let typename = partition.parttypename.to_ascii_lowercase();
-    fstype == "apfs"
-        || fstype == "hfs"
-        || fstype == "hfsplus"
-        || typename.contains("apple apfs")
-        || typename.contains("apple hfs")
-}
-
-fn is_foreign_root(partition: &DiskInfo) -> bool {
-    let fstype = partition.fstype.to_ascii_lowercase();
-    let typename = partition.parttypename.to_ascii_lowercase();
-    !partition.holders.is_empty()
-        || matches!(
-            fstype.as_str(),
-            "vfat"
-                | "fat32"
-                | "swap"
-                | "apfs"
-                | "hfs"
-                | "hfsplus"
-                | "ntfs"
-                | "bitlocker"
-                | "crypto_luks"
-                | "lvm2_member"
-                | "linux_raid_member"
-        )
-        || typename.contains("efi system")
-        || typename.contains("linux swap")
-        || typename.contains("lvm")
-        || typename.contains("raid")
-        || typename.contains("bitlocker")
 }
 
 fn parse_disk(node: &Value) -> DiskInfo {

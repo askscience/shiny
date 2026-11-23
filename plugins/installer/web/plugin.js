@@ -11,7 +11,7 @@ import {
   applyPreset, buildPlanModel, chooseDefaults,
   diskGaps, diskOs, diskReasons as baseDiskReasons, diskSpans, findEsp,
   layoutSpecsForPlan, placementForPlan,
-  rootCandidates,
+  rootCandidates, withEligibility,
 } from './timeline-model.js';
 import { osLabel, partitionLabel, renderTimelinePanel } from './timeline.js';
 
@@ -174,7 +174,7 @@ function selectedDisk() {
 }
 
 function diskReasons(disk, mode = state.partitionMode) {
-  return baseDiskReasons(disk, mode, state.probe?.live_medium);
+  return baseDiskReasons(disk, mode);
 }
 
 function reasonLabel(reason) {
@@ -189,6 +189,9 @@ function reasonLabel(reason) {
     serial: T('disk.reason.serial', 'No serial number reported'),
     small: T('disk.reason.small', 'Smaller than 8 GiB'),
     table: T('disk.reason.table', 'Uses an old partition table (only GPT is supported)'),
+    apple: T('disk.reason.apple', 'Holds macOS (APFS/HFS) partitions, which are never erased'),
+    busy: T('disk.reason.busy', 'A partition is in use by the system (encryption, LVM or RAID)'),
+    unknown: T('disk.reason.unknown', 'Could not check this disk — refresh the list'),
   };
   return values[reason] || reason;
 }
@@ -734,7 +737,7 @@ async function refreshData() {
     try {
       const probe = await apiFetch('/api/installer/probe');
       if (!tileEl) return;
-      state.probe = probe?.data ?? null;
+      state.probe = withEligibility(probe?.data ?? null);
       state.probeError = '';
       const disks = state.probe?.disks || [];
       const current = disks.find((disk) => disk.path === state.selectedDiskPath);

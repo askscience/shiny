@@ -440,5 +440,8 @@
   "plugin.installer.disk.toggle.home": "Separate personal files",
   "plugin.installer.profile.ai.off.title": "No AI",
   "plugin.installer.profile.ai.off.desc": "No AI at all. The AI button opens the launcher.",
-  "plugin.installer.profile.ai.off.meta": "You can turn it on later"
+  "plugin.installer.profile.ai.off.meta": "You can turn it on later",
+  "plugin.installer.disk.reason.apple": "Holds macOS (APFS/HFS) partitions, which are never erased",
+  "plugin.installer.disk.reason.busy": "A partition is in use by the system (encryption, LVM or RAID)",
+  "plugin.installer.disk.reason.unknown": "Could not check this disk — refresh the list"
 }

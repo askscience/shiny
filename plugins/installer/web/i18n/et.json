@@ -440,5 +440,8 @@
   "plugin.installer.disk.toggle.home": "Isiklikud failid eraldi",
   "plugin.installer.profile.ai.off.title": "Ilma AI-ta",
   "plugin.installer.profile.ai.off.desc": "AI-d ei paigaldata üldse. AI-nupp avab käivitaja.",
-  "plugin.installer.profile.ai.off.meta": "Saab hiljem sisse lülitada"
+  "plugin.installer.profile.ai.off.meta": "Saab hiljem sisse lülitada",
+  "plugin.installer.disk.reason.apple": "Sisaldab macOS-i partitsioone (APFS/HFS), mida kunagi ei kustutata",
+  "plugin.installer.disk.reason.busy": "Süsteem kasutab partitsiooni (krüpteering, LVM või RAID)",
+  "plugin.installer.disk.reason.unknown": "Ketast ei õnnestunud kontrollida — värskenda loendit"
 }

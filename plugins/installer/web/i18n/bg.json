@@ -440,5 +440,8 @@
   "plugin.installer.disk.toggle.home": "Отделен дял за лични файлове",
   "plugin.installer.profile.ai.off.title": "Без AI",
   "plugin.installer.profile.ai.off.desc": "Никакъв AI. Бутонът за AI отваря стартовото меню.",
-  "plugin.installer.profile.ai.off.meta": "Може да се включи по-късно"
+  "plugin.installer.profile.ai.off.meta": "Може да се включи по-късно",
+  "plugin.installer.disk.reason.apple": "Съдържа дялове на macOS (APFS/HFS), които никога не се изтриват",
+  "plugin.installer.disk.reason.busy": "Дял се използва от системата (шифроване, LVM или RAID)",
+  "plugin.installer.disk.reason.unknown": "Дискът не можа да бъде проверен — обновете списъка"
 }

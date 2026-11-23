@@ -440,5 +440,8 @@
   "plugin.installer.disk.toggle.home": "Persoonlijke bestanden apart",
   "plugin.installer.profile.ai.off.title": "Geen AI",
   "plugin.installer.profile.ai.off.desc": "Helemaal geen AI. De AI-knop opent de starter.",
-  "plugin.installer.profile.ai.off.meta": "Kan later worden ingeschakeld"
+  "plugin.installer.profile.ai.off.meta": "Kan later worden ingeschakeld",
+  "plugin.installer.disk.reason.apple": "Bevat macOS-partities (APFS/HFS), die nooit worden gewist",
+  "plugin.installer.disk.reason.busy": "Een partitie is in gebruik door het systeem (versleuteling, LVM of RAID)",
+  "plugin.installer.disk.reason.unknown": "Deze schijf kon niet worden gecontroleerd — vernieuw de lijst"
 }

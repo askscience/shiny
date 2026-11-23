@@ -29,6 +29,11 @@ export function classifyPartition(part) {
   return 'foreign';
 }
 
+/* isEsp / isSwap / partitionOs / diskOs name what a partition is for the
+   labels ("Windows stays untouched"). What may be used — which disks, which
+   partitions can take the system, which EFI partition is reused — is decided
+   by the installer's Rust (shiny-installer-protocol) and arrives with the
+   probe as `eligibility`: see withEligibility. */
 export function isEsp(part) {
   const fstype = String(part?.fstype || '').toLowerCase();
   return fstype === 'vfat'
@@ -42,18 +47,6 @@ export function isSwap(part) {
   return fstype.includes('swap')
     || (part?.mountpoints || []).includes('[SWAP]')
     || String(part?.parttypename || '').toLowerCase().includes('swap');
-}
-
-export function isForeignPartition(part) {
-  const fstype = String(part?.fstype || '').toLowerCase();
-  const typename = String(part?.parttypename || '').toLowerCase();
-  return (part?.holders || []).length > 0
-    || ['apfs', 'hfs', 'hfsplus', 'ntfs', 'bitlocker', 'crypto_luks', 'lvm2_member', 'linux_raid_member'].includes(fstype)
-    || typename.includes('apfs')
-    || typename.includes('hfs')
-    || typename.includes('bitlocker')
-    || typename.includes('lvm')
-    || typename.includes('raid');
 }
 
 const LINUX_FS = ['ext2', 'ext3', 'ext4', 'btrfs', 'xfs', 'f2fs', 'jfs', 'reiserfs'];
@@ -88,51 +81,38 @@ export function diskOs(disk) {
   return named[0]?.os || null;
 }
 
-export function diskPaths(disk) {
-  const paths = [];
-  const walk = (node) => {
-    if (node?.path) paths.push(node.path);
-    for (const child of node?.children || []) walk(child);
+/**
+ * The probe with each disk's `eligibility` attached: reason codes per mode
+ * (empty = usable), the partitions that can take the system and the EFI
+ * partition "existing" mode reuses — computed by the plugin with the rules
+ * the helper validates the plan with.
+ */
+export function withEligibility(probe) {
+  if (!probe) return probe;
+  const table = probe.eligibility || {};
+  return {
+    ...probe,
+    disks: (probe.disks || []).map((disk) => ({ ...disk, eligibility: table[disk.path] || disk.eligibility || null })),
   };
-  walk(disk);
-  return paths;
 }
 
-export function diskHasMounts(disk) {
-  return (disk?.mountpoints?.length || 0) > 0
-    || (disk?.children || []).some(diskHasMounts);
-}
-
-export function diskIsLive(disk, liveMedium = null) {
-  return !!liveMedium && diskPaths(disk).includes(liveMedium);
-}
-
-export function diskReasons(disk, mode = MODE_ERASE, liveMedium = null) {
+/** Why a disk cannot be used in `mode` (reason codes); unknown without a verdict. */
+export function diskReasons(disk, mode = MODE_ERASE) {
   if (!disk) return ['missing'];
-  const reasons = [];
-  if (disk.removable) reasons.push('removable');
-  if (disk.read_only) reasons.push('readOnly');
-  if (disk.is_loop) reasons.push('loop');
-  if (disk.is_rom) reasons.push('optical');
-  if (mode === MODE_ERASE && diskHasMounts(disk)) reasons.push('mounted');
-  if (diskIsLive(disk, liveMedium)) reasons.push('live');
-  if (!disk.serial) reasons.push('serial');
-  if (number(disk.size_bytes) < MIN_DISK_BYTES) reasons.push('small');
-  if (disk.pttype && disk.pttype !== 'gpt') reasons.push('table');
-  return reasons;
+  const reasons = disk.eligibility?.reasons?.[mode];
+  return Array.isArray(reasons) ? reasons : ['unknown'];
 }
 
+/** The partitions of a disk that can take the system ("existing" mode). */
 export function rootCandidates(disk) {
-  return (disk?.children || []).filter((part) => {
-    if (isEsp(part) || isSwap(part) || isForeignPartition(part)) return false;
-    if ((part.mountpoints || []).length > 0) return false;
-    if (part.fstype && part.fstype !== 'ext4') return false;
-    return number(part.size_bytes) >= MIN_ROOT_BYTES;
-  });
+  const ok = new Set(disk?.eligibility?.root_candidates || []);
+  return (disk?.children || []).filter((part) => ok.has(part.path));
 }
 
+/** The EFI system partition "existing" mode reuses, or null. */
 export function findEsp(disk) {
-  return (disk?.children || []).find(isEsp) || null;
+  const path = disk?.eligibility?.esp;
+  return path ? (disk.children || []).find((part) => part.path === path) || null : null;
 }
 
 export function usableGapBytes(gap) {
@@ -391,7 +371,7 @@ export function buildPlanModel(disk, state) {
       if (segment.part?.path === root?.path) {
         return { ...segment, kind: 'root', selectedRoot: true, locked: false };
       }
-      if (segment.part && isEsp(segment.part)) {
+      if (segment.part && esp && segment.part.path === esp.path) {
         return { ...segment, reused: true };
       }
       return segment;
@@ -529,10 +509,9 @@ function diskRank(a, b) {
   return number(b.size_bytes) - number(a.size_bytes);
 }
 
-export function chooseDefaults(probe, options = {}) {
-  const liveMedium = options.liveMedium ?? probe?.live_medium ?? null;
-  const disks = [...(probe?.disks || [])].sort(diskRank);
-  const allowed = (disk, mode) => diskReasons(disk, mode, liveMedium).length === 0;
+export function chooseDefaults(probe) {
+  const disks = [...(withEligibility(probe)?.disks || [])].sort(diskRank);
+  const allowed = (disk, mode) => diskReasons(disk, mode).length === 0;
 
   for (const disk of disks) {
     if (!allowed(disk, MODE_MANUAL)) continue;
@@ -593,6 +572,6 @@ export function chooseDefaults(probe, options = {}) {
     extent: null,
     rootPath: '',
     espPath: '',
-    reasons: first ? diskReasons(first, MODE_MANUAL, liveMedium) : ['missing'],
+    reasons: first ? diskReasons(first, MODE_MANUAL) : ['missing'],
   };
 }

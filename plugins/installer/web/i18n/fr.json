@@ -440,5 +440,8 @@
   "plugin.installer.disk.toggle.home": "Fichiers personnels séparés",
   "plugin.installer.profile.ai.off.title": "Sans IA",
   "plugin.installer.profile.ai.off.desc": "Aucune IA. Le bouton IA ouvre le lanceur.",
-  "plugin.installer.profile.ai.off.meta": "Vous pourrez l'activer plus tard"
+  "plugin.installer.profile.ai.off.meta": "Vous pourrez l'activer plus tard",
+  "plugin.installer.disk.reason.apple": "Contient des partitions macOS (APFS/HFS), qui ne sont jamais effacées",
+  "plugin.installer.disk.reason.busy": "Une partition est utilisée par le système (chiffrement, LVM ou RAID)",
+  "plugin.installer.disk.reason.unknown": "Impossible de vérifier ce disque — actualisez la liste"
 }

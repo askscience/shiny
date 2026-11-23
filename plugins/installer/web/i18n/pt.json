@@ -440,5 +440,8 @@
   "plugin.installer.disk.toggle.home": "Arquivos pessoais separados",
   "plugin.installer.profile.ai.off.title": "Sem IA",
   "plugin.installer.profile.ai.off.desc": "Nenhuma IA. O botão de IA abre o iniciador.",
-  "plugin.installer.profile.ai.off.meta": "Pode ser ativada depois"
+  "plugin.installer.profile.ai.off.meta": "Pode ser ativada depois",
+  "plugin.installer.disk.reason.apple": "Contém partições macOS (APFS/HFS), que nunca são apagadas",
+  "plugin.installer.disk.reason.busy": "Uma partição está em uso pelo sistema (encriptação, LVM ou RAID)",
+  "plugin.installer.disk.reason.unknown": "Não foi possível verificar este disco — atualize a lista"
 }

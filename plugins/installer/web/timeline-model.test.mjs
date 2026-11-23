@@ -4,8 +4,13 @@ import {
   MODE_ERASE, MODE_EXISTING, MODE_MANUAL,
   applyPreset, buildPlanModel, chooseDefaults, diskGaps, diskReasons,
   diskOs, diskSpans, layoutSpecsForPlan, partitionOs, placementForPlan, presetBytes,
-  resizeBoundary, selectedGap, summaryFor,
+  resizeBoundary, selectedGap, summaryFor, rootCandidates, findEsp, withEligibility,
 } from './timeline-model.js';
+
+// What the plugin's Rust decides about each disk (shiny-installer-protocol
+// `eligibility`, tested there); the fixtures carry a verdict as the probe would.
+const usable = { erase: [], existing: [], manual: [] };
+const verdict = (extra = {}) => ({ reasons: usable, root_candidates: [], esp: null, ...extra });
 
 let checks = 0;
 function check(name, fn) {
@@ -49,6 +54,7 @@ const disk = {
     },
   ],
   free_extents: [{ start_bytes: freeStart, size_bytes: 700 * GIB - MIB }],
+  eligibility: verdict({ root_candidates: ['/dev/nvme0n1p2'] }),
 };
 
 function manualState(overrides = {}) {
@@ -163,7 +169,7 @@ check('an empty disk defaults to erase', () => {
   const empty = {
     name: 'sda', path: '/dev/sda', size_bytes: 120 * GIB,
     serial: 'E1', pttype: 'gpt', removable: false, read_only: false,
-    mountpoints: [], children: [], free_extents: [],
+    mountpoints: [], children: [], free_extents: [], eligibility: verdict(),
   };
   const defaults = chooseDefaults({ disks: [empty], live_medium: null });
   assert.equal(defaults.mode, MODE_ERASE);
@@ -180,6 +186,7 @@ check('a full Windows disk is never selected destructively by default', () => {
       fstype: 'ntfs', mountpoints: [], holders: [],
     }],
     free_extents: [],
+    eligibility: verdict(),
   };
   const defaults = chooseDefaults({ disks: [windows], live_medium: null });
   assert.equal(defaults.mode, MODE_MANUAL);
@@ -206,6 +213,7 @@ check('an existing blank partition is selected only when it is blank', () => {
       },
     ],
     free_extents: [],
+    eligibility: verdict({ root_candidates: ['/dev/sdc2', '/dev/sdc3'], esp: '/dev/sdc1' }),
   };
   const defaults = chooseDefaults({ disks: [boot], live_medium: null });
   assert.equal(defaults.mode, MODE_EXISTING);
@@ -251,10 +259,18 @@ check('missing partition offsets are flagged as approximate', () => {
   assert.equal(gaps[0].eligible, false);
 });
 
-check('mounted disks are refused in erase mode but not in manual mode', () => {
-  const mounted = { ...disk, mountpoints: ['/mnt/data'] };
-  assert.ok(diskReasons(mounted, MODE_ERASE).includes('mounted'));
-  assert.ok(!diskReasons(mounted, MODE_MANUAL).includes('mounted'));
+check('a disk is judged by the verdict the probe brings, per mode', () => {
+  const mounted = { ...disk, eligibility: verdict({ reasons: { erase: ['mounted'], existing: [], manual: [] } }) };
+  assert.deepEqual(diskReasons(mounted, MODE_ERASE), ['mounted']);
+  assert.deepEqual(diskReasons(mounted, MODE_MANUAL), []);
+  // No verdict (an older probe): nothing is offered as usable.
+  assert.deepEqual(diskReasons({ ...disk, eligibility: null }, MODE_MANUAL), ['unknown']);
+  assert.deepEqual(diskReasons(null), ['missing']);
+  assert.deepEqual(rootCandidates(disk).map((p) => p.path), ['/dev/nvme0n1p2']);
+  assert.equal(findEsp(disk), null);
+  // The probe's table is attached to its disks by path.
+  const probe = withEligibility({ disks: [{ path: '/dev/x' }], eligibility: { '/dev/x': verdict({ esp: '/dev/x1' }) } });
+  assert.equal(probe.disks[0].eligibility.esp, '/dev/x1');
 });
 
 check('the summary reports formatted and kept partitions', () => {

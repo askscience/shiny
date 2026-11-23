@@ -440,5 +440,8 @@
   "plugin.installer.disk.toggle.home": "Pliki osobiste osobno",
   "plugin.installer.profile.ai.off.title": "Bez AI",
   "plugin.installer.profile.ai.off.desc": "Bez AI. Przycisk AI otwiera program uruchamiający.",
-  "plugin.installer.profile.ai.off.meta": "Możesz włączyć później"
+  "plugin.installer.profile.ai.off.meta": "Możesz włączyć później",
+  "plugin.installer.disk.reason.apple": "Zawiera partycje macOS (APFS/HFS), które nigdy nie są usuwane",
+  "plugin.installer.disk.reason.busy": "Partycja jest używana przez system (szyfrowanie, LVM lub RAID)",
+  "plugin.installer.disk.reason.unknown": "Nie udało się sprawdzić dysku — odśwież listę"
 }

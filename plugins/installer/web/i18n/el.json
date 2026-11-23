@@ -440,5 +440,8 @@
   "plugin.installer.disk.toggle.home": "Ξεχωριστή κατάτμηση για προσωπικά αρχεία",
   "plugin.installer.profile.ai.off.title": "Χωρίς AI",
   "plugin.installer.profile.ai.off.desc": "Καθόλου AI. Το κουμπί AI ανοίγει την εκκίνηση εφαρμογών.",
-  "plugin.installer.profile.ai.off.meta": "Μπορείς να το ενεργοποιήσεις αργότερα"
+  "plugin.installer.profile.ai.off.meta": "Μπορείς να το ενεργοποιήσεις αργότερα",
+  "plugin.installer.disk.reason.apple": "Περιέχει διαμερίσματα macOS (APFS/HFS), που δεν διαγράφονται ποτέ",
+  "plugin.installer.disk.reason.busy": "Ένα διαμέρισμα χρησιμοποιείται από το σύστημα (κρυπτογράφηση, LVM ή RAID)",
+  "plugin.installer.disk.reason.unknown": "Δεν ήταν δυνατός ο έλεγχος του δίσκου — ανανεώστε τη λίστα"
 }

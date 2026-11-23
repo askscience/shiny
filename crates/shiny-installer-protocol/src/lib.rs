@@ -4,6 +4,8 @@
 //! destructive operation. Keeping the types here means neither side can drift
 //! from the other without a compile error.
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -52,6 +54,8 @@ pub const AI_TIER_VOICE: &str = "voice";
 pub const AI_TIER_LOCAL: &str = "local";
 
 const MIN_ROOT_BYTES: u64 = 20 * 1024 * 1024 * 1024;
+/// The smallest disk the installer accepts.
+pub const MIN_DISK_BYTES: u64 = 8 * 1024 * 1024 * 1024;
 const ESP_MIN_BYTES: u64 = 512 * 1024 * 1024;
 const ESP_MAX_BYTES: u64 = 1024 * 1024 * 1024;
 
@@ -137,6 +141,151 @@ impl DiskInfo {
         }
         out
     }
+
+    fn fstype_lower(&self) -> String {
+        self.fstype.to_ascii_lowercase()
+    }
+
+    fn typename_lower(&self) -> String {
+        self.parttypename.to_ascii_lowercase()
+    }
+
+    /// An Apple (APFS/HFS) partition: never erased, never a root.
+    pub fn is_apple(&self) -> bool {
+        let fstype = self.fstype_lower();
+        let typename = self.typename_lower();
+        matches!(fstype.as_str(), "apfs" | "hfs" | "hfsplus")
+            || typename.contains("apple apfs")
+            || typename.contains("apple hfs")
+    }
+
+    /// An EFI system partition by any of its marks (filesystem, flag, type).
+    pub fn is_esp(&self) -> bool {
+        let fstype = self.fstype_lower();
+        matches!(fstype.as_str(), "vfat" | "fat32")
+            || self.partflags.iter().any(|f| f == "esp")
+            || self.typename_lower().contains("efi")
+    }
+
+    /// A swap partition.
+    pub fn is_swap(&self) -> bool {
+        self.fstype_lower().contains("swap")
+            || self.mountpoints.iter().any(|m| m == "[SWAP]")
+            || self.typename_lower().contains("swap")
+    }
+
+    /// A partition that belongs to something else and can never be the new
+    /// root: in use by device-mapper, Windows, macOS, encryption, LVM, RAID,
+    /// or a boot/swap role.
+    pub fn is_foreign_root(&self) -> bool {
+        let fstype = self.fstype_lower();
+        let typename = self.typename_lower();
+        !self.holders.is_empty()
+            || matches!(
+                fstype.as_str(),
+                "vfat" | "fat32" | "swap" | "apfs" | "hfs" | "hfsplus" | "ntfs" | "bitlocker"
+                    | "crypto_luks" | "lvm2_member" | "linux_raid_member"
+            )
+            || typename.contains("efi system")
+            || typename.contains("linux swap")
+            || typename.contains("lvm")
+            || typename.contains("raid")
+            || typename.contains("bitlocker")
+    }
+
+    /// A partition the system can be installed into ("existing" mode): not
+    /// mounted or held, not foreign, ext4 or blank, at least 20 GiB. The
+    /// helper's validation refuses exactly what this refuses.
+    pub fn root_candidate(&self) -> bool {
+        self.mountpoints.is_empty()
+            && self.holders.is_empty()
+            && !self.is_apple()
+            && !self.is_esp()
+            && !self.is_swap()
+            && !self.is_foreign_root()
+            && (self.fstype.is_empty() || self.fstype == "ext4")
+            && self.size_bytes >= MIN_ROOT_BYTES
+    }
+
+    /// The EFI system partition "existing" mode reuses: the first one
+    /// formatted vfat (the helper refuses any other filesystem).
+    pub fn usable_esp(&self) -> Option<&DiskInfo> {
+        self.children.iter().find(|p| p.is_esp() && p.fstype == "vfat")
+    }
+
+    /// Why this disk cannot be used in `mode`, as reason codes the window
+    /// names in the user's language; empty when it can. The helper's
+    /// validation refuses each of these too.
+    pub fn reasons(&self, mode: &str, live_medium: Option<&str>) -> Vec<&'static str> {
+        let mut out = Vec::new();
+        if self.removable {
+            out.push("removable");
+        }
+        if self.read_only {
+            out.push("readOnly");
+        }
+        if self.is_loop {
+            out.push("loop");
+        }
+        if self.is_rom {
+            out.push("optical");
+        }
+        if mode == MODE_ERASE {
+            if self.has_mounts() {
+                out.push("mounted");
+            }
+            if self.children.iter().any(DiskInfo::is_apple) {
+                out.push("apple");
+            }
+            if self.children.iter().any(|c| !c.holders.is_empty()) {
+                out.push("busy");
+            }
+        }
+        if let Some(live) = live_medium.filter(|l| !l.is_empty()) {
+            if self.paths().iter().any(|p| p == live) {
+                out.push("live");
+            }
+        }
+        if self.serial.trim().is_empty() {
+            out.push("serial");
+        }
+        if self.size_bytes < MIN_DISK_BYTES {
+            out.push("small");
+        }
+        if !matches!(self.pttype.as_str(), "" | "gpt") {
+            out.push("table");
+        }
+        out
+    }
+}
+
+/// What the window may offer on one disk, decided by the rules the helper
+/// validates with: reason codes per mode (empty = usable), the partitions
+/// that can take the system, and the EFI partition "existing" mode reuses.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default)]
+pub struct DiskEligibility {
+    pub reasons: BTreeMap<String, Vec<String>>,
+    pub root_candidates: Vec<String>,
+    pub esp: Option<String>,
+}
+
+/// Eligibility for every disk of a probe, keyed by disk path.
+pub fn eligibility(probe: &ProbeResponse) -> BTreeMap<String, DiskEligibility> {
+    let live = probe.live_medium.as_deref();
+    probe
+        .disks
+        .iter()
+        .map(|disk| {
+            let reasons = [MODE_ERASE, MODE_EXISTING, MODE_MANUAL]
+                .iter()
+                .map(|mode| (mode.to_string(), disk.reasons(mode, live).into_iter().map(String::from).collect()))
+                .collect();
+            let root_candidates = disk.children.iter().filter(|p| p.root_candidate()).map(|p| p.path.clone()).collect();
+            let esp = disk.usable_esp().map(|p| p.path.clone());
+            (disk.path.clone(), DiskEligibility { reasons, root_candidates, esp })
+        })
+        .collect()
 }
 
 /// The disk the user selected. The helper re-checks it against a fresh probe.
@@ -793,6 +942,83 @@ impl RpcResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn part(path: &str, fstype: &str, size_gib: u64) -> DiskInfo {
+        DiskInfo { path: path.into(), kind: "part".into(), fstype: fstype.into(), size_bytes: size_gib << 30, ..Default::default() }
+    }
+
+    fn disk(children: Vec<DiskInfo>) -> DiskInfo {
+        DiskInfo {
+            path: "/dev/sda".into(),
+            kind: "disk".into(),
+            serial: "S1".into(),
+            pttype: "gpt".into(),
+            size_bytes: 256 << 30,
+            children,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn mounted_disks_are_refused_for_erase_but_not_manual() {
+        let mut data = part("/dev/sda2", "ext4", 50);
+        data.mountpoints = vec!["/mnt/data".into()];
+        let d = disk(vec![data]);
+        assert!(d.reasons(MODE_ERASE, None).contains(&"mounted"));
+        assert!(!d.reasons(MODE_MANUAL, None).contains(&"mounted"));
+    }
+
+    #[test]
+    fn apple_and_busy_disks_are_refused_for_erase() {
+        let d = disk(vec![part("/dev/sda2", "apfs", 200)]);
+        assert_eq!(d.reasons(MODE_ERASE, None), vec!["apple"]);
+        assert!(d.reasons(MODE_MANUAL, None).is_empty());
+        let mut held = part("/dev/sda2", "ext4", 50);
+        held.holders = vec!["dm-0".into()];
+        assert_eq!(disk(vec![held]).reasons(MODE_ERASE, None), vec!["busy"]);
+    }
+
+    #[test]
+    fn disk_level_reasons() {
+        let mut d = disk(vec![]);
+        d.removable = true;
+        d.serial.clear();
+        d.pttype = "dos".into();
+        d.size_bytes = 4 << 30;
+        assert_eq!(d.reasons(MODE_MANUAL, None), vec!["removable", "serial", "small", "table"]);
+        let mut live = disk(vec![part("/dev/sda1", "iso9660", 4)]);
+        live.removable = false;
+        assert_eq!(live.reasons(MODE_MANUAL, Some("/dev/sda1")), vec!["live"]);
+    }
+
+    #[test]
+    fn root_candidates_and_the_reused_esp() {
+        let mut esp = part("/dev/sda1", "vfat", 1);
+        esp.partflags = vec!["esp".into()];
+        let windows = part("/dev/sda2", "ntfs", 100);
+        let blank = part("/dev/sda3", "", 40);
+        let small = part("/dev/sda4", "ext4", 10);
+        let mut mounted = part("/dev/sda5", "ext4", 40);
+        mounted.mountpoints = vec!["/".into()];
+        let btrfs = part("/dev/sda6", "btrfs", 40);
+        let d = disk(vec![esp, windows, blank, small, mounted, btrfs]);
+        let roots: Vec<&str> = d.children.iter().filter(|p| p.root_candidate()).map(|p| p.path.as_str()).collect();
+        assert_eq!(roots, vec!["/dev/sda3"]);
+        assert_eq!(d.usable_esp().map(|p| p.path.as_str()), Some("/dev/sda1"));
+        // An ESP flag on a partition that is not vfat is not reused.
+        let mut odd = part("/dev/sdb1", "ext4", 1);
+        odd.partflags = vec!["esp".into()];
+        assert!(disk(vec![odd]).usable_esp().is_none());
+    }
+
+    #[test]
+    fn eligibility_covers_every_disk_and_mode() {
+        let probe = ProbeResponse { disks: vec![disk(vec![])], live_medium: None, ..Default::default() };
+        let e = eligibility(&probe);
+        let d = &e["/dev/sda"];
+        assert_eq!(d.reasons.len(), 3);
+        assert!(d.reasons.values().all(|r| r.is_empty()));
+    }
 
     fn default_layout() -> PartitionLayout {
         PartitionLayout {

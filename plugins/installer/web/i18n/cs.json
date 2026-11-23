@@ -440,5 +440,8 @@
   "plugin.installer.disk.toggle.home": "Samostatný oddíl pro osobní soubory",
   "plugin.installer.profile.ai.off.title": "Bez AI",
   "plugin.installer.profile.ai.off.desc": "Žádná AI. Tlačítko AI otevře spouštěč.",
-  "plugin.installer.profile.ai.off.meta": "Lze zapnout později"
+  "plugin.installer.profile.ai.off.meta": "Lze zapnout později",
+  "plugin.installer.disk.reason.apple": "Obsahuje oddíly macOS (APFS/HFS), které se nikdy nemažou",
+  "plugin.installer.disk.reason.busy": "Oddíl používá systém (šifrování, LVM nebo RAID)",
+  "plugin.installer.disk.reason.unknown": "Disk se nepodařilo zkontrolovat — obnovte seznam"
 }

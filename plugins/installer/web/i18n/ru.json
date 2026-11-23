@@ -440,5 +440,8 @@
   "plugin.installer.disk.toggle.home": "Личные файлы отдельно",
   "plugin.installer.profile.ai.off.title": "Без ИИ",
   "plugin.installer.profile.ai.off.desc": "Совсем без ИИ. Кнопка ИИ открывает панель запуска.",
-  "plugin.installer.profile.ai.off.meta": "Можно включить позже"
+  "plugin.installer.profile.ai.off.meta": "Можно включить позже",
+  "plugin.installer.disk.reason.apple": "Содержит разделы macOS (APFS/HFS), которые никогда не стираются",
+  "plugin.installer.disk.reason.busy": "Раздел используется системой (шифрование, LVM или RAID)",
+  "plugin.installer.disk.reason.unknown": "Не удалось проверить диск — обновите список"
 }

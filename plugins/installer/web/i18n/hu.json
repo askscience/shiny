@@ -440,5 +440,8 @@
   "plugin.installer.disk.toggle.home": "Személyes fájlok külön",
   "plugin.installer.profile.ai.off.title": "AI nélkül",
   "plugin.installer.profile.ai.off.desc": "Egyáltalán nincs AI. Az AI gomb az indítót nyitja meg.",
-  "plugin.installer.profile.ai.off.meta": "Később bekapcsolható"
+  "plugin.installer.profile.ai.off.meta": "Később bekapcsolható",
+  "plugin.installer.disk.reason.apple": "macOS-partíciókat (APFS/HFS) tartalmaz, amelyeket soha nem törlünk",
+  "plugin.installer.disk.reason.busy": "Egy partíciót a rendszer használ (titkosítás, LVM vagy RAID)",
+  "plugin.installer.disk.reason.unknown": "A lemezt nem sikerült ellenőrizni — frissítse a listát"
 }

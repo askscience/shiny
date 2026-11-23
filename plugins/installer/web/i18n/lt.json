@@ -440,5 +440,8 @@
   "plugin.installer.disk.toggle.home": "Asmeniniai failai atskirai",
   "plugin.installer.profile.ai.off.title": "Be DI",
   "plugin.installer.profile.ai.off.desc": "Jokio DI. DI mygtukas atveria paleidiklį.",
-  "plugin.installer.profile.ai.off.meta": "Galima įjungti vėliau"
+  "plugin.installer.profile.ai.off.meta": "Galima įjungti vėliau",
+  "plugin.installer.disk.reason.apple": "Yra macOS skaidinių (APFS/HFS), kurie niekada netrinami",
+  "plugin.installer.disk.reason.busy": "Skaidinį naudoja sistema (šifravimas, LVM arba RAID)",
+  "plugin.installer.disk.reason.unknown": "Nepavyko patikrinti šio disko — atnaujinkite sąrašą"
 }

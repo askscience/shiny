@@ -4,6 +4,12 @@
 
 ### Changed
 
+- **Installer: the disk step knows what the last step will refuse.** Which
+  disks can be erased, which partitions can take the system and which EFI
+  partition is reused are decided by the installer's Rust and sent with the
+  disk list; the helper validates with the same rules. A disk holding macOS
+  or a partition in use (encryption, LVM, RAID) is no longer offered for
+  erasing only to be refused at the review.
 - **Studio: what you see is what plays.** Euclidean rhythms play where the
   grid draws them (the kick of `e4` was three sixteenths late); a macro knob
   moves its targets by the documented amount, once; WaveMe offers every
