@@ -37,7 +37,11 @@ JavaScript off, no remote or file access) and calls `printToPdf` with the page
 size and margins; the bytes return as `window.__liteauraPrinted({id, ok, data})`
 and the window uploads them (`POST /:id/replace-file`). The shell advertises the
 feature as `window.__liteauraCaps.print`; without it the window uses
-`POST /:id/render-html` (compose fallback).
+`POST /:id/render-html` (compose fallback). Page numbers follow the source's
+settings marker (`<!--pdfdoc theme=… numbers=1-->`, read by
+`source_page_numbers`): `replace-file` stamps "n / total" (8.5 pt, centred)
+in the same step as the upload, and the composer draws the same mark on the
+fallback — one export, one undo, the numbers once.
 
 ## PdfCraft
 

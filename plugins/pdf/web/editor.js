@@ -514,7 +514,6 @@ export function createEditor(doc, { onState } = {}) {
     undo: () => exec('undo'),
     redo: () => exec('redo'),
     get dirty() { return dirty || saving; },
-    get pageNumbers() { return pageNumbers; },
     get exporting() { return exporting; },
     destroy() {
       clearTimeout(saveTimer);

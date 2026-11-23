@@ -13,7 +13,7 @@ with `{ pdf_id, page_count, updated_at, history }`.
 | PUT | `/api/pdfs/:id` | `{ title }` | Rename. |
 | DELETE | `/api/pdfs/:id` | — | Delete with history. |
 | PUT | `/api/pdfs/:id/source` | `{ content, format, title? }` | Save source (`html`: text only, PDF marked stale; Markdown: regenerate). |
-| POST | `/api/pdfs/:id/replace-file` | multipart `file` | Upload the shell-printed export (undoable). |
+| POST | `/api/pdfs/:id/replace-file` | multipart `file` | Upload the shell-printed export (undoable); stamps page numbers when the source asks for them. |
 | POST | `/api/pdfs/:id/render-html` | — | Export without the shell (compose fallback). |
 | GET | `/api/pdfs/:id/file` · `/export` | — | Inline bytes (viewer) · download. |
 | GET | `/api/pdfs/:id/text/:page` | — | Text in reading order (PdfCraft). |

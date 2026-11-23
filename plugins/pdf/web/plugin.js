@@ -292,13 +292,10 @@ async function exportCurrentDoc() {
       const n = (data?.comments?.length || 0) + (data?.marks?.length || 0);
       if (n && !await confirmDialog(t('plugin.pdf.dialog.exportReplaces', { count: n }, `Updating the PDF replaces the ${n} comments and marks added to it. Undo brings them back. Continue?`))) return;
     }
-    let res = await editor.exportPdf();
+    // Page numbers, when the document asks for them, are stamped by the
+    // plugin in the same step as the export (one undo, never twice).
+    const res = await editor.exportPdf();
     if (!res) return; // the browser print dialog path
-    // Page numbers are part of the document's settings: stamp them on every
-    // export (the print engine has no page counter of its own).
-    if (editor.pageNumbers) {
-      res = await post(`/api/pdfs/${enc(currentPdf.pdf_id)}/header-footer`, { slots: ['', '', '', '', '<<1>> / <<n>>', ''], font_size: 8.5 }) || res;
-    }
     currentPdf.page_count = res.page_count;
     currentPdf.pdf_stale = false;
     applyHistory(res.history);

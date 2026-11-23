@@ -1191,9 +1191,26 @@ fn pdf_marks_remove(ctx: Arc<PluginCtx>) -> RouteHandler {
 
 /* ── POST /api/pdfs/:id/replace-file (exported document) ───── */
 
+/// Whether a written document asks for page numbers: its source opens with
+/// the editor's settings marker, `<!--pdfdoc theme=NAME numbers=1-->`.
+pub(crate) fn source_page_numbers(source: &str) -> bool {
+    let Some(rest) = source.strip_prefix("<!--pdfdoc theme=") else { return false };
+    let Some(end) = rest.find("-->") else { return false };
+    let marker = &rest[..end];
+    let theme_len = marker.find(|c: char| !(c.is_alphanumeric() || c == '_')).unwrap_or(marker.len());
+    theme_len > 0 && &marker[theme_len..] == " numbers=1"
+}
+
+/// The footer that numbers a written document's pages: "n / total", 8.5 pt,
+/// centred — the same mark the composer draws on its own export.
+const PAGE_NUMBER_SLOTS: [&str; 6] = ["", "", "", "", "<<1>> / <<n>>", ""];
+const PAGE_NUMBER_SIZE: f64 = 8.5;
+
 /// Replace a document's bytes with an uploaded PDF — the document editor's
-/// export (the shell prints the pages; the window uploads them here). An
-/// ordinary, undoable edit; it also marks the document's PDF as current.
+/// export (the shell prints the pages; the window uploads them here). When the
+/// document asks for page numbers they are stamped here, in the same step, so
+/// one export is one undo. An ordinary, undoable edit; it also marks the
+/// document's PDF as current.
 fn pdf_replace_file(ctx: Arc<PluginCtx>) -> RouteHandler {
     bridged_route(move |req: axum::extract::Request| {
         let ctx = ctx.clone();
@@ -1201,8 +1218,22 @@ fn pdf_replace_file(ctx: Arc<PluginCtx>) -> RouteHandler {
             let uid = user_id(&req)?;
             let id = take_id(&req)?;
             let (data, _) = shiny_plugin_sdk::read_upload_file(req, MAX_UPLOAD).await?;
+            let numbers = ctx
+                .db()
+                .query(
+                    "SELECT source FROM pdf_documents WHERE id = ?1 AND user_id = ?2",
+                    &[Value::text(&id), Value::text(&uid)],
+                )?
+                .first()
+                .is_some_and(|r| matches!(&r[0], Value::Text(s) if source_page_numbers(s)));
             let (data, count) = blocking(move || {
                 let count = ops::validate(&data)?;
+                let data = if numbers {
+                    let slots = PAGE_NUMBER_SLOTS.map(String::from);
+                    crate::craft::header_footer(&data, slots, PAGE_NUMBER_SIZE)?
+                } else {
+                    data
+                };
                 Ok::<_, AppError>((data, count))
             })
             .await?;
@@ -1237,7 +1268,7 @@ fn pdf_render_html(ctx: Arc<PluginCtx>) -> RouteHandler {
                 _ => return Err(AppError::BadRequest("this PDF has no editable source".into())),
             };
             let format = as_text(&row[2]);
-            let numbers = source.starts_with("<!--pdfdoc") && source.split("-->").next().map_or(false, |m| m.contains("numbers=1"));
+            let numbers = source_page_numbers(&source);
             let opts = ops::CreateOptions { title: Some(title), page_numbers: numbers };
             let (bytes, count) = blocking(move || {
                 let b = ops::create_with(&source, if format == "html" { "html" } else { &format }, &opts)?;
@@ -1253,4 +1284,19 @@ fn pdf_render_html(ctx: Arc<PluginCtx>) -> RouteHandler {
             Ok(ok(edited(&ctx, &uid, &id, count, json!({ "pdf_stale": false, "approximate": true }))?))
         }
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::source_page_numbers;
+
+    #[test]
+    fn page_numbers_follow_the_settings_marker() {
+        assert!(source_page_numbers("<!--pdfdoc theme=modern numbers=1--><p>x</p>"));
+        assert!(!source_page_numbers("<!--pdfdoc theme=modern--><p>x</p>"));
+        assert!(!source_page_numbers("<p>numbers=1</p>"));
+        assert!(!source_page_numbers("<!--pdfdoc theme=--> numbers=1-->"));
+        // The marker only counts at the very start of the source.
+        assert!(!source_page_numbers("<p></p><!--pdfdoc theme=modern numbers=1-->"));
+    }
 }

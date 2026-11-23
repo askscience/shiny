@@ -4,6 +4,9 @@
 
 ### Changed
 
+- **PDF: page numbers on an exported document are stamped once.** The
+  plugin adds them in the same step as the export (one undo instead of two);
+  without the print engine the numbers were drawn twice.
 - **Calc (the spreadsheet) computes in Rust and reads Italian.** Formulas
   are computed by one engine in the plugin, the same for the window, the
   assistant (which now reads each formula's result) and the `.ods` export
