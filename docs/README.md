@@ -79,6 +79,7 @@ small number of areas; each area has its own index and cross-links.
 | [Authoring](plugins/authoring.md) | Build your first plugin, step by step. |
 | [API reference](plugins/reference.md) | Traits, types, manifest, routes, outcomes. |
 | [The plugin builder](plugins/builder.md) | The assistant's commands for building a plugin from a conversation. |
+| [Window logic in Rust](plugins/js-to-rust.md) | What a plugin's window keeps in JavaScript and what belongs to its Rust; the record per plugin. |
 | [Runtime & ABI](plugins/runtime-abi.md) | The dlopen boundary, `bridged()`, SQLite rules. |
 | [Migrations](plugins/migrations.md) | Per-plugin schema and the immutability rule. |
 | [Security](plugins/security.md) | Trust model, signatures, the install log. |
