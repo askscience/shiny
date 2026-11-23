@@ -548,6 +548,182 @@ fn apply_theme(doc: &mut Document, t: &Theme, accent: Rgb) {
     style_tables(&mut doc.body);
 }
 
+/* ── The editing page's look, from the export's styles ─────────── */
+
+/// One style's values after following `based_on` down to the document
+/// defaults — what a paragraph in that style is set with.
+#[derive(Default)]
+struct Resolved {
+    font: Option<String>,
+    size: Option<f32>,
+    bold: Option<bool>,
+    italic: Option<bool>,
+    color: Option<Rgb>,
+    before: Option<f32>,
+    after: Option<f32>,
+    line: Option<f32>,
+    align: Option<Align>,
+    rule_below: Option<Border>,
+    bar_left: Option<Border>,
+}
+
+fn resolve_style(sheet: &wordcraft_doc::StyleSheet, id: &str) -> Resolved {
+    let mut chain = Vec::new();
+    let mut next = Some(id.to_string());
+    while let Some(cur) = next.take() {
+        if chain.len() > 12 || chain.contains(&cur) {
+            break;
+        }
+        if let Some(st) = sheet.get(&cur) {
+            next = st.based_on.clone();
+            chain.push(cur);
+        }
+    }
+    let colour = |c: &Option<TextColor>| match c {
+        Some(TextColor::Rgb(rgb)) => Some(*rgb),
+        _ => None,
+    };
+    let mut r = Resolved {
+        font: sheet.default_chr.font.clone(),
+        size: sheet.default_chr.size,
+        bold: sheet.default_chr.bold,
+        italic: sheet.default_chr.italic,
+        color: colour(&sheet.default_chr.color),
+        before: sheet.default_para.space_before,
+        after: sheet.default_para.space_after,
+        line: match sheet.default_para.line_spacing {
+            Some(LineSpacing::Multiple(m)) => Some(m),
+            _ => None,
+        },
+        align: sheet.default_para.align,
+        ..Resolved::default()
+    };
+    for id in chain.iter().rev() {
+        let Some(st) = sheet.get(id) else { continue };
+        let (c, p) = (&st.chr, &st.para);
+        if c.font.is_some() { r.font = c.font.clone(); }
+        if c.size.is_some() { r.size = c.size; }
+        if c.bold.is_some() { r.bold = c.bold; }
+        if c.italic.is_some() { r.italic = c.italic; }
+        if let Some(rgb) = colour(&c.color) { r.color = Some(rgb); }
+        if p.space_before.is_some() { r.before = p.space_before; }
+        if p.space_after.is_some() { r.after = p.space_after; }
+        if let Some(LineSpacing::Multiple(m)) = p.line_spacing { r.line = Some(m); }
+        if p.align.is_some() { r.align = p.align; }
+        if let Some(b) = &p.borders {
+            if b.bottom.is_some() { r.rule_below = b.bottom.clone(); }
+            if b.left.is_some() { r.bar_left = b.left.clone(); }
+        }
+    }
+    r
+}
+
+fn hex(c: Rgb) -> String {
+    format!("#{:02x}{:02x}{:02x}", c.0, c.1, c.2)
+}
+
+/// A face as a CSS font stack, with the bundled face behind Word's own.
+fn css_font(name: &str) -> String {
+    if name.contains("Serif") {
+        format!("'{name}', Georgia, serif")
+    } else if name == SANS {
+        format!("'{SANS}', system-ui, sans-serif")
+    } else {
+        format!("'{name}', '{SANS}', system-ui, sans-serif")
+    }
+}
+
+/// The CSS custom properties the Word window sets the page you type on with
+/// (`.word-sheets`): the faces, sizes, spacing and colours of the styles the
+/// export uses — the theme applied to a blank document exactly as `compose`
+/// applies it — so the editing page and the exported file agree by
+/// construction. Line height is the face's own line gap (hhea: 1.326 for
+/// Source Sans 3 and Aptos' fallback, 1.371 for Source Serif 4) times the
+/// style's line spacing, which is how the layout engine measures a line.
+/// Paper and margins are the window's own (it drags them live).
+pub fn page_vars(design: &Design) -> serde_json::Map<String, serde_json::Value> {
+    use serde_json::json;
+    let themed = theme(&design.template);
+    let mut doc = Document::new();
+    let accent = parse_hex(&design.accent);
+    if let Some(t) = &themed {
+        apply_theme(&mut doc, t, accent.unwrap_or(t.accent));
+    }
+    let st = &doc.styles;
+    let normal = resolve_style(st, "Normal");
+    let heads = [resolve_style(st, "Heading1"), resolve_style(st, "Heading2"), resolve_style(st, "Heading3")];
+    let title = resolve_style(st, "Title");
+    let subtitle = resolve_style(st, "Subtitle");
+    let quote = resolve_style(st, "Quote");
+
+    let ink = normal.color.unwrap_or(Rgb(0, 0, 0));
+    // The accent: the user's, else the colour the headings are set in.
+    let accent = accent.or(heads[0].color).unwrap_or(Rgb(0x0F, 0x47, 0x61));
+    let muted = themed.as_ref().map(|t| t.muted).or(subtitle.color).unwrap_or(Rgb(0x59, 0x59, 0x59));
+    let body_font = normal.font.clone().unwrap_or_else(|| "Aptos".into());
+    let face_gap = if body_font.contains("Serif") { 1.371 } else { 1.326 };
+    // Two decimals: 11 × 0.6 is 6.6, not f32's 6.6000004.
+    let num = |v: f32| ((v as f64) * 100.0).round() / 100.0;
+    let pt = |v: Option<f32>, d: f32| format!("{}pt", num(v.unwrap_or(d)));
+    let border = |b: &Option<Border>| match b {
+        Some(b) => format!("{}pt solid {}", num(b.width), hex(b.color.unwrap_or(accent))),
+        None => "0".into(),
+    };
+    let weight = |r: &Resolved| if r.bold == Some(true) { "700" } else { "400" };
+    let (table_head, table_head_ink, table_band, table_line) = if themed.is_some() {
+        (hex(accent), "#ffffff".to_string(), hex(tint(accent, 0.08)), hex(tint(accent, 0.3)))
+    } else {
+        ("transparent".to_string(), hex(ink), "transparent".to_string(), "#000000".to_string())
+    };
+
+    let mut v = serde_json::Map::new();
+    let mut put = |k: &str, val: String| {
+        v.insert(k.into(), json!(val));
+    };
+    put("--doc-body", css_font(&body_font));
+    put("--doc-head", css_font(heads[0].font.as_deref().unwrap_or(&body_font)));
+    put("--doc-size", pt(normal.size, 12.0));
+    put("--doc-lh", format!("{}", (face_gap * normal.line.unwrap_or(1.15) * 1000.0).round() / 1000.0));
+    put("--doc-after", pt(normal.after, 8.0));
+    put("--doc-ink", hex(ink));
+    put("--doc-muted", hex(muted));
+    put("--doc-accent", hex(accent));
+    for (i, h) in heads.iter().enumerate() {
+        let n = i + 1;
+        put(&format!("--doc-h{n}"), pt(h.size, 12.0));
+        put(&format!("--doc-h{n}-before"), pt(h.before, 0.0));
+        put(&format!("--doc-h{n}-after"), pt(h.after, 0.0));
+    }
+    put("--doc-head-weight", weight(&heads[0]).into());
+    put("--doc-h3-color", hex(heads[2].color.unwrap_or(accent)));
+    put("--doc-h1-rule", border(&heads[0].rule_below));
+    put("--doc-title", pt(title.size, 28.0));
+    put("--doc-title-weight", weight(&title).into());
+    put("--doc-title-align", if title.align == Some(Align::Center) { "center" } else { "left" }.into());
+    put("--doc-title-color", hex(title.color.unwrap_or(ink)));
+    put("--doc-subtitle", pt(subtitle.size, normal.size.unwrap_or(12.0) + 3.0));
+    put("--doc-subtitle-style", if subtitle.italic == Some(true) { "italic" } else { "normal" }.into());
+    put("--doc-quote-bar", border(&quote.bar_left));
+    put("--doc-quote-style", if quote.bar_left.is_some() || quote.italic != Some(true) { "normal" } else { "italic" }.into());
+    put("--doc-table-head", table_head);
+    put("--doc-table-head-ink", table_head_ink);
+    put("--doc-table-band", table_band);
+    put("--doc-table-line", table_line);
+    put("--doc-rule-soft", hex(tint(accent, 0.5)));
+    v
+}
+
+/// What the Word window needs to draw a design's page: the variables above,
+/// whether a theme styles tables and headings, and the contents heading the
+/// export will print.
+pub fn page_json(design: &Design) -> serde_json::Value {
+    serde_json::json!({
+        "vars": page_vars(design),
+        "themed": theme(&design.template).is_some(),
+        "contents": contents_label(&design.lang),
+    })
+}
+
 /// Page size in points for `paper`.
 fn page_size(paper: &str) -> (f32, f32) {
     match paper.trim().to_ascii_lowercase().as_str() {
@@ -931,6 +1107,43 @@ pub fn insert_after_block(html: &str, after: Option<&str>, block_html: &str) -> 
 mod tests {
     use super::*;
 
+    fn var<'a>(v: &'a serde_json::Map<String, serde_json::Value>, k: &str) -> &'a str {
+        v.get(k).and_then(|x| x.as_str()).unwrap_or_else(|| panic!("missing {k}"))
+    }
+
+    #[test]
+    fn the_editing_page_uses_the_export_styles() {
+        let plain = page_vars(&Design::default());
+        assert!(var(&plain, "--doc-body").starts_with("'Aptos'"));
+        assert_eq!(var(&plain, "--doc-size"), "12pt");
+        assert_eq!(var(&plain, "--doc-after"), "8pt");
+        assert_eq!(var(&plain, "--doc-lh"), "1.525");
+        assert_eq!(var(&plain, "--doc-title"), "28pt");
+        assert_eq!(var(&plain, "--doc-head-weight"), "400");
+        assert_eq!(var(&plain, "--doc-table-head"), "transparent");
+
+        let classic = page_vars(&Design { template: "classic".into(), ..Design::default() });
+        assert!(var(&classic, "--doc-body").starts_with("'Source Serif 4'"));
+        assert_eq!(var(&classic, "--doc-size"), "11pt");
+        assert_eq!(var(&classic, "--doc-h1"), "18pt");
+        assert_eq!(var(&classic, "--doc-h1-before"), "20pt");
+        assert_eq!(var(&classic, "--doc-h2-after"), "4pt");
+        assert_eq!(var(&classic, "--doc-head-weight"), "700");
+        assert_eq!(var(&classic, "--doc-title-align"), "center");
+        assert_eq!(var(&classic, "--doc-accent"), "#1f3864");
+        assert!(var(&classic, "--doc-h1-rule").contains("solid"));
+        assert_eq!(var(&classic, "--doc-table-head"), "#1f3864");
+        assert_eq!(var(&classic, "--doc-subtitle-style"), "italic");
+
+        let modern = page_vars(&Design { template: "modern".into(), accent: "#8b1e3f".into(), ..Design::default() });
+        assert_eq!(var(&modern, "--doc-accent"), "#8b1e3f");
+        assert_eq!(var(&modern, "--doc-title-color"), "#8b1e3f");
+        assert_eq!(var(&modern, "--doc-h3-color"), "#1f2328");
+        assert_eq!(var(&modern, "--doc-h1-rule"), "0");
+        assert!(var(&modern, "--doc-quote-bar").starts_with("2.25pt solid"));
+        assert_eq!(var(&modern, "--doc-lh"), "1.658");
+    }
+
     fn sample() -> Document {
         markdown_to_doc(
             "# Report\n\nIntro paragraph with **bold**.\n\n## Findings\n\nOne.\nTwo.\n\n| A | B |\n|---|---|\n| 1 | 2 |\n\n## Next steps\n\n- first\n- second\n",
@@ -1128,4 +1341,3 @@ mod samples {
         }
     }
 }
-

@@ -11,7 +11,7 @@ import { saveOrDownload, onOpenFromFiles, fileFromHome, pickFiles, SHINY_FILE_MI
 import { askInChat } from '../../js/textInput.js';
 import {
   MM, PT, PAPERS, TEMPLATE_IDS, ACCENTS, DOCUMENT_FAMILIES,
-  geometry, themeVars, applyVars, isThemed, contentsLabel, installDocumentFonts,
+  geometry, pageVars, applyVars, installDocumentFonts,
   savedMargin,
 } from './page.js';
 
@@ -88,7 +88,7 @@ let phoneObserver = null;
 let resizeObs = null;
 
 let docs = [];
-let currentDoc = null;   // { id, title, updated_at, design }
+let currentDoc = null;   // { id, title, updated_at, design, page }
 let dirty = false;
 let saving = false;
 let saveTimer = null;
@@ -147,9 +147,10 @@ async function saveDoc(id, title, html) {
   await apiFetch(`/api/documents/${enc(id)}`, { method: 'PUT', body: JSON.stringify({ title, html }) });
 }
 
+/** Save a design; the plugin answers with it and the page it sets (`page`). */
 async function saveDesign(id, design) {
   const res = await apiFetch(`/api/documents/${enc(id)}/design`, { method: 'PUT', body: JSON.stringify(design) });
-  return res?.data?.design || design;
+  return { design: res?.data?.design || design, page: res?.data?.page || null };
 }
 
 async function deleteDoc(id) {
@@ -300,7 +301,7 @@ async function openDoc(doc) {
   saveSeq++;
   try {
     const full = doc.html != null && doc.design ? doc : await fetchDoc(doc.id);
-    currentDoc = { id: doc.id, title: full.title, updated_at: full.updated_at, design: full.design || {} };
+    currentDoc = { id: doc.id, title: full.title, updated_at: full.updated_at, design: full.design || {}, page: full.page || null };
     editorEl.innerHTML = full.html || '<p><br></p>';
     if (titleInput) titleInput.value = full.title || '';
     tileEl?.classList.remove('is-empty');
@@ -365,9 +366,9 @@ async function removeCurrent() {
 function applyDesign() {
   if (!sheetsEl) return;
   const d = currentDoc?.design || {};
-  applyVars(sheetsEl, themeVars(d));
+  applyVars(sheetsEl, pageVars(currentDoc?.page, d));
   sheetsEl.dataset.template = (d.template || 'plain').toLowerCase();
-  sheetsEl.classList.toggle('is-themed', isThemed(d));
+  sheetsEl.classList.toggle('is-themed', !!currentDoc?.page?.themed);
   renderGeneratedParts();
   renderRulers();
   scheduleLayout();
@@ -393,7 +394,7 @@ function renderGeneratedParts() {
   }
 
   // Themed documents without a cover start with a title block.
-  const block = !d.cover && isThemed(d) && !!currentDoc;
+  const block = !d.cover && !!currentDoc?.page?.themed;
   titleBlock.hidden = !block;
   if (block) {
     titleBlock.querySelector('.word-tb-title').textContent = title;
@@ -427,7 +428,7 @@ function renderToc() {
   tocSheet.hidden = !show;
   if (!show) return;
   const list = tocSheet.querySelector('.word-toc-list');
-  tocSheet.querySelector('.word-toc-head').textContent = contentsLabel(d.lang || getLocale());
+  tocSheet.querySelector('.word-toc-head').textContent = currentDoc?.page?.contents || 'Contents';
   list.textContent = '';
   const first = frontPages() + 1;
   const top0 = editorEl.offsetTop;
@@ -616,7 +617,9 @@ async function commitDesign(design) {
   const target = currentDoc;
   if (!target) return;
   try {
-    target.design = await saveDesign(target.id, { ...design, lang: design.lang || getLocale() || '' });
+    const saved = await saveDesign(target.id, { ...design, lang: design.lang || getLocale() || '' });
+    target.design = saved.design;
+    if (saved.page) target.page = saved.page;
     if (currentDoc === target) {
       applyDesign();
       if (view === 'preview') void loadPreview();
@@ -976,7 +979,7 @@ function openSwatches(anchor, kind) {
       leaveFormatSheet();
       restoreSelection();
       if (kind === 'mark') exec('hiliteColor', c || 'transparent');
-      else exec('foreColor', c || themeVars(currentDoc?.design)['--doc-ink']);
+      else exec('foreColor', c || currentDoc?.page?.vars?.['--doc-ink']);
     });
     pop.appendChild(b);
   }
@@ -1086,8 +1089,6 @@ function ensureOption(sel, value) {
 
 /* ── Pictures & drops ───────────────────────────────────────── */
 
-const IMAGE_MAX_W = 600;          // CSS px ≈ the A4 text width (engine PICTURE_MAX_W)
-const IMAGE_MAX_SIDE = 1600;
 const IMAGE_EXTS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'];
 const DOC_EXTS = ['odt', 'docx', 'rtf', 'md', 'markdown', 'html', 'htm', 'txt'];
 const IMPORT_ACCEPT = [
@@ -1104,34 +1105,15 @@ const MIME_BY_EXT = {
 const extOf = (name) => String(name || '').toLowerCase().split('.').pop();
 const isImageFile = (f) => (f?.type || '').startsWith('image/') || IMAGE_EXTS.includes(extOf(f?.name));
 
-function blobToDataUrl(blob) {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(String(r.result));
-    r.onerror = () => reject(r.error || new Error('read failed'));
-    r.readAsDataURL(blob);
-  });
-}
-
-/** `{ src, width, height }`: small PNG/JPEG/GIF kept, the rest scaled and re-encoded. */
-async function preparePicture(blob) {
-  const bmp = await createImageBitmap(blob);
-  const { width: w0, height: h0 } = bmp;
-  const scale = Math.min(1, IMAGE_MAX_SIDE / Math.max(w0, h0));
-  const type = (blob.type || '').toLowerCase();
-  const keep = ['image/png', 'image/jpeg', 'image/gif'].includes(type) && scale === 1 && blob.size <= 1.5 * 1024 * 1024;
-  let src;
-  if (keep) src = await blobToDataUrl(blob);
-  else {
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.max(1, Math.round(w0 * scale));
-    canvas.height = Math.max(1, Math.round(h0 * scale));
-    canvas.getContext('2d').drawImage(bmp, 0, 0, canvas.width, canvas.height);
-    src = type === 'image/png' ? canvas.toDataURL('image/png') : canvas.toDataURL('image/jpeg', 0.86);
-  }
-  bmp.close?.();
-  const width = Math.min(IMAGE_MAX_W, w0);
-  return { src, width, height: Math.round(h0 * (width / w0)) };
+/** A picture as the `<img>` to insert, prepared by the plugin (the same
+ *  rules as the AI's pictures: size, format, transparency, text width). */
+async function preparePicture(blob, name) {
+  const form = new FormData();
+  form.append('file', blob, name || blob.name || 'picture');
+  const res = await apiFetch('/api/documents/picture', { method: 'POST', body: form });
+  const html = res?.data?.html;
+  if (!html) throw new Error('no picture');
+  return html;
 }
 
 function caretAtPoint(x, y) {
@@ -1152,9 +1134,7 @@ async function insertPictures(blobs) {
   if (view !== 'page') setView('page');
   for (const blob of blobs) {
     try {
-      const { src, width, height } = await preparePicture(blob);
-      const alt = String(blob.name || '').replace(/\.[^.]+$/, '').replace(/"/g, '');
-      exec('insertHTML', `<img src="${src}" alt="${alt}" width="${width}" height="${height}">`);
+      exec('insertHTML', await preparePicture(blob));
     } catch (_) {
       toast(t('plugin.word.toast.imageFailed', null, 'Could not insert the picture'), { type: 'error' });
     }

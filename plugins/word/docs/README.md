@@ -131,7 +131,7 @@ plugins/word/
 └── web/
     ├── icon.svg            # ui/doc-style document glyph
     ├── plugin.js           # Word window (UI + API + AI wiring)
-    └── page.js             # page model: paper, margins, theme (mirrors engine.rs)
+    └── page.js             # paper and margins (the look: engine::page_vars)
 ```
 
 ## Build & install

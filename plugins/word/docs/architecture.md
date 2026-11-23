@@ -18,7 +18,7 @@ See also: [README.md](README.md) · [tools.md](tools.md) · [routes.md](routes.m
 | `src/tools/mod.rs` | `content_to_html()`, `find_ci()`, `last_doc_id()`, `target_doc()`, `DocCreate/Write/Edit/Append/Read/List/Delete/Design/Export` | Agent tool surface |
 | `web/plugin.js` | window, API, editor, menu, AI wiring | Front end |
 | `migrations/001_init.sql`, `002_design.sql`, `003_opened.sql` | `documents` table, `design` and `opened_at` columns | Storage |
-| `web/page.js` | `themeVars()`, `geometry()`, `installDocumentFonts()` | The window's page model (mirrors the engine) |
+| `web/page.js` | `pageVars()`, `geometry()`, `installDocumentFonts()` | Paper and margins; the look comes from `engine::page_vars` |
 | `skills/word.md` | agent instructions | Embedded into the prompt by `register()` |
 
 ### `WordPlugin` lifecycle

@@ -4,6 +4,11 @@
 
 ### Changed
 
+- **Word: the page you type on is set from the export's own styles.** The
+  plugin computes the page's fonts, sizes, spacing and colours from the
+  document styles the export uses, instead of the window keeping a copy of
+  them; and inserted pictures are prepared by the same rules as the
+  assistant's (a transparent picture stays transparent).
 - **Capture: caption and style edits are single operations.** Moving,
   resizing or retyping a caption and changing your style guidelines or its
   lock no longer send the whole project back; the AI can move a caption too,

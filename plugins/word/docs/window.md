@@ -37,13 +37,17 @@ See also: [README.md](README.md) · [routes.md](routes.md) · [tools.md](tools.m
 
 ## The page (`web/page.js`)
 
-`themeVars(design)` turns the stored design into CSS custom properties on
-`.word-sheets`: page size and margins (`--page-w`, `--m-top`, …, in mm),
-fonts, sizes in pt, colours, spacing, table and quote styling. They mirror
-`engine.rs` (`Theme`, `compose`) value for value, so lines, headings and
-tables in the editor are set like the export. Line height is the face's line
-gap (Source Sans 3 1.326, Source Serif 4 1.371 — what the layout engine uses)
-times the theme's line spacing.
+The page's look — fonts, sizes in pt, colours, spacing, table and quote
+styling — comes from the plugin with the document (`page.vars`, from
+`engine::page_vars`): the theme is applied to a blank document exactly as the
+export applies it and the variables are read off the resulting styles, so
+lines, headings and tables in the editor are set like the export by
+construction. Line height is the face's line gap (Source Sans 3 1.326,
+Source Serif 4 1.371 — what the layout engine uses) times the style's line
+spacing. `pageVars(page, design)` adds the paper and margins (`--page-w`,
+`--m-top`, …, in mm), which the window keeps itself because a ruler drag
+moves them live. `page.themed` turns on the table and title styling and
+`page.contents` is the contents heading the export prints.
 
 `installDocumentFonts()` declares the faces the PDF embeds (Source Sans 3,
 Source Serif 4) with `@font-face` rules pointing at the plugin's own public
@@ -109,8 +113,10 @@ unmounts.
 - Tables: Insert table adds a 3 × 3 grid; the table tools edit rows and
   columns at the caret.
 - Pictures: the Picture button, a drop or a paste go through
-  `insertPictures()` (`preparePicture()` keeps small PNG/JPEG/GIF, re-encodes
-  the rest on a canvas, caps the width at 600 px ≈ the A4 text width).
+  `insertPictures()`, which posts each file to `/api/documents/picture` and
+  inserts the `<img>` the plugin prepares (the AI's rules: small PNG/JPEG
+  kept, the rest scaled and re-encoded, transparency kept, width ≤ the text
+  width).
 - Drops on the window: pictures go in at the drop point; documents (`.odt`,
   `.docx`, `.rtf`, `.md`, `.html`, `.txt`) are imported. Files dragged from the
   Files window carry `application/x-shiny-file` (`{path, name}`) and are

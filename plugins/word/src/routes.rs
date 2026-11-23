@@ -39,6 +39,7 @@ pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
         "doc_delete" => doc_delete(ctx),
         "doc_export" => doc_export(ctx),
         "doc_import" => doc_import(ctx),
+        "doc_picture" => doc_picture(),
         "doc_design" => doc_design(ctx),
         "doc_pages" => doc_pages(ctx),
         "doc_opened" => doc_opened(ctx),
@@ -124,7 +125,8 @@ fn doc_get(ctx: Arc<PluginCtx>) -> RouteHandler {
             let html = blocking(move || engine::odt_to_html(&odt)).await?;
             let updated_at = as_text(&row[2]);
             let design = Design::from_json(&as_text(&row[3]));
-            Ok(ok(json!({ "id": id, "title": title, "html": html, "updated_at": updated_at, "design": design })))
+            let page = engine::page_json(&design);
+            Ok(ok(json!({ "id": id, "title": title, "html": html, "updated_at": updated_at, "design": design, "page": page })))
         }
     })
 }
@@ -376,8 +378,29 @@ fn doc_design(ctx: Arc<PluginCtx>) -> RouteHandler {
             if changed == 0 {
                 return Err(AppError::NotFound("Document not found".into()));
             }
-            Ok(ok(json!({ "success": true, "design": design })))
+            let page = engine::page_json(&design);
+            Ok(ok(json!({ "success": true, "design": design, "page": page })))
         }
+    })
+}
+
+/// Largest picture accepted for insertion.
+const MAX_PICTURE: usize = 32 * 1024 * 1024;
+
+/// A picture to insert: the uploaded file as the `<img>` the editor takes,
+/// prepared by the same rules as the AI's pictures (`engine::picture_html`:
+/// small PNG/JPEG kept, the rest scaled to 1600 px and re-encoded — PNG when
+/// it has transparency — at most the text width).
+fn doc_picture() -> RouteHandler {
+    bridged_route(move |req: axum::extract::Request| async move {
+        let _uid = user_id(&req)?;
+        let (data, original_name) = shiny_plugin_sdk::read_upload_file(req, MAX_PICTURE).await?;
+        let alt = original_name
+            .as_deref()
+            .map(|n| n.rsplit_once('.').map(|(s, _)| s).unwrap_or(n).to_string())
+            .unwrap_or_default();
+        let html = blocking(move || engine::picture_html(&data, &alt, 100.0)).await?;
+        Ok(ok(json!({ "html": html })))
     })
 }
 

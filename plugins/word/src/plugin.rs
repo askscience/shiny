@@ -19,6 +19,7 @@ fn route_specs() -> Vec<RouteSpec> {
         RouteSpec::get("/api/documents", "doc_list"),
         RouteSpec::post("/api/documents", "doc_create"),
         RouteSpec::post("/api/documents/import", "doc_import"),
+        RouteSpec::post("/api/documents/picture", "doc_picture"),
         RouteSpec::get("/api/documents/:id", "doc_get"),
         RouteSpec::put("/api/documents/:id", "doc_save"),
         RouteSpec::delete("/api/documents/:id", "doc_delete"),

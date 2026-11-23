@@ -78,7 +78,7 @@ readable Word document: …")`, `BadRequest("Could not read …")`.
 | Handler tag | `doc_get` |
 | Auth | required |
 | Request | path `:id` |
-| Response | `{ success: true, data: { id, title, html, updated_at, design } }` |
+| Response | `{ success: true, data: { id, title, html, updated_at, design, page } }` — `page` is `engine::page_json`: `{ vars, themed, contents }`, the CSS variables of the editing page computed from the export's styles |
 | Code | `doc_get()`, `src/routes.rs` |
 
 Reads `title, odt, updated_at` scoped by `id` and `user_id`, converts the blob
@@ -144,7 +144,7 @@ found")`, `Internal("… export failed: …")`.
 | Handler tag | `doc_design` |
 | Auth | required |
 | Request | JSON `Design`: `{ template, paper, cover, toc, header, page_numbers, subtitle, author, date, lang, accent, margin_top, margin_right, margin_bottom, margin_left }` (all optional; margins in mm, 0 = 25 mm) |
-| Response | `{ success: true, data: { success: true, design } }` |
+| Response | `{ success: true, data: { success: true, design, page } }` (`page` as in `GET`) |
 | Code | `doc_design()`, `src/routes.rs` |
 
 Replaces the stored design after `Design::validate()` and bumps `updated_at`.
@@ -152,6 +152,14 @@ Replaces the stored design after `Design::validate()` and bumps `updated_at`.
 
 Errors: `BadRequest` (invalid JSON, unknown template, paper, colour, or text
 over 200 characters), `NotFound("Document not found")`.
+
+## `POST /api/documents/picture` — a picture to insert
+
+Handler tag `doc_picture`. Multipart `file` (up to 32 MB). Answers
+`{ html }`: the `<img>` the editor inserts, made by `engine::picture_html`
+— the same rules as the AI's pictures (small PNG/JPEG kept, the rest scaled
+to 1600 px and re-encoded, PNG when transparent, width at most the text
+width). The file name, without its extension, is the alt text.
 
 ## `POST /api/documents/:id/opened` — the window opened it
 
