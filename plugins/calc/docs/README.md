@@ -2,7 +2,8 @@
 
 The `calc` plugin is Shiny's spreadsheet. Sheets are a grid of **A1-addressed
 cells** stored as a JSON map (`"A1" -> "value"`), with `=`-prefixed formulas
-evaluated live in the window. Real **`.ods` import/export** uses the SDK codec
+computed by the plugin's Rust engine ([`src/engine.rs`](../src/engine.rs)) —
+one engine for the window, the AI tools and the export. Real **`.ods` import/export** uses the SDK codec
 [`crates/shiny-plugin-sdk/src/ods.rs`](../../../crates/shiny-plugin-sdk/src/ods.rs).
 
 Part of the OpenDocument office suite with [`word`](../../word/docs/README.md)
@@ -12,7 +13,7 @@ Part of the OpenDocument office suite with [`word`](../../word/docs/README.md)
 |---|---|
 | Plugin name | `calc` |
 | Category | `Office` |
-| Version / API level | `0.1.0` / `1` |
+| Version / API level | `0.1.5` / `1` |
 | Crate | `shiny-calc-plugin` (`libshiny_calc_plugin.so`) |
 | Database table | `spreadsheets` |
 | File format | OpenDocument Spreadsheet (`application/vnd.oasis.opendocument.spreadsheet`) |

@@ -19,6 +19,7 @@ fn route_specs() -> Vec<RouteSpec> {
         RouteSpec::get("/api/spreadsheets", "sheet_list"),
         RouteSpec::post("/api/spreadsheets", "sheet_create"),
         RouteSpec::post("/api/spreadsheets/import", "sheet_import"),
+        RouteSpec::post("/api/spreadsheets/evaluate", "sheet_evaluate"),
         RouteSpec::get("/api/spreadsheets/:id", "sheet_get"),
         RouteSpec::put("/api/spreadsheets/:id", "sheet_save"),
         RouteSpec::delete("/api/spreadsheets/:id", "sheet_delete"),

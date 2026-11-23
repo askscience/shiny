@@ -33,6 +33,7 @@ pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
         "sheet_delete" => sheet_delete(ctx),
         "sheet_export" => sheet_export(ctx),
         "sheet_import" => sheet_import(ctx),
+        "sheet_evaluate" => sheet_evaluate(),
         _ => return None,
     })
 }
@@ -105,6 +106,39 @@ fn merge_cells(stored_json: &str, incoming: &BTreeMap<String, String>) -> Result
     Ok(serde_json::to_string(&cells)?)
 }
 
+/// Column widths as stored: column index → CSS pixels, within bounds.
+fn clean_widths(map: &Map<String, Json>) -> Map<String, Json> {
+    map.iter()
+        .filter_map(|(k, v)| {
+            let col: u32 = k.parse().ok()?;
+            let w = v.as_f64()?;
+            (col < 52 && w.is_finite()).then(|| (col.to_string(), json!(w.clamp(40.0, 600.0).round() as i64)))
+        })
+        .collect()
+}
+
+fn parse_widths(text: &str) -> Map<String, Json> {
+    serde_json::from_str::<Map<String, Json>>(text).map(|m| clean_widths(&m)).unwrap_or_default()
+}
+
+/// The engine's results as the `.ods` writer takes them.
+fn ods_results(cells: &BTreeMap<String, String>) -> BTreeMap<String, ods::OdsCached> {
+    use crate::engine::Value as V;
+    crate::engine::evaluate_sheet(cells)
+        .into_iter()
+        .filter_map(|(k, v)| {
+            let c = match v {
+                V::Number(n) => ods::OdsCached::Number(n),
+                V::Bool(b) => ods::OdsCached::Bool(b),
+                V::Text(s) => ods::OdsCached::Text(s),
+                V::Error(e) => ods::OdsCached::Text(e.code().to_string()),
+                V::Empty => return None,
+            };
+            Some((k, c))
+        })
+        .collect()
+}
+
 fn clamp_dim(v: i64, min: i64, max: i64) -> i64 {
     v.clamp(min, max)
 }
@@ -169,20 +203,26 @@ fn sheet_get(ctx: Arc<PluginCtx>) -> RouteHandler {
             let uid = user_id(&req)?;
             let id = take_path(&req)?;
             let rows = ctx.db().query(
-                "SELECT title, cells, rows, cols, updated_at FROM spreadsheets \
+                "SELECT title, cells, rows, cols, updated_at, col_widths FROM spreadsheets \
                  WHERE id = ?1 AND user_id = ?2",
                 &[Value::text(&id), Value::text(&uid)],
             )?;
             let row = rows.first().ok_or_else(|| AppError::NotFound("Spreadsheet not found".into()))?;
             let title = as_text(&row[0]);
-            let cells: Map<String, Json> = parse_cells(&as_text(&row[1]))
+            let parsed = parse_cells(&as_text(&row[1]));
+            let values = crate::engine::sheet_values_json(&parsed);
+            let cells: Map<String, Json> = parsed
                 .into_iter()
                 .map(|(k, v)| (k, Json::String(v)))
                 .collect();
             let rows_n = as_int(&row[2]);
             let cols_n = as_int(&row[3]);
             let updated_at = as_text(&row[4]);
-            Ok(ok(json!({ "id": id, "title": title, "rows": rows_n, "cols": cols_n, "cells": cells, "updated_at": updated_at })))
+            let widths = parse_widths(&as_text(&row[5]));
+            Ok(ok(json!({
+                "id": id, "title": title, "rows": rows_n, "cols": cols_n, "cells": cells,
+                "values": values, "col_widths": widths, "updated_at": updated_at,
+            })))
         }
     })
 }
@@ -193,6 +233,8 @@ fn sheet_save(ctx: Arc<PluginCtx>) -> RouteHandler {
     struct Save {
         title: Option<String>,
         cells: Option<Map<String, Json>>,
+        /// Column index → width in pixels; replaces the stored widths.
+        col_widths: Option<Map<String, Json>>,
     }
 
     bridged_route(move |req: axum::extract::Request| {
@@ -231,11 +273,24 @@ fn sheet_save(ctx: Arc<PluginCtx>) -> RouteHandler {
             };
             let merged = merge_cells(&as_text(&cur[1]), &incoming)?;
 
-            let changed = ctx.db().execute(
-                "UPDATE spreadsheets SET title = ?1, cells = ?2, updated_at = datetime('now') \
-                 WHERE id = ?3 AND user_id = ?4",
-                &[Value::text(&new_title), Value::text(&merged), Value::text(&id), Value::text(&uid)],
-            )?;
+            let changed = match &body.col_widths {
+                Some(widths) => ctx.db().execute(
+                    "UPDATE spreadsheets SET title = ?1, cells = ?2, col_widths = ?3, updated_at = datetime('now') \
+                     WHERE id = ?4 AND user_id = ?5",
+                    &[
+                        Value::text(&new_title),
+                        Value::text(&merged),
+                        Value::text(&serde_json::to_string(&clean_widths(widths))?),
+                        Value::text(&id),
+                        Value::text(&uid),
+                    ],
+                )?,
+                None => ctx.db().execute(
+                    "UPDATE spreadsheets SET title = ?1, cells = ?2, updated_at = datetime('now') \
+                     WHERE id = ?3 AND user_id = ?4",
+                    &[Value::text(&new_title), Value::text(&merged), Value::text(&id), Value::text(&uid)],
+                )?,
+            };
             if changed == 0 {
                 return Err(AppError::NotFound("Spreadsheet not found".into()));
             }
@@ -275,7 +330,7 @@ fn sheet_export(ctx: Arc<PluginCtx>) -> RouteHandler {
             let row = rows.first().ok_or_else(|| AppError::NotFound("Spreadsheet not found".into()))?;
             let title = as_text(&row[0]);
             let cells = parse_cells(&as_text(&row[1]));
-            let bytes = ods::cells_to_ods(&cells)?;
+            let bytes = ods::cells_to_ods_with_results(&export_cells(&cells), &ods_results(&cells))?;
             let filename = filename_for_title(&title, "ods", "spreadsheet");
             Ok(Response::builder()
                 .header(CONTENT_TYPE, MIME_ODS)
@@ -283,6 +338,56 @@ fn sheet_export(ctx: Arc<PluginCtx>) -> RouteHandler {
                 .body(axum::body::Body::from(bytes))
                 .map_err(|e| AppError::Internal(format!("Export failed: {e}")))?)
         }
+    })
+}
+
+/// Formulas as LibreOffice reads them (English names, `,` between
+/// arguments); values as they are.
+fn export_cells(cells: &BTreeMap<String, String>) -> BTreeMap<String, String> {
+    cells
+        .iter()
+        .map(|(k, v)| {
+            let out = if v.trim_start().starts_with('=') {
+                crate::engine::canonical_formula(v.trim_start())
+            } else {
+                v.clone()
+            };
+            (k.clone(), out)
+        })
+        .collect()
+}
+
+/// Compute a sheet the window holds (saved or not): every non-empty cell's
+/// value, by the same engine the AI tools and the export use.
+fn sheet_evaluate() -> RouteHandler {
+    #[derive(Deserialize, Default)]
+    #[serde(default)]
+    struct Body {
+        cells: Map<String, Json>,
+    }
+
+    bridged_route(move |req: axum::extract::Request| async move {
+        let _uid = user_id(&req)?;
+        let axum::Json(body) = axum::Json::<Body>::from_request(req, &())
+            .await
+            .map_err(|e| AppError::BadRequest(format!("invalid JSON body: {e}")))?;
+        if body.cells.len() > MAX_CELLS {
+            return Err(AppError::BadRequest(format!("Too many cells (max {MAX_CELLS})")));
+        }
+        let cells: BTreeMap<String, String> = body
+            .cells
+            .into_iter()
+            .filter_map(|(k, v)| {
+                let s = match v {
+                    Json::String(s) => s,
+                    Json::Number(n) => n.to_string(),
+                    Json::Bool(b) => b.to_string(),
+                    _ => return None,
+                };
+                (s.chars().count() <= MAX_CELL_VALUE_LEN).then(|| (k.trim().to_uppercase(), s))
+            })
+            .collect();
+        Ok(ok(json!({ "values": crate::engine::sheet_values_json(&cells) })))
     })
 }
 

@@ -15,23 +15,39 @@ import {
  * non-empty cells are stored server-side as a JSON map ("A1" -> "value");
  * the window autosaves the whole map (PUT /api/spreadsheets/:id).
  *
- * Formulas: a value starting with "=" is evaluated live in the window —
- * cell refs (A1), ranges (A1:B3), SUM/AVERAGE/MIN/MAX/COUNT, + - * / ^ and
- * parentheses. The AI stores formulas as text; the window does the math.
+ * Formulas: a value starting with "=" is computed by the plugin's Rust
+ * engine (POST /api/spreadsheets/evaluate) — the same one the AI tools and
+ * the .ods export use. The window sends the whole sheet after each change and
+ * paints what comes back. Values are stored canonically (`2.50`, `=ROUND(A1,1)`)
+ * and typed and shown in the user's language (`2,50`, `=ROUND(A1;1)`), see
+ * sheet.js.
+ *
+ * Editing: a range selection (drag, Shift+click, Shift+arrows), Delete to
+ * clear it, Ctrl+Z / Ctrl+Y, Ctrl+C / X / V (formulas move their relative
+ * refs; text from other apps pastes as a block), F2 to edit, column widths
+ * dragged on the column header (kept with the sheet).
  *
  * AI wiring: `calc_*` tool outcomes arrive via the `agent:actions` event —
  * the window refreshes its sheet list and opens what the AI touched.
  */
 
 import { apiFetch } from '../../js/api.js';
-import { t, tp } from '../../js/i18n.js';
+import { t, tp, getLocale } from '../../js/i18n.js';
 import { formatMenuDate, appendMenuFooter } from '../../js/officeMenu.js';
 import { saveOrDownload, onOpenFromFiles, fileFromHome, pickFiles } from '../../js/files.js';
+import {
+  separators, toStored, toEditable, cellText, formatNumber, colName, shiftFormula,
+  toTsv, parseTsv, parseDelimited, csvDelimiter, ERROR_KEYS,
+} from './sheet.js';
 
 export const CALC_PLUGIN = 'calc';
 
 const DEFAULT_ROWS = 100;
 const DEFAULT_COLS = 26;
+const DEFAULT_COL_WIDTH = 110;
+const MIN_COL_WIDTH = 40;
+const MAX_COL_WIDTH = 600;
+const UNDO_LIMIT = 200;
 
 let tileEl = null;
 let sheetMenuBtn = null;
@@ -59,25 +75,24 @@ let current = null;         // { id, title, rows, cols, cells: Map, updated_at }
 let dirty = false;
 let saveTimer = null;
 let saveSeq = 0;
-let sel = { row: 1, col: 0 };  // 1-based row, 0-based col
+let sel = { row: 1, col: 0 };  // the active cell: 1-based row, 0-based col
+let anchor = { row: 1, col: 0 }; // the other corner of the selected range
 let editing = false;
+let editMode = 'enter';       // 'enter': typed over the cell, arrows move on;
+                              // 'edit': F2 / double click, arrows move the caret
+let values = new Map();       // ref → { t, v } from the engine
+let evalSeq = 0;
+let colWidths = {};           // column index → width in px (default otherwise)
+let undoStack = [];           // batches of { ref, before, after }
+let redoStack = [];
+let clip = null;              // the last copy: { text, rows: [[raw]], origin: {row, col} }
+let dragSelecting = false;
 
 /* Popup (body-level, the tile clips overflow) */
 let sheetMenuPopup = null;
 let sheetMenuOpen = false;
 
 /* ── Cell refs ───────────────────────────────────────────────── */
-
-function colName(col) {
-  let n = col + 1;
-  let s = '';
-  while (n > 0) {
-    const rem = (n - 1) % 26;
-    s = String.fromCharCode(65 + rem) + s;
-    n = Math.floor((n - 1) / 26);
-  }
-  return s;
-}
 
 function cellRef(row, col) {
   return `${colName(col)}${row}`;
@@ -111,234 +126,76 @@ async function createSheet(title = t('plugin.calc.sheet.untitled', null, 'Untitl
   return res?.data;
 }
 
-async function saveSheet(id, title, cells) {
+async function saveSheet(id, title, cells, widths = undefined) {
   const seq = ++saveSeq;
   await apiFetch(`/api/spreadsheets/${encodeURIComponent(id)}`, {
     method: 'PUT',
-    body: JSON.stringify({ title, cells }),
+    body: JSON.stringify(widths ? { title, cells, col_widths: widths } : { title, cells }),
   });
   return seq;
+}
+
+async function evaluateCells(cells) {
+  const res = await apiFetch('/api/spreadsheets/evaluate', {
+    method: 'POST',
+    body: JSON.stringify({ cells }),
+  });
+  return res?.data?.values || {};
 }
 
 async function deleteSheet(id) {
   await apiFetch(`/api/spreadsheets/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
 
-/* ── Formula evaluation ─────────────────────────────────────── */
+/* ── Values ─────────────────────────────────────────────────── */
 
-const FN = {
-  // All aggregates receive ONLY the finite numeric values from the range
-  // (empty and text cells are skipped by `rangeValues`, Excel-style).
-  SUM: (vs) => vs.reduce((a, b) => a + b, 0),
-  AVERAGE: (vs) => (vs.length ? vs.reduce((a, b) => a + b, 0) / vs.length : 0),
-  MIN: (vs) => (vs.length ? Math.min(...vs) : 0),
-  MAX: (vs) => (vs.length ? Math.max(...vs) : 0),
-  COUNT: (vs) => vs.length,
-};
+const seps = () => separators(getLocale());
+const bools = () => [
+  t('plugin.calc.value.true', null, 'TRUE'),
+  t('plugin.calc.value.false', null, 'FALSE'),
+];
 
-function tokenizeFormula(src) {
-  const tokens = [];
-  let i = 0;
-  while (i < src.length) {
-    const ch = src[i];
-    if (/\s/.test(ch)) { i++; continue; }
-    if (/[0-9.]/.test(ch)) {
-      let j = i;
-      while (j < src.length && /[0-9.]/.test(src[j])) j++;
-      tokens.push({ type: 'num', value: parseFloat(src.slice(i, j)) });
-      i = j;
-      continue;
-    }
-    // Words accept lower case too — function names (`sum(…)`) and cell
-    // refs (`a1`) are case-insensitive.
-    if (/[A-Za-z]/.test(ch)) {
-      let j = i;
-      while (j < src.length && /[A-Za-z0-9]/.test(src[j])) j++;
-      tokens.push({ type: 'word', value: src.slice(i, j) });
-      i = j;
-      continue;
-    }
-    if ('+-*/^(),:'.includes(ch)) {
-      tokens.push({ type: ch, value: ch });
-      i++;
-      continue;
-    }
-    tokens.push({ type: 'word', value: ch });
-    i++;
-  }
-  return tokens;
+/** What a cell shows, from its stored text and the engine's value. */
+function displayValue(ref) {
+  const raw = current?.cells.get(ref);
+  return cellText(raw, values.get(ref), getLocale(), seps(), bools());
 }
 
-/** Resolve a cell to a number for formulas (recursively, with cycle guard). */
-function cellNumber(cells, ref, seen) {
-  if (seen.has(ref)) return 0;
-  const raw = cells.get(ref);
-  if (raw == null || raw === '') return 0;
-  if (String(raw).startsWith('=')) {
-    seen.add(ref);
-    const v = evalFormula(String(raw), cells, seen);
-    seen.delete(ref);
-    return Number.isFinite(v) ? v : 0;
-  }
-  const n = Number(String(raw).replace(/,/g, ''));
-  return Number.isFinite(n) ? n : 0;
+/** The explanation of an error code, in the interface language. */
+function errorExplanation(code) {
+  const key = ERROR_KEYS[code];
+  if (!key) return '';
+  const fallback = {
+    div0: 'Division by zero',
+    value: 'A value of the wrong kind — text where a number is needed',
+    name: 'Unknown function or name',
+    ref: 'The reference points outside the sheet',
+    num: 'The number is out of range',
+    na: 'No value available',
+    circ: 'The formula refers to itself, directly or through other cells',
+    parse: 'The formula cannot be read — check brackets and separators',
+  }[key];
+  return t(`plugin.calc.error.${key}`, null, fallback);
 }
 
 /**
- * Numeric values of a range for aggregate functions: empty cells and text
- * cells are SKIPPED (not counted as 0), so AVERAGE/COUNT behave like a
- * spreadsheet. Formulas are evaluated; failing formulas are skipped.
+ * Ask the engine for every value of the sheet as it is now (saved or not),
+ * then repaint. Only the latest answer is painted.
  */
-function rangeValues(a, b, cells, seen) {
-  const out = [];
-  const r1 = Math.min(a.row, b.row);
-  const r2 = Math.max(a.row, b.row);
-  const c1 = Math.min(a.col, b.col);
-  const c2 = Math.max(a.col, b.col);
-  for (let r = r1; r <= r2; r++) {
-    for (let c = c1; c <= c2; c++) {
-      const ref = cellRef(r, c);
-      const raw = cells.get(ref);
-      if (raw == null || raw === '') continue; // empty → skip
-      if (String(raw).startsWith('=')) {
-        // Formula cells always contribute (errors evaluate to 0, matching
-        // plain arithmetic references).
-        out.push(cellNumber(cells, ref, seen));
-        continue;
-      }
-      const n = Number(String(raw).replace(/,/g, ''));
-      if (Number.isFinite(n)) out.push(n); // text → skip
-    }
-  }
-  return out;
-}
-
-/** Evaluate a formula string ("=SUM(A1:A3)+B1*2") to a number. */
-export function evalFormula(src, cells, seen = new Set()) {
-  const text = String(src).replace(/^=/, '').trim();
-  if (!text) return 0;
-  const tokens = tokenizeFormula(text);
-  let pos = 0;
-
-  function peek() { return tokens[pos]; }
-  function next() { return tokens[pos++]; }
-
-  function parseExpr() {
-    // One loop for BOTH + and - so mixed chains stay left-associative
-    // ("10-2+3" is 11, not 8).
-    let v = parseTerm();
-    while (peek() && (peek().type === '+' || peek().type === '-')) {
-      const op = next().type;
-      const r = parseTerm();
-      v = op === '+' ? v + r : v - r;
-    }
-    return v;
-  }
-
-  function parseTerm() {
-    // Same for * and / — "8/2*3" is 12, not 4.
-    let v = parseFactor();
-    while (peek() && (peek().type === '*' || peek().type === '/')) {
-      const op = next().type;
-      const d = parseFactor();
-      if (op === '*') v *= d;
-      else v = d === 0 ? NaN : v / d;
-    }
-    return v;
-  }
-
-  function parseFactor() {
-    let v = parseUnary();
-    while (peek() && peek().type === '^') { next(); v = Math.pow(v, parseUnary()); }
-    return v;
-  }
-
-  function parseUnary() {
-    if (peek() && peek().type === '-') { next(); return -parseUnary(); }
-    if (peek() && peek().type === '+') { next(); return parseUnary(); }
-    return parseAtom();
-  }
-
-  /** Function-call arguments: ranges (A1:B3) expand to their cell values. */
-  function parseArgs() {
-    const out = [];
-    while (peek() && peek().type !== ')') {
-      if (peek().type === ',') { next(); continue; }
-      // Lookahead: WORD : WORD → a range argument; expand to its values.
-      if (peek().type === 'word') {
-        const first = parseRef(peek().value);
-        const colon = tokens[pos + 1];
-        if (first && colon && colon.type === ':') {
-          next(); // first word
-          next(); // ':'
-          const toTok = next();
-          const second = toTok ? parseRef(toTok.value) : null;
-          if (second) {
-            out.push(...rangeValues(first, second, cells, seen));
-            continue;
-          }
-        }
-      }
-      out.push(parseExpr());
-    }
-    return out;
-  }
-
-  function parseAtom() {
-    const t = next();
-    if (!t) return 0;
-    if (t.type === 'num') return t.value;
-    if (t.type === '(') {
-      const v = parseExpr();
-      if (peek() && peek().type === ')') next();
-      return v;
-    }
-    if (t.type === 'word') {
-      // Function call: WORD(...) — SUM, AVERAGE, MIN, MAX, COUNT.
-      if (peek() && peek().type === '(') {
-        next();
-        const fn = FN[t.value.toUpperCase()];
-        // Non-numeric scalar args are skipped so COUNT/AVERAGE agree with
-        // their range behavior.
-        const args = parseArgs().filter((v) => Number.isFinite(v));
-        if (peek() && peek().type === ')') next();
-        return fn ? fn(args) : NaN;
-      }
-      // Bare cell ref (A1) or range (A1:B3).
-      const ref = parseRef(t.value);
-      if (!ref) return NaN;
-      const colon = peek();
-      if (colon && colon.type === ':' && colon.value === ':') {
-        next();
-        const to = next();
-        if (!to) return NaN;
-        const ref2 = parseRef(to.value);
-        if (!ref2) return NaN;
-        return rangeValues(ref, ref2, cells, seen)
-          .reduce((a, b) => a + b, 0);
-      }
-      return cellNumber(cells, t.value, seen);
-    }
-    return NaN;
-  }
-
+async function recompute() {
+  if (!current) return;
+  const seq = ++evalSeq;
+  const sheet = current;
   try {
-    const v = parseExpr();
-    return Number.isFinite(v) ? v : NaN;
-  } catch (_) {
-    return NaN;
+    const next = await evaluateCells(Object.fromEntries(sheet.cells));
+    if (seq !== evalSeq || sheet !== current) return;
+    values = new Map(Object.entries(next));
+    paintAllCells();
+    paintStatusLine();
+    updateGlow();
+  } catch (e) {
+    if (seq === evalSeq) toast(e.message || t('plugin.calc.toast.computeFailed', null, 'Could not compute the sheet'), { type: 'error' });
   }
-}
-
-/** The display value for a cell: computed result for formulas. */
-function displayValue(raw) {
-  if (raw == null || raw === '') return '';
-  const s = String(raw);
-  if (s.startsWith('=')) {
-    const v = evalFormula(s, current.cells);
-    return Number.isFinite(v) ? String(v) : '#ERROR';
-  }
-  return s;
 }
 
 /* ── Ambient glow ───────────────────────────────────────────── */
@@ -370,22 +227,18 @@ function updateGlow() {
   ctx.fillStyle = base;
   ctx.fillRect(0, 0, W, H);
 
-  const seen = new Set();
   const points = [];
-  for (const [ref, raw] of current.cells) {
-    if (raw == null || raw === '') continue;
+  for (const [ref, val] of values) {
+    if (val?.t !== 'n' || !Number.isFinite(val.v)) continue;
     const pos = parseRef(ref);
     if (!pos) continue;
-    let v;
-    try { v = cellNumber(current.cells, ref, seen); } catch (_) { continue; }
-    if (!Number.isFinite(v)) continue;
-    points.push({ row: pos.row, col: pos.col, v });
+    points.push({ row: pos.row, col: pos.col, v: val.v });
   }
   if (!points.length) { setTileGlow(tileEl, null); return; }
 
-  const values = points.map((p) => p.v);
-  const min = Math.min(...values);
-  const max = Math.max(...values);
+  const magnitudes = points.map((p) => p.v);
+  const min = Math.min(...magnitudes);
+  const max = Math.max(...magnitudes);
   const span = max - min || 1;
   for (const p of points) {
     const t = (p.v - min) / span;
@@ -407,7 +260,9 @@ function updateGlow() {
  *  "SAVING…"); the mono status line under the grid counts the cells. */
 function setStatus(mode) {
   const now = new Date();
-  const time = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  // The interface language decides 14:02 or 2:02 PM, not the browser's.
+  let time;
+  try { time = now.toLocaleTimeString(getLocale(), { hour: '2-digit', minute: '2-digit' }); } catch { time = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
   let short;
   if (mode === 'saving') short = t('plugin.calc.status.saving', null, 'Saving…');
   else if (mode === 'dirty') short = t('plugin.calc.status.unsaved', null, 'Unsaved');
@@ -416,7 +271,44 @@ function setStatus(mode) {
     saveStateEl.textContent = short;
     saveStateEl.dataset.state = mode;
   }
-  if (statusEl) statusEl.textContent = tp('plugin.calc.status.cells', current?.cells.size || 0);
+  paintStatusLine();
+}
+
+/**
+ * The line under the grid: the sum, average and count of a selected range;
+ * what an error in the selected cell means; otherwise how many cells are
+ * filled.
+ */
+function paintStatusLine() {
+  if (!statusEl) return;
+  const r = selRange();
+  statusEl.parentElement?.classList.remove('is-message');
+  if (current && (r.r1 !== r.r2 || r.c1 !== r.c2)) {
+    const nums = [];
+    for (let row = r.r1; row <= r.r2; row++) {
+      for (let col = r.c1; col <= r.c2; col++) {
+        const v = values.get(cellRef(row, col));
+        if (v?.t === 'n' && Number.isFinite(v.v)) nums.push(v.v);
+      }
+    }
+    const sum = nums.reduce((a, b) => a + b, 0);
+    const loc = getLocale();
+    statusEl.textContent = nums.length
+      ? t('plugin.calc.status.range', {
+        sum: formatNumber(sum, loc),
+        average: formatNumber(Math.round((sum / nums.length) * 1e4) / 1e4, loc),
+        count: formatNumber(nums.length, loc),
+      }, 'Sum {sum} · Average {average} · Count {count}')
+      : tp('plugin.calc.status.cells', current?.cells.size || 0);
+    return;
+  }
+  const v = current ? values.get(cellRef(sel.row, sel.col)) : null;
+  statusEl.parentElement?.classList.toggle('is-message', v?.t === 'e');
+  if (v?.t === 'e') {
+    statusEl.textContent = `${v.v} — ${errorExplanation(v.v)}`;
+    return;
+  }
+  statusEl.textContent = tp('plugin.calc.status.cells', current?.cells.size || 0);
 }
 
 /** No sheet open (none exist, or the last was deleted): show the empty state
@@ -446,7 +338,7 @@ async function persist() {
   setStatus('saving');
   try {
     const cells = Object.fromEntries(current.cells);
-    await saveSheet(current.id, titleInput.value.trim(), cells);
+    await saveSheet(current.id, titleInput.value.trim(), cells, colWidths);
     current.title = titleInput.value.trim();
     current.updated_at = new Date().toISOString();
     setStatus('saved');
@@ -458,25 +350,65 @@ async function persist() {
   }
 }
 
-function setCellValue(ref, value, { refresh = false } = {}) {
-  const v = String(value ?? '').trim();
-  if (v === '') current.cells.delete(ref);
-  else current.cells.set(ref, v);
-  markDirty();
-  if (refresh) {
-    // Full rebuild also refreshes any formulas that reference this cell.
-    renderGrid();
-  } else {
-    // In-place update of just this cell — keeps the DOM stable so a click
-    // that caused the edit to commit still lands on the correct cell.
-    const p = parseRef(ref);
-    const cell = p ? cellElFor(p.row, p.col) : null;
-    if (cell) {
-      cell.textContent = displayValue(current.cells.get(ref));
-      cell.classList.toggle('is-formula', String(current.cells.get(ref) ?? '').startsWith('='));
+/**
+ * Change cells: `changes` is `[{ ref, value }]` with values already in
+ * stored form. One call is one step of undo. The changed cells repaint at
+ * once (in place: the DOM stays, so a click that committed an edit still
+ * lands where it was aimed); formulas that depend on them follow when the
+ * engine answers.
+ */
+function setCells(changes, { record = true } = {}) {
+  if (!current || !changes.length) return;
+  const batch = [];
+  for (const { ref, value } of changes) {
+    const before = current.cells.get(ref) ?? '';
+    const after = String(value ?? '').trim();
+    if (before === after) continue;
+    if (after === '') current.cells.delete(ref);
+    else current.cells.set(ref, after);
+    // Until the engine answers, a formula shows its old value, a plain
+    // value shows itself.
+    if (after.startsWith('=')) {
+      if (!before.startsWith('=')) values.delete(ref);
     } else {
-      renderGrid();
+      values.delete(ref);
     }
+    batch.push({ ref, before, after });
+  }
+  if (!batch.length) return;
+  if (record) {
+    undoStack.push(batch);
+    if (undoStack.length > UNDO_LIMIT) undoStack.shift();
+    redoStack = [];
+  }
+  markDirty();
+  for (const { ref } of batch) {
+    const p = parseRef(ref);
+    if (p) paintCellAt(p.row, p.col);
+  }
+  paintSpillRows(batch);
+  syncFormulaBar();
+  void recompute();
+}
+
+function setCellValue(ref, value) {
+  setCells([{ ref, value }]);
+}
+
+/** Undo (`dir = -1`) or redo (`dir = 1`) one step, selecting what changed. */
+function stepHistory(dir) {
+  const from = dir < 0 ? undoStack : redoStack;
+  const to = dir < 0 ? redoStack : undoStack;
+  const batch = from.pop();
+  if (!batch || !current) return;
+  to.push(batch);
+  setCells(batch.map((c) => ({ ref: c.ref, value: dir < 0 ? c.before : c.after })), { record: false });
+  const cells = batch.map((c) => parseRef(c.ref)).filter(Boolean);
+  if (cells.length) {
+    const rows = cells.map((p) => p.row);
+    const cols = cells.map((p) => p.col);
+    anchor = { row: Math.min(...rows), col: Math.min(...cols) };
+    selectCell(Math.max(...rows), Math.max(...cols), { extend: true, scroll: true });
   }
 }
 
@@ -496,12 +428,18 @@ async function openSheet(sheet) {
       cells: new Map(Object.entries(full.cells || {})),
       updated_at: full.updated_at,
     };
+    values = new Map(Object.entries(full.values || {}));
+    colWidths = { ...(full.col_widths || {}) };
+    undoStack = [];
+    redoStack = [];
     titleInput.value = full.title;
     sel = { row: 1, col: 0 };
+    anchor = { ...sel };
     syncEmpty();
     renderGrid();
     setStatus('saved');
     updateGlow();
+    if (!full.values) void recompute();
   } catch (e) {
     toast(e.message || t('plugin.calc.toast.openFailed', null, 'Could not open spreadsheet'), { type: 'error' });
   }
@@ -678,43 +616,17 @@ async function pickCsvFile() {
   if (file) void importCsv(file);
 }
 
-function parseCsv(text) {
-  const rows = [];
-  let row = [];
-  let field = '';
-  let inQuotes = false;
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    if (inQuotes) {
-      if (ch === '"') {
-        if (text[i + 1] === '"') { field += '"'; i++; }
-        else inQuotes = false;
-      } else field += ch;
-    } else if (ch === '"') {
-      inQuotes = true;
-    } else if (ch === ',') {
-      row.push(field); field = '';
-    } else if (ch === '\n' || ch === '\r') {
-      if (ch === '\r' && text[i + 1] === '\n') i++;
-      row.push(field); field = '';
-      rows.push(row); row = [];
-    } else {
-      field += ch;
-    }
-  }
-  row.push(field);
-  rows.push(row);
-  return rows;
-}
-
 async function importCsv(file) {
   try {
     const text = await file.text();
-    const rows = parseCsv(text);
+    // A `;` file comes from a decimal-comma spreadsheet: read its numbers so.
+    const delimiter = csvDelimiter(text);
+    const rows = parseDelimited(text, delimiter);
+    const csvSeps = { decimal: delimiter === ';' ? ',' : '.' };
     const cells = {};
     rows.forEach((line, r) => {
       line.forEach((value, c) => {
-        const v = String(value ?? '').trim();
+        const v = toStored(String(value ?? ''), csvSeps);
         if (!v) return;
         cells[cellRef(r + 1, c)] = v;
       });
@@ -731,14 +643,128 @@ async function importCsv(file) {
 
 /* ── Grid ───────────────────────────────────────────────────── */
 
-/** The data cells of the grid as it was last built: `{ host, rows, cols, cells }`. */
+/** The data cells of the grid as it was last built:
+ *  `{ host, rows, cols, cells, at }` — `at[row][col]` is a cell's element. */
 let builtGrid = null;
+
+const widthOf = (col) => {
+  const w = Number(colWidths[col]);
+  return Number.isFinite(w) && w > 0 ? w : DEFAULT_COL_WIDTH;
+};
+
+function gridTemplate(totalCols) {
+  const cols = [];
+  for (let c = 0; c < totalCols; c++) cols.push(`${widthOf(c)}px`);
+  return `44px ${cols.join(' ')}`;
+}
+
+/** The selected range, corners ordered. */
+function selRange() {
+  return {
+    r1: Math.min(sel.row, anchor.row),
+    r2: Math.max(sel.row, anchor.row),
+    c1: Math.min(sel.col, anchor.col),
+    c2: Math.max(sel.col, anchor.col),
+  };
+}
+
+/**
+ * Paint one cell: its text and what kind of value it holds (a number sits
+ * right, an error centred, text left). Text with empty cells to its right
+ * runs on over them (`is-spill`), as in a spreadsheet, up to the next
+ * filled cell; otherwise it ends in an ellipsis.
+ */
+function paintCell(el, ref, r, c) {
+  const raw = current.cells.get(ref);
+  const val = values.get(ref);
+  const text = displayValue(ref);
+  const formula = String(raw ?? '').startsWith('=');
+  const kind = !raw ? '' : val?.t === 'e' ? 'error'
+    : val?.t === 'n' || val?.t === 'b' ? 'number'
+      : formula && !val ? 'number' : 'text';
+  el.classList.toggle('is-formula', formula);
+  el.classList.toggle('is-number', kind === 'number');
+  el.classList.toggle('is-error', kind === 'error');
+  el.title = kind === 'error' ? `${text} — ${errorExplanation(text)}` : ref;
+  let spill = 0;
+  if (kind === 'text' && text) {
+    const totalCols = builtGrid?.cols || 0;
+    for (let k = c + 1; k < totalCols && k <= c + 12; k++) {
+      if (current.cells.has(cellRef(r, k))) break;
+      spill += widthOf(k);
+    }
+  }
+  if (spill > 0) {
+    el.classList.add('is-spill');
+    el.style.setProperty('--calc-spill', `${widthOf(c) + spill - 16}px`);
+    const span = el.firstElementChild?.classList.contains('calc-cell-text') ? el.firstElementChild : null;
+    if (span) {
+      if (span.textContent !== text) span.textContent = text;
+    } else {
+      el.textContent = '';
+      const inner = document.createElement('span');
+      inner.className = 'calc-cell-text';
+      inner.textContent = text;
+      el.appendChild(inner);
+    }
+  } else {
+    el.classList.remove('is-spill');
+    el.style.removeProperty('--calc-spill');
+    if (el.firstElementChild || el.textContent !== text) el.textContent = text;
+  }
+}
+
+function paintCellAt(row, col) {
+  const el = cellElFor(row, col);
+  if (el) paintCell(el, cellRef(row, col), row, col);
+}
+
+/** Text to the left of a changed cell may now spill further, or less. */
+function paintSpillRows(batch) {
+  const rows = new Set();
+  for (const { ref } of batch) {
+    const p = parseRef(ref);
+    if (p) rows.add(p.row);
+  }
+  for (const row of rows) {
+    for (let c = 0; c < (builtGrid?.cols || 0); c++) {
+      if (current.cells.has(cellRef(row, c))) paintCellAt(row, c);
+    }
+  }
+}
+
+function paintAllCells() {
+  if (!builtGrid || !current) return;
+  for (const { el, ref, r, c } of builtGrid.cells) paintCell(el, ref, r, c);
+}
+
+/** Mark the active cell and the selected range. */
+function paintSelection() {
+  if (!builtGrid) return;
+  gridEl.querySelectorAll('.calc-cell--data.is-selected, .calc-cell--data.is-in-range')
+    .forEach((el) => el.classList.remove('is-selected', 'is-in-range'));
+  const r = selRange();
+  if (r.r1 !== r.r2 || r.c1 !== r.c2) {
+    for (let row = r.r1; row <= r.r2; row++) {
+      for (let col = r.c1; col <= r.c2; col++) cellElFor(row, col)?.classList.add('is-in-range');
+    }
+  }
+  cellElFor(sel.row, sel.col)?.classList.add('is-selected');
+  gridEl.querySelectorAll('.calc-cell--head').forEach((h) => {
+    const c = Number(h.dataset.col);
+    h.classList.toggle('is-active', c >= r.c1 && c <= r.c2);
+  });
+  gridEl.querySelectorAll('.calc-cell--rowhead').forEach((h) => {
+    const row = Number(h.dataset.row);
+    h.classList.toggle('is-active', row >= r.r1 && row <= r.r2);
+  });
+}
 
 /**
  * Bring an already-built grid of the same size up to date instead of
  * rebuilding it: only the cells whose text or state changed are touched.
- * A rebuild creates one element and three listeners per cell (up to 200×52)
- * and ran after every committed edit. False when the grid has to be built.
+ * A rebuild creates one element and three listeners per cell (up to 200×52).
+ * False when the grid has to be built.
  */
 function refreshGrid(totalRows, totalCols) {
   const built = builtGrid;
@@ -746,15 +772,71 @@ function refreshGrid(totalRows, totalCols) {
   // An open editor is positioned over its cell and is dropped by a rebuild:
   // keep that path as it was.
   if (editing || !built.cells.length || !built.cells[0].el.isConnected) return false;
+  gridEl.style.gridTemplateColumns = gridTemplate(totalCols);
   for (const { el, ref, r, c } of built.cells) {
-    const raw = current.cells.get(ref);
-    const text = displayValue(raw);
-    if (el.textContent !== text) el.textContent = text;
-    el.classList.toggle('is-formula', String(raw ?? '').startsWith('='));
-    el.classList.toggle('is-selected', r === sel.row && c === sel.col);
+    paintCell(el, ref, r, c);
     el.__editOnTap = false;
   }
+  paintSelection();
   return true;
+}
+
+/** The data cell under a screen point (a drag across the grid). */
+function cellAtPoint(x, y) {
+  const el = document.elementFromPoint(x, y)?.closest?.('.calc-cell--data');
+  return el && gridEl?.contains(el) ? el : null;
+}
+
+function onDragMove(e) {
+  if (!dragSelecting) return;
+  const el = cellAtPoint(e.clientX, e.clientY);
+  if (!el) return;
+  const row = Number(el.dataset.row);
+  const col = Number(el.dataset.col);
+  if (row !== sel.row || col !== sel.col) selectCell(row, col, { extend: true, focus: false });
+}
+
+function onDragEnd() {
+  if (!dragSelecting) return;
+  dragSelecting = false;
+  document.removeEventListener('pointermove', onDragMove);
+  document.removeEventListener('pointerup', onDragEnd);
+  cellElFor(sel.row, sel.col)?.focus({ preventScroll: true });
+}
+
+/** Drag a column header's right edge to resize it; double-click resets it. */
+function wireColumnResize(handle, col) {
+  handle.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX;
+    const startW = widthOf(col);
+    handle.setPointerCapture?.(e.pointerId);
+    const move = (ev) => {
+      const w = Math.round(Math.min(MAX_COL_WIDTH, Math.max(MIN_COL_WIDTH, startW + (ev.clientX - startX) / zoom)));
+      colWidths[col] = w;
+      gridEl.style.gridTemplateColumns = gridTemplate(builtGrid?.cols || DEFAULT_COLS);
+      if (editing) placeEditor();
+    };
+    const up = () => {
+      handle.removeEventListener('pointermove', move);
+      handle.removeEventListener('pointerup', up);
+      handle.removeEventListener('pointercancel', up);
+      if (widthOf(col) === DEFAULT_COL_WIDTH) delete colWidths[col];
+      paintAllCells();
+      markDirty();
+    };
+    handle.addEventListener('pointermove', move);
+    handle.addEventListener('pointerup', up);
+    handle.addEventListener('pointercancel', up);
+  });
+  handle.addEventListener('dblclick', (e) => {
+    e.stopPropagation();
+    delete colWidths[col];
+    gridEl.style.gridTemplateColumns = gridTemplate(builtGrid?.cols || DEFAULT_COLS);
+    paintAllCells();
+    markDirty();
+  });
 }
 
 function renderGrid() {
@@ -766,31 +848,41 @@ function renderGrid() {
 
   gridEl.innerHTML = '';
   const cells = [];
-  builtGrid = { host: gridEl, rows: totalRows, cols: totalCols, cells };
+  const at = [];
+  builtGrid = { host: gridEl, rows: totalRows, cols: totalCols, cells, at };
 
-  // Size the grid columns to the actual sheet width. The CSS default is a
-  // fallback only; if this stays fixed while totalCols varies, CSS auto-flow
-  // wraps the row headers/data cells into the wrong columns and the whole
-  // grid (especially the left number column) misaligns.
-  gridEl.style.gridTemplateColumns = `44px repeat(${totalCols}, 110px)`;
+  // Size the grid columns to the actual sheet width (and the widths the user
+  // dragged). If this stayed fixed while totalCols varies, CSS auto-flow would
+  // wrap the row headers/data cells into the wrong columns.
+  gridEl.style.gridTemplateColumns = gridTemplate(totalCols);
 
   const corner = document.createElement('div');
   corner.className = 'calc-cell calc-cell--corner';
   corner.textContent = '';
   gridEl.appendChild(corner);
 
+  const resizeLabel = t('plugin.calc.grid.resizeColumn', null, 'Drag to resize the column, double-click to reset it');
   for (let c = 0; c < totalCols; c++) {
     const head = document.createElement('div');
     head.className = 'calc-cell calc-cell--head';
+    head.dataset.col = String(c);
     head.textContent = colName(c);
+    const handle = document.createElement('div');
+    handle.className = 'calc-col-resize';
+    handle.title = resizeLabel;
+    handle.setAttribute('aria-hidden', 'true');
+    wireColumnResize(handle, c);
+    head.appendChild(handle);
     gridEl.appendChild(head);
   }
 
   for (let r = 1; r <= totalRows; r++) {
     const rowHead = document.createElement('div');
     rowHead.className = 'calc-cell calc-cell--rowhead';
+    rowHead.dataset.row = String(r);
     rowHead.textContent = String(r);
     gridEl.appendChild(rowHead);
+    at[r] = [];
 
     for (let c = 0; c < totalCols; c++) {
       const ref = cellRef(r, c);
@@ -800,38 +892,46 @@ function renderGrid() {
       cell.dataset.row = String(r);
       cell.dataset.col = String(c);
       cell.tabIndex = 0;
-      cell.textContent = displayValue(current.cells.get(ref));
-      cell.title = ref;
-      if (r === sel.row && c === sel.col) cell.classList.add('is-selected');
-      if (String(current.cells.get(ref) ?? '').startsWith('=')) {
-        cell.classList.add('is-formula');
-      }
       // Select on pointerdown (before any blur-triggered work) so a click
       // always lands on the cell under the pointer. A finger has no double
       // click: a second tap on the selected cell opens the editor (a long
       // press is swallowed by the context menu and never reaches `click`).
+      // A mouse drags out a range; Shift+click extends it.
       cell.addEventListener('pointerdown', (e) => {
+        if (e.button > 0) {
+          // A right-click inside the range keeps it (the menu acts on it).
+          const rg = selRange();
+          if (r >= rg.r1 && r <= rg.r2 && c >= rg.c1 && c <= rg.c2) return;
+        }
         const again = e.pointerType !== 'mouse' && e.isPrimary
           && sel.row === r && sel.col === c && !editing;
-        selectCell(r, c);
+        selectCell(r, c, { extend: e.shiftKey });
         cell.__editOnTap = again;
+        if (e.pointerType === 'mouse' && e.button === 0 && !e.shiftKey) {
+          dragSelecting = true;
+          document.addEventListener('pointermove', onDragMove);
+          document.addEventListener('pointerup', onDragEnd);
+        }
       });
       cell.addEventListener('click', () => {
         if (!cell.__editOnTap) return;
         cell.__editOnTap = false;
         if (Date.now() - pinchedAt < 600) return;
-        showEditor();
+        showEditor(null, 'edit');
       });
       cell.addEventListener('dblclick', () => {
         // Two quick taps already opened the editor through `click`.
         if (editing && sel.row === r && sel.col === c) return;
         selectCell(r, c);
-        showEditor();
+        showEditor(null, 'edit');
       });
       gridEl.appendChild(cell);
+      at[r][c] = cell;
       cells.push({ el: cell, ref, r, c });
     }
   }
+  for (const { el, ref, r, c } of cells) paintCell(el, ref, r, c);
+  paintSelection();
 }
 
 /** Overlay input positioned over the selected cell. */
@@ -843,65 +943,72 @@ function ensureEditor() {
   editorInputEl.autocomplete = 'off';
   editorInputEl.addEventListener('keydown', (e) => {
     e.stopPropagation();
-    if (e.key === 'Enter') { e.preventDefault(); commitEdit(true); }
-    else if (e.key === 'Tab') { e.preventDefault(); commitEdit(true); }
+    const arrow = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] }[e.key];
+    if (e.key === 'Enter') { e.preventDefault(); commitEdit(e.shiftKey ? [-1, 0] : [1, 0]); }
+    else if (e.key === 'Tab') { e.preventDefault(); commitEdit(e.shiftKey ? [0, -1] : [0, 1]); }
     else if (e.key === 'Escape') { e.preventDefault(); cancelEdit(); }
+    // Typed over a cell, an arrow confirms and moves on; while editing
+    // (F2, double click) left and right move the caret.
+    else if (arrow && (editMode === 'enter' || arrow[0] !== 0) && !e.shiftKey) {
+      e.preventDefault();
+      commitEdit(arrow);
+    }
   });
   editorInputEl.addEventListener('blur', () => {
     if (!editing) return;
     const value = editorInputEl.value;
     const ref = cellRef(sel.row, sel.col);
     hideEditor();
-    // Commit in-place (no rebuild) so a click-away lands on the right cell;
-    // then refresh any dependent formulas after the event has settled.
-    setCellValue(ref, value);
-    window.setTimeout(() => {
-      if (!editing) {
-        renderGrid();
-        cellElFor(sel.row, sel.col)?.focus();
-      }
-    }, 0);
+    // Commit in place (no rebuild) so a click-away lands on the right cell.
+    setCellValue(ref, toStored(value, seps()));
   });
   gridEl.appendChild(editorInputEl);
 }
 
 function cellElFor(row, col) {
-  return gridEl?.querySelector(`.calc-cell--data[data-row="${row}"][data-col="${col}"]`);
+  return builtGrid?.host === gridEl ? builtGrid.at[row]?.[col] || null : null;
 }
 
-/** Move the selection without rebuilding the grid DOM. */
-function selectCell(row, col, { focus = true, scroll = false } = {}) {
-  sel = { row, col };
-  gridEl?.querySelectorAll('.calc-cell--data.is-selected')
-    .forEach((el) => el.classList.remove('is-selected'));
-  const cell = cellElFor(row, col);
-  cell?.classList.add('is-selected');
+/**
+ * Move the active cell without rebuilding the grid. `extend` keeps the
+ * range's other corner where it is (Shift); otherwise the range collapses.
+ */
+function selectCell(row, col, { focus = true, scroll = false, extend = false } = {}) {
+  const maxRow = builtGrid?.rows || current?.rows || DEFAULT_ROWS;
+  const maxCol = (builtGrid?.cols || current?.cols || DEFAULT_COLS) - 1;
+  sel = { row: Math.max(1, Math.min(maxRow, row)), col: Math.max(0, Math.min(maxCol, col)) };
+  if (!extend) anchor = { ...sel };
+  paintSelection();
   syncFormulaBar();
-  if (scroll) cell?.scrollIntoView({ block: 'nearest' });
-  if (focus) cell?.focus();
+  paintStatusLine();
+  const cell = cellElFor(sel.row, sel.col);
+  if (scroll) cell?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  if (focus) cell?.focus({ preventScroll: !scroll });
 }
 
-function showEditor(prefill = null) {
+/**
+ * Open the in-cell editor. A key typed on a cell starts it with that key
+ * (`enter` mode); Enter, F2 or a double click edit what is there (`edit`).
+ */
+function showEditor(prefill = null, mode = prefill != null ? 'enter' : 'edit') {
   ensureEditor();
   const cell = cellElFor(sel.row, sel.col);
   if (!cell) return;
   editing = true;
+  editMode = mode;
   editorInputEl.value = prefill != null
     ? prefill
-    : (current.cells.get(cellRef(sel.row, sel.col)) ?? '');
+    : toEditable(current.cells.get(cellRef(sel.row, sel.col)) ?? '', seps());
   // The stylesheet keeps the overlay at `display: none` between edits, so
   // showing it needs a value of its own, not a cleared inline style.
   editorInputEl.style.display = 'block';
   placeEditor(cell);
   editorInputEl.focus();
   // Typing on a cell starts the edit with that key: keep it and put the caret
-  // after it, or the next key would replace it. Enter/F2 select the old value.
-  if (prefill != null) {
-    const end = editorInputEl.value.length;
-    editorInputEl.setSelectionRange(end, end);
-  } else {
-    editorInputEl.select();
-  }
+  // after it, or the next key would replace it. Enter/F2 put the caret at the
+  // end of the old value, ready to change it.
+  const end = editorInputEl.value.length;
+  editorInputEl.setSelectionRange(end, end);
 }
 
 /** Lay the overlay over a cell. The grid is zoomed, and the overlay lives
@@ -1004,19 +1111,14 @@ function hideEditor() {
   if (editorInputEl) editorInputEl.style.display = 'none';
 }
 
-function commitEdit(move) {
+/** Confirm the edit, then move by `[dRow, dCol]` (down after Enter). */
+function commitEdit(move = [1, 0]) {
   if (!editing || !current) return;
   const value = editorInputEl?.value ?? '';
   const editedRef = cellRef(sel.row, sel.col);
   hideEditor();
-  if (move) {
-    sel = { row: Math.min(sel.row + 1, current.rows), col: sel.col };
-  }
-  // Full refresh also updates any formulas that reference the edited cell.
-  setCellValue(editedRef, value, { refresh: true });
-  const next = cellElFor(sel.row, sel.col);
-  next?.scrollIntoView({ block: 'nearest' });
-  next?.focus();
+  setCellValue(editedRef, toStored(value, seps()));
+  selectCell(sel.row + move[0], sel.col + move[1], { scroll: true });
 }
 
 function cancelEdit() {
@@ -1029,10 +1131,138 @@ function cancelEdit() {
 function syncFormulaBar() {
   if (!formulaRefEl || !formulaInputEl || !current) return;
   const ref = cellRef(sel.row, sel.col);
-  formulaRefEl.textContent = ref;
+  const r = selRange();
+  formulaRefEl.textContent = r.r1 !== r.r2 || r.c1 !== r.c2
+    ? `${cellRef(r.r1, r.c1)}:${cellRef(r.r2, r.c2)}`
+    : ref;
   if (document.activeElement !== formulaInputEl) {
-    formulaInputEl.value = current.cells.get(ref) ?? '';
+    formulaInputEl.value = toEditable(current.cells.get(ref) ?? '', seps());
   }
+}
+
+/* ── Clear, copy, cut, paste ────────────────────────────────── */
+
+/** Empty every cell of the selected range, as one step of undo. */
+function clearSelection() {
+  if (!current) return;
+  const r = selRange();
+  const changes = [];
+  for (let row = r.r1; row <= r.r2; row++) {
+    for (let col = r.c1; col <= r.c2; col++) {
+      const ref = cellRef(row, col);
+      if (current.cells.has(ref)) changes.push({ ref, value: '' });
+    }
+  }
+  setCells(changes);
+}
+
+/** The keyboard is on the grid (not in a field, not editing a cell). */
+function gridHasFocus() {
+  return !!(gridEl && current && !editing && gridEl.contains(document.activeElement)
+    && document.activeElement !== editorInputEl);
+}
+
+/** The selected range as text for other apps (what the cells show), and
+ *  as stored text for a paste back into a sheet. */
+function copySelection() {
+  const r = selRange();
+  const shown = [];
+  const raw = [];
+  for (let row = r.r1; row <= r.r2; row++) {
+    const s = [];
+    const w = [];
+    for (let col = r.c1; col <= r.c2; col++) {
+      const ref = cellRef(row, col);
+      s.push(displayValue(ref));
+      w.push(current.cells.get(ref) ?? '');
+    }
+    shown.push(s);
+    raw.push(w);
+  }
+  const text = toTsv(shown);
+  clip = { text, rows: raw, origin: { row: r.r1, col: r.c1 } };
+  return text;
+}
+
+/**
+ * Paste at the selection. Cells copied here keep their formulas, with
+ * relative refs moved to the new place; one copied cell fills a selected
+ * range. Text from elsewhere is read as rows and columns (tabs, lines), each
+ * piece typed in as the user would.
+ */
+function pasteText(text) {
+  if (!current) return;
+  const r = selRange();
+  const changes = [];
+  const internal = clip && clip.text === text.replace(/\r\n/g, '\n').replace(/\n$/, '');
+  if (internal) {
+    const rows = clip.rows;
+    const single = rows.length === 1 && rows[0].length === 1;
+    const height = single ? r.r2 - r.r1 + 1 : rows.length;
+    const width = single ? r.c2 - r.c1 + 1 : rows[0].length;
+    for (let i = 0; i < height; i++) {
+      for (let j = 0; j < width; j++) {
+        const row = r.r1 + i;
+        const col = r.c1 + j;
+        if (row > builtGrid.rows || col >= builtGrid.cols) continue;
+        const src = single ? rows[0][0] : rows[i][j];
+        const from = single ? clip.origin : { row: clip.origin.row + i, col: clip.origin.col + j };
+        changes.push({ ref: cellRef(row, col), value: shiftFormula(src, row - from.row, col - from.col) });
+      }
+    }
+    setCells(changes);
+    anchor = { row: r.r1, col: r.c1 };
+    selectCell(r.r1 + height - 1, r.c1 + width - 1, { extend: true });
+    return;
+  }
+  const rows = parseTsv(text);
+  if (!rows.length) return;
+  const sp = seps();
+  rows.forEach((line, i) => line.forEach((value, j) => {
+    const row = r.r1 + i;
+    const col = r.c1 + j;
+    if (row > builtGrid.rows || col >= builtGrid.cols) return;
+    changes.push({ ref: cellRef(row, col), value: toStored(value, sp) });
+  }));
+  setCells(changes);
+  const width = Math.max(...rows.map((l) => l.length));
+  anchor = { row: r.r1, col: r.c1 };
+  selectCell(r.r1 + rows.length - 1, r.c1 + width - 1, { extend: true });
+}
+
+function onCopy(e) {
+  if (!gridHasFocus()) return;
+  e.preventDefault();
+  e.clipboardData?.setData('text/plain', copySelection());
+}
+
+function onCut(e) {
+  if (!gridHasFocus()) return;
+  e.preventDefault();
+  e.clipboardData?.setData('text/plain', copySelection());
+  clearSelection();
+}
+
+function onPaste(e) {
+  if (!gridHasFocus()) return;
+  const text = e.clipboardData?.getData('text/plain');
+  if (text == null) return;
+  e.preventDefault();
+  pasteText(text);
+}
+
+/** Paste from the context menu: the system clipboard when the browser lets
+ *  us read it, else the last copy made here. */
+async function pasteFromMenu() {
+  let text = null;
+  try { text = await navigator.clipboard?.readText(); } catch { text = null; }
+  if (text == null && clip) text = clip.text;
+  if (text == null) {
+    toast(t('plugin.calc.toast.pasteKeys', null, 'Use Ctrl+V to paste'), { type: 'info' });
+    return;
+  }
+  cellElFor(sel.row, sel.col)?.focus();
+  pasteText(text);
 }
 
 /* ── Tile lifecycle ─────────────────────────────────────────── */
@@ -1142,16 +1372,10 @@ export function mountCalcTile() {
   function commitFormula() {
     if (!current || document.activeElement === formulaInputEl && editing) return;
     const ref = cellRef(sel.row, sel.col);
-    const value = formulaInputEl.value;
-    if ((current.cells.get(ref) ?? '') !== value) {
-      // In-place update (no synchronous grid rebuild) — a rebuild inside the
-      // blur handler detaches the node under the pointer and makes the click
-      // land on the wrong cell. Refresh dependent formulas right after.
-      setCellValue(ref, value);
-      window.setTimeout(() => {
-        if (!editing) renderGrid();
-      }, 0);
-    }
+    const value = toStored(formulaInputEl.value, seps());
+    // In place (no grid rebuild): a rebuild inside the blur handler would
+    // detach the node under the pointer and send the click to the wrong cell.
+    if ((current.cells.get(ref) ?? '') !== value) setCellValue(ref, value);
     syncFormulaBar();
   }
 
@@ -1163,15 +1387,27 @@ export function mountCalcTile() {
   gridEl.style.setProperty('--calc-zoom', String(zoom));
   gridEl.addEventListener('keydown', (e) => {
     if (editing) return;
-    if (e.key === 'ArrowUp') { e.preventDefault(); moveSel(-1, 0); }
-    else if (e.key === 'ArrowDown') { e.preventDefault(); moveSel(1, 0); }
-    else if (e.key === 'ArrowLeft') { e.preventDefault(); moveSel(0, -1); }
-    else if (e.key === 'ArrowRight') { e.preventDefault(); moveSel(0, 1); }
-    else if (e.key === 'Enter') { e.preventDefault(); startEditing(); }
-    else if (e.key === 'Tab') { e.preventDefault(); moveSel(0, 1); }
-    else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    const ctrl = e.ctrlKey || e.metaKey;
+    const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+    const arrow = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] }[e.key];
+    if (arrow) {
       e.preventDefault();
-      startEditing(e.key);
+      // Shift stretches the range from its anchor.
+      selectCell(sel.row + arrow[0], sel.col + arrow[1], { scroll: true, extend: e.shiftKey });
+    } else if (e.key === 'Enter') { e.preventDefault(); showEditor(null, 'edit'); }
+    else if (e.key === 'F2') { e.preventDefault(); showEditor(null, 'edit'); }
+    else if (e.key === 'Tab') { e.preventDefault(); selectCell(sel.row, sel.col + (e.shiftKey ? -1 : 1), { scroll: true }); }
+    else if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); clearSelection(); }
+    else if (e.key === 'Escape') { e.preventDefault(); selectCell(sel.row, sel.col); }
+    else if (ctrl && key === 'z' && !e.shiftKey) { e.preventDefault(); stepHistory(-1); }
+    else if (ctrl && (key === 'y' || (key === 'z' && e.shiftKey))) { e.preventDefault(); stepHistory(1); }
+    else if (ctrl && key === 'a') {
+      e.preventDefault();
+      anchor = { row: 1, col: 0 };
+      selectCell(builtGrid?.rows || 1, (builtGrid?.cols || 1) - 1, { extend: true, focus: false });
+    } else if (e.key.length === 1 && !ctrl && !e.altKey) {
+      e.preventDefault();
+      showEditor(e.key, 'enter');
     }
   });
   gridWrapEl.appendChild(gridEl);
@@ -1185,15 +1421,9 @@ export function mountCalcTile() {
   status.appendChild(statusEl);
   bodyEl.appendChild(status);
 
-  function moveSel(dr, dc) {
-    const row = Math.max(1, Math.min(current?.rows || DEFAULT_ROWS, sel.row + dr));
-    const col = Math.max(0, Math.min((current?.cols || DEFAULT_COLS) - 1, sel.col + dc));
-    selectCell(row, col, { scroll: true });
-  }
-
-  function startEditing(prefill = null) {
-    showEditor(prefill);
-  }
+  document.addEventListener('copy', onCopy);
+  document.addEventListener('cut', onCut);
+  document.addEventListener('paste', onPaste);
 
   void openNewest();
   return tileEl;
@@ -1203,6 +1433,10 @@ export function mountCalcTile() {
 export function unmountCalcTile() {
   if (current && dirty) void persist();
   hideEditor();
+  document.removeEventListener('copy', onCopy);
+  document.removeEventListener('cut', onCut);
+  document.removeEventListener('paste', onPaste);
+  onDragEnd();
   tileEl?.remove();
   tileEl = null;
   gridEl = null;
@@ -1309,10 +1543,29 @@ export function calcContextMenu(ctx) {
   if (cellEl) {
     const row = Number(cellEl.dataset.row);
     const col = Number(cellEl.dataset.col);
-    const ref = cellRef(row, col);
+    const rg = selRange();
+    const inRange = row >= rg.r1 && row <= rg.r2 && col >= rg.c1 && col <= rg.c2;
+    if (!inRange) selectCell(row, col);
+    const r = selRange();
+    let filled = false;
+    for (let rr = r.r1; rr <= r.r2 && !filled; rr++) {
+      for (let cc = r.c1; cc <= r.c2; cc++) if (current.cells.has(cellRef(rr, cc))) { filled = true; break; }
+    }
+    // Copy and cut go through the browser's own copy event, so the system
+    // clipboard gets the text as Ctrl+C would.
+    const viaKeys = (cmd) => () => {
+      cellElFor(sel.row, sel.col)?.focus();
+      try { document.execCommand(cmd); } catch { /* the keys still work */ }
+    };
     cellItems.push(
-      { type: 'item', label: t('plugin.calc.cell.edit', null, 'Edit cell'), icon: 'ui/pencil', onClick: () => { selectCell(row, col); showEditor(); } },
-      { type: 'item', label: t('plugin.calc.cell.clear', null, 'Clear cell'), icon: 'ui/eraser', disabled: !current.cells.has(ref), onClick: () => { selectCell(row, col); setCellValue(ref, '', { refresh: true }); } },
+      { type: 'item', label: t('plugin.calc.cell.edit', null, 'Edit cell'), icon: 'ui/pencil', onClick: () => { selectCell(row, col); showEditor(null, 'edit'); } },
+      { type: 'item', label: t('plugin.calc.cell.copy', null, 'Copy'), icon: 'ui/copy', onClick: viaKeys('copy') },
+      { type: 'item', label: t('plugin.calc.cell.cut', null, 'Cut'), icon: 'ui/scissors', disabled: !filled, onClick: viaKeys('cut') },
+      { type: 'item', label: t('plugin.calc.cell.paste', null, 'Paste'), icon: 'ui/clipboard', onClick: () => void pasteFromMenu() },
+      { type: 'item', label: t('plugin.calc.cell.clear', null, 'Clear cell'), icon: 'ui/eraser', disabled: !filled, onClick: clearSelection },
+      { type: 'separator' },
+      { type: 'item', label: t('plugin.calc.cell.undo', null, 'Undo'), icon: 'ui/undo', disabled: !undoStack.length, onClick: () => stepHistory(-1) },
+      { type: 'item', label: t('plugin.calc.cell.redo', null, 'Redo'), icon: 'ui/redo', disabled: !redoStack.length, onClick: () => stepHistory(1) },
       { type: 'separator' },
     );
   }

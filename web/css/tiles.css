@@ -2278,6 +2278,42 @@ body.compose-active #tile-overlay {
 /* Formula cells read as ordinary values (the formula shows in the bar). */
 .calc-cell--data.is-formula { color: var(--text); }
 
+/* What a value is decides where it sits: numbers right (their digits line
+   up), errors centred in the muted ink, text left. */
+.calc-cell--data.is-number { justify-content: flex-end; }
+.calc-cell--data.is-error { justify-content: center; color: var(--error, var(--muted)); }
+
+/* Text with empty cells to its right runs on over them, up to
+   --calc-spill, then ends in an ellipsis. */
+.calc-cell--data.is-spill { overflow: visible; z-index: 1; }
+.calc-cell--data.is-spill .calc-cell-text {
+  display: block;
+  max-width: var(--calc-spill);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: none;
+}
+
+/* A selected range: the faint fill of the selection, without the outline
+   (the active cell keeps it). */
+.calc-cell--data.is-in-range { background: color-mix(in srgb, var(--text) 8%, transparent); }
+.calc-cell--head.is-active,
+.calc-cell--rowhead.is-active { color: var(--text); }
+
+/* The right edge of a column header: drag to resize. */
+.calc-col-resize {
+  position: absolute;
+  top: 0;
+  right: -4px;
+  width: 8px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 1;
+  touch-action: none;
+}
+.calc-col-resize:hover { background: color-mix(in srgb, var(--text) 18%, transparent); }
+
 /* Overlay cell editor — positioned over the selected cell by JS. */
 .calc-cell-editor.ui-input {
   position: absolute;
@@ -2314,6 +2350,12 @@ body.compose-active #tile-overlay {
   color: var(--muted);
   background: linear-gradient(180deg, transparent, var(--bg-elevated) 70%);
   pointer-events: none;
+}
+/* An explanation (what an error means) reads as a sentence. */
+.calc-status.is-message {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 11.5px;
 }
 
 /* Empty state (no sheets): the title and the tools step aside; three icon

@@ -4,6 +4,21 @@
 
 ### Changed
 
+- **Calc (the spreadsheet) computes in Rust and reads Italian.** Formulas
+  are computed by one engine in the plugin, the same for the window, the
+  assistant (which now reads each formula's result) and the `.ods` export
+  (which now carries the results). `2,50` is two and a half, not 250;
+  `1.000` is a thousand; `0,1+0,2` shows 0,3; `10%` and `€ 5` count as
+  numbers. Errors say what went wrong (`#DIV/0!`, `#VALUE!`, `#CIRC!` for a
+  formula that refers to itself), explained in the status line. New
+  functions: IF, ROUND, ROUNDUP/DOWN, IFERROR, AND/OR/NOT, SUMIF, COUNTIF,
+  AVERAGEIF, COUNTA, MEDIAN, PRODUCT, MOD, POWER, SQRT, ABS, INT, text
+  functions; `;` separates arguments and the Italian names (SOMMA, SE,
+  ARROTONDA…) work. The grid gains Delete, Ctrl+Z / Ctrl+Y, Ctrl+C / X / V
+  (formulas move their references), range selection with the sum, average
+  and count of it, F2, arrows and Tab that confirm and move, resizable
+  columns, numbers aligned right with thousands grouped, long text running
+  over empty cells, and the save time in the interface language's clock.
 - **Calculator behaves like a pocket calculator.** It takes the keyboard
   (digits, operators, Enter, Backspace, Escape) while it is the window in
   front; `%` is a percentage (`50+10%` is 55, `200×15%` is 30); `2π` and

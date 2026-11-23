@@ -509,7 +509,7 @@ impl Tool for CalcRead {
     fn aliases(&self) -> &[&str] { &["read_sheet", "read_spreadsheet", "get_sheet", "get_spreadsheet"] }
     fn step_label(&self) -> &str { "Reading spreadsheet…" }
     fn doc_fragment(&self) -> Option<&str> {
-        Some("- `calc_read` — Read a spreadsheet's cells. params: `{ sheet_id?: string }` — returns `sheet_id`, `title`, `rows`, `cols`, `cells` (map of A1-style ref → value) and `updated_at`. Without `sheet_id` reads the most recently used spreadsheet.")
+        Some("- `calc_read` — Read a spreadsheet's cells. params: `{ sheet_id?: string }` — returns `sheet_id`, `title`, `rows`, `cols`, `cells` (map of A1-style ref → value as written), `values` (each formula cell's computed result) and `updated_at`. Without `sheet_id` reads the most recently used spreadsheet.")
     }
     fn humanize(&self, _r: &str, data: &Value) -> String {
         let title = data.get("title").and_then(|v| v.as_str()).unwrap_or("spreadsheet");
@@ -546,9 +546,10 @@ impl Tool for CalcRead {
                 "rows": rows,
                 "cols": cols,
                 "cells": cell_map,
+                "values": crate::engine::formula_results_json(&cells),
                 "count": cells.len(),
                 "updated_at": updated_at,
-                "hint": "To change cells use calc_write {cells:{A1:\"...\"}}; to compute from this data do the math yourself and write the result with calc_write, or add a formula like =SUM(B1:B10) which evaluates live in the Calc window.",
+                "hint": "`values` holds what each formula computes to (an error code like #DIV/0! when it fails) — report those instead of redoing the math. To change cells use calc_write {cells:{A1:\"...\"}}; a formula like =SUM(B1:B10) computes in the sheet.",
             }),
         ))
     }

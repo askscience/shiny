@@ -1,9 +1,9 @@
 # Calc plugin — agent tools
 
-Spreadsheets are just JSON to you. A spreadsheet is a grid of cells addressed like **A1**, **B2**, **BC42**; only non-empty cells are stored, as a JSON map `"A1" -> "value"`. Values are text; a value starting with `=` is a formula (e.g. `=SUM(A1:A3)`) the Calc window evaluates live.
+Spreadsheets are just JSON to you. A spreadsheet is a grid of cells addressed like **A1**, **B2**, **BC42**; only non-empty cells are stored, as a JSON map `"A1" -> "value"`. Values are text; a value starting with `=` is a formula (e.g. `=SUM(A1:A3)`) the sheet computes.
 
 **The JSON contract:**
-- `calc_read` — read a spreadsheet: `{"action":"calc_read","params":{"sheet_id":"…"}}` → returns `{ sheet_id, title, rows, cols, cells: { "A1": "100", "B1": "=SUM(A1:A3)", … }, count, updated_at, hint }`. The `cells` map IS the JSON you write back with `calc_write`.
+- `calc_read` — read a spreadsheet: `{"action":"calc_read","params":{"sheet_id":"…"}}` → returns `{ sheet_id, title, rows, cols, cells: { "A1": "100", "B1": "=SUM(A1:A3)", … }, values: { "B1": 600 }, count, updated_at, hint }`. The `cells` map IS the JSON you write back with `calc_write`; `values` is what each formula computes to — report those numbers instead of redoing the math (an error code like `#DIV/0!` means that formula fails).
 - `calc_write` — merge cell values: `{"action":"calc_write","params":{"sheet_id":"…","cells":{"A1":"100","B1":"=SUM(A1:A3)"}}}` → upserts only the listed cells and keeps everything else. An empty-string value (`"A1":""`) clears that cell. `cells` may also be an array of `[["A1","100"],["B1","200"]]` pairs or of `{"A1":"100"}` objects; instead of `cells` you may pass `"cell":{"A1":"100"}`, `"ref":"A1","value":"100"`, a table of rows `"data":[["Item","Cost"],["Flights",184]]` (row 1 lands in A1; `rows`/`values`/`table` work too), or bare `{"A1":"100"}` next to `sheet_id`. Values may be strings, numbers or booleans. `title` optionally renames the sheet. Returns `{ sheet_id, title, count }`.
 - `calc_clear` — clear ALL cell values (keeps the sheet): `{"action":"calc_clear","params":{"sheet_id":"…"}}` → returns `{ sheet_id, title, cleared }`.
 - `calc_create` — new spreadsheet: `{"action":"calc_create","params":{"title":"Budget","cells":{"A1":"Item","B1":"Cost"}}}` — `cells` is optional but **strongly recommended**: it creates AND fills the sheet in one call, so you never leave an empty document (the `data` table of rows works here too). Optional `rows` (1–500, default 100) and `cols` (1–52, default 26) size the grid; `title` defaults to "Untitled". A bad cell reference in `cells` is an error (as in `calc_write`) and no sheet is created. Returns `{ sheet_id, title, rows, cols, count }`.
@@ -16,7 +16,8 @@ Rules (CRITICAL — never leave an empty sheet, never wipe the user's data):
 - **NEVER call `calc_delete`** unless the user explicitly asks to delete the whole spreadsheet/document.
 - **NEVER clear the whole sheet with `calc_write`** (empty strings for most cells) — the tool refuses; use `calc_clear` instead.
 - To change one cell, pass only that cell — do not echo back cells you aren't changing.
-- To **compute** ("sum column B", "what's the total?"): `calc_read` first, then do the math yourself and `calc_write` the result, or write a formula like `=SUM(B1:B10)` and tell the user it evaluates live.
+- To **compute** ("sum column B", "what's the total?"): write a formula like `=SUM(B1:B10)`, then `calc_read` and report its value from `values`.
+- Formulas: `+ - * / ^`, `&` (join text), `= <> < > <= >=`, `%` after a number, refs `A1` / `$A$1`, ranges `A1:B3`, `"text"`, TRUE/FALSE, and `SUM AVERAGE MIN MAX COUNT COUNTA PRODUCT MEDIAN ROUND ROUNDUP ROUNDDOWN INT ABS SQRT POWER MOD IF IFERROR AND OR NOT SUMIF COUNTIF AVERAGEIF CONCAT LEN UPPER LOWER TRIM LEFT RIGHT`. Write numbers with a `.` decimal mark and no grouping (`2.5`, `1000`); separate arguments with `,`.
 
 **Formula + id gotchas (read this before writing formulas):**
 - Formula values are plain strings: write `"D2": "=B2-C2"`. NEVER add a `BigDecimal:` prefix or extra quotes around the formula — that produces malformed JSON and the whole tool call is dropped, so the sheet is never touched.

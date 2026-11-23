@@ -49,9 +49,28 @@ const MANIFEST: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
 // cells → .ods
 // ─────────────────────────────────────────────────────────────
 
+/// A cell's computed value, for a reader that does not recalculate on load
+/// (and for the numbers a person typed with `,`, `%` or a currency sign).
+#[derive(Debug, Clone, PartialEq)]
+pub enum OdsCached {
+    Number(f64),
+    Text(String),
+    Bool(bool),
+}
+
 /// Build a valid `.ods` file from a cell map ("A1" -> "value").
 pub fn cells_to_ods(cells: &BTreeMap<String, String>) -> Result<Vec<u8>, AppError> {
-    let content = content_xml(cells);
+    cells_to_ods_with_results(cells, &BTreeMap::new())
+}
+
+/// Like `cells_to_ods`, with each cell's computed value: a formula carries
+/// its result instead of 0, and a typed number (`2,50`, `10%`, `€ 5`) is
+/// written as a number with its text kept.
+pub fn cells_to_ods_with_results(
+    cells: &BTreeMap<String, String>,
+    results: &BTreeMap<String, OdsCached>,
+) -> Result<Vec<u8>, AppError> {
+    let content = content_xml(cells, results);
 
     let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
 
@@ -83,15 +102,15 @@ pub fn cells_to_ods(cells: &BTreeMap<String, String>) -> Result<Vec<u8>, AppErro
 }
 
 /// Build `content.xml` with one `<table:table>` holding every non-empty cell.
-fn content_xml(cells: &BTreeMap<String, String>) -> String {
-    // row (1-based) -> (col (0-based) -> value)
-    let mut by_row: BTreeMap<u32, BTreeMap<u32, String>> = BTreeMap::new();
+fn content_xml(cells: &BTreeMap<String, String>, results: &BTreeMap<String, OdsCached>) -> String {
+    // row (1-based) -> (col (0-based) -> (value, computed))
+    let mut by_row: BTreeMap<u32, BTreeMap<u32, (String, Option<OdsCached>)>> = BTreeMap::new();
     for (ref_, value) in cells {
         if let Some(pos) = parse_ref(ref_) {
             by_row
                 .entry(pos.0)
                 .or_default()
-                .insert(pos.1, value.clone());
+                .insert(pos.1, (value.clone(), results.get(ref_).cloned()));
         }
     }
 
@@ -122,7 +141,7 @@ fn content_xml(cells: &BTreeMap<String, String>) -> String {
             let mut row_xml = String::from("    <table:table-row>");
             for col in 0..=max_col {
                 match cols.get(&col) {
-                    Some(value) => row_xml.push_str(&cell_xml(value)),
+                    Some((value, cached)) => row_xml.push_str(&cell_xml(value, cached.as_ref())),
                     None => row_xml.push_str("<table:table-cell/>"),
                 }
             }
@@ -137,14 +156,34 @@ fn content_xml(cells: &BTreeMap<String, String>) -> String {
     )
 }
 
-fn cell_xml(value: &str) -> String {
+fn cell_xml(value: &str, cached: Option<&OdsCached>) -> String {
     let v = value.trim();
     if let Some(formula) = v.strip_prefix('=') {
-        // Formula cell: cached value 0; readers recalculate on load.
-        let of = to_openformula(formula);
+        // Formula cell: its computed value when known (0 otherwise); readers
+        // recalculate on load anyway.
+        let of = xml_escape(&to_openformula(formula));
+        match cached {
+            Some(OdsCached::Text(t)) => format!(
+                "<table:table-cell office:value-type=\"string\" table:formula=\"{of}\"><text:p>{}</text:p></table:table-cell>",
+                xml_escape(t)
+            ),
+            Some(OdsCached::Bool(b)) => format!(
+                "<table:table-cell office:value-type=\"boolean\" office:boolean-value=\"{b}\" table:formula=\"{of}\"><text:p>{}</text:p></table:table-cell>",
+                if *b { "TRUE" } else { "FALSE" }
+            ),
+            Some(OdsCached::Number(n)) => format!(
+                "<table:table-cell office:value-type=\"float\" office:value=\"{n}\" table:formula=\"{of}\"><text:p>{n}</text:p></table:table-cell>"
+            ),
+            None => format!(
+                "<table:table-cell office:value-type=\"float\" office:value=\"0\" table:formula=\"{of}\"><text:p>0</text:p></table:table-cell>"
+            ),
+        }
+    } else if let (Some(OdsCached::Number(n)), None) = (cached, clean_number(v)) {
+        // A number typed with decoration (`2,50`, `10%`, `€ 5`): the value is
+        // the number, the text is what the person typed.
         format!(
-            "<table:table-cell office:value-type=\"float\" office:value=\"0\" table:formula=\"{}\"><text:p>0</text:p></table:table-cell>",
-            xml_escape(&of)
+            "<table:table-cell office:value-type=\"float\" office:value=\"{n}\"><text:p>{}</text:p></table:table-cell>",
+            xml_escape(v)
         )
     } else if let Some(num) = clean_number(v) {
         // Numeric only when the canonical form round-trips exactly — values
@@ -171,31 +210,74 @@ fn clean_number(v: &str) -> Option<f64> {
     }
 }
 
-/// Translate an app formula body ("SUM(B1:B3)+A1") to OpenFormula ("of:=…").
+/// Translate an app formula body ("SUM(B1:B3;2)+A1") to OpenFormula
+/// ("of:=SUM([.B1:.B3];2)+[.A1]"): refs in brackets, `;` between arguments,
+/// "strings" and function names (`LOG10(…)`) left alone.
 fn to_openformula(body: &str) -> String {
+    let chars: Vec<char> = body.chars().collect();
+    let word_at = |start: usize| -> usize {
+        let mut j = start;
+        while j < chars.len() && (chars[j].is_alphanumeric() || matches!(chars[j], '_' | '.' | '$')) {
+            j += 1;
+        }
+        j
+    };
+    let is_ref = |w: &str| {
+        let w = w.replace('$', "");
+        let letters = w.chars().take_while(|c| c.is_ascii_alphabetic()).count();
+        let digits = &w[letters..];
+        (1..=2).contains(&letters)
+            && !digits.is_empty()
+            && digits.len() <= 5
+            && digits.chars().all(|c| c.is_ascii_digit())
+            && !digits.starts_with('0')
+    };
     let mut out = String::new();
-    let bytes = body.as_bytes();
     let mut i = 0;
-    while i < bytes.len() {
-        if let Some((s, e)) = read_cell_ref(body, i) {
-            if e < bytes.len() && bytes[e] == b':' {
-                if let Some((_, e2)) = read_cell_ref(body, e + 1) {
-                    out.push_str("[.");
-                    out.push_str(&body[s..e]);
-                    out.push_str(":.");
-                    out.push_str(&body[e + 1..e2]);
-                    out.push(']');
-                    i = e2;
-                    continue;
+    while i < chars.len() {
+        let c = chars[i];
+        if c == '"' {
+            out.push(c);
+            i += 1;
+            while i < chars.len() {
+                out.push(chars[i]);
+                if chars[i] == '"' {
+                    if chars.get(i + 1) == Some(&'"') {
+                        out.push('"');
+                        i += 2;
+                        continue;
+                    }
+                    i += 1;
+                    break;
                 }
+                i += 1;
             }
-            out.push_str(&body[s..e]);
-            i = e;
             continue;
         }
-        let ch = body[i..].chars().next().unwrap_or(' ');
-        out.push(ch);
-        i += ch.len_utf8();
+        if c.is_alphabetic() || c == '_' || c == '$' {
+            let end = word_at(i);
+            let word: String = chars[i..end].iter().collect();
+            let next = chars[end..].iter().find(|c| !c.is_whitespace());
+            if is_ref(&word) && next != Some(&'(') {
+                let up = word.to_uppercase();
+                if chars.get(end) == Some(&':') {
+                    let end2 = word_at(end + 1);
+                    let second: String = chars[end + 1..end2].iter().collect();
+                    if is_ref(&second) {
+                        out.push_str(&format!("[.{up}:.{}]", second.to_uppercase()));
+                        i = end2;
+                        continue;
+                    }
+                }
+                out.push_str(&format!("[.{up}]"));
+            } else {
+                out.push_str(&word);
+            }
+            i = end;
+            continue;
+        }
+        out.push(if c == ',' { ';' } else { c });
+        i += 1;
     }
     format!("of:={out}")
 }
@@ -391,51 +473,43 @@ fn parse_ref(ref_: &str) -> Option<(u32, u32)> {
     Some((row, col - 1))
 }
 
-/// If `s[i..]` starts with a valid cell ref, return (start, end).
-fn read_cell_ref(s: &str, i: usize) -> Option<(usize, usize)> {
-    let bytes = s.as_bytes();
-    let mut j = i;
-    let mut letters = 0;
-    while j < bytes.len() && bytes[j].is_ascii_uppercase() {
-        letters += 1;
-        j += 1;
-        if letters > 2 {
-            return None;
-        }
-    }
-    if letters == 0 {
-        return None;
-    }
-    let digits_start = j;
-    while j < bytes.len() && bytes[j].is_ascii_digit() {
-        j += 1;
-    }
-    if j == digits_start || j - digits_start > 4 {
-        return None;
-    }
-    Some((i, j))
-}
-
-/// Translate an OpenFormula string ("of:=SUM([.B1:.B3])+[.A1]") back to the
-/// app's plain form ("=SUM(B1:B3)+A1").
+/// Translate an OpenFormula string ("of:=SUM([.B1:.B3];2)+[.A1]") back to the
+/// app's plain form ("=SUM(B1:B3,2)+A1"); "strings" stay as they are.
 fn from_openformula(src: &str) -> String {
     let body = src.strip_prefix("of:").unwrap_or(src);
+    let chars: Vec<char> = body.chars().collect();
     let mut out = String::new();
-    let bytes = body.as_bytes();
     let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'[' {
-            if let Some(rel) = body[i + 1..].find(']') {
-                let inner = &body[i + 1..i + 1 + rel];
-                let cleaned: String = inner.chars().filter(|c| *c != '.').collect();
-                out.push_str(&cleaned);
-                i = i + 1 + rel + 1;
+    while i < chars.len() {
+        let c = chars[i];
+        if c == '"' {
+            out.push(c);
+            i += 1;
+            while i < chars.len() {
+                out.push(chars[i]);
+                if chars[i] == '"' {
+                    if chars.get(i + 1) == Some(&'"') {
+                        out.push('"');
+                        i += 2;
+                        continue;
+                    }
+                    i += 1;
+                    break;
+                }
+                i += 1;
+            }
+            continue;
+        }
+        if c == '[' {
+            if let Some(rel) = chars[i + 1..].iter().position(|ch| *ch == ']') {
+                let inner: String = chars[i + 1..i + 1 + rel].iter().filter(|ch| **ch != '.').collect();
+                out.push_str(&inner);
+                i += rel + 2;
                 continue;
             }
         }
-        let ch = body[i..].chars().next().unwrap_or(' ');
-        out.push(ch);
-        i += ch.len_utf8();
+        out.push(if c == ';' { ',' } else { c });
+        i += 1;
     }
     if out.starts_with('=') {
         out
@@ -517,6 +591,22 @@ mod tests {
     }
 
     #[test]
+    fn computed_results_are_written() {
+        let cells = map(&[("A1", "2,50"), ("B1", "=A1*2"), ("C1", "=\"a\"&\"b\""), ("D1", "plain")]);
+        let mut results = BTreeMap::new();
+        results.insert("A1".to_string(), OdsCached::Number(2.5));
+        results.insert("B1".to_string(), OdsCached::Number(5.0));
+        results.insert("C1".to_string(), OdsCached::Text("ab".into()));
+        let xml = content_xml(&cells, &results);
+        assert!(xml.contains("office:value=\"2.5\"><text:p>2,50</text:p>"), "{xml}");
+        assert!(xml.contains("office:value=\"5\" table:formula"), "{xml}");
+        assert!(xml.contains("office:value-type=\"string\" table:formula"), "{xml}");
+        let back = ods_to_cells(&cells_to_ods_with_results(&cells, &results).expect("write")).expect("read");
+        assert_eq!(back.get("B1").map(String::as_str), Some("=A1*2"));
+        assert_eq!(back.get("D1").map(String::as_str), Some("plain"));
+    }
+
+    #[test]
     fn leading_zero_stays_text() {
         let cells = map(&[("A1", "02115"), ("B1", "4.0"), ("C1", "1e3")]);
         let ods = cells_to_ods(&cells).expect("write");
@@ -531,8 +621,11 @@ mod tests {
 
     #[test]
     fn formula_translation() {
-        assert_eq!(to_openformula("SUM(B1:B3)+A1"), "of:=SUM([.B1:.B3])+A1");
-        assert_eq!(to_openformula("A1^2"), "of:=A1^2");
+        assert_eq!(to_openformula("SUM(B1:B3)+A1"), "of:=SUM([.B1:.B3])+[.A1]");
+        assert_eq!(to_openformula("ROUND(B5,1)&\"A1,b\""), "of:=ROUND([.B5];1)&\"A1,b\"");
+        assert_eq!(to_openformula("LOG10($A$1)"), "of:=LOG10([.$A$1])");
+        assert_eq!(from_openformula("of:=ROUND([.B5];1)&\"x;y\""), "=ROUND(B5,1)&\"x;y\"");
+        assert_eq!(to_openformula("A1^2"), "of:=[.A1]^2");
         assert_eq!(from_openformula("of:=SUM([.B1:.B3])+A1"), "=SUM(B1:B3)+A1");
         assert_eq!(from_openformula("of:=SUM(B1:B3)"), "=SUM(B1:B3)");
         assert_eq!(from_openformula("[.A1]"), "=A1");
