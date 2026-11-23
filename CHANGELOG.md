@@ -12,6 +12,8 @@
   now-playing artwork come through the plugin (the same Radio Browser search
   the assistant uses, and the User-Agent MusicBrainz asks for) instead of the
   window calling those services itself.
+- **Mail: the provider list is the plugin's.** The add-account form no
+  longer falls back on its own, older copy of the provider servers.
 - **Updates: a package cut off mid-install counts as failed for the
   assistant too**, as the window already showed it.
 - **Impress: slides are stored the same way whoever writes them.** The
@@ -27,6 +29,10 @@
   resizing or retyping a caption and changing your style guidelines or its
   lock no longer send the whole project back; the AI can move a caption too,
   and can never unlock a style you locked.
+- **Installer: the account fields follow the same rules while you type and
+  at the review.** A computer name starting or ending with a dot and a
+  letters-only password are refused by both; so are the username `root` and
+  a `:` in the full name.
 - **Installer: the disk step knows what the last step will refuse.** Which
   disks can be erased, which partitions can take the system and which EFI
   partition is reused are decided by the installer's Rust and sent with the

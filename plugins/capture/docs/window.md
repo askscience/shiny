@@ -52,6 +52,12 @@ Captions), a preview that plays the timeline, and a side panel:
   (the AI's guide, the user's guidelines, *Keep this style*, *Something
   completely different*).
 
+Every edit is an engine operation (`PUT` with `ops`, see [tools](tools.md)):
+moving, resizing or retyping a caption is `update_caption`, the user's
+guidelines and *Keep this style* are `set_style_user` (which only the window
+may send). The timeline's length is the engine's `duration`, sent with the
+project.
+
 Keys: Space play/pause, S split at the playhead, Delete, arrows (Shift: 5 s),
 Ctrl+Z undo. Ctrl+wheel and pinch zoom the timeline.
 

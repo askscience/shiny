@@ -41,6 +41,9 @@ other code changes.
   check once installed, a cross if it failed. This comes from
   `APT::Status-Fd` (`dlstatus:` / `pmstatus:` / `pmerror:` lines, parsed by
   `PackageManager::progress_event`); other managers show the last log line.
+  When the job ends, a package still unpacking or configuring did not finish:
+  `Progress::end` (called by `Job::finish`) adds it to `failed`, so the window
+  and the AI tools, which read the same snapshot, both show it as failed.
   The Ollama tab shows the same bar: each step (stopping the service, the
   installer's `>>> …` steps, verification) as a moving bar with its text, and
   the bundle download as "DOWNLOAD · 42%" parsed from curl's progress bar

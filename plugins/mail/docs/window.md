@@ -38,6 +38,9 @@ capitals for labels and metadata, grey pill buttons with a trailing arrow.
   Its actions row is built once per shell and is the reader's pane bar
   (`data-pane-bar`), so it outlives the message re-renders.
 - **Footer**: mono folder + message count, cache note and connection status.
+- **Add-account form**: the provider list and each provider's servers come
+  from `GET /api/mail/status` (`presets`, the plugin's `mail.rs` PRESETS —
+  the list account setup checks against); the window keeps no copy.
 - **Action bar** (`actionBar`, the window's last child): Compose, shown on a
   phone only.
 
