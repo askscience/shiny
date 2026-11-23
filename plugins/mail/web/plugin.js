@@ -837,18 +837,6 @@ function renderSetup(root) {
   root.appendChild(wrap);
 }
 
-function defaultPresets() {
-  return [
-    { provider: 'gmail', label: 'Gmail', imap_host: 'imap.gmail.com', imap_port: 993, imap_security: 'ssl', smtp_host: 'smtp.gmail.com', smtp_port: 465, smtp_security: 'ssl' },
-    { provider: 'outlook', label: 'Outlook', imap_host: 'outlook.office365.com', imap_port: 993, imap_security: 'ssl', smtp_host: 'smtp-mail.outlook.com', smtp_port: 587, smtp_security: 'starttls' },
-    { provider: 'yahoo', label: 'Yahoo Mail', imap_host: 'imap.mail.yahoo.com', imap_port: 993, imap_security: 'ssl', smtp_host: 'smtp.mail.yahoo.com', smtp_port: 465, smtp_security: 'ssl' },
-    { provider: 'icloud', label: 'iCloud Mail', imap_host: 'imap.mail.me.com', imap_port: 993, imap_security: 'ssl', smtp_host: 'smtp.mail.me.com', smtp_port: 587, smtp_security: 'starttls' },
-    { provider: 'zoho', label: 'Zoho Mail', imap_host: 'imap.zoho.com', imap_port: 993, imap_security: 'ssl', smtp_host: 'smtp.zoho.com', smtp_port: 465, smtp_security: 'ssl' },
-    { provider: 'fastmail', label: 'Fastmail', imap_host: 'imap.fastmail.com', imap_port: 993, imap_security: 'ssl', smtp_host: 'smtp.fastmail.com', smtp_port: 465, smtp_security: 'ssl' },
-    { provider: 'proton', label: 'Proton (Bridge)', imap_host: '127.0.0.1', imap_port: 1143, imap_security: 'none', smtp_host: '127.0.0.1', smtp_port: 1025, smtp_security: 'none' },
-  ];
-}
-
 /** The add-account form: provider, credentials and optional custom servers. */
 function buildAccountForm({ onboarding }) {
   const form = h('div', 'mail-form-card');
@@ -857,7 +845,9 @@ function buildAccountForm({ onboarding }) {
     : t('plugin.mail.form.addAnother', null, 'Add another account')));
 
   const providerSel = select({
-    options: (presets.length ? presets : defaultPresets()).map((p) => ({ value: p.provider, label: p.label })),
+    // The providers and their servers are the plugin's (`mail.rs` PRESETS,
+    // sent with /status): the same list the account setup checks against.
+    options: presets.map((p) => ({ value: p.provider, label: p.label })),
     value: 'gmail',
   });
   const emailInput = input({ type: 'email', placeholder: t('plugin.mail.form.emailPlaceholder', null, 'you@example.com'), autocomplete: 'username' });
@@ -871,8 +861,7 @@ function buildAccountForm({ onboarding }) {
   const smtpSec = select({ options: ['ssl', 'starttls', 'none'], value: 'ssl' });
 
   providerSel.select.addEventListener('change', () => {
-    const p = presets.find((x) => x.provider === providerSel.select.value)
-      || defaultPresets().find((x) => x.provider === providerSel.select.value);
+    const p = presets.find((x) => x.provider === providerSel.select.value);
     if (p) {
       emailInput.value = '';
       imapHost.value = p.imap_host;
@@ -928,7 +917,7 @@ function buildAccountForm({ onboarding }) {
   form.appendChild(helpEl);
 
   function updateHelp(provider) {
-    const p = presets.find((x) => x.provider === provider) || defaultPresets().find((x) => x.provider === provider);
+    const p = presets.find((x) => x.provider === provider);
     const helpText = PROVIDER_HELP[provider] || PROVIDER_HELP.custom;
     helpCopy.textContent = '';
     const label = h('strong', null, (p?.label || provider) + ': ');
