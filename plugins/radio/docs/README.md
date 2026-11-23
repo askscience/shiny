@@ -16,7 +16,7 @@ proxy** (browsers cannot read Shoutcast/Icecast metadata directly).
 | **Author** | `shiny` |
 | **Rust crate** | `shiny-radio-plugin` → `libshiny_radio_plugin.so` |
 | **Agent tools** | 3 — [`radio_search`](./tools.md#radio_search), [`radio_play`](./tools.md#radio_play), [`radio_stop`](./tools.md#radio_stop) |
-| **REST routes** | 1 — [`GET /api/radio/nowplaying`](./routes.md) |
+| **REST routes** | 3 — [`nowplaying`, `search`, `artwork`](./routes.md) |
 | **Window surface** | yes — [`web/plugin.js`](./window.md) (`surface: true`) |
 | **Database tables** | none |
 | **Runtime dependencies** | `shiny-plugin-sdk`, `reqwest` (rustls), `axum`, `futures`, `tokio`, `uuid`, `serde`, `semver` |

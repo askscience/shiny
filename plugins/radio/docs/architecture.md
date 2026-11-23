@@ -8,7 +8,8 @@ plugins/radio/
 │   ├── lib.rs              module wiring
 │   ├── plugin.rs           manifest, tool + route registration, entry
 │   ├── radio_browser.rs    Radio Browser API client
-│   ├── routes.rs           /api/radio/nowplaying (ICY metadata)
+│   ├── routes.rs           /api/radio/nowplaying (ICY), /search, /artwork
+│   ├── artwork.rs          MusicBrainz → Cover Art Archive, cached
 │   └── tools/mod.rs        radio_search / radio_play / radio_stop
 └── web/
     ├── plugin.js           the Radio window (singleton <audio>)

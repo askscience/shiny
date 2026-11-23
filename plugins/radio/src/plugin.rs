@@ -31,6 +31,8 @@ impl Plugin for RadioPlugin {
             .skills(include_str!("../skills/radio.md"))
             .context_line("Radio: enabled — the Radio window can tune internet radio stations.");
         builder.route(RouteSpec::get("/api/radio/nowplaying", "nowplaying"));
+        builder.route(RouteSpec::get("/api/radio/search", "search"));
+        builder.route(RouteSpec::get("/api/radio/artwork", "artwork"));
         builder.tools([
             Arc::new(crate::tools::RadioSearch) as Arc<dyn shiny_plugin_sdk::tools::Tool>,
             Arc::new(crate::tools::RadioPlay) as Arc<dyn shiny_plugin_sdk::tools::Tool>,

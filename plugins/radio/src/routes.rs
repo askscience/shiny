@@ -20,9 +20,56 @@ pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
     let ctx = ctx.clone();
     match tag {
         "nowplaying" => Some(nowplaying(ctx)),
+        "search" => Some(search()),
+        "artwork" => Some(artwork()),
         _ => None,
     }
 }
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct SearchQuery {
+    q: String,
+    limit: Option<u32>,
+}
+
+/// The station grid: Radio Browser through the plugin's client — the same
+/// hosts, ranking (votes, broken streams hidden) and User-Agent as the AI's
+/// `radio_search`. An empty query lists the most voted stations.
+fn search() -> RouteHandler {
+    bridged_route(move |req: axum::extract::Request| async move {
+        let _uid = user_id(&req)?;
+        let (q, _) = take_query::<SearchQuery>(req).await?;
+        let term = q.q.trim().to_string();
+        let stations = crate::radio_browser::RadioBrowserClient::new()
+            .search(&crate::radio_browser::StationQuery {
+                name: Some(term.as_str()).filter(|t| !t.is_empty()),
+                limit: q.limit.unwrap_or(24).clamp(1, 100),
+                ..Default::default()
+            })
+            .await?;
+        Ok(axum::Json(json!({ "success": true, "data": { "stations": stations } })).into_response())
+    })
+}
+
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct ArtworkQuery {
+    title: String,
+}
+
+/// The now-playing track as artist and title, and its cover art (MusicBrainz
+/// → Cover Art Archive, see `artwork.rs`).
+fn artwork() -> RouteHandler {
+    bridged_route(move |req: axum::extract::Request| async move {
+        let _uid = user_id(&req)?;
+        let (q, _) = take_query::<ArtworkQuery>(req).await?;
+        let raw: String = q.title.chars().take(300).collect();
+        let (artist, title) = crate::artwork::split_track_title(&raw);
+        let cover = crate::artwork::cover_for(artist.as_deref(), &title).await;
+        Ok(axum::Json(json!({ "success": true, "data": { "artist": artist, "title": title, "artwork": cover } })).into_response())
+    })
+}
+
 #[derive(Deserialize)]
 struct NowPlayingQuery {
     url: String,

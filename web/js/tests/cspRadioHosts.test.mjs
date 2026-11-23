@@ -1,14 +1,14 @@
 /**
- * The Radio window talks to external services from the shell document.
+ * The Radio window and the shell's Content-Security-Policy.
  *
- * `plugins/radio/web/plugin.js` fetches the public Radio Browser directory
- * (station grid), MusicBrainz and the Cover Art Archive (now-playing artwork)
- * directly from the browser, and its `<audio>` element opens each station's
- * real stream URL. All of that is governed by `CONTENT_SECURITY_POLICY` in
- * `src/api/mod.rs`: without the hosts in `connect-src` every fetch fails with
- * a CSP violation and the window paints "Radio Browser unreachable"; without
- * external `media-src` the stream itself is refused. This test keeps the hosts
- * used by the plugin and the policy in sync.
+ * `plugins/radio/web/plugin.js` reaches the station directory (Radio Browser)
+ * and the now-playing artwork (MusicBrainz, Cover Art Archive) only through
+ * its plugin's routes — the plugin sends the User-Agent those services ask
+ * for — while its `<audio>` element opens each station's real stream URL,
+ * which `media-src` in `CONTENT_SECURITY_POLICY` (`src/api/mod.rs`) must
+ * admit. `connect-src` still lists the external hosts for Radio windows from
+ * before 0.1.3 (plugins update apart from the shell); they can go once those
+ * are gone.
  *
  * Run: node web/js/tests/cspRadioHosts.test.mjs
  */
@@ -41,15 +41,6 @@ const directives = new Map(
   }),
 );
 
-function hostOf(url) {
-  try {
-    const u = new URL(url);
-    return `${u.protocol}//${u.host}`;
-  } catch {
-    return null;
-  }
-}
-
 /** CSP host-source matching: exact origin or a `*.` subdomain wildcard. */
 function sourceAllows(sources, origin) {
   const target = new URL(origin);
@@ -67,34 +58,23 @@ function sourceAllows(sources, origin) {
 const connectSrc = directives.get('connect-src') ?? [];
 const mediaSrc = directives.get('media-src') ?? [];
 
-// Every API host the window may try must be admitted by connect-src.
-const jsHosts = [...pluginJs.matchAll(/'(https:\/\/[^']+)'/g)]
-  .map((m) => hostOf(m[1]))
-  .filter((host) => host && host.includes('api.radio-browser.info'));
-const rustHosts = [...pluginRs.matchAll(/"(https:\/\/[^"]+)"/g)]
-  .map((m) => hostOf(m[1]))
-  .filter((host) => host && host.includes('api.radio-browser.info'));
-
-check('the window has Radio Browser API hosts', jsHosts.length > 0);
-check(
-  'plugin.js and radio_browser.rs try the same Radio Browser hosts',
-  JSON.stringify(jsHosts) === JSON.stringify(rustHosts),
-  `js: ${jsHosts.join(', ')} · rust: ${rustHosts.join(', ')}`,
-);
-for (const host of new Set(jsHosts)) {
-  check(`connect-src allows ${host}`, sourceAllows(connectSrc, host), connectSrc.join(' '));
+// The window itself calls no external API: only its plugin's routes.
+for (const host of ['radio-browser.info', 'musicbrainz.org', 'coverartarchive.org']) {
+  check(`the window does not fetch ${host} itself`, !pluginJs.includes(host));
 }
+for (const route of ['/api/radio/search', '/api/radio/artwork', '/api/radio/nowplaying']) {
+  check(`the window uses ${route}`, pluginJs.includes(route));
+}
+check('the plugin knows the Radio Browser hosts', /https:\/\/[a-z0-9.]*api\.radio-browser\.info/.test(pluginRs));
 
-// MusicBrainz looks up the release; Cover Art Archive answers with a 307 to
-// archive.org (and then a per-server `*.archive.org` node), so the whole
-// redirect chain must be admitted too.
+// Older Radio windows (before 0.1.3) fetch these directly: keep them admitted.
 for (const origin of [
+  'https://all.api.radio-browser.info',
   'https://musicbrainz.org',
   'https://coverartarchive.org',
   'https://archive.org',
-  'https://dn710701.ca.archive.org',
 ]) {
-  check(`connect-src allows ${origin}`, sourceAllows(connectSrc, origin), connectSrc.join(' '));
+  check(`connect-src still allows ${origin} for older windows`, sourceAllows(connectSrc, origin), connectSrc.join(' '));
 }
 
 check(
@@ -113,4 +93,4 @@ if (failures) {
   process.exit(1);
 }
 
-console.log('\nthe Radio window\'s external hosts and stream media are allowed by the CSP');
+console.log('\nthe Radio window goes through its plugin, and its streams are allowed by the CSP');

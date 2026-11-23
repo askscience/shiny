@@ -11,8 +11,12 @@ import {
  * of station artwork from the Radio Browser directory, each captioned in mono
  * below. The artwork is mirrored as a blurred ambient glow behind the surface.
  *
- * Now-playing track titles come from core's /api/radio/nowplaying route,
- * which parses ICY stream metadata server-side (browsers can't).
+ * The window talks only to its plugin: the station grid comes from
+ * /api/radio/search (Radio Browser through the same client as the AI's
+ * `radio_search`), track titles from /api/radio/nowplaying (ICY metadata,
+ * which browsers can't read) and the artwork from /api/radio/artwork
+ * (MusicBrainz → Cover Art Archive, with the User-Agent MusicBrainz asks
+ * for). Only the stream itself is played straight from the station.
  *
  * AI wiring:
  * - `radio_play` tool artifacts (type `radio_station`) arrive via
@@ -26,14 +30,6 @@ import { getToken } from '../../js/api.js';
 import { t } from '../../js/i18n.js';
 
 export const RADIO_PLUGIN = 'radio';
-
-// `all` round-robins the live API servers via DNS; the named hosts are
-// fallbacks (the old fi1 host no longer resolves).
-const API_HOSTS = [
-  'https://all.api.radio-browser.info',
-  'https://de1.api.radio-browser.info',
-  'https://de2.api.radio-browser.info',
-];
 
 const NOW_PLAYING_KEY = 'radio.now_playing';
 const POLL_MS = 20000;
@@ -168,7 +164,7 @@ async function pollNowPlaying() {
     const title = json?.data?.title?.trim();
     if (title && title !== nowPlaying?.raw) {
       const previous = nowPlaying?.raw || null;
-      nowPlaying = { raw: title, ...splitTrackTitle(title) };
+      nowPlaying = { raw: title, artist: null, title };
       artworkUrl = null;
       renderHero();
       void resolveArtwork();
@@ -187,73 +183,44 @@ async function pollNowPlaying() {
   } catch (_) { /* transient — next poll retries */ }
 }
 
-/** "Artist — Title" (or "Artist - Title") → { artist, title } */
-function splitTrackTitle(raw) {
-  const m = raw.split(/\s+[—–-]\s+/);
-  if (m.length >= 2) return { artist: m[0].trim(), title: m.slice(1).join(' — ').trim() };
-  return { artist: null, title: raw };
-}
-
-/* ── Artwork: MusicBrainz → Cover Art Archive ───────────────── */
-
-async function fetchJson(url) {
-  const res = await fetch(url, {
-    headers: { 'User-Agent': 'Shiny/0.1 (https://github.com/askscience/shiny)' },
-  });
+/** The plugin's GET, with the session token. */
+async function pluginGet(path) {
+  const res = await fetch(path, { headers: { Authorization: `Bearer ${getToken()}` } });
   if (!res.ok) throw new Error(`${res.status}`);
-  return res.json();
+  return (await res.json())?.data;
 }
+
+/* ── Artwork: the plugin splits "Artist — Title" and looks the cover up
+   (MusicBrainz → Cover Art Archive, with the User-Agent MusicBrainz asks
+   for, which a page cannot send). ─────────────────────────────────── */
 
 async function resolveArtwork() {
-  if (!nowPlaying?.title) return;
-  const key = `${nowPlaying.artist || ''}|${nowPlaying.title}`.toLowerCase();
+  if (!nowPlaying?.raw) return;
+  const key = nowPlaying.raw.toLowerCase();
   if (artworkCache.has(key)) {
-    artworkUrl = artworkCache.get(key);
+    const hit = artworkCache.get(key);
+    nowPlaying = { ...nowPlaying, artist: hit.artist, title: hit.title };
+    artworkUrl = hit.artwork;
     renderHero();
     return;
   }
+  const raw = nowPlaying.raw;
   try {
-    const q = nowPlaying.artist
-      ? `recording:"${nowPlaying.title}" AND artist:"${nowPlaying.artist}"`
-      : `recording:"${nowPlaying.title}"`;
-    const mb = await fetchJson(
-      `https://musicbrainz.org/ws/2/recording/?query=${encodeURIComponent(q)}&fmt=json&limit=1`,
-    );
-    const releaseId = mb?.recordings?.[0]?.releases?.[0]?.id;
-    if (!releaseId) throw new Error('no release');
-    const caa = await fetchJson(`https://coverartarchive.org/release/${releaseId}`);
-    const front = caa?.images?.find((i) => i.front) || caa?.images?.[0];
-    const url = front?.thumbnails?.large || front?.image || null;
-    artworkCache.set(key, url);
-    artworkUrl = url;
+    const data = await pluginGet(`/api/radio/artwork?title=${encodeURIComponent(raw)}`);
+    const hit = { artist: data?.artist || null, title: data?.title || raw, artwork: data?.artwork || null };
+    artworkCache.set(key, hit);
+    if (nowPlaying?.raw !== raw) return; // the track changed meanwhile
+    nowPlaying = { ...nowPlaying, artist: hit.artist, title: hit.title };
+    artworkUrl = hit.artwork;
     renderHero();
-  } catch (_) {
-    artworkCache.set(key, null);
-  }
+  } catch (_) { /* no artwork this time */ }
 }
 
-/* ── Radio Browser API (browser-direct) ─────────────────────── */
-
-async function rbFetch(path) {
-  let lastErr = null;
-  for (const host of API_HOSTS) {
-    try {
-      const res = await fetch(`${host}/json/${path}`);
-      if (res.ok) return await res.json();
-      lastErr = new Error(`Radio Browser error: ${res.status}`);
-    } catch (e) {
-      lastErr = e;
-    }
-  }
-  throw (lastErr || new Error('Radio Browser unreachable'));
-}
+/* ── Stations: Radio Browser through the plugin (the AI's search) ── */
 
 async function searchStations(text) {
-  const term = text.trim();
-  const path = term
-    ? `stations/search?name=${encodeURIComponent(term)}&hidebroken=true&order=votes&reverse=true&limit=24`
-    : 'stations/topvote/24?hidebroken=true';
-  return rbFetch(path);
+  const data = await pluginGet(`/api/radio/search?q=${encodeURIComponent(text.trim())}&limit=24`);
+  return data?.stations || [];
 }
 
 function toStation(raw) {

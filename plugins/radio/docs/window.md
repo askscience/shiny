@@ -46,7 +46,9 @@ block of `web/css/tiles.css`):
   (or the stop control) halts the element.
 - Polls `GET /api/radio/nowplaying` for ICY metadata and raises a
   **"Now playing"** notification on track change (polling starts in `mount()`
-  and stops in `unmount()`).
+  and stops in `unmount()`); on a new track it asks `GET /api/radio/artwork`
+  for the artist, title and cover. The station grid comes from
+  `GET /api/radio/search`.
 - `radioContextMenu()` contributes play/stop/volume entries.
 
 ## Development

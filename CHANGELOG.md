@@ -4,6 +4,10 @@
 
 ### Changed
 
+- **Radio searches like the assistant.** The station grid and the
+  now-playing artwork come through the plugin (the same Radio Browser search
+  the assistant uses, and the User-Agent MusicBrainz asks for) instead of the
+  window calling those services itself.
 - **Updates: a package cut off mid-install counts as failed for the
   assistant too**, as the window already showed it.
 - **Impress: slides are stored the same way whoever writes them.** The
