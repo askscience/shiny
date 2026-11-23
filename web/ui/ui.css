@@ -145,21 +145,22 @@
   pointer-events: none; width: 14px; height: 14px;
 }
 
-/* Search — a pill with the magnifier as its round action at the end. The plate
-   is the theme's elevated surface and the disc is the theme's ink with the
-   glyph cut out of it, so the control reads the same in light and dark themes:
-   inverting both variables (or just `--search-plate` / `--search-ink`) in a
-   theme is enough to re-skin it.
+/* Search — a soft pill in the grey of the window bar's own buttons (the
+   editorial `--ed-pill`), the magnifier a quiet glyph at its start. It is not
+   a button: the field is the control, so nothing in it competes with the
+   window's real actions. Selected, the pill turns to the sheet's white (or the
+   dark theme's surface) with a hairline in the accent colour; the clear button
+   shows only while there is text to clear.
 
-   A search field normally sits in a row of 32–34px window controls, so the pill
-   is that tall and flat by default: it matches the buttons beside it and its
-   shadow cannot bleed out of the row. A page-level search (the Radio/YouTube
-   heroes) opts into the larger floating pill via `--search-size` and
-   `--search-shadow`. */
+   A theme or a window re-skins it through `--search-plate` (and
+   `--search-plate-hover`). A search field normally sits in a row of 32–34px
+   window controls, so the pill is that tall by default; a page-level search
+   (the Radio/YouTube heroes) opts into a larger one via `--search-size`. */
 .ui-search {
   --search-size: 34px;
-  --search-plate: var(--surface-strong, var(--bg-elevated, var(--surface)));
-  --search-ink: var(--text);
+  --search-plate: var(--ed-pill, var(--glass-strong));
+  --search-plate-hover: var(--ed-pill-hover, var(--glass-hover));
+  --search-plate-focus: var(--bg-elevated, var(--surface));
   --search-shadow: none;
   position: relative;
   display: flex;
@@ -169,48 +170,46 @@
   border-radius: 999px;
   background: var(--search-plate);
   box-shadow: var(--search-shadow);
-  transition: box-shadow var(--motion-feedback) var(--motion-ease);
+  /* The ring is drawn inside the edge (negative offset), so 1px reads as a
+     hairline; at rest it is invisible, selected it is the accent. */
+  outline: 1px solid transparent;
+  outline-offset: -1px;
+  transition: background var(--motion-feedback) var(--motion-ease), outline-color var(--motion-feedback) var(--motion-ease);
 }
-/* The pill carries its hairline in every state. A negative outline offset puts
-   the ring *inside* the pill's edge, where 1px reads as a hairline instead of
-   the 2px-looking floating ring `outline-offset: 1px` produced — and an outline
-   still composes safely with a theme whose `--shadow-sm` is `none`. The colour
-   is the theme's border token: dark ink on light themes, light ink on dark. */
-.ui-search { outline: 1px solid var(--glass-border); outline-offset: -1px; }
-/* Focus keeps the same very thin ring and only recolours it to the accent —
-   the state reads from the colour, never from a fatter or floating outline. */
-.ui-search:focus-within { outline-color: var(--accent); }
+.ui-search:hover { background: var(--search-plate-hover); }
+.ui-search:focus-within { background: var(--search-plate-focus); outline-color: var(--accent); }
 .ui-search .ui-input {
   flex: 1 1 auto;
   min-width: 0;
   height: var(--search-size);
-  /* Text inset scales with the pill (0.6 of its height, as in the design). */
-  padding: 0 6px 0 calc(var(--search-size) * 0.6);
+  padding: 0 12px 0 0;
   border-radius: inherit;
   font-family: var(--font-body);
 }
-/* Plate and outline live on the pill: the input inside stays bare in every
-   state a theme may have styled (some themes inset-shadow their fields). */
+/* Plate and ring live on the pill: the input inside stays bare in every state
+   a theme may have styled (some themes inset-shadow their fields). */
 .ui-search .ui-input,
 .ui-search .ui-input:hover,
 .ui-search .ui-input:focus { border: 0; background: transparent; box-shadow: none; }
 .ui-search-action {
+  order: -1;
   flex: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: var(--search-size);
+  width: calc(var(--search-size) * 0.9);
   height: var(--search-size);
-  padding: 0;
+  padding: 0 0 0 2px;
   border: 0;
   border-radius: 50%;
-  background: var(--search-ink);
-  color: var(--search-plate);
-  cursor: pointer;
-  transition: background var(--motion-feedback) var(--motion-ease);
+  background: transparent;
+  color: var(--muted);
+  cursor: text;
+  transition: color var(--motion-feedback) var(--motion-ease);
 }
-.ui-search-action:hover { background: color-mix(in srgb, var(--search-ink) 88%, var(--accent, var(--search-ink)) 12%); }
-.ui-search--clearable .ui-search-clear { flex: none; margin-right: 2px; }
+.ui-search:focus-within .ui-search-action { color: var(--text); }
+.ui-search--clearable .ui-search-clear { flex: none; margin-right: 3px; color: var(--muted); }
+.ui-search--clearable:has(.ui-input:placeholder-shown) .ui-search-clear { display: none; }
 @media (pointer: coarse) { .ui-search { --search-size: 44px; } }
 
 /* Native domain controls must honor the selected application font as well. */

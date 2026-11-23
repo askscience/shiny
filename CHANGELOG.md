@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **A quieter search field everywhere** (Files, Mail, Browser, Radio,
+  YouTube, Studio, the Plugins window): a soft pill in the grey of the window
+  bar's buttons, the magnifier a small glyph at its start instead of a black
+  disc at its end. Selected, it turns to the window's surface with a thin
+  ring in the accent colour; the clear button shows only while there is text.
+
 ### Fixed
 
 - **Word: a narrow window keeps the page.** Below 560 px a window on a

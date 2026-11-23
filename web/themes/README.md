@@ -108,16 +108,14 @@ can't be listed over HTTP.
   `mono` gradient and the Lattice wallpaper (`defaultBackground: "grid"`).
 - **Semantic colors** — `--ok`, `--warn`, `--error` are functional, not
   decorative. Keep them legible.
-- **Shared search field** — `/ui/ui.css` draws the search pill from three
-  variables: `--search-plate` (the plate behind the text, default
-  `--surface-strong`), `--search-ink` (the round magnifier action, default
-  `--text`, glyph cut out in the plate colour) and `--search-shadow` (unset by
-  default: a field in a row of controls must not bleed out of its row; a
-  page-level search sets it). Its 1px edge is the theme's border token
-  (`--glass-border`) in every state; focus only recolours that ring to
-  `--accent`, never thickens it. Retune those to re-skin it; never restyle the
-  `.ui-input` inside a `.ui-search` — the pill owns the plate, radius and edge,
-  in both light and dark modes.
+- **Shared search field** — `/ui/ui.css` draws the search as a soft pill from
+  `--search-plate` (default `--ed-pill`, the grey of the window bar's buttons),
+  `--search-plate-hover`, `--search-plate-focus` (the selected field, default
+  `--bg-elevated`) and `--search-shadow` (unset by default: a field in a row of
+  controls must not bleed out of its row). The magnifier is a quiet glyph at
+  the start, not a button; selected, a 1px ring in `--accent` is drawn inside
+  the edge. Retune those to re-skin it; never restyle the `.ui-input` inside a
+  `.ui-search` — the pill owns the plate, radius and ring, in light and dark.
 - **Icons** — always `stroke="currentColor"` (or `fill`), 24×24 viewBox,
   1.5 stroke width for visual rhythm. They inherit color from CSS and follow
   the theme (coloured artwork only follows the accent when *Accent-tinted

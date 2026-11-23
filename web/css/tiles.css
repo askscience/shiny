@@ -1422,7 +1422,7 @@ html[data-window-background="0"] .tile-glow {
 .radio-t-btn:disabled { opacity: 0.35; cursor: default; }
 
 /* ── Search ────────────────────────────────────────────────── */
-/* A flat grey pill, no shadow. */
+/* The shared soft pill, a little taller on the page. */
 .radio-tile .ui-search {
   --search-size: 38px;
   --search-shadow: none;
@@ -7558,7 +7558,7 @@ button.files-path-crumb:hover { color: var(--text); }
   min-width: 120px;
   margin-left: auto;
 }
-.files-search.ui-search:hover { --search-plate: var(--files-btn-hover); }
+.files-search.ui-search { --search-plate-hover: var(--files-btn-hover); }
 
 .files-header-actions { flex: none; display: flex; align-items: center; gap: 2px; }
 /* The grid/list switch and its options read as one grey square group. */

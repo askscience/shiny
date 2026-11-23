@@ -71,31 +71,31 @@ dialog; focus moves into the dialog while it is open.
 
 ## Search
 
-`searchBar()` renders a pill: the input is bare and `.ui-search` itself carries
-the plate, the radius and a 1px ring in every state (the theme's border token at
-rest, recoloured to the accent on focus — the width never changes), with the
-magnifier as a round action at the end (`.ui-search-action` — it returns the
-caret to the input and is kept out of the tab order). Pass `onClear` and the
-clear button sits between the input and the disc.
+`searchBar()` renders a soft pill in the grey of the window bar's own buttons
+(the editorial `--ed-pill`): the input is bare and `.ui-search` itself carries
+the plate and the radius. The magnifier is a quiet glyph at the start
+(`.ui-search-action` — not a button: it returns the caret to the input and is
+kept out of the tab order). Selected, the pill turns to the sheet's surface
+with a 1px ring in the accent colour drawn inside its edge. Pass `onClear` and a
+clear button sits at the end; it shows only while the field has text (the
+input's placeholder is hidden).
 
 The pill is 34px by default — the same height as the icon buttons it sits beside
 in a window's toolbars — and flat, so its shadow cannot bleed out of the row.
-A page-level search opts into the larger floating pill the way Radio and YouTube
-do:
+A page-level search opts into a larger one the way Radio does:
 
 ```css
 .radio-tile .ui-search {
-  --search-size: 40px;
-  --search-shadow: var(--shadow-sm, 0 2px 8px rgba(0, 0, 0, 0.12));
+  --search-size: 38px;
 }
 ```
 
-Themes re-skin the field through `--search-plate` (default `--surface-strong`),
-`--search-ink` (default `--text`, the disc, with the glyph cut out in the plate
-colour), `--search-shadow` and `--glass-border` (the 1px resting ring), instead
+Themes and windows re-skin the field through `--search-plate` (default
+`--ed-pill`), `--search-plate-hover` (default `--ed-pill-hover`),
+`--search-plate-focus` (default `--bg-elevated`) and `--search-shadow`, instead
 of restyling the inner input; window CSS adjusts only the wrapper
 (`.browser-address .ui-search { flex: 1 1 auto }`,
-`.radio-tile .ui-search { margin: … }`).
+`.files-search.ui-search { --search-plate: var(--files-btn) }`).
 
 ## Dials and lifetime
 
