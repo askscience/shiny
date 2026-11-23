@@ -70,7 +70,18 @@ async function api(url, opts = {}) {
   calls.push({ url, body: opts.body ? JSON.parse(opts.body) : null });
   if (url === '/api/browser/vault') return { data: { exists: vault.exists, unlocked: vault.unlocked } };
   if (!vault.unlocked) throw new Error('vault_locked');
-  if (url.startsWith('/api/browser/passwords?url=')) return { data: { entries: vault.entries } };
+  // The plugin's answers (vault.rs): `exact` = saved for this very host;
+  // `check` matches by origin and username and compares the password.
+  if (url.startsWith('/api/browser/passwords?url=')) {
+    const page = new URL(decodeURIComponent(url.split('url=')[1])).host.replace(/^www\./, '');
+    return { data: { entries: vault.entries.map((e) => ({ ...e, exact: new URL(e.origin).host.replace(/^www\./, '') === page })) } };
+  }
+  if (url === '/api/browser/passwords/check') {
+    const b = JSON.parse(opts.body);
+    const same = vault.entries.find((e) => e.origin === b.site && e.username === b.username);
+    if (!same) return { data: { status: 'new', id: null } };
+    return { data: { status: vault.secrets[same.id]?.password === b.password ? 'unchanged' : 'update', id: same.id } };
+  }
   if (url === '/api/browser/passwords/reveal') return { data: vault.secrets[JSON.parse(opts.body).id] };
   if (url === '/api/browser/passwords/save') return { data: { id: 'new' } };
   throw new Error(`unexpected ${url}`);
@@ -153,6 +164,8 @@ reset({ entries: [{ id: 'e1', origin: 'https://shop.example', username: 'me@x.co
 pageState.kept = { origin: 'https://shop.example', username: 'me@x.com', password: 'pw1' };
 await assist.pageLoaded(tab());
 check('a login already saved as it is is not offered', !shown());
+check('deciding that never reveals the saved password to the window',
+  !calls.some((c) => c.url === '/api/browser/passwords/reveal'));
 
 /* A changed password: offer to update that entry. */
 reset({ entries: [{ id: 'e1', origin: 'https://shop.example', username: 'me@x.com' }],

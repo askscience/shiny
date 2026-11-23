@@ -83,6 +83,7 @@ impl Plugin for BrowserPlugin {
             (HttpMethod::Post, "/api/browser/vault/lock", "browser_vault_lock"),
             (HttpMethod::Post, "/api/browser/vault/reset", "browser_vault_reset"),
             (HttpMethod::Get, "/api/browser/passwords", "browser_passwords"),
+            (HttpMethod::Post, "/api/browser/passwords/check", "browser_password_check"),
             (HttpMethod::Post, "/api/browser/passwords/reveal", "browser_password_reveal"),
             (HttpMethod::Post, "/api/browser/passwords/save", "browser_password_save"),
             (HttpMethod::Post, "/api/browser/passwords/remove", "browser_password_remove"),

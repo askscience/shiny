@@ -51,6 +51,7 @@ pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
         "browser_vault_lock" => Some(vault_lock()),
         "browser_vault_reset" => Some(vault_reset(ctx)),
         "browser_passwords" => Some(passwords_route(ctx)),
+        "browser_password_check" => Some(password_check(ctx)),
         "browser_password_reveal" => Some(password_reveal(ctx)),
         "browser_password_save" => Some(password_save(ctx)),
         "browser_password_remove" => Some(password_remove(ctx)),
@@ -812,7 +813,41 @@ fn passwords_route(ctx: Arc<PluginCtx>) -> RouteHandler {
                 .and_then(|q| url::form_urlencoded::parse(q.as_bytes()).find(|(k, _)| k == "url"))
                 .map(|(_, v)| v.into_owned());
             let entries = vault::list(&ctx, &uid, page.as_deref())?;
+            // With a page, each entry says whether it is the site's own login
+            // (`exact`) or a parent domain's.
+            let entries: Vec<serde_json::Value> = entries
+                .iter()
+                .map(|e| {
+                    let mut v = json!(e);
+                    if let (Some(page), Some(obj)) = (page.as_deref(), v.as_object_mut()) {
+                        obj.insert("exact".into(), json!(vault::is_exact_origin(&e.origin, page)));
+                    }
+                    v
+                })
+                .collect();
             Ok(ok(json!({ "entries": entries })))
+        }
+    })
+}
+
+#[derive(serde::Deserialize, Default)]
+#[serde(default)]
+struct CheckBody {
+    site: String,
+    username: String,
+    password: String,
+}
+
+/// POST /api/browser/passwords/check — is a login a page kept new, changed or
+/// already saved? `{ status: "new" | "update" | "unchanged", id? }`.
+fn password_check(ctx: Arc<PluginCtx>) -> RouteHandler {
+    bridged_route(move |req: axum::extract::Request| {
+        let ctx = ctx.clone();
+        async move {
+            let uid = user_id(&req)?;
+            let body = take_json::<CheckBody>(req).await?;
+            let (status, id) = vault::check(&ctx, &uid, &body.site, &body.username, &body.password)?;
+            Ok(ok(json!({ "status": status, "id": id })))
         }
     })
 }

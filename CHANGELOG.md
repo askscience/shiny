@@ -4,6 +4,10 @@
 
 ### Changed
 
+- **Browser: offering to save a login no longer reveals the saved
+  password to the window.** The plugin says whether a login a page kept is
+  new, changed or already saved, with the rule it saves by; which saved
+  logins are the site's own (and may be filled unasked) is its call too.
 - **Radio searches like the assistant.** The station grid and the
   now-playing artwork come through the plugin (the same Radio Browser search
   the assistant uses, and the User-Agent MusicBrainz asks for) instead of the

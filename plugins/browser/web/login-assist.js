@@ -65,11 +65,6 @@ function hostOf(origin) {
   }
 }
 
-/** The host without `www.`, as the vault matches it. */
-function sameHost(origin) {
-  return hostOf(origin).toLowerCase().replace(/^www\./, '');
-}
-
 function parse(json) {
   try {
     return json ? JSON.parse(json) : null;
@@ -136,6 +131,21 @@ export function createLoginAssist({
     try {
       const res = await api(`/api/browser/passwords?url=${encodeURIComponent(origin)}`);
       return res?.data?.entries || [];
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /** What a kept login is to the vault: `{ status: 'new' | 'update' |
+   *  'unchanged', id }`, decided by the plugin with the rule it saves by —
+   *  the stored password is compared there, never revealed here. */
+  async function checkLogin(origin, username, password) {
+    try {
+      const res = await api('/api/browser/passwords/check', {
+        method: 'POST',
+        body: JSON.stringify({ site: origin, username, password }),
+      });
+      return res?.data || null;
     } catch (_) {
       return null;
     }
@@ -274,12 +284,10 @@ export function createLoginAssist({
     const username = String(login.username || '').trim();
     const state = await vaultState();
     if (state.unlocked) {
-      const entries = await entriesFor(origin);
-      const same = (entries || []).find((e) => e.username === username && sameHost(e.origin) === sameHost(origin));
-      if (same) {
-        const secret = await reveal(same.id);
-        if (secret && secret.password === login.password) return;
-        present(tab, { type: 'update', origin, id: same.id, login: { username, password: login.password } });
+      const known = await checkLogin(origin, username, login.password);
+      if (known?.status === 'unchanged') return;
+      if (known?.status === 'update' && known.id) {
+        present(tab, { type: 'update', origin, id: known.id, login: { username, password: login.password } });
         return;
       }
     }
@@ -297,10 +305,10 @@ export function createLoginAssist({
       }
       return;
     }
-    // Unasked, only the site itself: the list also carries its parent
-    // domain's logins (the panel offers those on a click).
-    const host = sameHost(origin);
-    const entries = (await entriesFor(origin) || []).filter((e) => sameHost(e.origin) === host);
+    // Unasked, only the site itself (`exact`, the plugin's verdict): the list
+    // also carries its parent domain's logins (the panel offers those on a
+    // click).
+    const entries = (await entriesFor(origin) || []).filter((e) => e.exact);
     if (entries.length > 1) {
       // Which account is the user's to say: point to the list (the panel
       // shows the site's logins first and fills the one picked).

@@ -491,8 +491,18 @@ password is forgotten. `data`: `{ "reset": true }` or
 page on a subdomain of the saved host; an `https` login is never offered to an
 `http` page; explicit ports must match.
 
-`data`: `{ "entries": [ { "id", "origin", "username", "note", "updated_at" } ] }`
-— never a password.
+`data`: `{ "entries": [ { "id", "origin", "username", "note", "updated_at", "exact"? } ] }`
+— never a password. With `url`, `exact` says whether the login was saved for
+that very host (`vault::is_exact_origin`) rather than a parent domain: only
+an exact login is ever filled without the user asking.
+
+### POST `/api/browser/passwords/check`
+
+**Request**: `{ "site": "<page URL>", "username": "…", "password": "…" }` —
+a login a page just kept. `data`: `{ "status": "new" | "update" | "unchanged", "id": "…" | null }`,
+by the rule `save` matches entries with (origin and username); the stored
+password is compared in the plugin (in constant time), so the window never
+reveals it to decide whether to offer saving.
 
 ### POST `/api/browser/passwords/reveal`
 

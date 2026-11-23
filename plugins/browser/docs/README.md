@@ -254,6 +254,7 @@ Full detail in [`tools.md`](tools.md).
 | POST | `/api/browser/vault/lock` | `browser_vault_lock` |
 | POST | `/api/browser/vault/reset` | `browser_vault_reset` |
 | GET | `/api/browser/passwords` | `browser_passwords` |
+| POST | `/api/browser/passwords/check` | `browser_password_check` |
 | POST | `/api/browser/passwords/reveal` | `browser_password_reveal` |
 | POST | `/api/browser/passwords/save` | `browser_password_save` |
 | POST | `/api/browser/passwords/remove` | `browser_password_remove` |

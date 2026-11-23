@@ -237,8 +237,14 @@ first unlock (no vault)
     browser_vault <- { salt, cost, wrapped_key = AES-GCM(kek, data key, aad=owner) }
     OPEN[user] = data key (memory only, 15 min idle lock)
 
+save offer after a sign-in
+  page    -> the login it kept
+  window -> POST passwords/check { site, username, password }
+          <- new | update {id} | unchanged   (compared in the plugin, nothing revealed)
+
 fill on a page
-  window -> GET passwords?url=<page>      (entries for this origin, no passwords)
+  window -> GET passwords?url=<page>      (entries for this origin, no passwords;
+                                           `exact` = this host's own)
   click   -> POST passwords/reveal { id }
           -> liteaura:view: runJs fillScript(origin, user, pass)
   page    -> `location.origin === origin` checked inside the page, then fills

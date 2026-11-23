@@ -1,5 +1,5 @@
 name = "browser"
-version = "0.2.6"
+version = "0.2.7"
 api_level = 1
 runtime = "process"
 entry_symbol = "shiny_plugin_entry"

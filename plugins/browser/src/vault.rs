@@ -514,6 +514,43 @@ pub fn list(ctx: &PluginCtx, user_id: &str, page: Option<&str>) -> Result<Vec<En
         .collect())
 }
 
+/// The page's own logins among `list(page)`: saved for this very host (not a
+/// parent domain's, which the panel offers on a click but autofill never
+/// uses unasked).
+pub fn is_exact_origin(saved: &str, page: &str) -> bool {
+    let host = |o: &str| url::Url::parse(o).ok().and_then(|u| u.host_str().map(|h| h.trim_start_matches("www.").to_ascii_lowercase()));
+    match (host(saved), origin_of(page).as_deref().and_then(host)) {
+        (Some(s), Some(p)) => s == p,
+        _ => false,
+    }
+}
+
+/// What a login a page just kept means for the vault, by the rule `save`
+/// matches entries with (the same origin and username): `"new"`, or
+/// `"update"` / `"unchanged"` with the entry's id. The stored password is
+/// compared here, so the window never has to reveal it to find out.
+pub fn check(ctx: &PluginCtx, user_id: &str, site: &str, username: &str, password: &str) -> Result<(&'static str, Option<String>), AppError> {
+    let key = data_key(user_id).ok_or_else(locked)?;
+    let origin = origin_of(site).ok_or_else(|| AppError::BadRequest("not a web address".into()))?;
+    let username = username.trim();
+    let found = load_entries(ctx, user_id, &key)?
+        .into_iter()
+        .find(|(e, _)| e.origin == origin && e.username == username);
+    Ok(match found {
+        None => ("new", None),
+        Some((e, secret)) if constant_time_eq(secret.password.as_bytes(), password.as_bytes()) => ("unchanged", Some(e.id)),
+        Some((e, _)) => ("update", Some(e.id)),
+    })
+}
+
+/// Equality that takes the same time wherever the first difference is.
+fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    a.iter().zip(b).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
+}
+
 /// One login's username and password, for filling or showing.
 pub fn reveal(ctx: &PluginCtx, user_id: &str, id: &str) -> Result<(String, Zeroizing<String>), AppError> {
     let key = data_key(user_id).ok_or_else(locked)?;
@@ -692,6 +729,14 @@ pub fn remove(ctx: &PluginCtx, user_id: &str, id: &str) -> Result<bool, AppError
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_sites_own_logins_are_exact() {
+        assert!(is_exact_origin("https://shop.example", "https://www.shop.example/login"));
+        assert!(!is_exact_origin("https://example", "https://sub.example/login"));
+        assert!(!is_exact_origin("https://shop.example", "https://other.example/"));
+        assert!(constant_time_eq(b"pw", b"pw") && !constant_time_eq(b"pw", b"pW") && !constant_time_eq(b"pw", b"pw1"));
+    }
 
     /// A cheap cost so the tests do not spend 19 MiB per derivation.
     const TEST_COST: KdfCost = KdfCost { m: 64, t: 1, p: 1 };
