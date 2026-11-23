@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-11-23
+
 ### Changed
 
 - **One place for every update.** The Updates window is gone: the Plugins
