@@ -1,6 +1,6 @@
 {
   "plugin.updates.meta.description": "Проверка и установка обновлений системы и Ollama во всех основных дистрибутивах Linux",
-  "plugin.updates.meta.summary": "Обновления: одно окно (и индикатор в HUD) для системы и Ollama",
+  "plugin.updates.meta.summary": "Updates: система и Ollama в разделе «Обновления» окна «Плагины», а также значок в верхней панели",
   "plugin.updates.meta.category": "Система",
   "plugin.updates.tab.updates": "Обновления",
   "plugin.updates.tab.history": "История",
@@ -91,5 +91,22 @@
   "plugin.updates.live.plugins": "Загружены заново без перезапуска: {names}",
   "plugin.updates.live.overridden": "Не обновлены, используется ваша собственная копия: {names}",
   "plugin.updates.live.server": "Сервер: переходит на новую версию, как только ассистент освободится; страница переподключится сама.",
-  "plugin.updates.live.shell": "Оболочка: перезапустится с новой версией при следующей блокировке экрана."
+  "plugin.updates.live.shell": "Оболочка: перезапустится с новой версией при следующей блокировке экрана.",
+  "plugin.updates.overview.complete": "готово",
+  "plugin.updates.overview.pending": "к обновлению",
+  "plugin.updates.overview.current": "актуально",
+  "plugin.updates.overview.appsRunning": "Обновление приложений",
+  "plugin.updates.overview.ready.one": "{count} обновление готово",
+  "plugin.updates.overview.ready.many": "{count} обновления готовы",
+  "plugin.updates.overview.ready.other": "{count} обновлений готово",
+  "plugin.updates.overview.upToDate": "Всё актуально",
+  "plugin.updates.action.updateAll": "Обновить всё",
+  "plugin.updates.section.system": "Система",
+  "plugin.updates.section.apps": "Приложения",
+  "plugin.updates.size.toDownload": "{size} к загрузке",
+  "plugin.updates.progress.left": "осталось {time}",
+  "plugin.updates.pkg.downloading": "Загрузка",
+  "plugin.updates.pkg.downloaded": "Загружено",
+  "plugin.updates.ollama.installedShort": "Установлено",
+  "plugin.updates.activity.system": "Обновления системы"
 }

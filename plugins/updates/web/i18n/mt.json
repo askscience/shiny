@@ -1,6 +1,6 @@
 {
   "plugin.updates.meta.description": "Iċċekkja u installa l-aġġornamenti tas-sistema u ta' Ollama fuq kull distribuzzjoni ewlenija ta' Linux",
-  "plugin.updates.meta.summary": "Aġġornamenti: tieqa waħda (u ċippa fil-HUD) għall-aġġornamenti tas-sistema u ta' Ollama",
+  "plugin.updates.meta.summary": "Updates: is-sistema u Ollama fit-taqsima Aġġornamenti tat-tieqa Plugins, flimkien ma’ indikatur fil-bar ta’ fuq",
   "plugin.updates.meta.category": "Sistema",
   "plugin.updates.tab.updates": "Aġġornamenti",
   "plugin.updates.tab.history": "Kronoloġija",
@@ -97,5 +97,22 @@
   "plugin.updates.live.plugins": "Mgħobbija mill-ġdid mingħajr restart: {names}",
   "plugin.updates.live.overridden": "Mhux aġġornati, qed tintuża kopja tiegħek: {names}",
   "plugin.updates.live.server": "Server: jaqleb għall-verżjoni l-ġdida hekk kif l-assistent ikun wieqaf; il-paġna terġa' tikkonnettja waħedha.",
-  "plugin.updates.live.shell": "Shell: jerġa' jitnieda bil-verżjoni l-ġdida d-darba li jmiss li l-iskrin jiġi msakkar."
+  "plugin.updates.live.shell": "Shell: jerġa' jitnieda bil-verżjoni l-ġdida d-darba li jmiss li l-iskrin jiġi msakkar.",
+  "plugin.updates.overview.complete": "lest",
+  "plugin.updates.overview.pending": "biex jiġu aġġornati",
+  "plugin.updates.overview.current": "aġġornat",
+  "plugin.updates.overview.appsRunning": "Qed jiġu aġġornati l-apps",
+  "plugin.updates.overview.ready.one": "{count} aġġornament lest",
+  "plugin.updates.overview.ready.many": "{count} aġġornamenti lesti",
+  "plugin.updates.overview.ready.other": "{count} aġġornamenti lesti",
+  "plugin.updates.overview.upToDate": "Kollox aġġornat",
+  "plugin.updates.action.updateAll": "Aġġorna kollox",
+  "plugin.updates.section.system": "Sistema",
+  "plugin.updates.section.apps": "Apps",
+  "plugin.updates.size.toDownload": "{size} biex jitniżżlu",
+  "plugin.updates.progress.left": "fadal {time}",
+  "plugin.updates.pkg.downloading": "Qed jitniżżel",
+  "plugin.updates.pkg.downloaded": "Imniżżel",
+  "plugin.updates.ollama.installedShort": "Installat",
+  "plugin.updates.activity.system": "Aġġornamenti tas-sistema"
 }

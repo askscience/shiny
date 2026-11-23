@@ -1,4 +1,7 @@
-@property --p {
+/* The install ring's percent, registered so the conic fill can animate.
+   Its own name: a global `--p` registered here would stop every other
+   window's `--p` (progress bars in the Plugins window…) from inheriting. */
+@property --installer-p {
   syntax: '<number>';
   initial-value: 0;
   inherits: false;
@@ -1460,7 +1463,7 @@
 }
 
 .installer-ring {
-  --p: 0;
+  --installer-p: 0;
   position: relative;
   display: grid;
   place-content: center;
@@ -1468,8 +1471,8 @@
   height: 146px;
   flex: 0 0 auto;
   border-radius: 50%;
-  background: conic-gradient(var(--accent) calc(var(--p) * 1%), var(--glass-strong) 0);
-  transition: --p 400ms var(--motion-ease);
+  background: conic-gradient(var(--accent) calc(var(--installer-p) * 1%), var(--glass-strong) 0);
+  transition: --installer-p 400ms var(--motion-ease);
 }
 
 .installer-ring::before {

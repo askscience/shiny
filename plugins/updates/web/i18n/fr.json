@@ -1,6 +1,6 @@
 {
   "plugin.updates.meta.description": "Vérifiez et installez les mises à jour du système et d'Ollama sur toutes les grandes distributions Linux",
-  "plugin.updates.meta.summary": "Mises à jour : une seule fenêtre (et une pastille dans le HUD) pour le système et Ollama",
+  "plugin.updates.meta.summary": "Updates : le système et Ollama dans la section Mises à jour de la fenêtre Plugins, plus une puce dans la barre du haut",
   "plugin.updates.meta.category": "Système",
   "plugin.updates.tab.updates": "Mises à jour",
   "plugin.updates.tab.history": "Historique",
@@ -85,5 +85,22 @@
   "plugin.updates.live.plugins": "Rechargés sans redémarrage : {names}",
   "plugin.updates.live.overridden": "Non mis à jour, votre propre copie est utilisée : {names}",
   "plugin.updates.live.server": "Serveur : passe à la nouvelle version dès que l'assistant est inactif ; la page se reconnecte d'elle-même.",
-  "plugin.updates.live.shell": "Shell : il se relance avec la nouvelle version au prochain verrouillage de l'écran."
+  "plugin.updates.live.shell": "Shell : il se relance avec la nouvelle version au prochain verrouillage de l'écran.",
+  "plugin.updates.overview.complete": "terminé",
+  "plugin.updates.overview.pending": "à mettre à jour",
+  "plugin.updates.overview.current": "à jour",
+  "plugin.updates.overview.appsRunning": "Mise à jour des apps",
+  "plugin.updates.overview.ready.one": "{count} mise à jour prête",
+  "plugin.updates.overview.ready.many": "{count} mises à jour prêtes",
+  "plugin.updates.overview.ready.other": "{count} mises à jour prêtes",
+  "plugin.updates.overview.upToDate": "Tout est à jour",
+  "plugin.updates.action.updateAll": "Tout mettre à jour",
+  "plugin.updates.section.system": "Système",
+  "plugin.updates.section.apps": "Apps",
+  "plugin.updates.size.toDownload": "{size} à télécharger",
+  "plugin.updates.progress.left": "{time} restantes",
+  "plugin.updates.pkg.downloading": "Téléchargement",
+  "plugin.updates.pkg.downloaded": "Téléchargé",
+  "plugin.updates.ollama.installedShort": "Installé",
+  "plugin.updates.activity.system": "Mises à jour du système"
 }

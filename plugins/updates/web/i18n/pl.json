@@ -1,6 +1,6 @@
 {
   "plugin.updates.meta.description": "Sprawdzaj i instaluj aktualizacje systemu oraz Ollama w każdej głównej dystrybucji Linuksa",
-  "plugin.updates.meta.summary": "Aktualizacje: jedno okno (i wskaźnik HUD) dla aktualizacji systemu i Ollama",
+  "plugin.updates.meta.summary": "Updates: system i Ollama w sekcji Aktualizacje okna Wtyczki oraz wskaźnik na górnym pasku",
   "plugin.updates.meta.category": "System",
   "plugin.updates.tab.updates": "Aktualizacje",
   "plugin.updates.tab.history": "Historia",
@@ -91,5 +91,22 @@
   "plugin.updates.live.plugins": "Wczytane ponownie bez restartu: {names}",
   "plugin.updates.live.overridden": "Niezaktualizowane, używana jest twoja własna kopia: {names}",
   "plugin.updates.live.server": "Serwer: przełącza się na nową wersję, gdy tylko asystent będzie bezczynny; strona sama połączy się ponownie.",
-  "plugin.updates.live.shell": "Powłoka: uruchomi się ponownie w nowej wersji przy następnym zablokowaniu ekranu."
+  "plugin.updates.live.shell": "Powłoka: uruchomi się ponownie w nowej wersji przy następnym zablokowaniu ekranu.",
+  "plugin.updates.overview.complete": "ukończono",
+  "plugin.updates.overview.pending": "do aktualizacji",
+  "plugin.updates.overview.current": "aktualne",
+  "plugin.updates.overview.appsRunning": "Aktualizowanie aplikacji",
+  "plugin.updates.overview.ready.one": "{count} aktualizacja gotowa",
+  "plugin.updates.overview.ready.many": "{count} aktualizacje gotowe",
+  "plugin.updates.overview.ready.other": "{count} aktualizacji gotowych",
+  "plugin.updates.overview.upToDate": "Wszystko jest aktualne",
+  "plugin.updates.action.updateAll": "Zaktualizuj wszystko",
+  "plugin.updates.section.system": "System",
+  "plugin.updates.section.apps": "Aplikacje",
+  "plugin.updates.size.toDownload": "{size} do pobrania",
+  "plugin.updates.progress.left": "pozostało {time}",
+  "plugin.updates.pkg.downloading": "Pobieranie",
+  "plugin.updates.pkg.downloaded": "Pobrano",
+  "plugin.updates.ollama.installedShort": "Zainstalowano",
+  "plugin.updates.activity.system": "Aktualizacje systemu"
 }

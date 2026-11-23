@@ -51,6 +51,23 @@ pub struct UpdateStatus {
     /// Set when the query failed (unsupported distro, timeout, …).
     pub error: Option<String>,
     pub ollama: OllamaStatus,
+    /// Bytes each package would download (package name → bytes), when the
+    /// package manager can tell before downloading (apt's `--print-uris`).
+    #[serde(default)]
+    pub sizes: std::collections::BTreeMap<String, u64>,
+    /// Everything the upgrade would download, new dependencies included.
+    #[serde(default)]
+    pub download_bytes: Option<u64>,
+}
+
+/// One file an upgrade downloads, known before it starts.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct DownloadItem {
+    /// The package it belongs to (`bash`).
+    pub name: String,
+    /// The file the package manager stores it as (`bash_5.2_amd64.deb`).
+    pub file: String,
+    pub size: u64,
 }
 
 /// Ollama install/update state.

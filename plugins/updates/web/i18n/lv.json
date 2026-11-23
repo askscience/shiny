@@ -1,6 +1,6 @@
 {
   "plugin.updates.meta.description": "Pārbaudīt un instalēt sistēmas un Ollama atjauninājumus visās galvenajās Linux distribūcijās",
-  "plugin.updates.meta.summary": "Atjauninājumi: viens logs (un HUD elements) sistēmas un Ollama atjauninājumiem",
+  "plugin.updates.meta.summary": "Updates: sistēma un Ollama spraudņu loga sadaļā Atjauninājumi, kā arī indikators augšjoslā",
   "plugin.updates.meta.category": "Sistēma",
   "plugin.updates.tab.updates": "Atjauninājumi",
   "plugin.updates.tab.history": "Vēsture",
@@ -85,5 +85,22 @@
   "plugin.updates.live.plugins": "Ielādēti no jauna bez restartēšanas: {names}",
   "plugin.updates.live.overridden": "Nav atjaunināti, tiek izmantota jūsu pašu kopija: {names}",
   "plugin.updates.live.server": "Serveris: pāriet uz jauno versiju, tiklīdz asistents ir dīkstāvē; lapa atkārtoti savienojas pati.",
-  "plugin.updates.live.shell": "Čaula: nākamajā ekrāna bloķēšanas reizē tiek palaista no jauna ar jauno versiju."
+  "plugin.updates.live.shell": "Čaula: nākamajā ekrāna bloķēšanas reizē tiek palaista no jauna ar jauno versiju.",
+  "plugin.updates.overview.complete": "pabeigts",
+  "plugin.updates.overview.pending": "jāatjaunina",
+  "plugin.updates.overview.current": "atjaunināts",
+  "plugin.updates.overview.appsRunning": "Atjaunina lietotnes",
+  "plugin.updates.overview.ready.one": "{count} atjauninājums gatavs",
+  "plugin.updates.overview.ready.many": "{count} atjauninājumi gatavi",
+  "plugin.updates.overview.ready.other": "{count} atjauninājumi gatavi",
+  "plugin.updates.overview.upToDate": "Viss ir atjaunināts",
+  "plugin.updates.action.updateAll": "Atjaunināt visu",
+  "plugin.updates.section.system": "Sistēma",
+  "plugin.updates.section.apps": "Lietotnes",
+  "plugin.updates.size.toDownload": "{size} jālejupielādē",
+  "plugin.updates.progress.left": "atlikušas {time}",
+  "plugin.updates.pkg.downloading": "Lejupielādē",
+  "plugin.updates.pkg.downloaded": "Lejupielādēts",
+  "plugin.updates.ollama.installedShort": "Instalēts",
+  "plugin.updates.activity.system": "Sistēmas atjauninājumi"
 }

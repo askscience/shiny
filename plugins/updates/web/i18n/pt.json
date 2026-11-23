@@ -1,6 +1,6 @@
 {
   "plugin.updates.meta.description": "Verifique e instale atualizações do sistema e do Ollama em todas as principais distribuições Linux",
-  "plugin.updates.meta.summary": "Atualizações: uma janela (e um indicador no HUD) para atualizações do sistema e do Ollama",
+  "plugin.updates.meta.summary": "Updates: o sistema e o Ollama na secção Atualizações da janela Plugins, mais um indicador na barra superior",
   "plugin.updates.meta.category": "Sistema",
   "plugin.updates.tab.updates": "Atualizações",
   "plugin.updates.tab.history": "Histórico",
@@ -85,5 +85,22 @@
   "plugin.updates.live.plugins": "Recarregados sem reiniciar: {names}",
   "plugin.updates.live.overridden": "Não atualizados, está em uso uma cópia sua: {names}",
   "plugin.updates.live.server": "Servidor: muda para a nova versão assim que o assistente estiver inativo; a página volta a ligar-se sozinha.",
-  "plugin.updates.live.shell": "Shell: reinicia com a nova versão da próxima vez que o ecrã for bloqueado."
+  "plugin.updates.live.shell": "Shell: reinicia com a nova versão da próxima vez que o ecrã for bloqueado.",
+  "plugin.updates.overview.complete": "concluído",
+  "plugin.updates.overview.pending": "por atualizar",
+  "plugin.updates.overview.current": "atualizado",
+  "plugin.updates.overview.appsRunning": "A atualizar apps",
+  "plugin.updates.overview.ready.one": "{count} atualização pronta",
+  "plugin.updates.overview.ready.many": "{count} atualizações prontas",
+  "plugin.updates.overview.ready.other": "{count} atualizações prontas",
+  "plugin.updates.overview.upToDate": "Tudo atualizado",
+  "plugin.updates.action.updateAll": "Atualizar tudo",
+  "plugin.updates.section.system": "Sistema",
+  "plugin.updates.section.apps": "Apps",
+  "plugin.updates.size.toDownload": "{size} para transferir",
+  "plugin.updates.progress.left": "faltam {time}",
+  "plugin.updates.pkg.downloading": "A transferir",
+  "plugin.updates.pkg.downloaded": "Transferido",
+  "plugin.updates.ollama.installedShort": "Instalado",
+  "plugin.updates.activity.system": "Atualizações do sistema"
 }

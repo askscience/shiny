@@ -173,6 +173,17 @@ pub fn refresh_job(job: &Job, manager: &dyn PackageManager, password: Option<&st
     }
 }
 
+/// Ask the package manager what the upgrade will download (as the user,
+/// nothing downloaded), so progress can follow each file.
+fn plan_downloads(job: &Job, manager: &dyn PackageManager, packages: &[String]) {
+    let Some(spec) = manager.download_plan(packages) else { return };
+    if let Ok(out) = exec::run(&spec, None, Duration::from_secs(120)) {
+        if out.success {
+            job.set_downloads(manager.parse_download_plan(&out.stdout), manager.download_dir());
+        }
+    }
+}
+
 /// Upgrade `packages`, or everything when `all` is set.
 pub fn system_job(
     job: &Job,
@@ -181,6 +192,7 @@ pub fn system_job(
     all: bool,
     packages: &[String],
 ) -> bool {
+    plan_downloads(job, manager, if all { &[] } else { packages });
     if all {
         let spec = manager.upgrade_all();
         let upgraded = run_manager(job, &spec, password, UPGRADE_ALL_TIMEOUT, manager);

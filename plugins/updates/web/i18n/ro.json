@@ -1,6 +1,6 @@
 {
   "plugin.updates.meta.description": "Verifică și instalează actualizări de sistem + Ollama pe toate distribuțiile Linux majore",
-  "plugin.updates.meta.summary": "Actualizări: o singură fereastră (și un indicator HUD) pentru actualizările de sistem și Ollama",
+  "plugin.updates.meta.summary": "Updates: sistemul și Ollama în secțiunea Actualizări a ferestrei Pluginuri, plus un indicator în bara de sus",
   "plugin.updates.meta.category": "Sistem",
   "plugin.updates.tab.updates": "Actualizări",
   "plugin.updates.tab.history": "Istoric",
@@ -85,5 +85,22 @@
   "plugin.updates.live.plugins": "Reîncărcate fără repornire: {names}",
   "plugin.updates.live.overridden": "Neactualizate, se folosește propria ta copie: {names}",
   "plugin.updates.live.server": "Server: trece la noua versiune de îndată ce asistentul este inactiv; pagina se reconectează singură.",
-  "plugin.updates.live.shell": "Shell: repornește cu noua versiune la următoarea blocare a ecranului."
+  "plugin.updates.live.shell": "Shell: repornește cu noua versiune la următoarea blocare a ecranului.",
+  "plugin.updates.overview.complete": "finalizat",
+  "plugin.updates.overview.pending": "de actualizat",
+  "plugin.updates.overview.current": "la zi",
+  "plugin.updates.overview.appsRunning": "Se actualizează aplicațiile",
+  "plugin.updates.overview.ready.one": "{count} actualizare pregătită",
+  "plugin.updates.overview.ready.many": "{count} actualizări pregătite",
+  "plugin.updates.overview.ready.other": "{count} de actualizări pregătite",
+  "plugin.updates.overview.upToDate": "Totul este la zi",
+  "plugin.updates.action.updateAll": "Actualizează tot",
+  "plugin.updates.section.system": "Sistem",
+  "plugin.updates.section.apps": "Aplicații",
+  "plugin.updates.size.toDownload": "{size} de descărcat",
+  "plugin.updates.progress.left": "mai sunt {time}",
+  "plugin.updates.pkg.downloading": "Se descarcă",
+  "plugin.updates.pkg.downloaded": "Descărcat",
+  "plugin.updates.ollama.installedShort": "Instalat",
+  "plugin.updates.activity.system": "Actualizări de sistem"
 }

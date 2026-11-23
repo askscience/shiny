@@ -1,6 +1,6 @@
 {
   "plugin.updates.meta.description": "Sök efter och installera system- och Ollama-uppdateringar på alla stora Linux-distributioner",
-  "plugin.updates.meta.summary": "Uppdateringar: ett fönster (och ett HUD-chip) för system- och Ollama-uppdateringar",
+  "plugin.updates.meta.summary": "Updates: systemet och Ollama i Plugins-fönstrets avsnitt Uppdateringar, plus en chip i toppfältet",
   "plugin.updates.meta.category": "System",
   "plugin.updates.tab.updates": "Uppdateringar",
   "plugin.updates.tab.history": "Historik",
@@ -79,5 +79,22 @@
   "plugin.updates.live.plugins": "Laddade om utan omstart: {names}",
   "plugin.updates.live.overridden": "Inte uppdaterade, din egen kopia används: {names}",
   "plugin.updates.live.server": "Server: byter till den nya versionen så snart assistenten är ledig; sidan återansluter av sig själv.",
-  "plugin.updates.live.shell": "Skal: startar om med den nya versionen nästa gång skärmen låses."
+  "plugin.updates.live.shell": "Skal: startar om med den nya versionen nästa gång skärmen låses.",
+  "plugin.updates.overview.complete": "klart",
+  "plugin.updates.overview.pending": "att uppdatera",
+  "plugin.updates.overview.current": "uppdaterat",
+  "plugin.updates.overview.appsRunning": "Uppdaterar appar",
+  "plugin.updates.overview.ready.one": "{count} uppdatering redo",
+  "plugin.updates.overview.ready.many": "{count} uppdateringar redo",
+  "plugin.updates.overview.ready.other": "{count} uppdateringar redo",
+  "plugin.updates.overview.upToDate": "Allt är uppdaterat",
+  "plugin.updates.action.updateAll": "Uppdatera allt",
+  "plugin.updates.section.system": "System",
+  "plugin.updates.section.apps": "Appar",
+  "plugin.updates.size.toDownload": "{size} att hämta",
+  "plugin.updates.progress.left": "{time} kvar",
+  "plugin.updates.pkg.downloading": "Hämtar",
+  "plugin.updates.pkg.downloaded": "Hämtat",
+  "plugin.updates.ollama.installedShort": "Installerat",
+  "plugin.updates.activity.system": "Systemuppdateringar"
 }

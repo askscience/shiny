@@ -63,6 +63,24 @@ pub trait PackageManager: Send + Sync {
     fn progress_event(&self, _line: &str) -> Option<crate::progress::Event> {
         None
     }
+
+    /// The files an upgrade would download, asked without root and without
+    /// downloading (`None`: the manager cannot tell beforehand). Empty
+    /// `packages` means a full upgrade.
+    fn download_plan(&self, _packages: &[String]) -> Option<CmdSpec> {
+        None
+    }
+
+    /// Parse the stdout of [`PackageManager::download_plan`].
+    fn parse_download_plan(&self, _stdout: &str) -> Vec<crate::model::DownloadItem> {
+        Vec::new()
+    }
+
+    /// Where finished downloads land, readable without root, so progress can
+    /// tell which files have arrived.
+    fn download_dir(&self) -> Option<&'static str> {
+        None
+    }
 }
 
 /// The result of parsing `/etc/os-release`.

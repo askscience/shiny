@@ -52,6 +52,13 @@ pub struct Snapshot {
 }
 
 impl Job {
+    /// What the job will download, and where finished files land.
+    pub fn set_downloads(&self, items: Vec<crate::model::DownloadItem>, dir: Option<&str>) {
+        if let Ok(mut g) = self.inner.lock() {
+            g.progress.set_downloads(items, dir);
+        }
+    }
+
     /// Fold a structured progress event into the job state.
     pub fn progress(&self, event: Event) {
         if let Ok(mut g) = self.inner.lock() {
@@ -91,7 +98,7 @@ impl Job {
                 done: g.state != State::Running,
                 success: g.success,
                 error: g.error.clone(),
-                progress: g.progress.clone(),
+                progress: g.progress.view(),
             },
             Err(_) => Snapshot {
                 lines: Vec::new(),

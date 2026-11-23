@@ -1,6 +1,6 @@
 {
   "plugin.updates.meta.description": "Preverite in namestite posodobitve sistema in Ollama v vseh glavnih distribucijah Linux",
-  "plugin.updates.meta.summary": "Posodobitve: eno okno (in značka v vmesniku) za posodobitve sistema in Ollama",
+  "plugin.updates.meta.summary": "Updates: sistem in Ollama v razdelku Posodobitve okna Vtičniki ter oznaka v zgornji vrstici",
   "plugin.updates.meta.category": "Sistem",
   "plugin.updates.tab.updates": "Posodobitve",
   "plugin.updates.tab.history": "Zgodovina",
@@ -91,5 +91,22 @@
   "plugin.updates.live.plugins": "Znova naloženo brez ponovnega zagona: {names}",
   "plugin.updates.live.overridden": "Ni posodobljeno, v uporabi je vaša lastna kopija: {names}",
   "plugin.updates.live.server": "Strežnik: preklopi na novo različico, takoj ko je pomočnik nedejaven; stran se sama znova poveže.",
-  "plugin.updates.live.shell": "Lupina: ob naslednjem zaklepu zaslona se znova zažene z novo različico."
+  "plugin.updates.live.shell": "Lupina: ob naslednjem zaklepu zaslona se znova zažene z novo različico.",
+  "plugin.updates.overview.complete": "končano",
+  "plugin.updates.overview.pending": "za posodobitev",
+  "plugin.updates.overview.current": "posodobljeno",
+  "plugin.updates.overview.appsRunning": "Posodabljanje aplikacij",
+  "plugin.updates.overview.ready.one": "{count} posodobitev pripravljena",
+  "plugin.updates.overview.ready.many": "{count} posodobitve pripravljene",
+  "plugin.updates.overview.ready.other": "{count} posodobitev pripravljenih",
+  "plugin.updates.overview.upToDate": "Vse je posodobljeno",
+  "plugin.updates.action.updateAll": "Posodobi vse",
+  "plugin.updates.section.system": "Sistem",
+  "plugin.updates.section.apps": "Aplikacije",
+  "plugin.updates.size.toDownload": "{size} za prenos",
+  "plugin.updates.progress.left": "še {time}",
+  "plugin.updates.pkg.downloading": "Prenašanje",
+  "plugin.updates.pkg.downloaded": "Preneseno",
+  "plugin.updates.ollama.installedShort": "Nameščeno",
+  "plugin.updates.activity.system": "Posodobitve sistema"
 }

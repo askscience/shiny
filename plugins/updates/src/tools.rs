@@ -198,7 +198,7 @@ impl Tool for UpdatesRefreshTool {
         if missing_password(password.as_deref()) {
             return Ok(ActionOutcome::error(
                 "updates_refresh",
-                "An administrator (sudo) password is required. Open the Updates window to enter it.",
+                "An administrator (sudo) password is required. Open Plugins → Updates (the top-bar update chip) to enter it.",
             ));
         }
 
@@ -274,7 +274,7 @@ impl Tool for UpdatesApplyTool {
         if missing_password(password.as_deref()) {
             return Ok(ActionOutcome::error(
                 "updates_apply",
-                "An administrator (sudo) password is required. Open the Updates window to enter it.",
+                "An administrator (sudo) password is required. Open Plugins → Updates (the top-bar update chip) to enter it.",
             ));
         }
 
@@ -348,7 +348,7 @@ impl Tool for OllamaUpdateTool {
         if missing_password(password.as_deref()) {
             return Ok(ActionOutcome::error(
                 "update_ollama",
-                "An administrator (sudo) password is required. Open the Updates window to enter it.",
+                "An administrator (sudo) password is required. Open Plugins → Updates (the top-bar update chip) to enter it.",
             ));
         }
         let job = jobs::start("ollama", move |job| {

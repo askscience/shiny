@@ -17,6 +17,10 @@
  *    (`/api/plugins/store`), which also finds new Craft apps on its own
  *    (`src/plugins/craft_discovery.rs`). The search in the window bar covers
  *    every app and plugin.
+ *  - Updates is the one place for every update: the system and Ollama (the
+ *    Updates plugin is its engine; `systemUpdates.js` draws the overview ring,
+ *    the download and install meters and a row per package) and the apps.
+ *    The top bar's update chip opens it (`selectSection`).
  *  - Manifest: the selected app — the slab, its name, publisher and actions,
  *    then VERSION / SIZE / PUBLISHER / STATUS rows, AI control, how its window
  *    opens, links and removal.
@@ -48,6 +52,10 @@ import {
   storeWaitingForNetwork, storeLoadFailed,
 } from './craftStore.js';
 import { t } from './i18n.js';
+import {
+  loadSystemUpdates, onSystemUpdatesChange, systemPendingCount, renderOverview, renderSystemBlocks,
+  systemHistory, systemSignature,
+} from './systemUpdates.js';
 
 export const PLUGINS_WINDOW = 'plugins';
 
@@ -454,7 +462,7 @@ async function installFromStore(id, name) {
   }
 }
 
-async function installAllFromStore({ updatesOnly = false } = {}) {
+async function installAllFromStore({ updatesOnly = false, confirm = true } = {}) {
   const catalogRefreshing = storeSnapshot()?.refreshing === true;
   const apps = storeApps()
     .filter((app) => !craftAppBusy(app) && !app.waiting_for_network
@@ -469,7 +477,7 @@ async function installAllFromStore({ updatesOnly = false } = {}) {
   const cliBytes = (app) => (app.mcp_available && (!app.mcp_installed || app.mcp_pending) ? (app.mcp_size || 0) : 0);
   const bytes = apps.reduce((sum, app) => sum + (app.asset_size || 0) + cliBytes(app), 0);
   const size = bytes ? ` (~${formatSize(bytes)})` : '';
-  if (!await confirmDialog(t('plugins.storeInstallAllConfirm', { count: apps.length, size },
+  if (confirm && !await confirmDialog(t('plugins.storeInstallAllConfirm', { count: apps.length, size },
     `Install ${apps.length} apps${size}?`))) return;
   for (const app of apps) {
     try {
@@ -480,6 +488,21 @@ async function installAllFromStore({ updatesOnly = false } = {}) {
   }
   toast(t('plugins.storeQueued', { count: apps.length }, `Installing ${apps.length} apps`));
   await loadStoreAndRender();
+}
+
+/** Update every app with a newer version, from the catalogue and the Craft
+ *  store, without asking again (the Updates section's "Update all"). */
+async function updateAllApps() {
+  for (const app of catalogUpdates().filter((a) => !catalogBusy(a))) {
+    try {
+      await apiFetch('/api/plugins/catalog/install', { method: 'POST', body: JSON.stringify({ name: app.name }) });
+    } catch (e) {
+      toast(e.message || t('plugins.installFailed', null, 'Install failed'), { type: 'error' });
+    }
+  }
+  if (pendingUpdates().some((a) => !craftAppBusy(a))) await installAllFromStore({ updatesOnly: true, confirm: false });
+  await loadCatalog();
+  render();
 }
 
 async function setCraftAiControl(app, enable) {
@@ -516,10 +539,9 @@ function sectionLabel(id) {
 
 function sectionCount(id) {
   if (id === 'apps') return catalogApps().length || null;
-  if (id === 'updates') return (pendingUpdates().length + catalogUpdates().length) || null;
+  if (id === 'updates') return (pendingUpdates().length + catalogUpdates().length + systemPendingCount()) || null;
   if (id === 'craft') return storeApps().length || null;
   if (id === 'installed') return plugins.length || null;
-  if (id === 'updates') return pendingUpdates().length || null;
   return null;
 }
 
@@ -751,47 +773,78 @@ function renderStage() {
   }
 
   if (section === 'updates') {
+    // One place for every update: the system and Ollama (the Updates
+    // plugin's engine, systemUpdates.js) and the apps.
     const pending = pendingUpdates();
     const appUpdates = catalogUpdates();
+    const appCount = pending.length + appUpdates.length;
+    const total = appCount + systemPendingCount();
     stage.appendChild(stageHead(kicker('updates'), t('plugins.tabUpdates', null, 'Updates'),
-      pending.length + appUpdates.length
-        ? t('plugins.metaUpdates', { count: pending.length + appUpdates.length }, `${pending.length + appUpdates.length} to update`)
+      total
+        ? t('plugins.metaUpdates', { count: total }, `${total} to update`)
         : t('plugins.allUpToDate', null, 'Everything is up to date')));
-    if (appUpdates.length) stage.appendChild(indexList(appUpdates.map((a) => describe('app', a.name)).filter(Boolean)));
-    const controls = el('div', 'pw-controls');
-    if (pending.some((a) => !craftAppBusy(a))) {
-      controls.appendChild(arrowPill(t('plugins.updateAll', null, 'Update all'),
-        () => void installAllFromStore({ updatesOnly: true }), { primary: true, icon: 'ui/refresh' }));
+
+    const busyApps = [...appUpdates.filter((a) => catalogBusy(a)), ...pending.filter((a) => craftAppBusy(a))];
+    const appsPercent = busyApps.length
+      ? busyApps.reduce((sum, a) => sum + (a.state === 'downloading' ? (a.progress ?? 0) : 100), 0) / busyApps.length
+      : null;
+    stage.appendChild(renderOverview({
+      count: appCount,
+      busy: busyApps.length > 0,
+      percent: appsPercent,
+      updateAll: () => void updateAllApps(),
+    }));
+    for (const block of renderSystemBlocks()) stage.appendChild(block);
+
+    // Apps: the catalogue's and the Craft store's, with their own controls.
+    const apps = el('section', 'pw-up-block pw-up-block--apps');
+    const head = el('header', 'pw-up-block-head');
+    const title = el('div', 'pw-up-block-title');
+    title.append(eyebrow(appCount
+      ? t('plugins.metaUpdates', { count: appCount }, `${appCount} to update`)
+      : t('plugins.allUpToDate', null, 'Everything is up to date'), 'pw-up-block-kicker'),
+    el('h3', 'pw-up-block-name', t('plugins.tabApps', null, 'Apps')));
+    head.appendChild(title);
+    const controls = el('div', 'pw-up-block-actions');
+    if (appCount && [...pending, ...appUpdates].some((a) => !craftAppBusy(a) && !catalogBusy(a))) {
+      controls.appendChild(arrowPill(t('plugins.updateAll', null, 'Update all'), () => void updateAllApps(), { icon: 'ui/download' }));
     }
-    const check = button({ label: t('plugins.storeCheck', null, 'Check for updates'), icon: 'ui/refresh', variant: 'ghost', size: 'sm' });
+    const check = iconButton({ icon: 'ui/refresh', label: t('plugins.storeCheck', null, 'Check for updates'), variant: 'quiet', size: 'sm' });
     check.addEventListener('click', async () => {
-      check.setLoading(true);
+      check.setLoading?.(true);
       void loadCatalog({ refresh: true });
+      void loadSystemUpdates(true);
       try { await refreshStore(); } catch (e) {
         toast(storeWaitingForNetwork()
           ? t('plugins.storeWaitingForConnection', null, 'Waiting for connection')
           : (e.message || t('plugins.storeUnavailable', null, 'Store unavailable')), { type: 'error' });
       } finally {
-        check.setLoading(false);
+        check.setLoading?.(false);
         render();
       }
     });
     controls.appendChild(check);
+    head.appendChild(controls);
+    apps.appendChild(head);
+    if (appUpdates.length || pending.length) {
+      apps.appendChild(indexList([
+        ...appUpdates.map((a) => describe('app', a.name)),
+        ...pending.map((a) => describe('craft', a.id)),
+      ].filter(Boolean)));
+    } else if (!storeSnapshot() && !catalog) {
+      apps.appendChild(storeMissing());
+    } else {
+      apps.appendChild(el('p', 'pw-up-note', getStoreAutoUpdate()
+        ? t('plugins.allUpToDateAuto', null, 'New versions install on their own.')
+        : t('plugins.allUpToDateManual', null, 'New versions will show here.')));
+    }
     const auto = el('label', 'pw-auto');
     auto.appendChild(eyebrow(t('plugins.storeAuto', null, 'Update automatically')));
-    const autoToggle = toggle({ checked: getStoreAutoUpdate(), onChange: (v) => setStoreAutoUpdate(v) });
+    const autoToggle = toggle({ checked: getStoreAutoUpdate(), onChange: (v) => { setStoreAutoUpdate(v); render(); } });
     autoToggle.setAttribute('aria-label', t('plugins.storeAuto', null, 'Update automatically'));
     auto.appendChild(autoToggle);
-    controls.appendChild(auto);
-    stage.appendChild(controls);
-    if (!storeSnapshot()) { stage.appendChild(storeMissing()); return; }
-    stage.appendChild(pending.length ? indexList(pending.map((a) => describe('craft', a.id)).filter(Boolean)) : stageEmpty({
-      icon: 'ui/check',
-      title: t('plugins.allUpToDate', null, 'Everything is up to date'),
-      body: getStoreAutoUpdate()
-        ? t('plugins.allUpToDateAuto', null, 'New versions install on their own.')
-        : t('plugins.allUpToDateManual', null, 'New versions will show here.'),
-    }));
+    apps.appendChild(auto);
+    stage.appendChild(apps);
     return;
   }
 
@@ -802,6 +855,17 @@ function renderStage() {
   log.appendChild(el('div', 'pw-log-note', t('plugins.activityLoading', null, 'Loading…')));
   stage.appendChild(log);
   void refreshActivity(log);
+  // The system's own updates (the Updates plugin's history), when it is there.
+  const sys = el('div', 'pw-log pw-log--system');
+  stage.appendChild(sys);
+  void systemHistory().then((rows) => {
+    if (!rows.length || !sys.isConnected) return;
+    sys.appendChild(eyebrow(t('plugin.updates.activity.system', null, 'System updates'), 'pw-log-head'));
+    for (const r of rows) {
+      const line = `${r.at || ''}  ${r.action}${r.manager ? ` · ${r.manager}` : ''}${r.detail ? ` — ${r.detail}` : ''}`;
+      sys.appendChild(el('div', `pw-log-line is-${r.status === 'ok' ? 'ok' : 'error'}`, line));
+    }
+  });
 }
 
 /* ── Manifest ───────────────────────────────────────────────── */
@@ -1020,6 +1084,7 @@ function signature() {
     pluginsLoaded, plugins.map((p) => `${p.name}@${p.version}`), [...activeSet].sort(),
     catalogFailed, catalogApps().map((a) => [a.name, a.state, a.installed_version, a.version, a.update_available, a.error]),
     refs?.nav?.top() || '',
+    section === 'updates' || section === 'activity' ? systemSignature() : '',
   ]);
 }
 let lastSignature = '';
@@ -1182,6 +1247,7 @@ function setSection(next) {
   if (next === 'installed') void loadPlugins();
   else if (next === 'apps') { void loadCatalog(); void loadPlugins(); }
   else if (next !== 'activity') { void loadStoreAndRender(); void loadCatalog(); }
+  if (next === 'updates' || next === 'activity') void loadSystemUpdates();
 }
 
 function mountPlugins() {
@@ -1303,6 +1369,15 @@ function mountPlugins() {
   void loadPlugins();
   void loadStoreAndRender();
   void loadCatalog();
+  // The system's updates: a change repaints the window; the running job's
+  // progress patches its own numbers and only the rail is refreshed here.
+  onSystemUpdatesChange((kind) => {
+    if (!refs) return;
+    if (kind === 'progress') { renderRail(); return; }
+    render();
+  });
+  cleanups.push(() => onSystemUpdatesChange(null));
+  void loadSystemUpdates();
   return tileEl;
 }
 
@@ -1344,6 +1419,8 @@ export default {
   unmount: unmountPlugins,
   getElement: getPluginsElement,
   contextMenu: pluginsContextMenu,
+  // `openCoreWindowSection('plugins', 'updates')`: the top bar's update chip.
+  selectSection: (id) => setSection(id),
   // The Touch Bar: the window's sections, then what its menu offers.
   touchBar: () => [
     ...SECTIONS.map((id) => ({

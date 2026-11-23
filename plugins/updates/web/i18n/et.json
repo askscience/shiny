@@ -1,6 +1,6 @@
 {
   "plugin.updates.meta.description": "Kontrolli ja paigalda süsteemi + Ollama uuendusi kõikides peamistes Linuxi distributsioonides",
-  "plugin.updates.meta.summary": "Uuendused: üks aken (ja HUD-i märgis) süsteemi ja Ollama uuenduste jaoks",
+  "plugin.updates.meta.summary": "Updates: süsteem ja Ollama Pluginate akna jaotises Uuendused, lisaks kiip ülaribal",
   "plugin.updates.meta.category": "Süsteem",
   "plugin.updates.tab.updates": "Uuendused",
   "plugin.updates.tab.history": "Ajalugu",
@@ -79,5 +79,22 @@
   "plugin.updates.live.plugins": "Laaditi uuesti ilma taaskäivituseta: {names}",
   "plugin.updates.live.overridden": "Ei uuendatud, kasutusel on sinu enda koopia: {names}",
   "plugin.updates.live.server": "Server: läheb uuele versioonile üle kohe, kui abiline on jõude; leht ühendub ise uuesti.",
-  "plugin.updates.live.shell": "Kest: käivitub uue versiooniga uuesti ekraani järgmisel lukustamisel."
+  "plugin.updates.live.shell": "Kest: käivitub uue versiooniga uuesti ekraani järgmisel lukustamisel.",
+  "plugin.updates.overview.complete": "valmis",
+  "plugin.updates.overview.pending": "uuendada",
+  "plugin.updates.overview.current": "ajakohane",
+  "plugin.updates.overview.appsRunning": "Rakenduste uuendamine",
+  "plugin.updates.overview.ready.one": "{count} uuendus valmis",
+  "plugin.updates.overview.ready.many": "{count} uuendust valmis",
+  "plugin.updates.overview.ready.other": "{count} uuendust valmis",
+  "plugin.updates.overview.upToDate": "Kõik on ajakohane",
+  "plugin.updates.action.updateAll": "Uuenda kõik",
+  "plugin.updates.section.system": "Süsteem",
+  "plugin.updates.section.apps": "Rakendused",
+  "plugin.updates.size.toDownload": "{size} alla laadida",
+  "plugin.updates.progress.left": "{time} jäänud",
+  "plugin.updates.pkg.downloading": "Allalaadimine",
+  "plugin.updates.pkg.downloaded": "Alla laaditud",
+  "plugin.updates.ollama.installedShort": "Paigaldatud",
+  "plugin.updates.activity.system": "Süsteemi uuendused"
 }

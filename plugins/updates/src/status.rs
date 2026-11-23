@@ -166,7 +166,27 @@ pub fn collect(force: bool) -> UpdateStatus {
         );
     }
 
+    // What the upgrade would download, per package and in all (apt can say
+    // beforehand, as the user, without downloading).
+    let mut sizes = std::collections::BTreeMap::new();
+    let mut download_bytes = None;
+    if error.is_none() && !packages.is_empty() {
+        if let Some(spec) = manager.download_plan(&[]) {
+            if let Ok(out) = exec::run(&spec, None, LIST_TIMEOUT) {
+                if out.success {
+                    let plan = manager.parse_download_plan(&out.stdout);
+                    for item in &plan {
+                        *sizes.entry(item.name.clone()).or_insert(0) += item.size;
+                    }
+                    download_bytes = Some(plan.iter().map(|i| i.size).sum());
+                }
+            }
+        }
+    }
+
     let status = UpdateStatus {
+        sizes,
+        download_bytes,
         distro: info,
         count: packages.len(),
         packages,
@@ -205,6 +225,8 @@ mod tests {
             stale: false,
             cached: false,
             error: None,
+            sizes: Default::default(),
+            download_bytes: None,
             ollama: OllamaStatus {
                 installed: false,
                 path: None,

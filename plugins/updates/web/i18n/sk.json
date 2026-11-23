@@ -1,6 +1,6 @@
 {
   "plugin.updates.meta.description": "Kontrola a inštalácia aktualizácií systému a Ollama vo všetkých hlavných linuxových distribúciách",
-  "plugin.updates.meta.summary": "Aktualizácie: jedno okno (a indikátor v HUD) pre aktualizácie systému a Ollama",
+  "plugin.updates.meta.summary": "Updates: systém a Ollama v sekcii Aktualizácie okna Pluginy a ukazovateľ v hornej lište",
   "plugin.updates.meta.category": "Systém",
   "plugin.updates.tab.updates": "Aktualizácie",
   "plugin.updates.tab.history": "História",
@@ -91,5 +91,22 @@
   "plugin.updates.live.plugins": "Znova načítané bez reštartu: {names}",
   "plugin.updates.live.overridden": "Neaktualizované, používa sa vaša vlastná kópia: {names}",
   "plugin.updates.live.server": "Server: prejde na novú verziu, len čo bude asistent nečinný; stránka sa sama znova pripojí.",
-  "plugin.updates.live.shell": "Shell: pri ďalšom zamknutí obrazovky sa spustí znova s novou verziou."
+  "plugin.updates.live.shell": "Shell: pri ďalšom zamknutí obrazovky sa spustí znova s novou verziou.",
+  "plugin.updates.overview.complete": "hotovo",
+  "plugin.updates.overview.pending": "na aktualizáciu",
+  "plugin.updates.overview.current": "aktuálne",
+  "plugin.updates.overview.appsRunning": "Aktualizácia aplikácií",
+  "plugin.updates.overview.ready.one": "{count} aktualizácia pripravená",
+  "plugin.updates.overview.ready.many": "{count} aktualizácie pripravené",
+  "plugin.updates.overview.ready.other": "{count} aktualizácií pripravených",
+  "plugin.updates.overview.upToDate": "Všetko je aktuálne",
+  "plugin.updates.action.updateAll": "Aktualizovať všetko",
+  "plugin.updates.section.system": "Systém",
+  "plugin.updates.section.apps": "Aplikácie",
+  "plugin.updates.size.toDownload": "{size} na stiahnutie",
+  "plugin.updates.progress.left": "zostáva {time}",
+  "plugin.updates.pkg.downloading": "Sťahovanie",
+  "plugin.updates.pkg.downloaded": "Stiahnuté",
+  "plugin.updates.ollama.installedShort": "Nainštalované",
+  "plugin.updates.activity.system": "Aktualizácie systému"
 }

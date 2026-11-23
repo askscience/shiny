@@ -10,7 +10,7 @@ and can be read on its own.
 | A plugin's code (`plugin.toml`, the cdylib, `migrations/`, `skills/`) | `application::plugin_watch` every `PLUGIN_WATCH_SECS` (10), or `POST /api/plugins/rescan` | The plugin is registered again: migrations run, the old library is retired (kept mapped, never `dlclose`d), its tools and routes are replaced, the router is rebuilt. |
 | A plugin's `web/` | The page, through the `digest` in `GET /api/plugins` and `/api/system/version` | The window's module URL changes (`plugin.js?v=<digest>`), so the next import loads the new code. A visible window is rebuilt in place only when its surface has `saveState()`/`restoreState()`; otherwise on close and reopen. |
 | The core `web/` tree | The page, through `web` in `/api/system/version` | The desktop is stashed in `sessionStorage` and the page reloads itself once; every window comes back, also with "Remember my workspace" off. |
-| `/usr/bin/shiny` (the server) | The Updates window after apt (`binaryReplaced` in `/api/system/version`) | `POST /api/system/reexec`: the server drains, closes its pool and `exec`s the new binary in the same process with the listening socket inherited (`SHINY_LISTEN_FD`). The pid does not change; the port never closes. |
+| `/usr/bin/shiny` (the server) | The Plugins window's Updates section after apt (`binaryReplaced` in `/api/system/version`) | `POST /api/system/reexec`: the server drains, closes its pool and `exec`s the new binary in the same process with the listening socket inherited (`SHINY_LISTEN_FD`). The pid does not change; the port never closes. |
 | `/usr/bin/liteaura` (the kiosk shell) | The shell itself (`liteaura_core::binary`) | It exits with code 44 when the page posts `liteaura:locked`; the session script relaunches it at once, behind the locked screen. |
 
 ## Fingerprints
@@ -57,9 +57,10 @@ with it to tell a replaced binary (`binaryReplaced`).
 Child processes (speech sidecars) survive the `exec`; the new server finds
 them on their ports as it does at any start.
 
-## The Updates window
+## The Updates section
 
-After a successful apt job `plugins/updates/web/plugin.js` calls
+After a successful apt job the Plugins window's Updates section
+(`web/js/systemUpdates.js`) calls
 `/api/plugins/rescan`, then `/api/system/reexec` when the `liteaura` package
 was upgraded or the server reports `binaryReplaced`, and writes each outcome
 to the job log: which plugins were loaded again, which are shadowed by a copy

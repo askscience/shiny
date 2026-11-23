@@ -1,6 +1,6 @@
 {
   "plugin.updates.meta.description": "System- und Ollama-Updates unter allen wichtigen Linux-Distributionen prüfen und installieren",
-  "plugin.updates.meta.summary": "Updates: ein Fenster (und HUD-Chip) für System- und Ollama-Updates",
+  "plugin.updates.meta.summary": "Updates: System und Ollama im Bereich Updates des Plugins-Fensters, dazu ein Chip in der oberen Leiste",
   "plugin.updates.meta.category": "System",
   "plugin.updates.tab.updates": "Updates",
   "plugin.updates.tab.history": "Verlauf",
@@ -79,5 +79,22 @@
   "plugin.updates.live.plugins": "Ohne Neustart neu geladen: {names}",
   "plugin.updates.live.overridden": "Nicht aktualisiert, deine eigene Kopie ist in Gebrauch: {names}",
   "plugin.updates.live.server": "Server: wechselt zur neuen Version, sobald der Assistent untätig ist; die Seite verbindet sich von selbst neu.",
-  "plugin.updates.live.shell": "Shell: startet beim nächsten Sperren des Bildschirms mit der neuen Version neu."
+  "plugin.updates.live.shell": "Shell: startet beim nächsten Sperren des Bildschirms mit der neuen Version neu.",
+  "plugin.updates.overview.complete": "fertig",
+  "plugin.updates.overview.pending": "zu aktualisieren",
+  "plugin.updates.overview.current": "aktuell",
+  "plugin.updates.overview.appsRunning": "Apps werden aktualisiert",
+  "plugin.updates.overview.ready.one": "{count} Update bereit",
+  "plugin.updates.overview.ready.many": "{count} Updates bereit",
+  "plugin.updates.overview.ready.other": "{count} Updates bereit",
+  "plugin.updates.overview.upToDate": "Alles ist aktuell",
+  "plugin.updates.action.updateAll": "Alles aktualisieren",
+  "plugin.updates.section.system": "System",
+  "plugin.updates.section.apps": "Apps",
+  "plugin.updates.size.toDownload": "{size} herunterzuladen",
+  "plugin.updates.progress.left": "noch {time}",
+  "plugin.updates.pkg.downloading": "Wird geladen",
+  "plugin.updates.pkg.downloaded": "Geladen",
+  "plugin.updates.ollama.installedShort": "Installiert",
+  "plugin.updates.activity.system": "Systemupdates"
 }

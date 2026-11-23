@@ -64,8 +64,8 @@ the server is not already root. The password is piped to `sudo -S` on stdin and
 is never stored or logged.
 
 If a user asks to install updates and no password is available, do **not**
-guess: tell them to open the **Updates** window from the top bar and enter their
-password there. Never ask the user to type their password into the chat unless
+guess: tell them to open **Plugins → Updates** (the update chip in the top bar
+opens it) and enter their password there. Never ask the user to type their password into the chat unless
 they explicitly choose to.
 
 ## Examples

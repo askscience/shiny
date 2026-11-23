@@ -2,7 +2,7 @@
 
 use crate::distro::{dedup, PackageManager};
 use crate::exec::CmdSpec;
-use crate::model::PackageUpdate;
+use crate::model::{DownloadItem, PackageUpdate};
 use crate::progress::{Event, PkgState};
 
 pub struct Apt;
@@ -187,6 +187,44 @@ impl PackageManager for Apt {
     fn progress_event(&self, line: &str) -> Option<Event> {
         parse_status_line(line)
     }
+
+    fn download_plan(&self, packages: &[String]) -> Option<CmdSpec> {
+        // `--print-uris` lists what would be fetched (URI, file, size, hash)
+        // without downloading or locking: it runs as the user.
+        let spec = CmdSpec::new("apt-get").args(["-qq", "--print-uris"]);
+        let spec = if packages.is_empty() {
+            spec.arg("full-upgrade")
+        } else {
+            spec.args(["install", "--only-upgrade"]).args(packages.iter().map(String::as_str))
+        };
+        Some(spec.env("LC_ALL", "C"))
+    }
+
+    fn parse_download_plan(&self, stdout: &str) -> Vec<DownloadItem> {
+        parse_print_uris(stdout)
+    }
+
+    fn download_dir(&self) -> Option<&'static str> {
+        Some("/var/cache/apt/archives")
+    }
+}
+
+/// `'URI' file size hash` lines → the files to download. The package is the
+/// file name up to its first `_` (`bash_5.2-1_amd64.deb` → `bash`).
+fn parse_print_uris(stdout: &str) -> Vec<DownloadItem> {
+    stdout
+        .lines()
+        .filter_map(|line| {
+            let line = line.trim();
+            let rest = line.strip_prefix('\'')?;
+            let (_, after) = rest.split_once('\'')?;
+            let mut parts = after.split_whitespace();
+            let file = parts.next()?.to_string();
+            let size: u64 = parts.next()?.parse().ok()?;
+            let name = file.split('_').next()?.to_string();
+            (!name.is_empty() && file.ends_with(".deb")).then_some(DownloadItem { name, file, size })
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -204,6 +242,18 @@ mod tests {
         assert_eq!(out[0].candidate.as_deref(), Some("5.2.15-2+b7"));
         assert_eq!(out[0].current.as_deref(), Some("5.2.15-2+b2"));
         assert_eq!(out[0].repo.as_deref(), Some("stable"));
+    }
+
+    #[test]
+    fn parses_the_download_plan() {
+        let src = "'http://deb.debian.org/debian/pool/main/b/bash/bash_5.2.15-2%2bb7_amd64.deb' bash_5.2.15-2+b7_amd64.deb 1499540 SHA256:abc\n\
+                   'http://deb.debian.org/debian/pool/main/c/curl/curl_7.88.1-10_amd64.deb' curl_7.88.1-10_amd64.deb 315960 SHA256:def\n\
+                   'http://example/notes.txt' notes.txt 12 SHA256:x\n";
+        let plan = parse_print_uris(src);
+        assert_eq!(plan.len(), 2);
+        assert_eq!(plan[0], DownloadItem { name: "bash".into(), file: "bash_5.2.15-2+b7_amd64.deb".into(), size: 1_499_540 });
+        assert_eq!(plan[1].name, "curl");
+        assert!(parse_print_uris("").is_empty());
     }
 
     #[test]

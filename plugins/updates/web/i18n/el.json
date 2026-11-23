@@ -1,6 +1,6 @@
 {
   "plugin.updates.meta.description": "Έλεγχος και εγκατάσταση ενημερώσεων συστήματος και Ollama σε κάθε μεγάλη διανομή Linux",
-  "plugin.updates.meta.summary": "Ενημερώσεις: ένα παράθυρο (και ένδειξη στο HUD) για ενημερώσεις συστήματος και Ollama",
+  "plugin.updates.meta.summary": "Updates: το σύστημα και το Ollama στην ενότητα Ενημερώσεις του παραθύρου Πρόσθετα, και ένδειξη στην επάνω γραμμή",
   "plugin.updates.meta.category": "Σύστημα",
   "plugin.updates.tab.updates": "Ενημερώσεις",
   "plugin.updates.tab.history": "Ιστορικό",
@@ -79,5 +79,22 @@
   "plugin.updates.live.plugins": "Φορτώθηκαν ξανά χωρίς επανεκκίνηση: {names}",
   "plugin.updates.live.overridden": "Δεν ενημερώθηκαν, χρησιμοποιείται δικό σας αντίγραφο: {names}",
   "plugin.updates.live.server": "Διακομιστής: περνά στη νέα έκδοση μόλις ο βοηθός είναι αδρανής· η σελίδα επανασυνδέεται μόνη της.",
-  "plugin.updates.live.shell": "Κέλυφος: ξεκινά ξανά με τη νέα έκδοση την επόμενη φορά που θα κλειδωθεί η οθόνη."
+  "plugin.updates.live.shell": "Κέλυφος: ξεκινά ξανά με τη νέα έκδοση την επόμενη φορά που θα κλειδωθεί η οθόνη.",
+  "plugin.updates.overview.complete": "ολοκληρώθηκε",
+  "plugin.updates.overview.pending": "προς ενημέρωση",
+  "plugin.updates.overview.current": "ενημερωμένο",
+  "plugin.updates.overview.appsRunning": "Ενημέρωση εφαρμογών",
+  "plugin.updates.overview.ready.one": "{count} ενημέρωση έτοιμη",
+  "plugin.updates.overview.ready.many": "{count} ενημερώσεις έτοιμες",
+  "plugin.updates.overview.ready.other": "{count} ενημερώσεις έτοιμες",
+  "plugin.updates.overview.upToDate": "Όλα είναι ενημερωμένα",
+  "plugin.updates.action.updateAll": "Ενημέρωση όλων",
+  "plugin.updates.section.system": "Σύστημα",
+  "plugin.updates.section.apps": "Εφαρμογές",
+  "plugin.updates.size.toDownload": "{size} για λήψη",
+  "plugin.updates.progress.left": "απομένουν {time}",
+  "plugin.updates.pkg.downloading": "Λήψη",
+  "plugin.updates.pkg.downloaded": "Ελήφθη",
+  "plugin.updates.ollama.installedShort": "Εγκαταστάθηκε",
+  "plugin.updates.activity.system": "Ενημερώσεις συστήματος"
 }

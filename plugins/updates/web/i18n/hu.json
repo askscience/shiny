@@ -1,6 +1,6 @@
 {
   "plugin.updates.meta.description": "Rendszer- és Ollama-frissítések ellenőrzése és telepítése minden nagyobb Linux-disztribúción",
-  "plugin.updates.meta.summary": "Frissítések: egy ablak (és HUD-jelző) a rendszer- és Ollama-frissítésekhez",
+  "plugin.updates.meta.summary": "Updates: a rendszer és az Ollama a Bővítmények ablak Frissítések részében, plusz egy jelző a felső sávon",
   "plugin.updates.meta.category": "Rendszer",
   "plugin.updates.tab.updates": "Frissítések",
   "plugin.updates.tab.history": "Előzmények",
@@ -79,5 +79,22 @@
   "plugin.updates.live.plugins": "Újratöltve újraindítás nélkül: {names}",
   "plugin.updates.live.overridden": "Nincs frissítve, a saját másolatod van használatban: {names}",
   "plugin.updates.live.server": "Kiszolgáló: az új verzióra vált, amint az asszisztens tétlen; az oldal magától újracsatlakozik.",
-  "plugin.updates.live.shell": "Héj: a képernyő következő zárolásakor újraindul az új verzióval."
+  "plugin.updates.live.shell": "Héj: a képernyő következő zárolásakor újraindul az új verzióval.",
+  "plugin.updates.overview.complete": "kész",
+  "plugin.updates.overview.pending": "frissítendő",
+  "plugin.updates.overview.current": "naprakész",
+  "plugin.updates.overview.appsRunning": "Alkalmazások frissítése",
+  "plugin.updates.overview.ready.one": "{count} frissítés kész",
+  "plugin.updates.overview.ready.many": "{count} frissítés kész",
+  "plugin.updates.overview.ready.other": "{count} frissítés kész",
+  "plugin.updates.overview.upToDate": "Minden naprakész",
+  "plugin.updates.action.updateAll": "Összes frissítése",
+  "plugin.updates.section.system": "Rendszer",
+  "plugin.updates.section.apps": "Alkalmazások",
+  "plugin.updates.size.toDownload": "{size} letöltendő",
+  "plugin.updates.progress.left": "még {time}",
+  "plugin.updates.pkg.downloading": "Letöltés",
+  "plugin.updates.pkg.downloaded": "Letöltve",
+  "plugin.updates.ollama.installedShort": "Telepítve",
+  "plugin.updates.activity.system": "Rendszerfrissítések"
 }

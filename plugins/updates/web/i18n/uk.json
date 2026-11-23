@@ -1,6 +1,6 @@
 {
   "plugin.updates.meta.description": "Перевіряйте та встановлюйте оновлення системи й Ollama у всіх основних дистрибутивах Linux",
-  "plugin.updates.meta.summary": "Оновлення: одне вікно (і індикатор у HUD) для системних оновлень і оновлень Ollama",
+  "plugin.updates.meta.summary": "Updates: система й Ollama в розділі «Оновлення» вікна «Плагіни», а також значок на верхній панелі",
   "plugin.updates.meta.category": "Система",
   "plugin.updates.tab.updates": "Оновлення",
   "plugin.updates.tab.history": "Історія",
@@ -91,5 +91,22 @@
   "plugin.updates.live.plugins": "Завантажено знову без перезапуску: {names}",
   "plugin.updates.live.overridden": "Не оновлено, використовується ваша власна копія: {names}",
   "plugin.updates.live.server": "Сервер: переходить на нову версію, щойно асистент звільниться; сторінка перепідключиться сама.",
-  "plugin.updates.live.shell": "Оболонка: перезапуститься з новою версією під час наступного блокування екрана."
+  "plugin.updates.live.shell": "Оболонка: перезапуститься з новою версією під час наступного блокування екрана.",
+  "plugin.updates.overview.complete": "готово",
+  "plugin.updates.overview.pending": "до оновлення",
+  "plugin.updates.overview.current": "актуально",
+  "plugin.updates.overview.appsRunning": "Оновлення застосунків",
+  "plugin.updates.overview.ready.one": "{count} оновлення готове",
+  "plugin.updates.overview.ready.many": "{count} оновлення готові",
+  "plugin.updates.overview.ready.other": "{count} оновлень готово",
+  "plugin.updates.overview.upToDate": "Усе актуально",
+  "plugin.updates.action.updateAll": "Оновити все",
+  "plugin.updates.section.system": "Система",
+  "plugin.updates.section.apps": "Застосунки",
+  "plugin.updates.size.toDownload": "{size} до завантаження",
+  "plugin.updates.progress.left": "залишилось {time}",
+  "plugin.updates.pkg.downloading": "Завантаження",
+  "plugin.updates.pkg.downloaded": "Завантажено",
+  "plugin.updates.ollama.installedShort": "Встановлено",
+  "plugin.updates.activity.system": "Оновлення системи"
 }

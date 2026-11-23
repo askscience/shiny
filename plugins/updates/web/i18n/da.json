@@ -1,6 +1,6 @@
 {
   "plugin.updates.meta.description": "Tjek og installér system- og Ollama-opdateringer på alle større Linux-distributioner",
-  "plugin.updates.meta.summary": "Opdateringer: ét vindue (og HUD-mærkat) til system- og Ollama-opdateringer",
+  "plugin.updates.meta.summary": "Updates: systemet og Ollama i Plugins-vinduets afsnit Opdateringer plus en chip i topbjælken",
   "plugin.updates.meta.category": "System",
   "plugin.updates.tab.updates": "Opdateringer",
   "plugin.updates.tab.history": "Historik",
@@ -79,5 +79,22 @@
   "plugin.updates.live.plugins": "Genindlæst uden genstart: {names}",
   "plugin.updates.live.overridden": "Ikke opdateret, din egen kopi er i brug: {names}",
   "plugin.updates.live.server": "Server: skifter til den nye version, så snart assistenten er ledig; siden forbinder selv igen.",
-  "plugin.updates.live.shell": "Shell: genstarter med den nye version, næste gang skærmen låses."
+  "plugin.updates.live.shell": "Shell: genstarter med den nye version, næste gang skærmen låses.",
+  "plugin.updates.overview.complete": "færdig",
+  "plugin.updates.overview.pending": "skal opdateres",
+  "plugin.updates.overview.current": "opdateret",
+  "plugin.updates.overview.appsRunning": "Opdaterer apps",
+  "plugin.updates.overview.ready.one": "{count} opdatering klar",
+  "plugin.updates.overview.ready.many": "{count} opdateringer klar",
+  "plugin.updates.overview.ready.other": "{count} opdateringer klar",
+  "plugin.updates.overview.upToDate": "Alt er opdateret",
+  "plugin.updates.action.updateAll": "Opdater alt",
+  "plugin.updates.section.system": "System",
+  "plugin.updates.section.apps": "Apps",
+  "plugin.updates.size.toDownload": "{size} skal hentes",
+  "plugin.updates.progress.left": "{time} tilbage",
+  "plugin.updates.pkg.downloading": "Henter",
+  "plugin.updates.pkg.downloaded": "Hentet",
+  "plugin.updates.ollama.installedShort": "Installeret",
+  "plugin.updates.activity.system": "Systemopdateringer"
 }

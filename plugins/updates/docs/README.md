@@ -12,43 +12,50 @@ other code changes.
 |---|---|
 | Plugin name | `updates` |
 | Category | `System` |
-| Version / API level | `0.1.0` / `1` |
+| Version / API level | `0.1.2` / `1` |
 | Crate | `shiny-updates-plugin` (`libshiny_updates_plugin.so`) |
 | Database | `updates_history` (audit trail) |
-| Web surface | `plugins/updates/web/plugin.js` (window + HUD chip) |
+| Web surface | `web/hud.js` (the top-bar chip); the screens are the Plugins window's Updates section (`web/js/systemUpdates.js` in core) |
 
 ## What it adds
 
 - A **HUD chip** injected into the top bar immediately before the battery chip.
-  It shows a count badge when updates are pending and opens the Updates window
-  when clicked.
-- An **Updates window**: detected distro + package manager, pending packages
-  (with selection), one-click install, Ollama version/update, live job log and
-  recent history.
-  The window follows the editorial window language (styles: the "Updates
-  plugin window" section of `web/css/tiles.css`): flat tabs in the window bar;
-  a large title ("8 updates" / "Up to date", the count rolls up) under a mono
-  eyebrow ("DEBIAN · APT"); the install action as the ink arrow pill; hairline
-  package rows with the name on the left and mono "1.2 → 1.3 · MAIN" on the
-  right; the job log in mono. Details opens the log as a pane: a column
-  beside the content in a wide window, a slide-in over it with the shared
-  Back when the window is narrow or on a phone, where every action is its
-  icon and the install button wears the pending count as a badge. Packages
-  and history cascade in when loaded.
-  While an install runs on apt, a progress bar shows the phase and percent
-  ("INSTALLING · 42% · 12 OF 40 PACKAGES") and every package row shows its
-  own state: a dot while queued, a spinner while unpacking/configuring, a
-  check once installed, a cross if it failed. This comes from
-  `APT::Status-Fd` (`dlstatus:` / `pmstatus:` / `pmerror:` lines, parsed by
-  `PackageManager::progress_event`); other managers show the last log line.
-  When the job ends, a package still unpacking or configuring did not finish:
-  `Progress::end` (called by `Job::finish`) adds it to `failed`, so the window
-  and the AI tools, which read the same snapshot, both show it as failed.
-  The Ollama tab shows the same bar: each step (stopping the service, the
-  installer's `>>> …` steps, verification) as a moving bar with its text, and
-  the bundle download as "DOWNLOAD · 42%" parsed from curl's progress bar
-  (`ollama::progress_event`; the bar's `\r` redraws never reach the log).
-  The busy spinner lives only on the action button.
+  It shows a count badge when updates are pending and opens the Plugins
+  window on its **Updates** section when clicked.
+- The **engine** of that section — there is no Updates window any more: one
+  place shows the system, Ollama and the apps. The section (core,
+  `web/js/systemUpdates.js`, styled in `web/css/plugins.css`) has:
+  - an overview: a ring with the whole job's percent while one runs (the
+    number of updates waiting otherwise), counts for system, apps and Ollama
+    with the download size, the download meter (bytes, speed, time left) and
+    the install meter (packages done), the package being worked on, one
+    "Update all" for the system and the apps, and the job log under Details;
+  - the System block: one hairline row per package — name, versions, size,
+    state — whose own line fills to half as it downloads and to the end as it
+    installs (queued · downloading · downloaded · unpacking · configuring ·
+    installed · failed);
+  - the Ollama block, and the system history in the Activity section.
+  A job that is still running when the window opens is picked up again.
+  After a successful upgrade the changed plugins are loaded again and the
+  server swaps itself for the new binary when its own package was upgraded
+  (`docs/core/live-update.md`).
+- The **numbers are the plugin's** (Rust): `GET /api/updates/status` adds
+  each package's download size (`sizes`) and the total (`download_bytes`),
+  asked with apt's `--print-uris` as the user, without downloading. A job
+  plans its downloads the same way (`PackageManager::download_plan`), and its
+  `progress` (`Progress::view`) carries `download_total` / `download_done`,
+  the `speed` and `eta`, `items` (every package's state and percent) and
+  `overall` (downloading counts for 40 % when there is anything to download).
+  apt reports the download as a whole (`dlstatus:`); a file counts as
+  downloaded once it is in `/var/cache/apt/archives` (the partial directory
+  is readable only by apt), and the bytes still on their way are put on the
+  first package not yet in. The install states come from `APT::Status-Fd`
+  (`pmstatus:` / `pmerror:`, `PackageManager::progress_event`); other
+  managers report the phase and the last line. When the job ends, a package
+  still unpacking or configuring did not finish: `Progress::end` (called by
+  `Job::finish`) adds it to `failed`, so the section and the AI tools, which
+  read the same snapshot, agree. Ollama's update reports each step and the
+  bundle download (`ollama::progress_event`).
 - **Agent tools**: `updates_status`, `updates_distro`, `updates_refresh`,
   `updates_apply`, `update_ollama`.
   `updates_status` (and `GET /api/updates/status`) serve the package list
@@ -144,7 +151,8 @@ plugins/updates/
 │   ├── tools.rs                the 5 agent tools
 │   └── routes.rs               /api/updates/*
 └── web/
-    ├── plugin.js               window + HUD chip
+    ├── hud.js                  top-bar chip (opens Plugins → Updates)
+    ├── i18n/                   the section's strings, 26 languages
     └── icon.svg
 ```
 
@@ -179,7 +187,7 @@ mkdir -p /tmp/pkg/updates/skills /tmp/pkg/updates/migrations /tmp/pkg/updates/we
 cp plugins/updates/plugin.toml              /tmp/pkg/updates/
 cp plugins/updates/skills/updates.md        /tmp/pkg/updates/skills/
 cp plugins/updates/migrations/*.sql         /tmp/pkg/updates/migrations/
-cp plugins/updates/web/plugin.js plugins/updates/web/icon.svg /tmp/pkg/updates/web/
+cp -r plugins/updates/web/hud.js plugins/updates/web/icon.svg plugins/updates/web/i18n /tmp/pkg/updates/web/
 cp target/release/libshiny_updates_plugin.so /tmp/pkg/updates/
 ( cd /tmp/pkg && zip -r updates.zip updates )
 ```

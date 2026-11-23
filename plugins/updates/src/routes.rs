@@ -1,4 +1,4 @@
-//! REST surface for the Updates window.
+//! REST surface for the Plugins window's Updates section (and the chip).
 //!
 //! Read routes are available to any authenticated user; write routes are
 //! **local-only** (the same rule the Terminal uses) because they can run

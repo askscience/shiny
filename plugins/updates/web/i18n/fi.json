@@ -1,6 +1,6 @@
 {
   "plugin.updates.meta.description": "Tarkista ja asenna järjestelmän ja Ollaman päivitykset kaikilla tärkeimmillä Linux-jakeluilla",
-  "plugin.updates.meta.summary": "Päivitykset: yksi ikkuna (ja HUD-merkintä) järjestelmän ja Ollaman päivityksille",
+  "plugin.updates.meta.summary": "Updates: järjestelmä ja Ollama Plugins-ikkunan Päivitykset-osiossa sekä merkki yläpalkissa",
   "plugin.updates.meta.category": "Järjestelmä",
   "plugin.updates.tab.updates": "Päivitykset",
   "plugin.updates.tab.history": "Historia",
@@ -79,5 +79,22 @@
   "plugin.updates.live.plugins": "Ladattu uudelleen ilman uudelleenkäynnistystä: {names}",
   "plugin.updates.live.overridden": "Ei päivitetty, oma kopiosi on käytössä: {names}",
   "plugin.updates.live.server": "Palvelin: vaihtaa uuteen versioon heti, kun avustaja on toimeton; sivu yhdistää itse uudelleen.",
-  "plugin.updates.live.shell": "Kuori: käynnistyy uudelleen uudella versiolla, kun näyttö seuraavan kerran lukitaan."
+  "plugin.updates.live.shell": "Kuori: käynnistyy uudelleen uudella versiolla, kun näyttö seuraavan kerran lukitaan.",
+  "plugin.updates.overview.complete": "valmis",
+  "plugin.updates.overview.pending": "päivitettävää",
+  "plugin.updates.overview.current": "ajan tasalla",
+  "plugin.updates.overview.appsRunning": "Päivitetään sovelluksia",
+  "plugin.updates.overview.ready.one": "{count} päivitys valmiina",
+  "plugin.updates.overview.ready.many": "{count} päivitystä valmiina",
+  "plugin.updates.overview.ready.other": "{count} päivitystä valmiina",
+  "plugin.updates.overview.upToDate": "Kaikki on ajan tasalla",
+  "plugin.updates.action.updateAll": "Päivitä kaikki",
+  "plugin.updates.section.system": "Järjestelmä",
+  "plugin.updates.section.apps": "Sovellukset",
+  "plugin.updates.size.toDownload": "{size} ladattavana",
+  "plugin.updates.progress.left": "{time} jäljellä",
+  "plugin.updates.pkg.downloading": "Ladataan",
+  "plugin.updates.pkg.downloaded": "Ladattu",
+  "plugin.updates.ollama.installedShort": "Asennettu",
+  "plugin.updates.activity.system": "Järjestelmäpäivitykset"
 }

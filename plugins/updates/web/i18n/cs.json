@@ -1,6 +1,6 @@
 {
   "plugin.updates.meta.description": "Kontrolujte a instalujte aktualizace systému i Ollamy ve všech hlavních linuxových distribucích",
-  "plugin.updates.meta.summary": "Aktualizace: jedno okno (a čip v HUD) pro systémové aktualizace i Ollamu",
+  "plugin.updates.meta.summary": "Updates: systém a Ollama v sekci Aktualizace okna Pluginy a ukazatel v horní liště",
   "plugin.updates.meta.category": "Systém",
   "plugin.updates.tab.updates": "Aktualizace",
   "plugin.updates.tab.history": "Historie",
@@ -91,5 +91,22 @@
   "plugin.updates.live.plugins": "Znovu načteno bez restartu: {names}",
   "plugin.updates.live.overridden": "Neaktualizováno, používá se vaše vlastní kopie: {names}",
   "plugin.updates.live.server": "Server: přejde na novou verzi, jakmile bude asistent nečinný; stránka se sama znovu připojí.",
-  "plugin.updates.live.shell": "Shell: při příštím zamknutí obrazovky se spustí znovu s novou verzí."
+  "plugin.updates.live.shell": "Shell: při příštím zamknutí obrazovky se spustí znovu s novou verzí.",
+  "plugin.updates.overview.complete": "hotovo",
+  "plugin.updates.overview.pending": "k aktualizaci",
+  "plugin.updates.overview.current": "aktuální",
+  "plugin.updates.overview.appsRunning": "Aktualizace aplikací",
+  "plugin.updates.overview.ready.one": "{count} aktualizace připravena",
+  "plugin.updates.overview.ready.many": "{count} aktualizace připraveny",
+  "plugin.updates.overview.ready.other": "{count} aktualizací připraveno",
+  "plugin.updates.overview.upToDate": "Vše je aktuální",
+  "plugin.updates.action.updateAll": "Aktualizovat vše",
+  "plugin.updates.section.system": "Systém",
+  "plugin.updates.section.apps": "Aplikace",
+  "plugin.updates.size.toDownload": "{size} ke stažení",
+  "plugin.updates.progress.left": "zbývá {time}",
+  "plugin.updates.pkg.downloading": "Stahování",
+  "plugin.updates.pkg.downloaded": "Staženo",
+  "plugin.updates.ollama.installedShort": "Nainstalováno",
+  "plugin.updates.activity.system": "Aktualizace systému"
 }

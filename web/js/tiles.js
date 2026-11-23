@@ -1350,7 +1350,9 @@ export function initTileManager() {
 
   window.addEventListener('plugin:focus', (e) => {
     const name = e.detail?.name;
-    if (name) void openPluginWindow(name, { focus: true });
+    // Updates has no window: its place is the Plugins window's Updates section.
+    if (name === 'updates') void openCoreWindowSection('plugins', 'updates');
+    else if (name) void openPluginWindow(name, { focus: true });
   });
   window.addEventListener('plugins:changed', async (e) => {
     await refreshCatalog(true);

@@ -1,6 +1,6 @@
 {
   "plugin.updates.meta.description": "Seiceáil agus suiteáil nuashonruithe córais + Ollama ar gach mór-dháileadh Linux",
-  "plugin.updates.meta.summary": "Nuashonruithe: aon fhuinneog amháin (agus sliseog HUD) do nuashonruithe córais agus Ollama",
+  "plugin.updates.meta.summary": "Updates: an córas agus Ollama i rannán Nuashonruithe na fuinneoige Breiseáin, móide comhartha sa bharra barr",
   "plugin.updates.meta.category": "Córas",
   "plugin.updates.tab.updates": "Nuashonruithe",
   "plugin.updates.tab.history": "Stair",
@@ -97,5 +97,22 @@
   "plugin.updates.live.plugins": "Athluchtaithe gan atosú: {names}",
   "plugin.updates.live.overridden": "Gan nuashonrú, tá do chóip féin in úsáid: {names}",
   "plugin.updates.live.server": "Freastalaí: aistríonn sé chuig an leagan nua a luaithe a bhíonn an cúntóir díomhaoin; athcheanglaíonn an leathanach uaidh féin.",
-  "plugin.updates.live.shell": "Blaosc: atosaíonn sí leis an leagan nua an chéad uair eile a ghlasáiltear an scáileán."
+  "plugin.updates.live.shell": "Blaosc: atosaíonn sí leis an leagan nua an chéad uair eile a ghlasáiltear an scáileán.",
+  "plugin.updates.overview.complete": "críochnaithe",
+  "plugin.updates.overview.pending": "le nuashonrú",
+  "plugin.updates.overview.current": "cothrom le dáta",
+  "plugin.updates.overview.appsRunning": "Aipeanna á nuashonrú",
+  "plugin.updates.overview.ready.one": "{count} nuashonrú réidh",
+  "plugin.updates.overview.ready.many": "{count} nuashonrú réidh",
+  "plugin.updates.overview.ready.other": "{count} nuashonrú réidh",
+  "plugin.updates.overview.upToDate": "Tá gach rud cothrom le dáta",
+  "plugin.updates.action.updateAll": "Nuashonraigh gach rud",
+  "plugin.updates.section.system": "Córas",
+  "plugin.updates.section.apps": "Aipeanna",
+  "plugin.updates.size.toDownload": "{size} le híoslódáil",
+  "plugin.updates.progress.left": "{time} fágtha",
+  "plugin.updates.pkg.downloading": "Á íoslódáil",
+  "plugin.updates.pkg.downloaded": "Íoslódáilte",
+  "plugin.updates.ollama.installedShort": "Suiteáilte",
+  "plugin.updates.activity.system": "Nuashonruithe córais"
 }

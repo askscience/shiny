@@ -6,13 +6,15 @@
  * the window closed. The button is injected into `#hud-top` immediately before
  * the battery chip — the same cluster as sound, Wi-Fi and Bluetooth.
  *
- * Clicking it activates/focuses the Updates window. The chip polls
+ * Clicking it opens the Plugins window on its Updates section — the one
+ * place for system, Ollama and app updates (the Updates plugin has no window
+ * of its own; it is the engine behind that section). The chip polls
  * `/api/updates/status` and shows the pending count; a desktop notification is
  * raised on a 0 → N transition.
  */
 import { controlButton, notify, setIcon } from '../../ui/index.js';
 import { apiFetch } from '../../js/api.js';
-import { activatePlugin } from '../../js/tiles.js';
+import { openCoreWindowSection } from '../../js/tiles.js';
 import { t, tp } from '../../js/i18n.js';
 
 const PLUGIN = 'updates';
@@ -60,7 +62,7 @@ export function install() {
   btn.appendChild(badgeEl);
 
   setIcon(ic, 'ui/download', { size: 20 });
-  btn.addEventListener('click', () => void activatePlugin(PLUGIN));
+  btn.addEventListener('click', () => void openCoreWindowSection('plugins', 'updates'));
 
   if (battery && battery.parentElement === top) top.insertBefore(btn, battery);
   else top.appendChild(btn);

@@ -1,6 +1,6 @@
 {
   "plugin.updates.meta.description": "Проверявайте и инсталирайте актуализации на системата + Ollama за всяка основна Linux дистрибуция",
-  "plugin.updates.meta.summary": "Актуализации: един прозорец (и индикатор в HUD) за системни актуализации и актуализации на Ollama",
+  "plugin.updates.meta.summary": "Updates: системата и Ollama в раздела Обновления на прозореца Добавки, плюс индикатор в горната лента",
   "plugin.updates.meta.category": "Системни",
   "plugin.updates.tab.updates": "Актуализации",
   "plugin.updates.tab.history": "История",
@@ -79,5 +79,22 @@
   "plugin.updates.live.plugins": "Заредени отново без рестарт: {names}",
   "plugin.updates.live.overridden": "Не са обновени, използва се ваше собствено копие: {names}",
   "plugin.updates.live.server": "Сървър: преминава към новата версия веднага щом асистентът е свободен; страницата се свързва отново сама.",
-  "plugin.updates.live.shell": "Обвивка: стартира отново с новата версия при следващото заключване на екрана."
+  "plugin.updates.live.shell": "Обвивка: стартира отново с новата версия при следващото заключване на екрана.",
+  "plugin.updates.overview.complete": "готово",
+  "plugin.updates.overview.pending": "за обновяване",
+  "plugin.updates.overview.current": "актуално",
+  "plugin.updates.overview.appsRunning": "Обновяване на приложенията",
+  "plugin.updates.overview.ready.one": "{count} обновление е готово",
+  "plugin.updates.overview.ready.many": "{count} обновления са готови",
+  "plugin.updates.overview.ready.other": "{count} обновления са готови",
+  "plugin.updates.overview.upToDate": "Всичко е актуално",
+  "plugin.updates.action.updateAll": "Обнови всичко",
+  "plugin.updates.section.system": "Система",
+  "plugin.updates.section.apps": "Приложения",
+  "plugin.updates.size.toDownload": "{size} за изтегляне",
+  "plugin.updates.progress.left": "остават {time}",
+  "plugin.updates.pkg.downloading": "Изтегляне",
+  "plugin.updates.pkg.downloaded": "Изтеглено",
+  "plugin.updates.ollama.installedShort": "Инсталирано",
+  "plugin.updates.activity.system": "Системни обновления"
 }

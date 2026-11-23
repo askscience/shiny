@@ -176,8 +176,10 @@ check(
   missing.map(([key, file]) => `${key} (${file})`).join(', '),
 );
 
+// A plugin's keys (`plugin.<name>.…`) live in its own catalogue, as for t().
 const noPluralForm = [...plural].filter(([key]) => (
-  !enKeys.has(`${key}.one`) && !enKeys.has(`${key}.other`) && !enKeys.has(key)
+  !key.startsWith('plugin.')
+  && !enKeys.has(`${key}.one`) && !enKeys.has(`${key}.other`) && !enKeys.has(key)
 ));
 check(
   `every tp() key has a plural form in en.json (${plural.size} checked)`,

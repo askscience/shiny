@@ -34,8 +34,8 @@ impl Plugin for UpdatesPlugin {
             .persona(PERSONA)
             .skills(include_str!("../skills/updates.md"))
             .context_line(
-                "Updates: the Updates window and the top-bar update chip show pending system and \
-                 Ollama updates.",
+                "Updates: the Plugins window's Updates section (opened by the top-bar update chip) \
+                 shows pending system, Ollama and app updates.",
             );
 
         builder.routes(crate::routes::route_specs());

@@ -2387,7 +2387,7 @@ function paintStage(node, key, status, current) {
 function updateProgressDom() {
   const status = state.jobStatus;
   if (!status || !refs.ring) return;
-  refs.ring.style.setProperty('--p', String(Math.max(0, Math.min(100, status.progress || 0))));
+  refs.ring.style.setProperty('--installer-p', String(Math.max(0, Math.min(100, status.progress || 0))));
   if (refs.ringValue) refs.ringValue.textContent = `${status.progress || 0}%`;
   // The stage label decodes in place when the helper moves to the next stage.
   if (refs.progressStage) {
@@ -2426,7 +2426,7 @@ function renderProgress() {
 
   const hero = el('div', 'installer-progress-hero');
   const ring = el('div', 'installer-ring');
-  ring.style.setProperty('--p', String(Math.max(0, Math.min(100, status.progress || 0))));
+  ring.style.setProperty('--installer-p', String(Math.max(0, Math.min(100, status.progress || 0))));
   refs.ring = ring;
   refs.ringValue = el('span', 'installer-ring-value', `${status.progress || 0}%`);
   ring.append(refs.ringValue, el('span', 'installer-ring-label', T('progress.completeShort', 'complete')));

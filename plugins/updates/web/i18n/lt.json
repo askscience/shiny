@@ -1,6 +1,6 @@
 {
   "plugin.updates.meta.description": "Tikrinkite ir diekite sistemos bei Ollama naujinimus visose pagrindinėse Linux distribucijose",
-  "plugin.updates.meta.summary": "Naujinimai: vienas langas (ir būsenos žyma) sistemos bei Ollama naujinimams",
+  "plugin.updates.meta.summary": "Updates: sistema ir Ollama įskiepių lango skiltyje Naujiniai bei ženkliukas viršutinėje juostoje",
   "plugin.updates.meta.category": "Sistema",
   "plugin.updates.tab.updates": "Naujinimai",
   "plugin.updates.tab.history": "Istorija",
@@ -91,5 +91,22 @@
   "plugin.updates.live.plugins": "Įkelta iš naujo be paleidimo iš naujo: {names}",
   "plugin.updates.live.overridden": "Neatnaujinta, naudojama jūsų pačių kopija: {names}",
   "plugin.updates.live.server": "Serveris: pereina prie naujos versijos, kai tik asistentas neužimtas; puslapis prisijungia iš naujo pats.",
-  "plugin.updates.live.shell": "Apvalkalas: paleidžiamas iš naujo su nauja versija kitą kartą užrakinus ekraną."
+  "plugin.updates.live.shell": "Apvalkalas: paleidžiamas iš naujo su nauja versija kitą kartą užrakinus ekraną.",
+  "plugin.updates.overview.complete": "baigta",
+  "plugin.updates.overview.pending": "reikia atnaujinti",
+  "plugin.updates.overview.current": "atnaujinta",
+  "plugin.updates.overview.appsRunning": "Atnaujinamos programos",
+  "plugin.updates.overview.ready.one": "{count} naujinys paruoštas",
+  "plugin.updates.overview.ready.many": "{count} naujiniai paruošti",
+  "plugin.updates.overview.ready.other": "{count} naujinių paruošta",
+  "plugin.updates.overview.upToDate": "Viskas atnaujinta",
+  "plugin.updates.action.updateAll": "Atnaujinti viską",
+  "plugin.updates.section.system": "Sistema",
+  "plugin.updates.section.apps": "Programos",
+  "plugin.updates.size.toDownload": "{size} atsisiųsti",
+  "plugin.updates.progress.left": "liko {time}",
+  "plugin.updates.pkg.downloading": "Atsisiunčiama",
+  "plugin.updates.pkg.downloaded": "Atsisiųsta",
+  "plugin.updates.ollama.installedShort": "Įdiegta",
+  "plugin.updates.activity.system": "Sistemos naujiniai"
 }

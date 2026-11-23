@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **One place for every update.** The Updates window is gone: the Plugins
+  window's Updates section shows the system, Ollama and the apps together,
+  and the top bar's update chip opens it. An overview ring shows how far the
+  whole update is (or how many updates wait), with the size to download, the
+  download speed and time left, how many packages are installed, the package
+  being worked on and one "Update all". Every package has its own row whose
+  line fills as it downloads and installs, with its size and state. The
+  numbers come from the Updates plugin, which now asks apt beforehand what it
+  will download. The system's update history joins the install activity.
+
+### Fixed
+
+- **Installer: its progress ring no longer breaks other windows' bars.** It
+  registered a page-wide `--p` that stopped every other `--p` from being
+  inherited — the Plugins window's download bars included.
+
 ## [0.3.2] - 2026-11-23
 
 ### Changed

@@ -1,6 +1,6 @@
 {
   "plugin.updates.meta.description": "Controlla e installa gli aggiornamenti di sistema e di Ollama su tutte le principali distribuzioni Linux",
-  "plugin.updates.meta.summary": "Updates: una sola finestra (e un chip nell'HUD) per gli aggiornamenti di sistema e di Ollama",
+  "plugin.updates.meta.summary": "Updates: sistema e Ollama nella sezione Aggiornamenti della finestra Plugin, più un chip nella barra in alto",
   "plugin.updates.meta.category": "Sistema",
   "plugin.updates.tab.updates": "Aggiornamenti",
   "plugin.updates.tab.history": "Cronologia",
@@ -85,5 +85,22 @@
   "plugin.updates.live.plugins": "Ricaricati senza riavvio: {names}",
   "plugin.updates.live.overridden": "Non aggiornati, è in uso una tua copia: {names}",
   "plugin.updates.live.server": "Server: passa alla nuova versione appena l'assistente è inattivo; la pagina si riconnette da sola.",
-  "plugin.updates.live.shell": "Shell: si riavvia con la nuova versione al prossimo blocco dello schermo."
+  "plugin.updates.live.shell": "Shell: si riavvia con la nuova versione al prossimo blocco dello schermo.",
+  "plugin.updates.overview.complete": "completato",
+  "plugin.updates.overview.pending": "da aggiornare",
+  "plugin.updates.overview.current": "aggiornato",
+  "plugin.updates.overview.appsRunning": "Aggiornamento delle app",
+  "plugin.updates.overview.ready.one": "{count} aggiornamento pronto",
+  "plugin.updates.overview.ready.many": "{count} aggiornamenti pronti",
+  "plugin.updates.overview.ready.other": "{count} aggiornamenti pronti",
+  "plugin.updates.overview.upToDate": "Tutto aggiornato",
+  "plugin.updates.action.updateAll": "Aggiorna tutto",
+  "plugin.updates.section.system": "Sistema",
+  "plugin.updates.section.apps": "App",
+  "plugin.updates.size.toDownload": "{size} da scaricare",
+  "plugin.updates.progress.left": "{time} rimanenti",
+  "plugin.updates.pkg.downloading": "Download",
+  "plugin.updates.pkg.downloaded": "Scaricato",
+  "plugin.updates.ollama.installedShort": "Installato",
+  "plugin.updates.activity.system": "Aggiornamenti di sistema"
 }

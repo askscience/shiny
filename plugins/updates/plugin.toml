@@ -1,9 +1,9 @@
 name = "updates"
-version = "0.1.1"
+version = "0.1.2"
 api_level = 1
 entry_symbol = "shiny_plugin_entry"
 description = "Check and install system + Ollama updates across every major Linux distribution"
-summary = "Updates: one window (and HUD chip) for system and Ollama updates"
+summary = "Updates: the engine of the Plugins window's Updates section (system and Ollama), plus a top-bar chip"
 author = "shiny"
 migrations_dir = "migrations"
 skills_dir = "skills"
