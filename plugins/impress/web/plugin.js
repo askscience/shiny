@@ -46,7 +46,8 @@ import SPEC from './slide-spec.js';
 
 export const IMPRESS_PLUGIN = 'impress';
 
-const THEMES = ['aurora', 'slate', 'ocean', 'mono', 'ember'];
+// The names come from the shared slide spec (odp_spec.rs, the writer's own).
+const THEMES = SPEC.themeNames;
 // Glow colours per theme — must stay in sync with web/css/tiles.css.
 const THEME_GLOW = {
   aurora: { accent: '#6366f1', darkB: '#2b2b52' },
@@ -55,7 +56,7 @@ const THEME_GLOW = {
   mono: { accent: '#18181b', darkB: '#1c1c1c' },
   ember: { accent: '#f97316', darkB: '#2d1f14' },
 };
-const LAYOUTS = ['title', 'section', 'content', 'two-column', 'quote', 'blank'];
+const LAYOUTS = SPEC.layoutNames;
 // Display names for the slide themes and layouts (the stored values stay keys).
 const THEME_LABELS = {
   aurora: ['plugin.impress.theme.aurora', 'Aurora'],
@@ -73,11 +74,10 @@ const LAYOUT_LABELS = {
   blank: ['plugin.impress.layout.blank', 'Blank'],
 };
 const labelOf = (table, key) => (table[key] ? t(table[key][0], null, table[key][1]) : key);
-// Per-slide animation. TRANSITIONS must stay in sync with the SDK
-// `odp::TRANSITIONS` (the ODF export maps each one to a standard effect);
-// REVEALS matches `odp::REVEALS`.
-const TRANSITIONS = ['none', 'fade', 'slide', 'push', 'zoom'];
-const REVEALS = ['all', 'bullets'];
+// Per-slide animation: the SDK's `odp::TRANSITIONS` (the ODF export maps each
+// one to a standard effect) and `odp::REVEALS`, through the spec.
+const TRANSITIONS = SPEC.transitions;
+const REVEALS = SPEC.reveals;
 const TRANSITION_LABELS = {
   none: { labelKey: 'plugin.impress.transition.none' },
   fade: { labelKey: 'plugin.impress.transition.fade' },
@@ -183,9 +183,8 @@ function newSlide(layout = 'content') {
 
 function normalizeSlide(s) {
   const slide = { ...newSlide(), ...(s || {}) };
-  if (!LAYOUTS.includes(slide.layout)) slide.layout = 'content';
-  if (!TRANSITIONS.includes(slide.transition)) slide.transition = 'none';
-  if (!REVEALS.includes(slide.reveal)) slide.reveal = 'all';
+  // Layout, transition, reveal and fit are made canonical by the plugin
+  // (`canonical_slide`) on every read and save; here they only get defaults.
   slide.bullets = Array.isArray(slide.bullets) ? slide.bullets : [];
   slide.columns = Array.isArray(slide.columns) ? slide.columns : [[], []];
   slide.title = String(slide.title || '');

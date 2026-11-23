@@ -36,7 +36,8 @@ export default {
   opens.
 - **Inspector**: mono uppercase labels over hairline-underlined selects
   (layout / transition / bullets, with translated option names) and speaker
-  notes; slide operations are small grey pills (Add slide, move, delete).
+  notes; the theme, layout, transition and reveal names come from
+  `slide-spec.js` (`themeNames`, `layoutNames`, `transitions`, `reveals`); slide operations are small grey pills (Add slide, move, delete).
 - **Panes**: the body is a `paneStack` (`.impress-body`). Wide, it is a grid —
   the strip a column on the left, the inspector under the stage. Narrow
   (≤ 700 px) or on a phone (`.is-stacked`) the strip is a row of thumbnails

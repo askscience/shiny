@@ -8,7 +8,7 @@ All routes are `auth`, registered in [`src/plugin.rs`](../src/plugin.rs).
 | `POST` | `/api/presentations` | `{ title, theme?, slides }` | Create. |
 | `POST` | `/api/presentations/import` | multipart `.odp` | Import a deck. |
 | `GET` | `/api/presentations/:id` | — | Read one deck. |
-| `PUT` | `/api/presentations/:id` | `{ title?, theme?, slides }` | Save. |
+| `PUT` | `/api/presentations/:id` | `{ title?, theme?, slides }` | Save. Each slide is stored canonical (`canonical_slide`: known layout, transition and reveal, `fit` within 0.4–1), as are the AI tools' slides. |
 | `DELETE` | `/api/presentations/:id` | — | Delete. |
 | `GET` | `/api/presentations/:id/export` | — | Export as `.odp`. |
 

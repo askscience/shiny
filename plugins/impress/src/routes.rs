@@ -38,13 +38,17 @@ pub fn handle(ctx: &Arc<PluginCtx>, tag: &str) -> Option<RouteHandler> {
 }
 
 /* ── helpers ────────────────────────────────────────────────── */
-/// Force the app-only animation fields to their canonical values, so a deck
-/// saved by an older client (or an API caller that omits them) never stores
-/// `""` where the model means `none`/`all`.
-fn canonical_slide(s: Slide) -> Slide {
+/// A slide as it is stored: a known layout ("content" otherwise), the
+/// animation fields at their canonical values (never `""` where the model
+/// means `none`/`all`), and the shrink-to-fit scale within what the writer
+/// accepts — whoever wrote it (the window, the AI, an older client).
+pub(crate) fn canonical_slide(s: Slide) -> Slide {
+    let fit = if s.fit.is_finite() { s.fit.clamp(shiny_plugin_sdk::odp_spec::MIN_FIT, 1.0) } else { 1.0 };
     Slide {
+        layout: odp::normalize_layout(&s.layout),
         transition: odp::normalize_transition(&s.transition),
         reveal: odp::normalize_reveal(&s.reveal),
+        fit,
         ..s
     }
 }
@@ -282,4 +286,24 @@ fn deck_import(ctx: Arc<PluginCtx>) -> RouteHandler {
             Ok(ok(json!({ "title": title })))
         }
     })
+}
+
+#[cfg(test)]
+mod canonical_tests {
+    use super::canonical_slide;
+    use shiny_plugin_sdk::odp::Slide;
+
+    fn slide(v: serde_json::Value) -> Slide {
+        serde_json::from_value(v).expect("a slide")
+    }
+
+    #[test]
+    fn stored_slides_are_canonical() {
+        let s = canonical_slide(slide(serde_json::json!({ "layout": "Two-Column", "transition": "", "reveal": "x", "fit": 0.1 })));
+        assert_eq!((s.layout.as_str(), s.transition.as_str(), s.reveal.as_str(), s.fit), ("two-column", "none", "all", 0.4));
+        let s = canonical_slide(slide(serde_json::json!({ "layout": "poster" })));
+        assert_eq!((s.layout.as_str(), s.fit), ("content", 1.0));
+        let s = canonical_slide(slide(serde_json::json!({ "layout": "quote", "fit": 0.75 })));
+        assert_eq!((s.layout.as_str(), s.fit), ("quote", 0.75));
+    }
 }

@@ -11,7 +11,7 @@ use serde_json::{json, Value};
 use sqlx::SqlitePool;
 
 use shiny_plugin_sdk::errors::AppError;
-use shiny_plugin_sdk::odp::{normalize_layout, normalize_reveal, normalize_theme, normalize_transition, Slide};
+use shiny_plugin_sdk::odp::{normalize_theme, Slide};
 use shiny_plugin_sdk::outcome::ActionOutcome;
 use shiny_plugin_sdk::services::PluginCtx;
 use shiny_plugin_sdk::tools::{ParamHelpers, Tool, ToolRequest};
@@ -84,11 +84,9 @@ fn coerce_slide(v: &Value) -> Slide {
     let obj = v.as_object();
     let get = |key: &str| obj.and_then(|o| o.get(key)).cloned().unwrap_or(Value::Null);
 
-    let layout = normalize_layout(
-        get("layout").as_str().unwrap_or("content"),
-    );
-    Slide {
-        layout,
+    // The stored form — layout, animation, fit — is the routes' canonical_slide.
+    crate::routes::canonical_slide(Slide {
+        layout: get("layout").as_str().unwrap_or("content").to_string(),
         title: str_field(&get("title")),
         subtitle: str_field(&get("subtitle")),
         bullets: coerce_string_list(&get("bullets")),
@@ -96,10 +94,10 @@ fn coerce_slide(v: &Value) -> Slide {
         body: str_field(&get("body")),
         attribution: str_field(&get("attribution")),
         notes: str_field(&get("notes")),
-        transition: normalize_transition(get("transition").as_str().unwrap_or("none")),
-        reveal: normalize_reveal(get("reveal").as_str().unwrap_or("all")),
-        fit: get("fit").as_f64().filter(|f| f.is_finite()).map_or(1.0, |f| f.clamp(0.4, 1.0)),
-    }
+        transition: get("transition").as_str().unwrap_or("none").to_string(),
+        reveal: get("reveal").as_str().unwrap_or("all").to_string(),
+        fit: get("fit").as_f64().unwrap_or(1.0),
+    })
 }
 
 /// Parse the `slides` parameter. Accepts an array of slide objects, or a

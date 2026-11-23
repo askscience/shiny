@@ -471,6 +471,12 @@ pub fn spec_json() -> Value {
         "minFit": MIN_FIT,
         "themes": themes,
         "layouts": layouts,
+        // The names in their canonical order (the maps above are keyed and
+        // sorted): what the editor offers, and what `canonical_slide` keeps.
+        "themeNames": THEMES,
+        "layoutNames": LAYOUTS,
+        "transitions": crate::odp::TRANSITIONS,
+        "reveals": crate::odp::REVEALS,
     })
 }
 

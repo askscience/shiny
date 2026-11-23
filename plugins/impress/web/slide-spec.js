@@ -11,6 +11,14 @@ export default {
     "fallback": "DejaVu Sans",
     "text": "Inter"
   },
+  "layoutNames": [
+    "title",
+    "section",
+    "content",
+    "two-column",
+    "quote",
+    "blank"
+  ],
   "layouts": {
     "blank": {
       "background": {
@@ -332,6 +340,17 @@ export default {
     "h": 360.0,
     "w": 640.0
   },
+  "reveals": [
+    "all",
+    "bullets"
+  ],
+  "themeNames": [
+    "aurora",
+    "slate",
+    "ocean",
+    "mono",
+    "ember"
+  ],
   "themes": {
     "aurora": {
       "accent": "#6366f1",
@@ -393,5 +412,12 @@ export default {
       "sectionB": "#272f3a",
       "subOnDark": "#bec1c6"
     }
-  }
+  },
+  "transitions": [
+    "none",
+    "fade",
+    "slide",
+    "push",
+    "zoom"
+  ]
 };

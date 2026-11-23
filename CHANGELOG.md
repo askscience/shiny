@@ -4,6 +4,10 @@
 
 ### Changed
 
+- **Impress: slides are stored the same way whoever writes them.** The
+  plugin keeps every slide's layout, animation and text fit valid on save
+  (the assistant's slides included); the window takes the lists of themes,
+  layouts and animations from the slide specification the export uses.
 - **Word: the page you type on is set from the export's own styles.** The
   plugin computes the page's fonts, sizes, spacing and colours from the
   document styles the export uses, instead of the window keeping a copy of
