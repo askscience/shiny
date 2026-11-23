@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-11-23
+
 ### Changed
 
 - **Browser: offering to save a login no longer reveals the saved
