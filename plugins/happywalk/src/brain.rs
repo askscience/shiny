@@ -50,20 +50,26 @@ fn language(lang: &str) -> &'static str {
 }
 
 pub fn system_prompt(request: &Request) -> String {
+    let actions = if request.allowed_actions.is_empty() {
+        "\"action\": \"\" (there is nothing to do, only something to say)".to_string()
+    } else {
+        format!(
+            "\"action\": one of [{}], or \"\" when none fits",
+            request
+                .allowed_actions
+                .iter()
+                .map(|a| format!("\"{a}\""))
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    };
     format!(
         "You are the character of a video game, walking through a small pastel city. \
          A player steers you with their voice, and you know it: you only do what they say, \
          so whatever goes wrong is their doing. You are ironic and warm, never mean, never rude, \
          and you tease the player about it. Never repeat a line you said before. \
-         Answer with one JSON object and nothing else: \
-         {{\"action\": one of [{actions}], \"say\": a single short spoken line in {language}, at most 15 words}}. \
-         Use an empty action when none fits.",
-        actions = request
-            .allowed_actions
-            .iter()
-            .map(|a| format!("\"{a}\""))
-            .collect::<Vec<_>>()
-            .join(", "),
+         Answer at once, without deliberating, with one JSON object and nothing else: \
+         {{{actions}, \"say\": a single short spoken line in {language}, at most 15 words}}.",
         language = language(&request.lang),
     )
 }
@@ -73,8 +79,17 @@ pub fn system_prompt(request: &Request) -> String {
 pub fn parse(text: &str, allowed: &[String]) -> Option<Answer> {
     let start = text.find('{')?;
     let end = text.rfind('}')?;
-    let mut answer: Answer = serde_json::from_str(text.get(start..=end)?).ok()?;
-    answer.action = answer.action.trim().to_lowercase();
+    let value: serde_json::Value = serde_json::from_str(text.get(start..=end)?).ok()?;
+    // Models fill a field they have no use for in their own ways (`[]`,
+    // `null`, "none"): anything that is not an offered action is no action.
+    let mut answer = Answer {
+        action: value["action"]
+            .as_str()
+            .unwrap_or_default()
+            .trim()
+            .to_lowercase(),
+        say: value["say"].as_str().unwrap_or_default().to_string(),
+    };
     if !allowed.contains(&answer.action) {
         answer.action.clear();
     }
@@ -239,18 +254,40 @@ async fn ask(provider: &Provider, request: &Request) -> Result<String, String> {
                 .to_string())
         }
         Provider::OpenAi { base, key, model } => {
-            let body = json!({ "model": model, "messages": messages, "stream": false, "max_tokens": 96, "temperature": 0.9 });
-            let mut call = http().post(format!("{base}/chat/completions")).json(&body);
-            if !key.is_empty() {
-                call = call.bearer_auth(key);
+            // Many of these models reason before they answer, and the trace
+            // counts against the limit: leave room for it. JSON mode and
+            // "no thinking" are asked for first; an endpoint that does not
+            // know them refuses the request, which is then sent plain.
+            let plain = json!({ "model": model, "messages": messages, "stream": false, "max_tokens": 700, "temperature": 0.9 });
+            let mut asked = plain.clone();
+            asked["response_format"] = json!({ "type": "json_object" });
+            asked["thinking"] = json!({ "type": "disabled" });
+            let send = |body: serde_json::Value| {
+                let mut call = http().post(format!("{base}/chat/completions")).json(&body);
+                if !key.is_empty() {
+                    call = call.bearer_auth(key);
+                }
+                call.send()
+            };
+            let mut reply = send(asked).await.map_err(|e| e.to_string())?;
+            if matches!(reply.status().as_u16(), 400 | 422) {
+                reply = send(plain).await.map_err(|e| e.to_string())?;
             }
-            let reply = call.send().await.map_err(|e| e.to_string())?;
             if !reply.status().is_success() {
                 // The endpoint's own text stays out of the log line a page reads.
                 return Err(format!("the endpoint answered {}", reply.status()));
             }
             let data: serde_json::Value = reply.json().await.map_err(|e| e.to_string())?;
-            Ok(data["choices"][0]["message"]["content"]
+            let choice = &data["choices"][0];
+            tracing::debug!(
+                "happywalk: the endpoint finished with {} ({} reasoning characters)",
+                choice["finish_reason"],
+                choice["message"]["reasoning_content"]
+                    .as_str()
+                    .map(str::len)
+                    .unwrap_or(0)
+            );
+            Ok(choice["message"]["content"]
                 .as_str()
                 .unwrap_or_default()
                 .to_string())
@@ -291,7 +328,11 @@ pub fn route(ctx: Arc<PluginCtx>) -> RouteHandler {
                 Ok(Ok(text)) => text,
             };
             match parse(&text, &request.allowed_actions) {
-                None => Ok(none("malformed", &name, started)),
+                None => {
+                    let shown: String = text.chars().take(200).collect();
+                    tracing::info!("happywalk: the brain's answer was not usable: {shown:?}");
+                    Ok(none("malformed", &name, started))
+                }
                 Some(answer) => Ok(ok(json!({
                     "answer": answer,
                     "model": name,
@@ -334,6 +375,36 @@ mod tests {
     }
 
     #[test]
+    fn an_action_of_any_other_shape_is_no_action() {
+        let answer = parse(r#"{"action": [], "say": "Terza volta, stesso muro."}"#, &[]).unwrap();
+        assert_eq!(
+            answer,
+            Answer {
+                action: String::new(),
+                say: "Terza volta, stesso muro.".into()
+            }
+        );
+        assert_eq!(
+            parse(r#"{"action": null, "say": "Eh."}"#, &allowed())
+                .unwrap()
+                .action,
+            ""
+        );
+    }
+
+    #[test]
+    fn with_nothing_to_do_the_prompt_offers_no_list() {
+        let request = Request {
+            situation: String::new(),
+            allowed_actions: Vec::new(),
+            lang: "it".into(),
+        };
+        let prompt = system_prompt(&request);
+        assert!(!prompt.contains("one of"));
+        assert!(prompt.contains("nothing to do"));
+    }
+
+    #[test]
     fn nothing_usable_is_no_answer() {
         assert_eq!(parse("I would rather not.", &allowed()), None);
         assert_eq!(parse(r#"{"action": "fly"}"#, &allowed()), None);
@@ -372,7 +443,7 @@ mod tests {
             allowed_actions: allowed(),
             lang: "it".into(),
         });
-        assert!(prompt.contains(r#"["stop", "turn_left"]"#));
+        assert!(prompt.contains(r#"one of ["stop", "turn_left"]"#));
         assert!(prompt.contains("Italian"));
     }
 }

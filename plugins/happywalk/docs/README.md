@@ -85,8 +85,10 @@ prompt is the character (steered by voice and aware of it, ironic, warm,
 never mean) and asks for one JSON object. On Ollama the output is
 **constrained** to that shape (`format`, a JSON schema whose `action` is an
 enum of the offered actions), with no reasoning trace and few tokens, so a
-small model cannot wander off; an OpenAI-compatible endpoint is asked the same
-way without the constraint. Either way `src/brain.rs` then takes the first
+small model cannot wander off. An OpenAI-compatible endpoint is asked for
+JSON mode and for no reasoning (`response_format`, `thinking`), with room in
+the token limit for a model that reasons anyway; an endpoint that refuses
+those two fields is asked again without them. Either way `src/brain.rs` then takes the first
 object in the reply, keeps the action only if the game offered it, and trims
 the line to one short sentence. No answer (`reason`: `ai-off`, `unavailable`,
 `late` after 6 s, `malformed`) is a normal outcome.
@@ -229,8 +231,9 @@ the engine's built-in font has no accented letters.
   from partial results; keyboard as a fallback; bumping into a building stops
   the character and gets a line from a fixed list. Done when the time from the
   end of the word to the movement is under 300 ms.
-- **Phase 2, the character's brain (built; not yet tried with a real
-  model):** the lines for bumps and misunderstood
+- **Phase 2, the character's brain (built; the route was tried with a real
+  OpenAI-compatible model, answers in about a second; not yet played with
+  a real voice):** the lines for bumps and misunderstood
   commands come from the model ("you said X, Y happened"); free sentences are
   answered with valid actions only; a fixed personality; lines spoken and
   shown in a bubble; a short memory for running jokes; a template line when
