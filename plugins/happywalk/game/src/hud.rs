@@ -219,7 +219,7 @@ fn bubble(
     let (Ok(player), Ok((camera, view))) = (players.single(), cameras.single()) else {
         return;
     };
-    let above = player.translation() + Vec3::Y * 2.9;
+    let above = player.translation() + Vec3::Y * 2.3;
     match camera.world_to_viewport(view, above) {
         Ok(at) if bubble.left > 0.0 => {
             *visibility = Visibility::Visible;

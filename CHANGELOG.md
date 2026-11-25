@@ -21,7 +21,13 @@
   expected shape), from what the player said, what happened and a short
   memory of earlier moments; a sentence that is no command goes to the model
   too, which may answer with one of the orders. A fixed line is said only
-  when the model is off or late. See `plugins/happywalk/docs/README.md`.
+  when the model is off or late. The look is voxel: every model is a
+  MagicaVoxel file on one pastel palette, written by a script
+  (`plugins/happywalk/tools/make_assets.py`) and meshed greedily with soft
+  ambient occlusion; the neighbourhood has shops with awnings, trees,
+  benches, planters and lamp posts, the character is a small round figure
+  in a beanie, and the sky turns slowly from day to evening. See
+  `plugins/happywalk/docs/README.md`.
 - **Plugins: `publish = false` keeps a plugin in development out of the
   catalogue.** Until now a new plugin directory on `main` was published by
   its first push; with this line in `plugin.toml` it is neither offered nor

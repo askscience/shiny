@@ -68,6 +68,7 @@ impl Memory {
             Topic::Bump(SolidKind::Lamp) => 1,
             Topic::Bump(SolidKind::Edge) => 2,
             Topic::NotUnderstood => 3,
+            Topic::Bump(_) => 4,
         };
         let turn = self.turns.entry(slot).or_insert(0);
         let line = stand_in(lang, topic, *turn);
@@ -90,6 +91,9 @@ fn thing(into: SolidKind) -> &'static str {
     match into {
         SolidKind::Building => "the wall of a building",
         SolidKind::Lamp => "a lamp post",
+        SolidKind::Tree => "a tree",
+        SolidKind::Bench => "a bench",
+        SolidKind::Planter => "a flower planter",
         SolidKind::Edge => "the hedge at the edge of the neighbourhood",
     }
 }

@@ -8,6 +8,7 @@ use bevy::prelude::*;
 
 use crate::city::{SolidKind, Solids, START};
 use crate::intent::Order;
+use crate::vox::VoxLibrary;
 
 /// The character walked into something.
 #[derive(Message, Clone, Copy, Debug)]
@@ -180,34 +181,24 @@ impl Plugin for PlayerPlugin {
     }
 }
 
-fn spawn(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-) {
-    let mut matte = |r: f32, g: f32, b: f32| {
-        materials.add(StandardMaterial {
-            base_color: Color::srgb(r, g, b),
-            perceptual_roughness: 0.9,
-            reflectance: 0.1,
-            ..default()
-        })
+/// Metres to a voxel of the character.
+const VOXEL: f32 = 0.04;
+
+fn spawn(mut commands: Commands, library: Res<VoxLibrary>) {
+    // A part hangs below its joint: its model's top centre is at the joint.
+    let hang = |name: &str, forward: f32| {
+        let down = library.size(name).y as f32 * VOXEL;
+        library.place(name, Vec3::new(0.0, -down, forward), VOXEL, 0)
     };
-    let skin = matte(0.99, 0.84, 0.74);
-    let hair = matte(0.45, 0.33, 0.30);
-    let shirt = matte(0.99, 0.70, 0.45);
-    let trousers = matte(0.45, 0.56, 0.80);
-    let shoes = matte(0.96, 0.96, 0.98);
-    let dark = matte(0.20, 0.20, 0.26);
-    let pack = matte(0.55, 0.80, 0.72);
-    let unit = meshes.add(Cuboid::new(1.0, 1.0, 1.0));
-    let part = |at: Vec3, size: Vec3, material: &Handle<StandardMaterial>| {
-        (
-            Mesh3d(unit.clone()),
-            MeshMaterial3d(material.clone()),
-            Transform::from_translation(at).with_scale(size),
-        )
-    };
+    // Everything is measured from the models, so a redrawn part fits.
+    let size = |name: &str| library.size(name).as_vec3() * VOXEL;
+    let (leg, torso, arm, pack) = (size("leg"), size("torso"), size("arm"), size("backpack"));
+    let hip = leg.y - 0.02;
+    let shoulder = hip + torso.y - 0.1;
+    let chest = torso.y - 0.06;
+    let reach = (torso.x + arm.x) / 2.0 - 0.03;
+    let apart = leg.x / 2.0 + 0.02;
+    let behind = (torso.z + pack.z) / 2.0 - 0.06;
 
     commands
         .spawn((
@@ -216,26 +207,15 @@ fn spawn(
             Visibility::default(),
         ))
         .with_children(|figure| {
-            // Legs swing from the hip, arms from the shoulder: each is a
-            // joint with its blocks hanging below it.
             for side in [-1.0, 1.0] {
                 figure
                     .spawn((
                         Limb { side, reach: 0.75 },
-                        Transform::from_xyz(side * 0.19, 0.82, 0.0),
+                        Transform::from_xyz(side * apart, hip, 0.0),
                         Visibility::default(),
                     ))
                     .with_children(|leg| {
-                        leg.spawn(part(
-                            Vec3::new(0.0, -0.36, 0.0),
-                            Vec3::new(0.30, 0.72, 0.32),
-                            &trousers,
-                        ));
-                        leg.spawn(part(
-                            Vec3::new(0.0, -0.75, -0.04),
-                            Vec3::new(0.32, 0.14, 0.42),
-                            &shoes,
-                        ));
+                        leg.spawn(hang("leg", -0.02));
                     });
                 figure
                     .spawn((
@@ -243,73 +223,29 @@ fn spawn(
                             side: -side,
                             reach: 0.95,
                         },
-                        Transform::from_xyz(side * 0.47, 1.56, 0.0),
+                        Transform::from_xyz(side * reach, shoulder, 0.0),
                         Visibility::default(),
                     ))
                     .with_children(|arm| {
-                        arm.spawn(part(
-                            Vec3::new(0.0, -0.22, 0.0),
-                            Vec3::new(0.22, 0.44, 0.26),
-                            &shirt,
-                        ));
-                        arm.spawn(part(
-                            Vec3::new(0.0, -0.58, 0.0),
-                            Vec3::new(0.20, 0.30, 0.22),
-                            &skin,
-                        ));
+                        arm.spawn(hang("arm", 0.0));
                     });
             }
             figure
                 .spawn((
                     Body,
-                    Transform::from_xyz(0.0, 0.82, 0.0),
+                    Transform::from_xyz(0.0, hip, 0.0),
                     Visibility::default(),
                 ))
                 .with_children(|body| {
-                    body.spawn(part(
-                        Vec3::new(0.0, 0.40, 0.0),
-                        Vec3::new(0.70, 0.80, 0.40),
-                        &shirt,
-                    ));
-                    body.spawn(part(
-                        Vec3::new(0.0, 0.42, 0.30),
-                        Vec3::new(0.50, 0.56, 0.22),
-                        &pack,
-                    ));
+                    body.spawn(library.place("torso", Vec3::ZERO, VOXEL, 0));
+                    body.spawn(library.place("backpack", Vec3::new(0.0, 0.06, behind), VOXEL, 0));
                     body.spawn((
                         Head,
-                        Transform::from_xyz(0.0, 0.82, 0.0),
+                        Transform::from_xyz(0.0, chest, 0.0),
                         Visibility::default(),
                     ))
                     .with_children(|head| {
-                        head.spawn(part(
-                            Vec3::new(0.0, 0.32, 0.0),
-                            Vec3::new(0.62, 0.62, 0.60),
-                            &skin,
-                        ));
-                        head.spawn(part(
-                            Vec3::new(0.0, 0.60, 0.04),
-                            Vec3::new(0.68, 0.20, 0.68),
-                            &hair,
-                        ));
-                        head.spawn(part(
-                            Vec3::new(0.0, 0.40, 0.26),
-                            Vec3::new(0.68, 0.44, 0.20),
-                            &hair,
-                        ));
-                        // The face is on the `-z` side: that is where it walks.
-                        for side in [-1.0, 1.0] {
-                            head.spawn(part(
-                                Vec3::new(side * 0.15, 0.34, -0.31),
-                                Vec3::new(0.09, 0.12, 0.03),
-                                &dark,
-                            ));
-                        }
-                        head.spawn(part(
-                            Vec3::new(0.0, 0.17, -0.31),
-                            Vec3::new(0.18, 0.04, 0.03),
-                            &dark,
-                        ));
+                        head.spawn(library.place("head", Vec3::ZERO, VOXEL, 0));
                     });
                 });
         });
@@ -388,7 +324,7 @@ fn animate(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::city::{solids, PITCH};
+    use crate::city::{neighbourhood, solids, PITCH};
 
     fn walk_until_bump(
         player: &mut Player,
@@ -407,7 +343,7 @@ mod tests {
 
     #[test]
     fn forward_walks_up_the_street_to_the_hedge() {
-        let solids = Solids(solids());
+        let solids = solids(&neighbourhood(), &crate::vox::sizes());
         let mut player = Player::default();
         player.obey(Order::Forward);
         let start = Vec2::new(START.x, START.z);
@@ -420,7 +356,7 @@ mod tests {
 
     #[test]
     fn a_turn_into_the_lot_ends_in_a_building() {
-        let solids = Solids(solids());
+        let solids = solids(&neighbourhood(), &crate::vox::sizes());
         let mut player = Player::default();
         // From the crossing, a few metres up the street, then left: a wall.
         let mut at = Vec2::new(PITCH / 2.0, 4.0);
@@ -435,7 +371,7 @@ mod tests {
 
     #[test]
     fn the_jolt_ends_and_the_character_stands_still() {
-        let solids = Solids(solids());
+        let solids = solids(&neighbourhood(), &crate::vox::sizes());
         let mut player = Player {
             jolt: JOLT,
             ..default()
@@ -451,7 +387,7 @@ mod tests {
 
     #[test]
     fn turning_back_after_a_bump_does_not_bump_again() {
-        let solids = Solids(solids());
+        let solids = solids(&neighbourhood(), &crate::vox::sizes());
         let mut player = Player::default();
         let mut at = Vec2::new(PITCH / 2.0, 4.0);
         player.obey(Order::Left);

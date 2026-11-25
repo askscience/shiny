@@ -13,18 +13,35 @@ publish = false
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-# No default features: no audio (the host speaks), no gamepads, no threads (a
-# plugin window is not cross-origin isolated, so there is no SharedArrayBuffer).
+# Only what the game uses: no audio (the host speaks), no gamepads, no glTF,
+# no animation or gizmos, no built-in font (the game brings its own), and no
+# threads (a plugin window is not cross-origin isolated, so there is no
+# SharedArrayBuffer). Every feature left out is download size.
 bevy = { version = "0.20", default-features = false, features = [
-    "default_app",
     "std",
+    "async_executor",
+    "bevy_asset",
+    "bevy_log",
+    "bevy_window",
     "bevy_winit",
-    "default_font",
     "webgl2",
     "web",
-    "3d_bevy_render",
-    "ui_api",
-    "ui_bevy_render",
+    "bevy_color",
+    "bevy_image",
+    "bevy_mesh",
+    "bevy_camera",
+    "bevy_light",
+    "bevy_shader",
+    "bevy_material",
+    "bevy_render",
+    "bevy_core_pipeline",
+    "bevy_pbr",
+    "tonemapping_luts",
+    "ktx2",
+    "zstd_rust",
+    "bevy_text",
+    "bevy_ui",
+    "bevy_ui_render",
 ] }
 wasm-bindgen = "=0.2.129"
 js-sys = "0.3"

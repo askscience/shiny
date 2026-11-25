@@ -95,12 +95,38 @@ the line to one short sentence. No answer (`reason`: `ai-off`, `unavailable`,
 
 ## The game so far
 
-One fixed neighbourhood: nine lots of cube buildings with streets between
-them, lamp posts at the crossings, a hedge around it all (`game/src/city.rs`).
-The character is a voxel figure in separate blocks (head, body, arms, legs,
-each limb swinging from its joint) that walks where it is told
-(`game/src/player.rs`), followed by a soft third-person camera
-(`game/src/camera.rs`).
+One fixed neighbourhood: nine lots, each with four buildings facing its
+streets and trees, benches and planters on its pavement, lamp posts at the
+crossings, a hedge around it all (`game/src/city.rs`). The character is a
+voxel figure in separate parts (head, body, backpack, arms, legs, each limb
+swinging from its joint) that walks where it is told (`game/src/player.rs`),
+followed by a soft third-person camera (`game/src/camera.rs`), under a pastel
+sky that turns slowly from day to evening (`game/src/sky.rs`).
+
+### Voxel models
+
+Everything made of voxels is a MagicaVoxel `.vox` file in
+`game/assets/vox/`, all on one pastel palette. `tools/make_assets.py` writes
+them (a building is a function of its colours, storeys and size), and they
+open in MagicaVoxel: a model can be retouched or replaced by hand as long as
+it keeps its name and the palette.
+
+`game/src/vox.rs` reads the files (its own small reader), turns each model
+to the game's axes (`y` up, front towards `-z`, not mirrored), and meshes it
+once: neighbouring faces of one colour and one shading become one rectangle
+(greedy meshing), and soft ambient occlusion is baked into the vertex
+colours. `VoxLibrary::place(name, at, voxel, quarter_turns)` is what a
+module spawns; the voxel's size is the placer's choice (25 cm for buildings,
+4 cm for the character).
+
+### The character's look
+
+A small round figure of its own, deliberately not a block-headed one: a big
+soft head under a beanie with a pompom, eyes with a glint, a hoodie with a
+scarf, a round backpack, short limbs with mitten hands. Its parts are
+ellipsoids cut from the voxel grid at 4 cm a voxel (`head`, `torso`,
+`backpack`, `arm`, `leg` in `tools/make_assets.py`). The game measures the
+joints from the models, so a redrawn part fits without touching the code.
 
 ### Commands
 
@@ -219,33 +245,102 @@ figures).
 The game's typeface is DejaVu Sans Bold (`game/assets/`, with its licence):
 the engine's built-in font has no accented letters.
 
+## How the game is kept easy to grow
+
+These are rules, not hopes: new work follows them.
+
+- **One Bevy plugin per module, talking through messages.** A module owns
+  its state and announces what happened (`Order`, `Bumped`, `Said`,
+  `Heard`); nobody reaches into another module's components. A new feature
+  is a new plugin added to the list in `game/src/lib.rs`, reading the
+  messages it cares about.
+- **Content is data, found by name.** A voxel model is a file in
+  `game/assets/vox/` (dropping one there builds it in). The city is a list
+  of `Prop`s (model, place, turn, voxel size, solid or not): whatever writes
+  the list, a fixed layout or a generator, changes nothing else. Commands
+  and stand-in lines are per-language tables. Adding a thing to the street,
+  a word to the vocabulary or a language does not touch the engine code.
+- **The rules are plain functions with unit tests.** Parsing commands,
+  walking and bumping, laying out the city, meshing a model, describing a
+  moment to the model: each works without a window or a browser and is
+  tested that way (`cargo test` in `game/`).
+- **The host stays behind the bridge.** Only `bridge.rs` and `web/host.js`
+  know about LiteAura. The game sees text in, answers in, a line out.
+- **Nothing waits.** Every call out of the frame is asynchronous and has a
+  stand-in for when it is late.
+
+### Performance budget
+
+- **Few draw calls.** All voxel models share one material (colour is in the
+  vertices) and placed copies share their mesh, so the renderer batches
+  them. Greedy meshing keeps a building at a few hundred quads.
+- **Collision looks only nearby.** Solids sit in a grid of 8 m buckets; a
+  step tests the handful around it however big the city is.
+- **A small engine.** Bevy is built with only the features the game uses
+  (`game/Cargo.toml`); the release build is optimised for size.
+- **Frames first.** Recognition runs in a worker, the model and the voice
+  are requests; the game's own systems do no work when nothing changed
+  (texts are rewritten only when their source changes).
+- Targets to hold as the game grows: 60 frames a second on the kiosk's
+  GPU, under 150 draw calls in view, under 10 MB to download.
+
 ## Plan
 
-- **Phase 0, foundations (done):** the workspace, one Bevy plugin per module,
-  the bridge with its three flows, and the latency log. Done when the game
-  starts, LiteAura hears the voice and the log shows the recognised text with
-  its times.
-- **Phase 1, basic voice control (done, not yet tried with a real voice):** a fixed block of cube buildings; a voxel
-  character in separate parts with a simple walk; the known commands (forward,
-  back, left, right, stop, faster, slower) on a restricted grammar, acted on
-  from partial results; keyboard as a fallback; bumping into a building stops
-  the character and gets a line from a fixed list. Done when the time from the
-  end of the word to the movement is under 300 ms.
+- **Phase 0, foundations (done):** the workspace, one Bevy plugin per
+  module, the bridge with its three flows, and the latency log.
+- **Phase 1, basic voice control (done; not yet tried with a real voice):**
+  the known commands on a restricted grammar, acted on from partial results;
+  keyboard as a fallback; bumps.
 - **Phase 2, the character's brain (built; the route was tried with a real
-  OpenAI-compatible model, answers in about a second; not yet played with
-  a real voice):** the lines for bumps and misunderstood
-  commands come from the model ("you said X, Y happened"); free sentences are
-  answered with valid actions only; a fixed personality; lines spoken and
-  shown in a bubble; a short memory for running jokes; a template line when
-  the model is late. Done when reactions arrive within 1-2 s and no frame
-  stutters.
-- **Phase 3, the voxel look:** one shared pastel palette; a kit of MagicaVoxel
-  assets (building parts, trees, benches, lamps, cars, bikes, quest objects)
-  meshed greedily with soft ambient occlusion; interchangeable character
-  parts; soft light, a pastel sky, a light day/evening cycle.
+  OpenAI-compatible model, answers in about a second; not yet played with a
+  real voice):** lines and actions from the user's model, a short memory,
+  stand-ins when it is late.
+- **Phase 3, the voxel look (in progress):** one shared pastel palette; a
+  kit of voxel models written by `tools/make_assets.py` as MagicaVoxel
+  files (buildings, trees, benches, planters, lamps, the hedge, the
+  character in parts), meshed greedily with soft ambient occlusion; a pastel
+  sky and a slow turn from day to evening. Still to do: interchangeable
+  character parts (hair, clothes), windows that light up in the evening,
+  cars and bikes as models.
+- **Phase 4, a city from a seed:** a generator that writes the list of
+  props from a seed (street grid, lot sizes, building kit pieces stacked
+  into varied fronts, parks and squares), in chunks that are spawned and
+  dropped around the player, so the city has no edge. Named places (the
+  bakery, the newsstand, the park) that the model and the quests can refer
+  to. Done when two seeds give two different, sensible cities at full speed.
+- **Phase 5, people and traffic:** `NpcPlugin` (passers-by with routines on
+  the pavements, template lines, the model only for the one being talked
+  to) and `TrafficPlugin` (cars and bikes on street lanes, stopping at
+  crossings). Collisions that are comic, never violent: avian3d for the
+  things that tumble (cones, boxes, a dropped ice cream). New orders:
+  "saluta", "aspetta", "attraversa". Done when crossing a street is a small
+  adventure.
+- **Phase 6, errands:** `QuestPlugin`. Everyday tasks given in plain words
+  ("buy bread", "post the letter", "find the cat"), with places from the
+  generator, a note of what is carried, and the character commenting on how
+  it is going. Free sentences that name a place become a walk there ("vai
+  al forno"). Done when a ten-minute session has a beginning and an end.
+- **Phase 7, made to be shared:** `ClipPlugin` (the last seconds always
+  recorded, exported with the transcript and the bubble burnt in),
+  `CameraPlugin` cuts for the funny moments (a bump in slow motion, the
+  character looking at the camera), a title card and a photo mode.
+- **Phase 8, refinement of the look** (asked for by the author on
+  2026-11-25; the examples are his, the list is open):
+  - buildings with more to look at: balconies, flower pots on sills,
+    climbing plants, shutters, signs, chimneys, roof gardens, laundry lines;
+  - shops that read as what they are (bakery, newsstand, florist, café with
+    tables outside, greengrocer with crates);
+  - several districts with their own palette accents, building kit and
+    street furniture (old centre, seaside, market, park side), chosen by the
+    generator of Phase 4;
+  - the character kept clearly its own figure, not a block-headed one: see
+    "The character's look" above.
 
-Modules still to come, each a Bevy plugin: `VoxPlugin`, a
-procedural `CityPlugin`, `NpcPlugin`, `TrafficPlugin`, `QuestPlugin`,
-`ClipPlugin`. Physics: avian3d with grid-aligned boxes.
+  All of it is content for `tools/make_assets.py` and the generator's
+  tables: no engine work.
+- **Phase 9, ready to publish:** the game built in CI, performance checked
+  against the budget on the kiosk, the licences of every model weight and
+  font checked, more languages for commands and stand-in lines, then
+  `publish = false` goes.
 
 Before any release the licences of the model weights have to be checked.

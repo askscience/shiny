@@ -18,6 +18,8 @@ struct Lines {
     lamp: &'static [&'static str],
     edge: &'static [&'static str],
     lost: &'static [&'static str],
+    /// Anything else in the street.
+    thing: &'static [&'static str],
 }
 
 const ITALIAN: Lines = Lines {
@@ -45,6 +47,11 @@ const ITALIAN: Lines = Lines {
         "Bello. E io cosa dovrei farci?",
         "Non ho capito, ma annuisco lo stesso.",
         "Parole grosse. Proviamo con avanti?",
+    ],
+    thing: &[
+        "C'era una cosa. Adesso lo sappiamo in due.",
+        "Tutta la città libera, e tu scegli questo.",
+        "Io l'avevo visto. Tu no, evidentemente.",
     ],
 };
 
@@ -74,6 +81,11 @@ const ENGLISH: Lines = Lines {
         "No idea what that means, but I'm nodding.",
         "Big words. Shall we try forward?",
     ],
+    thing: &[
+        "There was a thing there. Now we both know.",
+        "A whole city to walk in, and you choose this.",
+        "I saw it coming. You, clearly, did not.",
+    ],
 };
 
 fn lines(lang: &str) -> &'static Lines {
@@ -92,6 +104,7 @@ pub fn stand_in(lang: &str, topic: Topic, turn: usize) -> &'static str {
         Topic::Bump(SolidKind::Lamp) => lines.lamp,
         Topic::Bump(SolidKind::Edge) => lines.edge,
         Topic::NotUnderstood => lines.lost,
+        Topic::Bump(_) => lines.thing,
     };
     list[turn % list.len()]
 }

@@ -10,7 +10,9 @@
 //! * [`telemetry`] — the latency of every link of that chain, logged.
 //! * [`intent`] — the known commands, straight from the recognised words.
 //! * [`keyboard`] — the same commands from keys, for testing.
-//! * [`city`] — the neighbourhood and everything in it that is solid.
+//! * [`vox`] — voxel models: `.vox` files meshed greedily, found by name.
+//! * [`city`] — the neighbourhood, as a list of placed models and solids.
+//! * [`sky`] — the light: pastel sky, soft sun, day turning to evening.
 //! * [`player`] — the character: walking, turning, bumping.
 //! * [`camera`] — third person, following softly.
 //! * [`brain`] — what the character says, asked of the user's language model.
@@ -29,7 +31,9 @@ pub mod intent;
 pub mod keyboard;
 pub mod lines;
 pub mod player;
+pub mod sky;
 pub mod telemetry;
+pub mod vox;
 
 use bevy::prelude::*;
 
@@ -61,6 +65,8 @@ pub fn app() -> App {
         bridge::LiteAuraBridgePlugin,
         intent::IntentPlugin,
         keyboard::KeyboardPlugin,
+        vox::VoxPlugin,
+        sky::SkyPlugin,
         city::CityPlugin,
         player::PlayerPlugin,
         camera::CameraPlugin,
