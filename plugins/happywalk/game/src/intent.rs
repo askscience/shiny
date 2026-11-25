@@ -29,6 +29,8 @@ pub enum Order {
     Wave,
     /// Walk to the nearest place of a kind.
     GoTo(PlaceKind),
+    /// Keep the last seconds of play.
+    Clip,
 }
 
 /// A whole sentence in which there was no command.
@@ -69,6 +71,9 @@ const ITALIAN: Vocabulary = Vocabulary {
         ("saluta", Order::Wave),
         ("ciao", Order::Wave),
         ("buongiorno", Order::Wave),
+        ("clip", Order::Clip),
+        ("salva", Order::Clip),
+        ("registra", Order::Clip),
         ("forno", Order::GoTo(PlaceKind::Bakery)),
         ("panetteria", Order::GoTo(PlaceKind::Bakery)),
         ("pane", Order::GoTo(PlaceKind::Bakery)),
@@ -116,6 +121,8 @@ const ENGLISH: Vocabulary = Vocabulary {
         ("wave", Order::Wave),
         ("hello", Order::Wave),
         ("hi", Order::Wave),
+        ("clip", Order::Clip),
+        ("save", Order::Clip),
         ("bakery", Order::GoTo(PlaceKind::Bakery)),
         ("bread", Order::GoTo(PlaceKind::Bakery)),
         ("florist", Order::GoTo(PlaceKind::Florist)),

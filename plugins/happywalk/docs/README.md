@@ -188,6 +188,24 @@ at the bakery") in everything it is asked, says a line when one is done or a
 round is over, and may answer a free sentence with a place to go: "ho fame"
 can become a walk to the bakery.
 
+### Clips, and the camera's moments
+
+**The last seconds are always on tape** (`web/host.js`). Two recorders run
+half a turn apart on the game's canvas, each starting over every 30 seconds;
+saying `clip` (or `salva`, `registra`, `save`; key `C`) stops the one that
+has run longer and keeps it: a WebM of the last 15 to 30 seconds, handed to
+the browser as a download (the shell files it) and listed in
+`happywalkHost.clips`. The picture is the canvas, so bubbles and transcript
+are in it; the sound is the character's voice and the player's microphone,
+mixed for the tape. `?clips=0` in the address turns recording off (encoding
+video costs processor time).
+
+**A bump gets a close look** (`game/src/camera.rs`): the camera comes in low
+for a second and the first half of it runs at a third of the speed. **The
+character looks back at the camera** while it says its line. The game's name
+is shown as it starts. **Photo mode** (`P`) stops the game, puts the HUD
+away and takes the camera slowly round the character.
+
 ### Voxel models
 
 Everything made of voxels is a MagicaVoxel `.vox` file in
@@ -412,10 +430,9 @@ These are rules, not hopes: new work follows them.
   Not done: things that tumble when kicked (and so no avian3d yet).
 - **Phase 6, errands (done):** places as orders, routes along the streets
   walked alone, errands in rounds of five, the brain aware of them.
-- **Phase 7, made to be shared:** `ClipPlugin` (the last seconds always
-  recorded, exported with the transcript and the bubble burnt in),
-  `CameraPlugin` cuts for the funny moments (a bump in slow motion, the
-  character looking at the camera), a title card and a photo mode.
+- **Phase 7, made to be shared (done):** clips of the last seconds with
+  sound, a close slowed look at bumps, the look back at the camera, a title,
+  photo mode.
 - **Phase 8, refinement of the look** (asked for by the author on
   2026-11-25; the examples are his, the list is open):
   - buildings with more to look at: balconies, flower pots on sills,

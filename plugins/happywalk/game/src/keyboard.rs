@@ -2,7 +2,7 @@
 //! through the same path.
 //!
 //! Arrows or WASD: forward, back, left, right. Space: stop. `+`/`-` (or
-//! `E`/`Q`): faster, slower. `H`: wave.
+//! `E`/`Q`): faster, slower. `H`: wave. `C`: keep a clip.
 
 use bevy::prelude::*;
 
@@ -33,6 +33,7 @@ const KEYS: &[(KeyCode, Order)] = &[
     (KeyCode::NumpadSubtract, Order::Slower),
     (KeyCode::Minus, Order::Slower),
     (KeyCode::KeyH, Order::Wave),
+    (KeyCode::KeyC, Order::Clip),
 ];
 
 fn keys(pressed: Res<ButtonInput<KeyCode>>, mut commands: MessageWriter<Order>) {

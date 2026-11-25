@@ -33,8 +33,10 @@
   when greeted or walked into; cars and bikes drive the streets and always
   stop for the character, with a hoot. Naming a place ("vai al forno")
   sends the character there by itself along the streets, and errands (buy
-  bread, fetch the paper, a walk in the park) come five to a round. See
-  `plugins/happywalk/docs/README.md`.
+  bread, fetch the paper, a walk in the park) come five to a round. The
+  last seconds of play are always recorded and "clip" keeps them as a video
+  with sound; a bump gets a close slowed look and the character looks back
+  at the camera as it speaks. See `plugins/happywalk/docs/README.md`.
 - **Plugins: `publish = false` keeps a plugin in development out of the
   catalogue.** Until now a new plugin directory on `main` was published by
   its first push; with this line in `plugin.toml` it is neither offered nor

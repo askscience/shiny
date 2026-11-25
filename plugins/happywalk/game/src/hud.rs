@@ -4,8 +4,10 @@
 use bevy::prelude::*;
 
 use crate::brain::Said;
-use crate::bridge::{Heard, HostStatus};
+use crate::bridge::{ClipSaved, Heard, Host, HostStatus};
+use crate::camera::Direction;
 use crate::camera::FollowCamera;
+use crate::intent::Order;
 use crate::player::Player;
 use crate::telemetry::Latency;
 
@@ -24,7 +26,10 @@ impl Plugin for HudPlugin {
         app.init_resource::<LastHeard>()
             .add_message::<OtherSaid>()
             .add_systems(Startup, setup)
-            .add_systems(Update, (remember, draw, toggle_timings).chain())
+            .add_systems(
+                Update,
+                (remember, draw, toggle_timings, clips, title, photo).chain(),
+            )
             .add_systems(
                 PostUpdate,
                 (bubble, other_bubble).after(TransformSystems::Propagate),
@@ -61,6 +66,20 @@ struct Bubble {
 #[derive(Component)]
 struct BubbleText;
 
+/// A short notice in the middle of the top edge ("clip saved").
+#[derive(Component)]
+struct Toast {
+    left: f32,
+}
+
+/// The game's name, shown as it starts.
+#[derive(Component)]
+struct TitleCard;
+
+/// Everything of the HUD, to put it away for a photo.
+#[derive(Component)]
+struct HudRoot;
+
 /// The other speaker's bubble: where in the world it hangs.
 #[derive(Component)]
 struct OtherBubble {
@@ -92,14 +111,17 @@ fn setup(mut commands: Commands, mut fonts: ResMut<Assets<Font>>) {
     };
 
     commands
-        .spawn(Node {
-            position_type: PositionType::Absolute,
-            left: Val::Px(20.0),
-            top: Val::Px(16.0),
-            flex_direction: FlexDirection::Column,
-            row_gap: Val::Px(6.0),
-            ..default()
-        })
+        .spawn((
+            HudRoot,
+            Node {
+                position_type: PositionType::Absolute,
+                left: Val::Px(20.0),
+                top: Val::Px(16.0),
+                flex_direction: FlexDirection::Column,
+                row_gap: Val::Px(6.0),
+                ..default()
+            },
+        ))
         .with_children(|hud| {
             hud.spawn((Text::new(""), text(16.0), ListeningLabel));
             hud.spawn((Text::new(""), text(30.0), HeardLabel));
@@ -126,6 +148,44 @@ fn setup(mut commands: Commands, mut fonts: ResMut<Assets<Font>>) {
                 text(18.0),
                 TextLayout::justify(Justify::Center),
                 BubbleText,
+            ));
+        });
+
+    // A notice at the top, and the title across the middle.
+    commands
+        .spawn(Node {
+            position_type: PositionType::Absolute,
+            width: Val::Percent(100.0),
+            top: Val::Px(18.0),
+            justify_content: JustifyContent::Center,
+            ..default()
+        })
+        .with_children(|row| {
+            row.spawn((
+                Text::new(""),
+                text(17.0),
+                Toast { left: 0.0 },
+                Visibility::Hidden,
+            ));
+        });
+    commands
+        .spawn(Node {
+            position_type: PositionType::Absolute,
+            width: Val::Percent(100.0),
+            top: Val::Percent(30.0),
+            justify_content: JustifyContent::Center,
+            ..default()
+        })
+        .with_children(|row| {
+            row.spawn((
+                Text::new("Happy Walk"),
+                TextFont {
+                    font: font.clone().into(),
+                    font_size: FontSize::Px(72.0),
+                    ..default()
+                },
+                TextColor(Color::srgb(1.0, 1.0, 1.0)),
+                TitleCard,
             ));
         });
 
@@ -184,6 +244,84 @@ fn other_bubble(
             node.top = Val::Px((at.y - 50.0).max(8.0));
         }
         _ => *visibility = Visibility::Hidden,
+    }
+}
+
+/// "Clip": ask the page to keep the last seconds, and say how it went.
+fn clips(
+    time: Res<Time<Real>>,
+    status: Res<HostStatus>,
+    host: Res<Host>,
+    mut orders: MessageReader<Order>,
+    mut saved: MessageReader<ClipSaved>,
+    mut toasts: Query<(&mut Toast, &mut Text, &mut Visibility)>,
+) {
+    let Ok((mut toast, mut text, mut visibility)) = toasts.single_mut() else {
+        return;
+    };
+    let italian = status.lang.starts_with("it");
+    for order in orders.read() {
+        if *order == Order::Clip {
+            host.save_clip();
+            **text = if italian {
+                "Salvo la clip…".into()
+            } else {
+                "Saving the clip…".into()
+            };
+            toast.left = 4.0;
+        }
+    }
+    for clip in saved.read() {
+        **text = match (clip.ok, italian) {
+            (true, true) => format!("Clip salvata ({:.0} s)", clip.seconds),
+            (true, false) => format!("Clip saved ({:.0} s)", clip.seconds),
+            (false, true) => "Niente clip: la registrazione è spenta".into(),
+            (false, false) => "No clip: recording is off".into(),
+        };
+        toast.left = 3.5;
+    }
+    toast.left = (toast.left - time.delta_secs()).max(0.0);
+    *visibility = if toast.left > 0.0 {
+        Visibility::Inherited
+    } else {
+        Visibility::Hidden
+    };
+}
+
+/// The title stays a few seconds, then fades away.
+fn title(
+    time: Res<Time<Real>>,
+    mut cards: Query<(Entity, &mut TextColor), With<TitleCard>>,
+    mut commands: Commands,
+) {
+    const STAYS: f32 = 3.5;
+    const FADES: f32 = 1.2;
+    let age = time.elapsed_secs();
+    for (entity, mut colour) in &mut cards {
+        if age > STAYS + FADES {
+            commands.entity(entity).despawn();
+        } else {
+            colour
+                .0
+                .set_alpha(1.0 - ((age - STAYS) / FADES).clamp(0.0, 1.0));
+        }
+    }
+}
+
+/// Photo mode puts the HUD away.
+fn photo(
+    direction: Res<Direction>,
+    mut roots: Query<&mut Visibility, (With<HudRoot>, Without<Toast>)>,
+) {
+    if !direction.is_changed() {
+        return;
+    }
+    for mut visibility in &mut roots {
+        *visibility = if direction.photo {
+            Visibility::Hidden
+        } else {
+            Visibility::Inherited
+        };
     }
 }
 

@@ -5,7 +5,7 @@
 use bevy::prelude::*;
 
 use crate::city::{SolidKind, Solids, START};
-use crate::player::Player;
+use crate::player::{Bumped, Player};
 
 /// Behind and above the character, in its own frame.
 const BEHIND: Vec3 = Vec3::new(0.0, 3.6, 6.6);
@@ -15,11 +15,28 @@ const AIM: Vec3 = Vec3::new(0.0, 1.1, -2.0);
 #[derive(Component)]
 pub struct FollowCamera;
 
+/// What the camera is making of the moment.
+#[derive(Resource, Default, Debug)]
+pub struct Direction {
+    /// Seconds left of the close, slowed look at a bump.
+    pub impact: f32,
+    /// Photo mode: the game stands still, the HUD is away, the camera goes
+    /// slowly round the character.
+    pub photo: bool,
+    orbit: f32,
+}
+
+/// How long the look at a bump lasts, and how slow the first part of it is.
+const IMPACT: f32 = 1.1;
+const SLOW: f32 = 0.35;
+
 pub struct CameraPlugin;
 
 impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, spawn)
+        app.init_resource::<Direction>()
+            .add_systems(Update, direct)
+            .add_systems(Startup, spawn)
             .add_systems(PostUpdate, follow.before(TransformSystems::Propagate));
     }
 }
@@ -41,6 +58,45 @@ fn spawn(mut commands: Commands) {
     ));
 }
 
+/// Bumps get a close, slowed look; `P` is photo mode.
+fn direct(
+    real: Res<Time<Real>>,
+    mut clock: ResMut<Time<Virtual>>,
+    keys: Res<ButtonInput<KeyCode>>,
+    mut bumps: MessageReader<Bumped>,
+    mut direction: ResMut<Direction>,
+) {
+    if bumps.read().count() > 0 {
+        direction.impact = IMPACT;
+    }
+    if keys.just_pressed(KeyCode::KeyP) {
+        direction.photo = !direction.photo;
+    }
+    let dt = real.delta_secs();
+    direction.impact = (direction.impact - dt).max(0.0);
+    if direction.photo {
+        direction.orbit += dt * 0.35;
+    } else {
+        direction.orbit = 0.0;
+    }
+    // Slow for the first half of the look, then back up to speed.
+    let speed = if direction.photo {
+        0.0
+    } else if direction.impact > IMPACT / 2.0 {
+        SLOW
+    } else {
+        1.0
+    };
+    if (clock.relative_speed() - speed).abs() > 0.01 {
+        if speed == 0.0 {
+            clock.pause();
+        } else {
+            clock.unpause();
+            clock.set_relative_speed(speed);
+        }
+    }
+}
+
 /// How far back the camera can sit (0..1 of [`BEHIND`]) before the line
 /// from the character to it meets a building.
 pub fn room_behind(solids: &Solids, from: Vec2, back: Vec2) -> f32 {
@@ -59,7 +115,8 @@ pub fn room_behind(solids: &Solids, from: Vec2, back: Vec2) -> f32 {
 }
 
 fn follow(
-    time: Res<Time>,
+    time: Res<Time<Real>>,
+    direction: Res<Direction>,
     solids: Res<Solids>,
     mut room: Local<Option<f32>>,
     players: Query<(&Player, &Transform), Without<FollowCamera>>,
@@ -69,10 +126,13 @@ fn follow(
         return;
     };
     // Follow where the character is heading, not every wobble of its body.
-    let frame = Quat::from_rotation_y(player.facing);
+    // In photo mode it goes round; otherwise it stays behind.
+    let frame = Quat::from_rotation_y(player.facing + direction.orbit);
     let ground = Vec3::new(at.translation.x, 0.0, at.translation.z);
     let ease = 1.0 - (-4.0 * time.delta_secs()).exp();
-    let back = frame * Vec3::new(BEHIND.x, 0.0, BEHIND.z);
+    // The look at a bump comes in close and low.
+    let close = 1.0 - 0.42 * (direction.impact / IMPACT).min(1.0);
+    let back = frame * Vec3::new(BEHIND.x, 0.0, BEHIND.z) * close;
     let clear = room_behind(
         &solids,
         Vec2::new(ground.x, ground.z),
@@ -82,7 +142,7 @@ fn follow(
     let room = room.get_or_insert(clear);
     *room += (clear - *room) * ease;
     // Closer means higher up the wall's side: look down a little more.
-    let want = ground + back * *room + Vec3::Y * BEHIND.y * (0.75 + 0.25 * *room);
+    let want = ground + back * *room + Vec3::Y * BEHIND.y * (0.75 + 0.25 * *room) * close;
     camera.translation = camera.translation.lerp(want, ease);
     let aim = ground + frame * AIM;
     let look = camera.looking_at(aim, Vec3::Y).rotation;

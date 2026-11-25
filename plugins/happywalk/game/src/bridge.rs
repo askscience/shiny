@@ -69,6 +69,13 @@ pub struct BrainAnswered {
     pub answer: Option<BrainAnswer>,
 }
 
+/// The page kept a clip of the last seconds (or failed to).
+#[derive(Message, Clone, Copy, Debug)]
+pub struct ClipSaved {
+    pub ok: bool,
+    pub seconds: f32,
+}
+
 /// The character was put somewhere by hand (tests, screenshots).
 #[derive(Message, Clone, Copy, Debug)]
 pub struct Placed {
@@ -124,6 +131,11 @@ impl Host {
         id
     }
 
+    /// Keep the last seconds of play as a clip. [`ClipSaved`] follows.
+    pub fn save_clip(&self) {
+        js::save_clip();
+    }
+
     /// The words the recogniser should expect (a restricted vocabulary is
     /// faster and far more accurate than free dictation). Empty: free speech.
     pub fn set_grammar(&self, words: &[&str]) {
@@ -152,6 +164,7 @@ enum Inbound {
     Spoke { id: u32, ok: bool, ms: f64 },
     Status(String),
     Place { x: f32, z: f32, facing: f32 },
+    Clip { ok: bool, seconds: f32 },
 }
 
 static INBOX: Mutex<VecDeque<Inbound>> = Mutex::new(VecDeque::new());
@@ -225,6 +238,12 @@ mod exports {
         push(Inbound::Place { x, z, facing });
     }
 
+    /// A clip was kept (or could not be): how many seconds it holds.
+    #[wasm_bindgen]
+    pub fn hw_clip_saved(ok: bool, seconds: f32) {
+        push(Inbound::Clip { ok, seconds });
+    }
+
     #[wasm_bindgen]
     pub fn hw_status(json: &str) {
         push(Inbound::Status(json.to_string()));
@@ -245,6 +264,8 @@ mod js {
         pub fn set_grammar(words_json: &str);
         #[wasm_bindgen(js_namespace = ["window", "happywalkHost"])]
         pub fn log(line: &str);
+        #[wasm_bindgen(js_namespace = ["window", "happywalkHost"], js_name = saveClip)]
+        pub fn save_clip();
         #[wasm_bindgen(js_namespace = ["window", "performance"])]
         pub fn now() -> f64;
     }
@@ -258,6 +279,7 @@ mod js {
     pub fn say(_id: u32, _text: &str) {}
     pub fn set_grammar(_words_json: &str) {}
     pub fn log(_line: &str) {}
+    pub fn save_clip() {}
     pub fn now() -> f64 {
         static START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
         START
@@ -280,6 +302,7 @@ impl Plugin for LiteAuraBridgePlugin {
             .add_message::<BrainAnswered>()
             .add_message::<Spoke>()
             .add_message::<Placed>()
+            .add_message::<ClipSaved>()
             .add_systems(First, pump);
     }
 }
@@ -295,6 +318,7 @@ fn pump(
     mut answered: MessageWriter<BrainAnswered>,
     mut spoke: MessageWriter<Spoke>,
     mut placed: MessageWriter<Placed>,
+    mut clips: MessageWriter<ClipSaved>,
     mut laps: MessageWriter<Lap>,
     mut status: ResMut<HostStatus>,
 ) {
@@ -358,6 +382,9 @@ fn pump(
                     at: Vec2::new(x, z),
                     facing,
                 });
+            }
+            Inbound::Clip { ok, seconds } => {
+                clips.write(ClipSaved { ok, seconds });
             }
             Inbound::Status(json) => {
                 if let Ok(next) = serde_json::from_str::<HostStatus>(&json) {

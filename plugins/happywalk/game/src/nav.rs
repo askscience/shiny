@@ -134,7 +134,7 @@ fn set_out(
             Order::Forward | Order::Back | Order::Left | Order::Right | Order::Stop => {
                 *route = Route::default()
             }
-            Order::Faster | Order::Slower | Order::Wave => {}
+            Order::Faster | Order::Slower | Order::Wave | Order::Clip => {}
         }
     }
 }

@@ -174,6 +174,7 @@ async function startListening() {
     audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1, sampleRate: SAMPLE_RATE },
   });
   audioContext = new AudioContext({ sampleRate: SAMPLE_RATE });
+  if (mix) tapeSound(mix.context.createMediaStreamSource(stream), false);
   makeRecognizer();
   const source = audioContext.createMediaStreamSource(stream);
   const processor = audioContext.createScriptProcessor(BLOCK_FRAMES, 1, 1);
@@ -211,6 +212,99 @@ async function startListening() {
   processor.connect(audioContext.destination);
   report({ voice: 'listening', lang: sttLang, detail: '' });
   log(`listening (${sttLang}${grammar.length ? `, ${grammar.length} phrases` : ', free speech'})`);
+}
+
+/* ── Clips ───────────────────────────────────────────────────── */
+
+// The last seconds of play are always on tape, so the funny moment can be
+// kept after it happened. Two recorders run half a turn apart, each starting
+// over every CLIP_TURN seconds; saving stops the one that has run longer,
+// which holds between half a turn and a whole one. (One recorder with its
+// oldest pieces dropped would not play: only the first piece of a recording
+// carries the header.)
+//
+// The picture is the game's canvas, bubbles and transcript included; the
+// sound is the character's voice and the player's microphone.
+
+const CLIP_TURN = 30;
+const CLIP_KEEP = 4;
+const clips = [];
+const recorders = [];
+let clipStream = null;
+let mix = null;
+
+function clipMime() {
+  return ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'].find((type) => window.MediaRecorder?.isTypeSupported(type)) || '';
+}
+
+function startRecorder(slot) {
+  const recorder = new MediaRecorder(clipStream, { mimeType: clipMime(), videoBitsPerSecond: 2_500_000 });
+  const tape = { recorder, parts: [], since: performance.now(), timer: 0 };
+  recorder.ondataavailable = (event) => { if (event.data.size) tape.parts.push(event.data); };
+  recorder.start();
+  // Start over when the turn is up, unless it is being saved.
+  tape.timer = setTimeout(() => {
+    recorder.onstop = () => startRecorder(slot);
+    recorder.stop();
+  }, CLIP_TURN * 1000);
+  recorders[slot] = tape;
+}
+
+function startClips() {
+  const canvas = document.getElementById('happywalk-canvas');
+  if (!window.MediaRecorder || !canvas.captureStream || new URLSearchParams(window.location.search).get('clips') === '0') {
+    log('clips: off');
+    return;
+  }
+  clipStream = canvas.captureStream(30);
+  try {
+    // A mixer of its own, at the device's rate (the recogniser's context
+    // runs at 16 kHz): the voice and the microphone go to the tape.
+    const context = new AudioContext();
+    mix = { context, tape: context.createMediaStreamDestination() };
+    for (const track of mix.tape.stream.getAudioTracks()) clipStream.addTrack(track);
+  } catch (error) {
+    log(`clips: no sound (${error?.message || error})`);
+  }
+  startRecorder(0);
+  setTimeout(() => startRecorder(1), (CLIP_TURN / 2) * 1000);
+  log(`clips: recording the last ${CLIP_TURN / 2} to ${CLIP_TURN} s (${clipMime() || 'default format'})`);
+}
+
+/** Send a source of sound to the tape (and to the speakers when `aloud`). */
+function tapeSound(node, aloud) {
+  if (!mix) return;
+  node.connect(mix.tape);
+  if (aloud) node.connect(mix.context.destination);
+}
+
+function saveClip() {
+  const tape = recorders.filter(Boolean).sort((a, b) => a.since - b.since)[0];
+  if (!tape || tape.recorder.state !== 'recording') {
+    game?.hw_clip_saved(false, 0);
+    return;
+  }
+  const slot = recorders.indexOf(tape);
+  const seconds = (performance.now() - tape.since) / 1000;
+  clearTimeout(tape.timer);
+  tape.recorder.onstop = () => {
+    const blob = new Blob(tape.parts, { type: tape.recorder.mimeType || 'video/webm' });
+    const name = `happy-walk-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.webm`;
+    const url = URL.createObjectURL(blob);
+    clips.push({ name, url, seconds, bytes: blob.size });
+    while (clips.length > CLIP_KEEP) URL.revokeObjectURL(clips.shift().url);
+    // Hand it to the browser as a download: the shell files it.
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = name;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    log(`clip saved: ${name}, ${seconds.toFixed(0)} s, ${(blob.size / 1e6).toFixed(1)} MB`);
+    game?.hw_clip_saved(blob.size > 0, seconds);
+    startRecorder(slot);
+  };
+  tape.recorder.stop();
 }
 
 /* ── What the game calls ─────────────────────────────────────── */
@@ -272,6 +366,11 @@ window.happywalkHost = {
       playing?.pause();
       const audio = new Audio(url);
       playing = audio;
+      if (mix) {
+        // Through the mixer, so the line is on the tape as well.
+        if (mix.context.state === 'suspended') await mix.context.resume().catch(() => {});
+        tapeSound(mix.context.createMediaElementSource(audio), true);
+      }
       // The character must not hear itself: the microphone is ignored while
       // its line plays.
       const done = () => {
@@ -291,6 +390,11 @@ window.happywalkHost = {
     log(`voice #${id} ${ok ? 'speaking' : 'failed'} after ${ms.toFixed(0)} ms`);
     game?.hw_spoke(id, ok, ms);
   },
+
+  /** Keep the last seconds of play as a clip; hw_clip_saved follows. */
+  saveClip,
+
+  get clips() { return clips.map((clip) => ({ ...clip })); },
 
   /** For tests and the keyboard: as if the recogniser had heard `text`. */
   hear(text, isFinal = true) {
@@ -338,6 +442,7 @@ async function start() {
       if (!String(error?.message || error).includes('Using exceptions for control flow')) throw error;
     }
   });
+  startClips();
   try {
     await startListening();
   } catch (error) {

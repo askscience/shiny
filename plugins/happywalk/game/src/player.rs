@@ -65,6 +65,8 @@ pub const RADIUS: f32 = 0.38;
 const JOLT: f32 = 0.5;
 /// Radians a second.
 const TURN_RATE: f32 = 7.0;
+/// Seconds a glance at the camera lasts.
+const GLANCE: f32 = 2.2;
 /// A turn wider than this (radians) is finished before the next step.
 const ABOUT_FACE: f32 = 1.2;
 
@@ -81,6 +83,8 @@ pub struct Player {
     thrown: Vec2,
     /// Seconds of waving left.
     pub waving: f32,
+    /// Seconds left of looking over its shoulder at the camera.
+    pub glance: f32,
     /// Where the limbs are in their swing, and how wide it is (0..1).
     stride: f32,
     swing: f32,
@@ -96,6 +100,7 @@ impl Default for Player {
             jolt: 0.0,
             thrown: Vec2::ZERO,
             waving: 0.0,
+            glance: 0.0,
             stride: 0.0,
             swing: 0.0,
         }
@@ -124,7 +129,7 @@ impl Player {
             Order::Slower => self.pace = self.pace.slower(),
             Order::Wave => self.waving = 1.4,
             // Where to go is the navigator's business.
-            Order::GoTo(_) => {}
+            Order::GoTo(_) | Order::Clip => {}
         }
     }
 
@@ -203,7 +208,7 @@ impl Plugin for PlayerPlugin {
             .add_message::<Waved>()
             .init_resource::<Movers>()
             .add_systems(Startup, spawn)
-            .add_systems(Update, (walk, animate).chain().in_set(PlayerSet));
+            .add_systems(Update, (glance, walk, animate).chain().in_set(PlayerSet));
     }
 }
 
@@ -277,6 +282,15 @@ fn spawn(mut commands: Commands, library: Res<VoxLibrary>) {
         });
 }
 
+/// A line said after something went wrong comes with a look at the camera.
+fn glance(mut said: MessageReader<crate::brain::Said>, mut players: Query<&mut Player>) {
+    if said.read().count() > 0 {
+        if let Ok(mut player) = players.single_mut() {
+            player.glance = GLANCE;
+        }
+    }
+}
+
 fn walk(
     time: Res<Time>,
     solids: Res<Solids>,
@@ -307,6 +321,7 @@ fn walk(
     let dt = time.delta_secs().min(0.05);
     let at = Vec2::new(transform.translation.x, transform.translation.z);
     player.waving = (player.waving - dt).max(0.0);
+    player.glance = (player.glance - dt).max(0.0);
     let (at, bumped) = player.step(at, dt, &solids, &movers);
     transform.translation.x = at.x;
     transform.translation.z = at.y;
@@ -365,7 +380,11 @@ fn animate(
         body.rotation = Quat::from_rotation_x(-0.08 * player.swing + jolt * 0.45);
     }
     if let Ok(mut head) = heads.single_mut() {
-        head.rotation = Quat::from_rotation_z((jolt * 22.0).sin() * jolt * 0.35);
+        // Saying its line, it looks back at whoever is steering.
+        let turn =
+            (player.glance / 0.3).min(1.0) * ((GLANCE - player.glance) / 0.3).clamp(0.0, 1.0);
+        head.rotation = Quat::from_rotation_y(2.2 * turn)
+            * Quat::from_rotation_z((jolt * 22.0).sin() * jolt * 0.35);
     }
 }
 
