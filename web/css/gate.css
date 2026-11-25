@@ -32,55 +32,6 @@
 /* While locked the virtual keyboard still has to reach the password. */
 body.lock-active #keyboard-bar { z-index: 9600; }
 
-/* ── Aura: the accent, alive behind everything ── */
-.gate-aura {
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  overflow: hidden;
-}
-.gate-aura > span {
-  position: absolute;
-  width: 70vmax;
-  height: 70vmax;
-  border-radius: 50%;
-  filter: blur(80px);
-  opacity: 0.55;
-  will-change: transform;
-}
-.gate-aura > span:first-child {
-  left: -18vmax;
-  bottom: -30vmax;
-  background: radial-gradient(closest-side, var(--accent-glow), transparent 70%);
-}
-.gate-aura > span:last-child {
-  right: -26vmax;
-  top: -28vmax;
-  background: radial-gradient(closest-side, color-mix(in srgb, var(--accent-2) 40%, transparent), transparent 70%);
-  opacity: 0.35;
-}
-html[data-motion="kinetic"] .gate-aura > span:first-child { animation: gateAuraPan 26s linear infinite alternate; }
-html[data-motion="kinetic"] .gate-aura > span:last-child { animation: gateAuraPan 34s linear infinite alternate-reverse; }
-html[data-motion="fluid"] .gate-aura > span { animation: gateAuraBreathe 9s ease-in-out infinite alternate; }
-html[data-motion="fluid"] .gate-aura > span:last-child { animation-duration: 12s; }
-html[data-motion="depth"] .gate-aura > span:first-child {
-  transform: translate3d(calc(var(--pointer-x, 0) * -40px), calc(var(--pointer-y, 0) * -40px), 0);
-  transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
-}
-html[data-motion="depth"] .gate-aura > span:last-child {
-  transform: translate3d(calc(var(--pointer-x, 0) * 60px), calc(var(--pointer-y, 0) * 60px), 0);
-  transition: transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
-}
-@keyframes gateAuraPan {
-  from { transform: translate3d(0, 0, 0); }
-  to { transform: translate3d(14vmax, -8vmax, 0); }
-}
-@keyframes gateAuraBreathe {
-  from { transform: scale(0.92) translate3d(0, 0, 0); }
-  to { transform: scale(1.12) translate3d(4vmax, -3vmax, 0); }
-}
-
 /* ── Aside: brand on top, the time at the foot ── */
 .gate-aside {
   display: flex;
@@ -393,6 +344,8 @@ html[data-motion="fluid"] .gate .gate-row::after { transition: transform var(--s
 html[data-motion="kinetic"] .gate-hint-icon { animation: gateHintKinetic 1.8s cubic-bezier(0.76, 0, 0.24, 1) infinite; }
 html[data-motion="fluid"] .gate-hint-icon { animation: gateHintFluid 1.6s ease-in-out infinite; }
 html[data-motion="depth"] .gate-hint-icon { animation: gateHintDepth 2.2s ease-in-out infinite; }
+/* At rest the hint stays, still: paused mid-cycle it could be left faded out. */
+html[data-gate-rest] .gate-hint-icon { animation: none; }
 @keyframes gateHintKinetic {
   0% { transform: translateY(6px); opacity: 0; }
   40% { transform: translateY(0); opacity: 1; }
@@ -440,5 +393,5 @@ html[data-motion="depth"] .gate-hint-icon { animation: gateHintDepth 2.2s ease-i
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .gate-aura > span, .gate-hint-icon { animation: none !important; }
+  .gate-hint-icon { animation: none !important; }
 }

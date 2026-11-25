@@ -546,7 +546,7 @@ above.
 The sign-in screen and the lock screen are one stage, the **gate**
 (`web/js/gate.js`, `web/css/gate.css`): the time set very large in the theme's
 display face (an accent colon, AM/PM as a mono suffix), the date as a mono
-kicker, the weather, the brand, and an accent aura behind them — beside an
+kicker, the weather and the brand, beside an
 editorial panel (a numbered kicker, the profile index in display type with
 arrow pills, a password on a hairline with a round accent "go"). It is opaque:
 nothing of the desktop shows through.
@@ -556,8 +556,12 @@ nothing of the desktop shows through.
   `gateExit`, `gateReveal` (a panel step arriving) and `gateShake` (a wrong
   password) move it in the motion language: kinetic wipes behind masks and
   rolls the clock's digits, fluid rides the springs, depth comes out of a blur,
-  follows the pointer and leaves through the viewer. The aura drifts, breathes
-  or parallaxes the same way.
+  follows the pointer and leaves through the viewer.
+- **Nothing moves while nobody is there.** The stage has no endless
+  animation of its own, and the lock screen's swipe hint stops after 30
+  seconds without input (`<html data-gate-rest>`, set by `gateChrome`) and
+  starts again on the first touch, key or pointer move. An unattended gate
+  gives the compositor no frame to draw.
 - **Weather.** The top bar's (`weather:update`); the last reading is kept
   unscoped (`gate.weather`, six hours) so the sign-in screen has one before any
   session exists.

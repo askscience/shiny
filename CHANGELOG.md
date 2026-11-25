@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **Sign-in and lock screens: nothing moves while nobody is there.** The two
+  blurred accent glows that drifted behind the gate are gone: they were
+  barely visible, and animating them kept the compositor drawing sixty
+  frames a second, about a third of a core for as long as the sign-in screen
+  was up. The lock screen's swipe hint now stops after 30 seconds without
+  input and starts again on the first touch, key or pointer move.
+
 ## [0.3.4] - 2026-11-25
 
 ### Fixed

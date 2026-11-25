@@ -81,10 +81,6 @@ function build() {
   root.setAttribute('role', 'dialog');
   root.setAttribute('aria-modal', 'true');
 
-  const aura = el('div', 'gate-aura');
-  aura.setAttribute('aria-hidden', 'true');
-  aura.append(el('span'), el('span'));
-
   const aside = el('aside', 'gate-aside');
   aside.setAttribute('data-gate-aside', '');
 
@@ -122,7 +118,7 @@ function build() {
   const hintText = el('span', 'gate-hint-text');
   hint.append(hintIcon, hintText);
 
-  root.append(aura, aside, panel, hint);
+  root.append(aside, panel, hint);
 
   form.addEventListener('submit', (e) => {
     e.preventDefault();

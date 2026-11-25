@@ -2,8 +2,8 @@
  * gate.js — the stage shared by the sign-in screen and the lock screen.
  *
  * Both are the same place: the time set very large in the theme's display
- * face, the date as a mono kicker, the weather, the brand, an accent aura —
- * and a panel beside it (the profile index and the password form at sign-in,
+ * face, the date as a mono kicker, the weather and the brand, with a panel
+ * beside it (the profile index and the password form at sign-in,
  * the password alone at unlock). This module owns that stage:
  *
  *   - `gateChrome(host)` fills a `[data-gate-aside]` box with the brand, the
@@ -196,6 +196,47 @@ function renderTime(timeEl, text, animate) {
   });
 }
 
+/** How long the gate keeps moving after the last input. */
+const REST_AFTER_MS = 30000;
+const REST_EVENTS = ['pointerdown', 'pointermove', 'keydown', 'wheel', 'touchstart'];
+let restUsers = 0;
+let restTimer = 0;
+
+function gateWake() {
+  document.documentElement.removeAttribute('data-gate-rest');
+  clearTimeout(restTimer);
+  restTimer = setTimeout(() => {
+    document.documentElement.setAttribute('data-gate-rest', '');
+  }, REST_AFTER_MS);
+}
+
+/**
+ * Let the gate rest while nobody is there. An endless animation (the lock hint)
+ * makes the compositor draw a full frame sixty times a second for as long as
+ * the screen is up, which on an unattended screen is a third of a core for
+ * hours. After `REST_AFTER_MS` without input the page is marked
+ * `data-gate-rest` and `gate.css` holds it still; any input wakes it. Returns the function that stops watching.
+ */
+function gateRest() {
+  if (restUsers++ === 0) {
+    for (const type of REST_EVENTS) {
+      window.addEventListener(type, gateWake, { capture: true, passive: true });
+    }
+    gateWake();
+  }
+  let stopped = false;
+  return () => {
+    if (stopped) return;
+    stopped = true;
+    if (--restUsers > 0) return;
+    for (const type of REST_EVENTS) {
+      window.removeEventListener(type, gateWake, { capture: true });
+    }
+    clearTimeout(restTimer);
+    document.documentElement.removeAttribute('data-gate-rest');
+  };
+}
+
 /**
  * Fill `host` (a `[data-gate-aside]`) with the brand, clock, date and weather.
  * Returns `{ refresh, destroy }`; the clock ticks on the minute until destroyed.
@@ -267,11 +308,13 @@ export function gateChrome(host) {
   const onWeather = () => refresh({ animate: false });
   window.addEventListener('weather:update', onWeather);
   window.addEventListener('locale:change', onWeather);
+  const stopRest = gateRest();
 
   const api = {
     refresh,
     destroy() {
       clearTimeout(timer);
+      stopRest();
       window.removeEventListener('weather:update', onWeather);
       window.removeEventListener('locale:change', onWeather);
       delete host.__gate;
