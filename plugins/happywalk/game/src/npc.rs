@@ -366,12 +366,24 @@ mod tests {
     }
 
     #[test]
-    fn the_people_of_a_street_are_not_copies() {
-        let looks: std::collections::HashSet<Look> = (0..60)
-            .flat_map(|i| residents(3, IVec2::new(i, 1)))
-            .map(|r| r.look)
-            .collect();
-        assert!(looks.len() > 40, "{} looks", looks.len());
+    fn nobody_looks_like_anybody_else() {
+        // Everyone in a wide stretch of city, for two seeds: no two alike.
+        for seed in [3u64, 2026] {
+            let people: Vec<Look> = (-30..30)
+                .flat_map(|x| (-30..30).map(move |z| IVec2::new(x, z)))
+                .flat_map(|chunk| residents(seed, chunk))
+                .map(|r| r.look.visible())
+                .collect();
+            let different: std::collections::HashSet<&Look> = people.iter().collect();
+            assert!(people.len() > 3000, "{} people", people.len());
+            assert_eq!(
+                different.len(),
+                people.len(),
+                "seed {seed}: {} alike among {}",
+                people.len() - different.len(),
+                people.len()
+            );
+        }
     }
 
     #[test]

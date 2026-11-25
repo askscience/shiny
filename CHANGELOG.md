@@ -43,7 +43,7 @@
   dress: a wardrobe opens at the first game (skin, height, hair, beard,
   glasses, hat, clothes, scarf, shoes, backpack, each with its colours, and
   a button for a random look), and every passer-by is a person of its own
-  made the same way from the city's seed. See
+  made the same way from the city's seed, no two alike. See
   `plugins/happywalk/docs/README.md`.
 - **Shared UI: `swatches`.** A row of colours to pick one from, with roving
   keyboard focus like `segmented` and a "none" choice

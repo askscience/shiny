@@ -260,8 +260,11 @@ controls (colours as `swatches`, styles as chips), so a choice added in
 and English, are in `wardrobe.js`.
 
 **Passers-by are made the same way**, each from a number out of the city's
-seed (`Look::random`): the same lot has the same people every time, and no
-two streets the same crowd. The unusual is kept unusual (most have no beard,
+seed (`Look::random`). **Nobody looks like anybody else**: a test builds
+everyone in a stretch of 60 by 60 lots, for two seeds (over 3000 people),
+and finds no two drawn alike. The seed also means a street keeps its
+people: walking away and coming back, you meet the same ones again, as in a
+real neighbourhood. The unusual is kept unusual (most have no beard,
 no glasses, natural hair). A passer-by is drawn in two meshes, everything
 above the hips and a leg used twice.
 

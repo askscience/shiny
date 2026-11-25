@@ -241,12 +241,16 @@ impl Look {
 
     /// A look from a number: the same number, the same person.
     pub fn random(bits: u64) -> Self {
-        let mut dice = bits | 1;
+        // SplitMix64: every roll is a full mix of the number, so people made
+        // from neighbouring numbers are no more alike than any two others.
+        let mut state = bits;
         let mut roll = |n: u8| {
-            dice ^= dice << 13;
-            dice ^= dice >> 7;
-            dice ^= dice << 17;
-            ((dice >> 20) % n.max(1) as u64) as u8
+            state = state.wrapping_add(0x9E37_79B9_7F4A_7C15);
+            let mut z = state;
+            z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+            z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+            z ^= z >> 31;
+            (z % n.max(1) as u64) as u8
         };
         let mut look = Look::default();
         for choice in OPTIONS {
@@ -272,6 +276,29 @@ impl Look {
         }
         if roll(3) != 0 {
             look.backpack = 0;
+        }
+        look
+    }
+
+    /// The look as it shows: choices that cannot be seen (the colour of a
+    /// hat nobody wears, the details of a top that has none) set to 0, so
+    /// two looks that would be drawn the same compare equal.
+    pub fn visible(&self) -> Self {
+        let mut look = self.checked();
+        if look.hat == 0 {
+            look.hat_colour = 0;
+        }
+        if look.hair == 0 && look.beard == 0 {
+            // Shaved and beardless: only the brows show the hair colour, and
+            // they are drawn from the skin then.
+            look.hair_colour = 0;
+        }
+        let ponytail = HAIR_STYLES[look.hair as usize] == "ponytail";
+        let sunhat = HATS[look.hat as usize] == "sunhat";
+        let accent_shows =
+            TOPS[look.top as usize] != "tee" || ponytail || sunhat || !look.short_sleeves();
+        if !accent_shows {
+            look.accent = 0;
         }
         look
     }

@@ -247,16 +247,24 @@ const SHOPS: [(&str, PlaceKind, &str); 4] = [
 /// A number from the seed, a chunk and a purpose: the generator's only
 /// source of chance.
 pub fn chance(seed: u64, chunk: IVec2, salt: u32) -> u32 {
-    let mut x = seed
-        ^ (chunk.x as i64 as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15)
-        ^ (chunk.y as i64 as u64).wrapping_mul(0xC2B2_AE3D_27D4_EB4F)
-        ^ (salt as u64).wrapping_mul(0x1656_67B1_9E37_79F9);
-    x ^= x >> 30;
-    x = x.wrapping_mul(0xBF58_476D_1CE4_E5B9);
-    x ^= x >> 27;
-    x = x.wrapping_mul(0x94D0_49BB_1331_11EB);
-    x ^= x >> 31;
-    (x >> 16) as u32
+    // Each input is mixed in after the one before, through the full SplitMix64
+    // finaliser. (Combining them first with XOR, as this did, made a chunk and
+    // its mirror through the origin share numbers: the same people, and the
+    // same lots, at (3, -19) and (-3, 19).)
+    let mix = |mut z: u64| {
+        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+        z ^ (z >> 31)
+    };
+    let mut h = mix(seed.wrapping_add(0x9E37_79B9_7F4A_7C15));
+    for part in [
+        chunk.x as u32 as u64,
+        chunk.y as u32 as u64 | 1 << 32,
+        salt as u64 | 2 << 32,
+    ] {
+        h = mix(h ^ part.wrapping_mul(0x9E37_79B9_7F4A_7C15));
+    }
+    (h >> 32) as u32
 }
 
 fn pick(seed: u64, chunk: IVec2, salt: u32, modulo: u32) -> u32 {
@@ -636,6 +644,30 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn no_two_places_share_their_numbers() {
+        // Over a wide stretch of city, every chunk's number is its own: no
+        // mirror images, no repeating rows.
+        let mut seen = std::collections::HashMap::new();
+        for x in -40..40 {
+            for z in -40..40 {
+                let coord = IVec2::new(x, z);
+                if let Some(other) = seen.insert(chance(7, coord, 713), coord) {
+                    panic!("{coord} and {other} share a number");
+                }
+            }
+        }
+        assert_ne!(
+            chance(7, IVec2::new(3, -19), 1),
+            chance(7, IVec2::new(-3, 19), 1)
+        );
+        assert_ne!(
+            chance(7, IVec2::new(2, 5), 1),
+            chance(7, IVec2::new(5, 2), 1)
+        );
+        assert_ne!(chance(7, IVec2::ZERO, 1), chance(8, IVec2::ZERO, 1));
     }
 
     #[test]
