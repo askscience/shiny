@@ -10,7 +10,13 @@
   for the web and framed in a window (`plugins/happywalk/game`), a bridge to
   LiteAura's own speech recognition (Vosk with a restricted vocabulary and
   partial results), language model and voice, and a log of how long every
-  link of that chain takes. See `plugins/happywalk/docs/README.md`.
+  link of that chain takes. On top of that, the first playable piece: a
+  fixed neighbourhood of cube buildings, a voxel character in separate
+  blocks that walks, turns, changes pace and stops on spoken commands
+  (Italian and English, acted on from partial results; the keyboard does the
+  same for testing), and bumps into buildings, lamp posts and the hedge with
+  a jolt and an ironic line, spoken and shown in a bubble. See
+  `plugins/happywalk/docs/README.md`.
 - **Plugins: `publish = false` keeps a plugin in development out of the
   catalogue.** Until now a new plugin directory on `main` was published by
   its first push; with this line in `plugin.toml` it is neither offered nor

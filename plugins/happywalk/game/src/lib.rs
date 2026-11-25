@@ -8,12 +8,25 @@
 //! * [`bridge`] — `LiteAuraBridge`: recognised speech in, requests to the
 //!   language model and text to speak out. Nothing here blocks a frame.
 //! * [`telemetry`] — the latency of every link of that chain, logged.
-//! * [`scene`] — what is on screen (for now: proof that frames are drawn).
-//! * [`hud`] — "I am listening", what was understood, and the timings.
+//! * [`intent`] — the known commands, straight from the recognised words.
+//! * [`keyboard`] — the same commands from keys, for testing.
+//! * [`city`] — the neighbourhood and everything in it that is solid.
+//! * [`player`] — the character: walking, turning, bumping.
+//! * [`camera`] — third person, following softly.
+//! * [`lines`] — what the character says when things go wrong.
+//! * [`hud`] — the speech bubble, "I am listening", what was understood.
+
+// Bevy's queries are long types by nature.
+#![allow(clippy::type_complexity)]
 
 pub mod bridge;
+pub mod camera;
+pub mod city;
 pub mod hud;
-pub mod scene;
+pub mod intent;
+pub mod keyboard;
+pub mod lines;
+pub mod player;
 pub mod telemetry;
 
 use bevy::prelude::*;
@@ -44,7 +57,12 @@ pub fn app() -> App {
     .add_plugins((
         telemetry::TelemetryPlugin,
         bridge::LiteAuraBridgePlugin,
-        scene::ScenePlugin,
+        intent::IntentPlugin,
+        keyboard::KeyboardPlugin,
+        city::CityPlugin,
+        player::PlayerPlugin,
+        camera::CameraPlugin,
+        lines::LinesPlugin,
         hud::HudPlugin,
     ));
     app

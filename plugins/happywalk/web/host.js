@@ -128,12 +128,18 @@ function makeRecognizer() {
   const deliver = (text, isFinal) => {
     audio.results += 1;
     const clean = String(text || '').replaceAll('[unk]', ' ').replace(/\s+/g, ' ').trim();
-    if (!clean) return;
+    const now = performance.now();
+    if (!clean) {
+      // Nothing was understood, but a final result still ends the sentence:
+      // the game has to know, or the next one would be read as its sequel.
+      if (isFinal && lastPartial) game?.hw_heard('', true, now, 0);
+      if (isFinal) lastPartial = '';
+      return;
+    }
     // The recogniser repeats its partial result with every block of audio:
     // only a change is news.
     if (!isFinal && clean === lastPartial) return;
     lastPartial = isFinal ? '' : clean;
-    const now = performance.now();
     const speechEnd = quietSince ? lastLoudAt : 0;
     log(`heard "${clean}" ${isFinal ? 'final' : 'partial'}${speechEnd ? ` +${(now - speechEnd).toFixed(0)} ms after speech` : ''}`);
     game?.hw_heard(clean, isFinal, now, speechEnd);
@@ -293,6 +299,10 @@ window.happywalkHost = {
     game?.hw_heard(String(text), !!isFinal, now, 0);
   },
 
+  /** Where the character is and what it is doing (tests and debugging). */
+  get state() {
+    try { return JSON.parse(game?.hw_state() || 'null'); } catch (_) { return null; }
+  },
   get status() { return { ...status }; },
   get audio() { return { ...audio, context: audioContext?.state || 'none' }; },
   get logLines() { return [...logLines]; },

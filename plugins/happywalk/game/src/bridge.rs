@@ -27,6 +27,8 @@ use crate::telemetry::Lap;
 /// Text the recogniser understood.
 #[derive(Message, Clone, Debug)]
 pub struct Heard {
+    /// Lower case. Empty only for a final result in which nothing was
+    /// understood: the sentence is over, that is all.
     pub text: String,
     /// `false` for a partial result: the phrase may still grow or change.
     pub is_final: bool,
@@ -144,6 +146,16 @@ enum Inbound {
 
 static INBOX: Mutex<VecDeque<Inbound>> = Mutex::new(VecDeque::new());
 
+/// The game's state as the page may read it (`hw_state`).
+static STATE: Mutex<String> = Mutex::new(String::new());
+
+/// Publish the state the page may read.
+pub fn publish_state(json: String) {
+    if let Ok(mut state) = STATE.lock() {
+        *state = json;
+    }
+}
+
 fn push(message: Inbound) {
     if let Ok(mut inbox) = INBOX.lock() {
         inbox.push_back(message);
@@ -184,6 +196,16 @@ mod exports {
     #[wasm_bindgen]
     pub fn hw_spoke(id: u32, ok: bool, ms: f64) {
         push(Inbound::Spoke { id, ok, ms });
+    }
+
+    /// Where the character is and what it is doing, as JSON: for tests and
+    /// for the page's log, never for the game itself.
+    #[wasm_bindgen]
+    pub fn hw_state() -> String {
+        super::STATE
+            .lock()
+            .map(|state| state.clone())
+            .unwrap_or_default()
     }
 
     #[wasm_bindgen]
@@ -269,6 +291,10 @@ fn pump(
         match message {
             Inbound::Heard(h) => {
                 if h.text.is_empty() {
+                    // An empty final result only marks the end of a sentence.
+                    if h.is_final {
+                        heard.write(h);
+                    }
                     continue;
                 }
                 let kind = if h.is_final { "final" } else { "partial" };
