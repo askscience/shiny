@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-11-25
+
 ### Fixed
 
 - **Touch Bar: the shell no longer runs out of memory while the bar
