@@ -95,13 +95,51 @@ the line to one short sentence. No answer (`reason`: `ai-off`, `unavailable`,
 
 ## The game so far
 
-One fixed neighbourhood: nine lots, each with four buildings facing its
-streets and trees, benches and planters on its pavement, lamp posts at the
-crossings, a hedge around it all (`game/src/city.rs`). The character is a
-voxel figure in separate parts (head, body, backpack, arms, legs, each limb
-swinging from its joint) that walks where it is told (`game/src/player.rs`),
-followed by a soft third-person camera (`game/src/camera.rs`), under a pastel
-sky that turns slowly from day to evening (`game/src/sky.rs`).
+An endless city grown from a seed (`game/src/gen.rs`): lots of homes, shops,
+parks and squares along a grid of streets, in districts that change slowly
+across the map. The character is a small voxel figure in separate parts that
+walks where it is told (`game/src/player.rs`), followed by a soft third-person
+camera (`game/src/camera.rs`), under a pastel sky that turns slowly from day
+to evening (`game/src/sky.rs`).
+
+### The city
+
+The city is a grid of **chunks**, one lot each (22 m) with the streets along
+it. `gen::chunk(seed, coord)` is a pure function: the same seed gives the
+same city everywhere, and nothing is stored.
+
+- **Districts** (centre, residential, green) come from smooth noise four
+  chunks wide; a district only sets how likely each kind of lot is.
+- **Lots:** *homes* and *shops* (four buildings facing the streets, trees,
+  benches and planters on the pavement), *parks* (grass, trees on a loose
+  grid, a fountain or flowers, benches) and *squares* (a fountain, a
+  newsstand, benches, planters).
+- **Places** have names the character and the errands can use: the bakery,
+  the florist, the café, the greengrocer, the newsstand, the park, the
+  square. A place is where to stand to be at it, on the street in front.
+  `gen::nearest_place(seed, from, kind, reach)` finds one.
+- A lot's content is a list of `Prop`s (model, place, turn, voxel size,
+  solid or not). To add a kind of lot: add it to `LotKind`, give it a weight
+  per district, write its layout.
+
+`game/src/city.rs` keeps the chunks around the player on screen: those
+within two chunks are spawned (nearest first, two a frame, all at once at
+the start), those three away are dropped, and fog the colour of the sky
+hides where the drawing stops. `Solids` answers "is there something here?"
+anywhere: chunks on screen are remembered, any other is worked out from the
+seed on the spot.
+
+The page picks the seed: `?seed=<number>` in the address for a known city,
+otherwise a new one each time (it is in the log). To see a seed's city
+without running the game:
+
+```sh
+cd plugins/happywalk/game && cargo run --example map -- 2026
+```
+
+prints the lots and districts around the start and the nearest place of
+each kind. `happywalkHost.place(x, z, facing)` puts the character somewhere
+(tests and screenshots).
 
 ### Voxel models
 
@@ -161,7 +199,8 @@ it is reported as `NotUnderstood`, which Phase 2 gives to the model.
 ### Bumps
 
 Everything that can be walked into is a `Solid`: a box aligned to the ground
-grid, of a kind (building, lamp post, the hedge at the edge). The character
+grid, of a kind (building, lamp post, tree, bench, planter, fountain,
+newsstand). The character
 takes a small square on the ground and a step that would touch a solid is
 not taken: it stops, is thrown back a little with its arms up, and says
 something. After a bump it turns on the spot before walking off, so turning
@@ -274,8 +313,10 @@ These are rules, not hopes: new work follows them.
 - **Few draw calls.** All voxel models share one material (colour is in the
   vertices) and placed copies share their mesh, so the renderer batches
   them. Greedy meshing keeps a building at a few hundred quads.
-- **Collision looks only nearby.** Solids sit in a grid of 8 m buckets; a
-  step tests the handful around it however big the city is.
+- **Collision looks only nearby.** Solids are kept per chunk; a step tests
+  the one or two chunks it touches, however big the city is.
+- **Only the city nearby exists.** 25 chunks are on screen at most; their
+  ground is three shared meshes each.
 - **A small engine.** Bevy is built with only the features the game uses
   (`game/Cargo.toml`); the release build is optimised for size.
 - **Frames first.** Recognition runs in a worker, the model and the voice
@@ -302,12 +343,11 @@ These are rules, not hopes: new work follows them.
   sky and a slow turn from day to evening. Still to do: interchangeable
   character parts (hair, clothes), windows that light up in the evening,
   cars and bikes as models.
-- **Phase 4, a city from a seed:** a generator that writes the list of
-  props from a seed (street grid, lot sizes, building kit pieces stacked
-  into varied fronts, parks and squares), in chunks that are spawned and
-  dropped around the player, so the city has no edge. Named places (the
-  bakery, the newsstand, the park) that the model and the quests can refer
-  to. Done when two seeds give two different, sensible cities at full speed.
+- **Phase 4, a city from a seed (done):** a generator that writes each
+  chunk's props from the seed (districts, four kinds of lot, shops that are
+  named places), chunks spawned and dropped around the player, no edge.
+  Still to do in later phases: lots of other sizes and streets that are not
+  a plain grid, building fronts assembled from kit pieces.
 - **Phase 5, people and traffic:** `NpcPlugin` (passers-by with routines on
   the pavements, template lines, the model only for the one being talked
   to) and `TrafficPlugin` (cars and bikes on street lanes, stopping at

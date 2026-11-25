@@ -66,7 +66,6 @@ impl Memory {
         let slot = match topic {
             Topic::Bump(SolidKind::Building) => 0,
             Topic::Bump(SolidKind::Lamp) => 1,
-            Topic::Bump(SolidKind::Edge) => 2,
             Topic::NotUnderstood => 3,
             Topic::Bump(_) => 4,
         };
@@ -94,7 +93,8 @@ fn thing(into: SolidKind) -> &'static str {
         SolidKind::Tree => "a tree",
         SolidKind::Bench => "a bench",
         SolidKind::Planter => "a flower planter",
-        SolidKind::Edge => "the hedge at the edge of the neighbourhood",
+        SolidKind::Fountain => "a fountain",
+        SolidKind::Kiosk => "the newsstand",
     }
 }
 

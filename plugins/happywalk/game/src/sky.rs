@@ -96,12 +96,16 @@ fn turn(
     mut sky: ResMut<ClearColor>,
     mut ambient: ResMut<GlobalAmbientLight>,
     mut suns: Query<(&mut DirectionalLight, &mut Transform), With<Sun>>,
+    mut fogs: Query<&mut DistanceFog>,
 ) {
     daylight.evening = evening_at(time.elapsed_secs(), daylight.cycle);
     let e = daylight.evening;
     let mix = |a: Color, b: Color| a.mix(&b, e);
     let lerp = |a: f32, b: f32| a + (b - a) * e;
     sky.0 = mix(DAY.sky, EVENING.sky);
+    for mut fog in &mut fogs {
+        fog.color = sky.0;
+    }
     ambient.color = mix(DAY.ambient, EVENING.ambient);
     ambient.brightness = lerp(DAY.brightness, EVENING.brightness);
     if let Ok((mut sun, mut transform)) = suns.single_mut() {

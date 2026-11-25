@@ -11,7 +11,8 @@
 //! * [`intent`] — the known commands, straight from the recognised words.
 //! * [`keyboard`] — the same commands from keys, for testing.
 //! * [`vox`] — voxel models: `.vox` files meshed greedily, found by name.
-//! * [`city`] — the neighbourhood, as a list of placed models and solids.
+//! * [`gen`] — the city generator: a seed in, lots, props and places out.
+//! * [`city`] — the chunks of the city around the player, and its solids.
 //! * [`sky`] — the light: pastel sky, soft sun, day turning to evening.
 //! * [`player`] — the character: walking, turning, bumping.
 //! * [`camera`] — third person, following softly.
@@ -19,13 +20,18 @@
 //! * [`lines`] — stand-in lines for when the model cannot answer.
 //! * [`hud`] — the speech bubble, "I am listening", what was understood.
 
-// Bevy's queries are long types by nature.
-#![allow(clippy::type_complexity)]
+// Bevy's queries are long types and its systems take what they use.
+#![allow(
+    clippy::type_complexity,
+    clippy::too_many_arguments,
+    clippy::chunks_exact_to_as_chunks
+)]
 
 pub mod brain;
 pub mod bridge;
 pub mod camera;
 pub mod city;
+pub mod gen;
 pub mod hud;
 pub mod intent;
 pub mod keyboard;
@@ -40,8 +46,10 @@ use bevy::prelude::*;
 /// The canvas the page provides for the game.
 pub const CANVAS: &str = "#happywalk-canvas";
 
-pub fn app() -> App {
+/// The game, in the city grown from `seed`.
+pub fn app(seed: u64) -> App {
     let mut app = App::new();
+    app.insert_resource(city::CitySeed(seed));
     app.add_plugins(
         DefaultPlugins
             .set(WindowPlugin {
@@ -76,9 +84,9 @@ pub fn app() -> App {
     app
 }
 
-/// Called by the page once the module is loaded.
+/// Called by the page once the module is loaded, with the city's seed.
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen::prelude::wasm_bindgen]
-pub fn hw_start() {
-    app().run();
+pub fn hw_start(seed: u32) {
+    app(seed as u64).run();
 }

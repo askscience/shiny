@@ -16,7 +16,6 @@ pub enum Topic {
 struct Lines {
     building: &'static [&'static str],
     lamp: &'static [&'static str],
-    edge: &'static [&'static str],
     lost: &'static [&'static str],
     /// Anything else in the street.
     thing: &'static [&'static str],
@@ -37,11 +36,6 @@ const ITALIAN: Lines = Lines {
         "Un lampione. L'unica cosa illuminata, qui.",
         "Bel palo. L'ho salutato da vicino.",
         "Tra tutta la strada libera, proprio il palo.",
-    ],
-    edge: &[
-        "Qui finisce il quartiere. E anche la tua idea.",
-        "Oltre non si va. Lo dice la siepe, non io.",
-        "Bella siepe. Torniamo indietro?",
     ],
     lost: &[
         "Bello. E io cosa dovrei farci?",
@@ -71,11 +65,6 @@ const ENGLISH: Lines = Lines {
         "Nice pole. I said hello up close.",
         "A whole empty street, and you pick the pole.",
     ],
-    edge: &[
-        "The neighbourhood ends here. So does your plan.",
-        "No further. The hedge says so, not me.",
-        "Lovely hedge. Shall we turn around?",
-    ],
     lost: &[
         "Lovely. And what do I do with that?",
         "No idea what that means, but I'm nodding.",
@@ -102,7 +91,6 @@ pub fn stand_in(lang: &str, topic: Topic, turn: usize) -> &'static str {
     let list = match topic {
         Topic::Bump(SolidKind::Building) => lines.building,
         Topic::Bump(SolidKind::Lamp) => lines.lamp,
-        Topic::Bump(SolidKind::Edge) => lines.edge,
         Topic::NotUnderstood => lines.lost,
         Topic::Bump(_) => lines.thing,
     };
@@ -120,8 +108,8 @@ mod tests {
         assert_ne!(first, stand_in("it", lamp, 1));
         assert_eq!(stand_in("it", lamp, ITALIAN.lamp.len()), first);
         assert_eq!(
-            stand_in("de", Topic::Bump(SolidKind::Edge), 0),
-            ENGLISH.edge[0]
+            stand_in("de", Topic::Bump(SolidKind::Fountain), 0),
+            ENGLISH.thing[0]
         );
         assert_eq!(stand_in("it", Topic::NotUnderstood, 0), ITALIAN.lost[0]);
     }

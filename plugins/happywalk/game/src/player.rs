@@ -255,6 +255,7 @@ fn walk(
     time: Res<Time>,
     solids: Res<Solids>,
     mut orders: MessageReader<Order>,
+    mut placed: MessageReader<crate::bridge::Placed>,
     mut bumps: MessageWriter<Bumped>,
     mut players: Query<(&mut Player, &mut Transform)>,
 ) {
@@ -263,6 +264,11 @@ fn walk(
     };
     for order in orders.read() {
         player.obey(*order);
+    }
+    for place in placed.read() {
+        transform.translation = Vec3::new(place.at.x, 0.0, place.at.y);
+        (player.heading, player.facing, player.walking, player.jolt) =
+            (place.facing, place.facing, false, 0.0);
     }
     // A long frame must not carry the character through a wall.
     let dt = time.delta_secs().min(0.05);
@@ -324,14 +330,18 @@ fn animate(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::city::{neighbourhood, solids, PITCH};
+    use crate::city::{a_built_lot, PITCH};
+    use crate::gen;
+
+    const SEED: u64 = 9;
 
     fn walk_until_bump(
         player: &mut Player,
         mut at: Vec2,
         solids: &Solids,
+        steps: usize,
     ) -> (Vec2, Option<SolidKind>) {
-        for _ in 0..10_000 {
+        for _ in 0..steps {
             let (next, bumped) = player.step(at, 1.0 / 60.0, solids);
             at = next;
             if bumped.is_some() || !player.walking {
@@ -341,37 +351,64 @@ mod tests {
         (at, None)
     }
 
+    /// On the street beside a built lot, told to walk at its wall.
+    fn facing_a_wall(solids: &Solids) -> (Player, Vec2) {
+        let mut player = Player::default();
+        let mut at = gen::centre(a_built_lot(SEED)) + Vec2::new(PITCH / 2.0, -1.5);
+        player.obey(Order::Left);
+        player.obey(Order::Forward);
+        for _ in 0..30 {
+            at = player.step(at, 1.0 / 60.0, solids).0;
+        }
+        (player, at)
+    }
+
     #[test]
-    fn forward_walks_up_the_street_to_the_hedge() {
-        let solids = solids(&neighbourhood(), &crate::vox::sizes());
+    fn forward_walks_up_the_street_without_end() {
+        let solids = Solids::new(SEED);
         let mut player = Player::default();
         player.obey(Order::Forward);
+        player.obey(Order::Faster);
         let start = Vec2::new(START.x, START.z);
-        let (at, bumped) = walk_until_bump(&mut player, start, &solids);
-        assert_eq!(bumped, Some(SolidKind::Edge));
-        assert!(at.y < start.y - 40.0, "{at:?}");
+        // Three minutes at a run: more than a kilometre, and no edge.
+        let (at, bumped) = walk_until_bump(&mut player, start, &solids, 60 * 180);
+        assert_eq!(bumped, None);
+        assert!(player.walking);
+        assert!(at.y < start.y - 1000.0, "{at:?}");
+    }
+
+    #[test]
+    fn a_turn_into_the_lot_ends_in_a_building() {
+        let solids = Solids::new(SEED);
+        let (mut player, at) = facing_a_wall(&solids);
+        let (_, bumped) = walk_until_bump(&mut player, at, &solids, 2000);
+        assert_eq!(bumped, Some(SolidKind::Building));
         assert!(!player.walking);
         assert!(player.jolt > 0.0);
     }
 
     #[test]
-    fn a_turn_into_the_lot_ends_in_a_building() {
-        let solids = solids(&neighbourhood(), &crate::vox::sizes());
-        let mut player = Player::default();
-        // From the crossing, a few metres up the street, then left: a wall.
-        let mut at = Vec2::new(PITCH / 2.0, 4.0);
-        player.obey(Order::Left);
-        player.obey(Order::Forward);
-        for _ in 0..60 {
-            at = player.step(at, 1.0 / 60.0, &solids).0;
-        }
-        let (_, bumped) = walk_until_bump(&mut player, at, &solids);
+    fn turning_back_after_a_bump_does_not_bump_again() {
+        let solids = Solids::new(SEED);
+        let (mut player, at) = facing_a_wall(&solids);
+        let (mut at, bumped) = walk_until_bump(&mut player, at, &solids, 2000);
         assert_eq!(bumped, Some(SolidKind::Building));
+        let wall = at;
+        // Told to go back while still reeling: it turns round and walks
+        // off, back to the street.
+        player.obey(Order::Back);
+        for _ in 0..120 {
+            let (next, bumped) = player.step(at, 1.0 / 60.0, &solids);
+            assert_eq!(bumped, None);
+            at = next;
+        }
+        assert!(player.walking);
+        assert!(at.x > wall.x + 2.0, "{at:?}");
     }
 
     #[test]
     fn the_jolt_ends_and_the_character_stands_still() {
-        let solids = solids(&neighbourhood(), &crate::vox::sizes());
+        let solids = Solids::new(SEED);
         let mut player = Player {
             jolt: JOLT,
             ..default()
@@ -383,30 +420,6 @@ mod tests {
         assert_eq!(player.jolt, 0.0);
         let still = player.step(at, 1.0 / 60.0, &solids).0;
         assert_eq!(still, at);
-    }
-
-    #[test]
-    fn turning_back_after_a_bump_does_not_bump_again() {
-        let solids = solids(&neighbourhood(), &crate::vox::sizes());
-        let mut player = Player::default();
-        let mut at = Vec2::new(PITCH / 2.0, 4.0);
-        player.obey(Order::Left);
-        player.obey(Order::Forward);
-        for _ in 0..60 {
-            at = player.step(at, 1.0 / 60.0, &solids).0;
-        }
-        let (mut at, bumped) = walk_until_bump(&mut player, at, &solids);
-        assert_eq!(bumped, Some(SolidKind::Building));
-        // Told to go back while still reeling: it turns round and walks
-        // off, back to the street.
-        player.obey(Order::Back);
-        for _ in 0..120 {
-            let (next, bumped) = player.step(at, 1.0 / 60.0, &solids);
-            assert_eq!(bumped, None);
-            at = next;
-        }
-        assert!(player.walking);
-        assert!(at.x > PITCH / 2.0 - 2.0, "{at:?}");
     }
 
     #[test]

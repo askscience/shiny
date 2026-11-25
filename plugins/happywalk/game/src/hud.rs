@@ -170,10 +170,10 @@ fn draw(
     }
     if last.is_changed() {
         if let Ok(mut text) = heard.single_mut() {
-            **text = if last.is_final {
-                last.text.clone()
-            } else {
-                format!("{}…", last.text)
+            **text = match (last.text.is_empty(), last.is_final) {
+                (true, _) => String::new(),
+                (false, true) => last.text.clone(),
+                (false, false) => format!("{}…", last.text),
             };
         }
     }

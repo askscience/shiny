@@ -28,6 +28,15 @@ fn spawn(mut commands: Commands) {
     commands.spawn((
         Camera3d::default(),
         FollowCamera,
+        // The city has no edge; the fog is where it stops being drawn
+        // (`sky.rs` keeps it the colour of the sky).
+        DistanceFog {
+            falloff: FogFalloff::Linear {
+                start: 30.0,
+                end: 54.0,
+            },
+            ..default()
+        },
         Transform::from_translation(START + BEHIND).looking_at(START + AIM, Vec3::Y),
     ));
 }
@@ -83,16 +92,23 @@ fn follow(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::city::{neighbourhood, solids, PITCH};
+    use crate::city::{a_built_lot, PITCH};
+    use crate::gen;
 
     #[test]
     fn the_camera_comes_closer_with_a_wall_behind() {
-        let city = solids(&neighbourhood(), &crate::vox::sizes());
+        let seed = 4;
+        let city = Solids::new(seed);
         // Looking up the street from the crossing: all the room there is.
         let open = room_behind(&city, Vec2::new(PITCH / 2.0, 0.0), Vec2::new(0.0, 6.6));
         assert_eq!(open, 1.0);
-        // Facing a wall across the street, the wall behind is near.
-        let tight = room_behind(&city, Vec2::new(PITCH / 2.0, 4.0), Vec2::new(6.6, 0.0));
+        // On the street with its back to a building: the wall is near.
+        let lot = gen::centre(a_built_lot(seed));
+        let tight = room_behind(
+            &city,
+            lot + Vec2::new(PITCH / 2.0, -1.5),
+            Vec2::new(-6.6, 0.0),
+        );
         assert!(tight < 0.8, "{tight}");
         assert!(tight >= 0.3);
     }

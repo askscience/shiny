@@ -26,8 +26,10 @@
   (`plugins/happywalk/tools/make_assets.py`) and meshed greedily with soft
   ambient occlusion; the neighbourhood has shops with awnings, trees,
   benches, planters and lamp posts, the character is a small round figure
-  in a beanie, and the sky turns slowly from day to evening. See
-  `plugins/happywalk/docs/README.md`.
+  in a beanie, and the sky turns slowly from day to evening. The city is
+  endless and grown from a seed: districts, lots of homes, shops, parks and
+  squares, and named places (the bakery, the newsstand, the park), loaded
+  around the player as it walks. See `plugins/happywalk/docs/README.md`.
 - **Plugins: `publish = false` keeps a plugin in development out of the
   catalogue.** Until now a new plugin directory on `main` was published by
   its first push; with this line in `plugin.toml` it is neither offered nor

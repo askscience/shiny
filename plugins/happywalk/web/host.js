@@ -303,6 +303,9 @@ window.happywalkHost = {
   get state() {
     try { return JSON.parse(game?.hw_state() || 'null'); } catch (_) { return null; }
   },
+  /** Put the character somewhere (tests and screenshots). */
+  place(x, z, facing = 0) { game?.hw_place(x, z, facing); },
+
   get status() { return { ...status }; },
   get audio() { return { ...audio, context: audioContext?.state || 'none' }; },
   get logLines() { return [...logLines]; },
@@ -324,9 +327,14 @@ async function start() {
   log(`latency game-load ${(performance.now() - started).toFixed(0)} ms (build ${built.build})`);
   say('');
   game.hw_status(JSON.stringify(status));
+  // The city grows from a seed: `?seed=` in the address for a known city,
+  // otherwise a new one every time.
+  const asked = Number(new URLSearchParams(window.location.search).get('seed'));
+  const seed = Number.isInteger(asked) && asked > 0 ? asked >>> 0 : (Math.random() * 0xffffffff) >>> 0;
+  log(`city seed ${seed}`);
   // Bevy takes over the page's event loop from here (it throws to do so).
   queueMicrotask(() => {
-    try { game.hw_start(); } catch (error) {
+    try { game.hw_start(seed); } catch (error) {
       if (!String(error?.message || error).includes('Using exceptions for control flow')) throw error;
     }
   });

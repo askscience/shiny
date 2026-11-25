@@ -98,11 +98,13 @@ class Model:
 # ── Buildings ────────────────────────────────────────────────────────────
 
 
-def building(wall, roof, floors, width=24, depth=24, shop=False, lit=()):
+def building(wall, roof, floors, width=24, depth=24, shop=False, lit=(), awning="awning", sign=None, boxes=None):
     """A block of flats: a ground floor with a door (a shop window and an
     awning when `shop`), `floors` storeys of windows on all four sides, and a
     roof slab that overhangs by one voxel. `lit` lists (storey, column)
-    windows whose light is on."""
+    windows whose light is on. A shop can have its own `awning` colour, a
+    `sign` board over it, and `boxes` of that colour of flowers under the
+    front windows."""
     storey = 9
     height = 10 + floors * storey + 3
     m = Model(width + 2, depth + 2, height)
@@ -141,11 +143,22 @@ def building(wall, roof, floors, width=24, depth=24, shop=False, lit=()):
         m.box(x0 + 2, y0, 2, door_x - 2, y0, 6, "glass")
         m.box(door_x + 6, y0, 2, x1 - 2, y0, 6, "glass")
         for x in range(x0, x1 + 1):
-            m.set(x, y0 - 1, 8, "awning" if (x // 2) % 2 == 0 else "trim")
-            m.set(x, y0 - 1, 7, "awning" if (x // 2) % 2 == 0 else "trim")
+            m.set(x, y0 - 1, 8, awning if (x // 2) % 2 == 0 else "trim")
+            m.set(x, y0 - 1, 7, awning if (x // 2) % 2 == 0 else "trim")
+        if sign:
+            m.box(x0 + 5, y0 - 1, 10, x1 - 5, y0 - 1, 12, sign)
+            for x in range(x0 + 7, x1 - 6, 3):
+                m.set(x, y0 - 1, 11, "trim")
     else:
         m.box(x0 + 3, y0, 3, x0 + 5, y0, 6, "glass")
         m.box(x1 - 5, y0, 3, x1 - 3, y0, 6, "glass")
+    if boxes:
+        for f in range(floors):
+            z = 11 + f * storey
+            for c in columns:
+                m.box(c - 1, y0 - 1, z - 1, c + 3, y0 - 1, z - 1, "bark")
+                for x in range(c - 1, c + 4):
+                    m.set(x, y0 - 1, z, boxes if x % 2 else "leaf")
     # The roof: an overhanging slab, a parapet, and something on it.
     m.box(0, 0, top, width + 1, depth + 1, top, roof)
     for x in range(0, width + 2):
@@ -214,6 +227,40 @@ def hedge():
                 m.set(x, y, 4, "leaf")
             if (x * 5 + y * 11) % 23 == 0:
                 m.set(x, y, 4, "flower")
+    return m
+
+
+def fountain():
+    m = Model(20, 20, 12)
+    # A round basin of stone with water in it, and a column in the middle.
+    for x in range(20):
+        for y in range(20):
+            d = ((x - 9.5) ** 2 + (y - 9.5) ** 2) ** 0.5
+            if d <= 9.6:
+                m.box(x, y, 0, x, y, 1, "stone")
+                if d >= 8.0:
+                    m.box(x, y, 2, x, y, 3, "stone")
+                else:
+                    m.set(x, y, 2, "sky" if (x + y) % 3 else "glass")
+    m.box(9, 9, 2, 10, 10, 8, "stone")
+    m.box(8, 8, 9, 11, 11, 9, "stone")
+    m.box(9, 9, 10, 10, 10, 11, "sky")
+    return m
+
+
+def kiosk():
+    """A newsstand: a small booth with papers on its counter."""
+    m = Model(16, 12, 15)
+    m.box(1, 2, 0, 14, 10, 11, "mint")
+    m.box(2, 3, 1, 13, 9, 10, None)
+    m.box(3, 2, 5, 12, 2, 9, "glass")
+    m.box(2, 1, 4, 13, 1, 4, "wood")
+    for i, x in enumerate(range(3, 13, 2)):
+        m.set(x, 1, 5, ("roof_red", "roof_blue", "lamp", "flower", "trim")[i % 5])
+    m.box(0, 0, 12, 15, 11, 12, "roof_green")
+    for x in range(16):
+        m.set(x, 0, 11, "roof_green" if (x // 2) % 2 == 0 else "trim")
+    m.box(5, 4, 13, 10, 7, 14, "roof_green")
     return m
 
 
@@ -329,13 +376,20 @@ def leg():
 
 
 MODELS = {
-    "building_rose_shop": lambda: building("rose", "roof_red", 2, shop=True, lit=[(0, 1)]),
+    # Homes.
+    "building_rose": lambda: building("rose", "roof_red", 2, lit=[(0, 1)], boxes="flower"),
     "building_peach": lambda: building("peach", "roof_red", 3, lit=[(2, 0), (1, 2)]),
     "building_sky": lambda: building("sky", "roof_blue", 4, lit=[(3, 1)]),
-    "building_lilac_shop": lambda: building("lilac", "roof_blue", 3, shop=True, lit=[(1, 0)]),
+    "building_lilac": lambda: building("lilac", "roof_blue", 3, lit=[(1, 0)], boxes="lamp"),
     "building_mint": lambda: building("mint", "roof_green", 2, width=22, depth=22),
     "building_cream": lambda: building("cream", "roof_green", 5, width=22, depth=24, lit=[(4, 2), (2, 1)]),
-    "building_peach_shop": lambda: building("peach", "roof_blue", 1, width=24, depth=20, shop=True),
+    # Shops: what they sell is in their name, and in the generator's table.
+    "shop_bakery": lambda: building("cream", "roof_red", 1, shop=True, awning="awning", sign="wood", lit=[(0, 0)]),
+    "shop_florist": lambda: building("mint", "roof_green", 2, shop=True, awning="flower", sign="leaf_dark", boxes="flower"),
+    "shop_cafe": lambda: building("rose", "roof_blue", 2, shop=True, awning="roof_red", sign="door", lit=[(1, 1)]),
+    "shop_grocer": lambda: building("peach", "roof_green", 1, width=24, depth=20, shop=True, awning="leaf", sign="bark"),
+    "fountain": fountain,
+    "kiosk": kiosk,
     "lamp": lamp,
     "tree": tree,
     "tree_dark": lambda: tree("leaf_dark"),

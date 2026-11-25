@@ -69,6 +69,13 @@ pub struct BrainAnswered {
     pub answer: Option<BrainAnswer>,
 }
 
+/// The character was put somewhere by hand (tests, screenshots).
+#[derive(Message, Clone, Copy, Debug)]
+pub struct Placed {
+    pub at: Vec2,
+    pub facing: f32,
+}
+
 #[derive(Message, Clone, Debug)]
 pub struct Spoke {
     pub id: u32,
@@ -144,6 +151,7 @@ enum Inbound {
     Brain { id: u32, json: String, ms: f64 },
     Spoke { id: u32, ok: bool, ms: f64 },
     Status(String),
+    Place { x: f32, z: f32, facing: f32 },
 }
 
 static INBOX: Mutex<VecDeque<Inbound>> = Mutex::new(VecDeque::new());
@@ -210,6 +218,13 @@ mod exports {
             .unwrap_or_default()
     }
 
+    /// Put the character somewhere, facing `facing` radians: for tests and
+    /// screenshots.
+    #[wasm_bindgen]
+    pub fn hw_place(x: f32, z: f32, facing: f32) {
+        push(Inbound::Place { x, z, facing });
+    }
+
     #[wasm_bindgen]
     pub fn hw_status(json: &str) {
         push(Inbound::Status(json.to_string()));
@@ -264,6 +279,7 @@ impl Plugin for LiteAuraBridgePlugin {
             .add_message::<Heard>()
             .add_message::<BrainAnswered>()
             .add_message::<Spoke>()
+            .add_message::<Placed>()
             .add_systems(First, pump);
     }
 }
@@ -278,6 +294,7 @@ fn pump(
     mut heard: MessageWriter<Heard>,
     mut answered: MessageWriter<BrainAnswered>,
     mut spoke: MessageWriter<Spoke>,
+    mut placed: MessageWriter<Placed>,
     mut laps: MessageWriter<Lap>,
     mut status: ResMut<HostStatus>,
 ) {
@@ -335,6 +352,12 @@ fn pump(
                     about: format!("#{id} {}", if ok { "speaking" } else { "failed" }),
                 });
                 spoke.write(Spoke { id, ok });
+            }
+            Inbound::Place { x, z, facing } => {
+                placed.write(Placed {
+                    at: Vec2::new(x, z),
+                    facing,
+                });
             }
             Inbound::Status(json) => {
                 if let Ok(next) = serde_json::from_str::<HostStatus>(&json) {
