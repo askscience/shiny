@@ -69,6 +69,14 @@ pub struct BrainAnswered {
     pub answer: Option<BrainAnswer>,
 }
 
+/// The player chose how the character looks.
+#[derive(Message, Clone, Copy, Debug)]
+pub struct LookChosen(pub crate::figure::Look);
+
+/// Whether the wardrobe is open.
+#[derive(Resource, Default, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Wardrobe(pub bool);
+
 /// The page kept a clip of the last seconds (or failed to).
 #[derive(Message, Clone, Copy, Debug)]
 pub struct ClipSaved {
@@ -165,6 +173,8 @@ enum Inbound {
     Status(String),
     Place { x: f32, z: f32, facing: f32 },
     Clip { ok: bool, seconds: f32 },
+    Look(String),
+    Wardrobe(bool),
 }
 
 static INBOX: Mutex<VecDeque<Inbound>> = Mutex::new(VecDeque::new());
@@ -244,6 +254,37 @@ mod exports {
         push(Inbound::Clip { ok, seconds });
     }
 
+    /// Dress the character: a look as JSON (missing fields keep their
+    /// default, values out of range are brought in).
+    #[wasm_bindgen]
+    pub fn hw_look(json: &str) {
+        push(Inbound::Look(json.to_string()));
+    }
+
+    /// The wardrobe opens or closes: while it is open the character stands
+    /// still facing the camera and takes no orders.
+    #[wasm_bindgen]
+    pub fn hw_wardrobe(open: bool) {
+        push(Inbound::Wardrobe(open));
+    }
+
+    /// What can be chosen, for the wardrobe to show (see `figure.rs`).
+    #[wasm_bindgen]
+    pub fn hw_look_options() -> String {
+        crate::figure::options_json()
+    }
+
+    /// A look as JSON: the default one, or a random one from a number.
+    #[wasm_bindgen]
+    pub fn hw_look_sample(random: f64) -> String {
+        let look = if random > 0.0 {
+            crate::figure::Look::random(random as u64)
+        } else {
+            crate::figure::Look::default()
+        };
+        serde_json::to_string(&look).unwrap_or_default()
+    }
+
     #[wasm_bindgen]
     pub fn hw_status(json: &str) {
         push(Inbound::Status(json.to_string()));
@@ -303,6 +344,8 @@ impl Plugin for LiteAuraBridgePlugin {
             .add_message::<Spoke>()
             .add_message::<Placed>()
             .add_message::<ClipSaved>()
+            .add_message::<LookChosen>()
+            .init_resource::<Wardrobe>()
             .add_systems(First, pump);
     }
 }
@@ -319,6 +362,8 @@ fn pump(
     mut spoke: MessageWriter<Spoke>,
     mut placed: MessageWriter<Placed>,
     mut clips: MessageWriter<ClipSaved>,
+    mut looks: MessageWriter<LookChosen>,
+    mut wardrobe: ResMut<Wardrobe>,
     mut laps: MessageWriter<Lap>,
     mut status: ResMut<HostStatus>,
 ) {
@@ -385,6 +430,16 @@ fn pump(
             }
             Inbound::Clip { ok, seconds } => {
                 clips.write(ClipSaved { ok, seconds });
+            }
+            Inbound::Look(json) => {
+                if let Ok(look) = serde_json::from_str::<crate::figure::Look>(&json) {
+                    looks.write(LookChosen(look.checked()));
+                }
+            }
+            Inbound::Wardrobe(open) => {
+                if wardrobe.0 != open {
+                    wardrobe.0 = open;
+                }
             }
             Inbound::Status(json) => {
                 if let Ok(next) = serde_json::from_str::<HostStatus>(&json) {

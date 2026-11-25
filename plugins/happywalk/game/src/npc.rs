@@ -12,6 +12,7 @@ use std::f32::consts::{FRAC_PI_2, PI};
 use bevy::prelude::*;
 
 use crate::city::{CitySeed, PAVED};
+use crate::figure::Look;
 use crate::gen::{self, SolidKind};
 use crate::hud::OtherSaid;
 use crate::lines::{passer_by, Remark};
@@ -21,11 +22,8 @@ use crate::vox::VoxLibrary;
 
 /// Passers-by live in chunks this near the player.
 const NEAR: i32 = 1;
-/// Metres to a voxel, as for the character.
-const VOXEL: f32 = 0.04;
 /// How far from the middle of a lot its people walk: along the kerb.
 const TRACK: f32 = PAVED / 2.0 - 0.28;
-const LOOKS: [&str; 4] = ["a", "b", "c", "d"];
 
 #[derive(Component, Debug)]
 pub struct Npc {
@@ -39,7 +37,6 @@ pub struct Npc {
     pause: f32,
     stride: f32,
     hop: f32,
-    look: usize,
 }
 
 /// Where a walker is on a lot's kerb, and which way it faces (radians, 0
@@ -59,16 +56,29 @@ pub fn on_track(lot: Vec2, along: f32, way: f32) -> (Vec2, f32) {
     (lot + at, if way > 0.0 { heading } else { heading + PI })
 }
 
-/// The passers-by of a chunk: none, one or two, from the seed.
-pub fn residents(seed: u64, chunk: IVec2) -> Vec<(f32, f32, f32, usize)> {
+/// A passer-by as the seed makes it: where on the kerb, which way round,
+/// how fast, and what it looks like.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Resident {
+    pub along: f32,
+    pub way: f32,
+    pub speed: f32,
+    pub look: Look,
+}
+
+/// The passers-by of a chunk: none, one or two, from the seed. Each is a
+/// person of its own (`figure.rs`): the same lot has the same people.
+pub fn residents(seed: u64, chunk: IVec2) -> Vec<Resident> {
     let count = gen::chance(seed, chunk, 700) % 3;
     (0..count)
         .map(|i| {
             let roll = |salt: u32| gen::chance(seed, chunk, 710 + i * 10 + salt);
-            let along = (roll(0) % 1000) as f32 / 1000.0 * TRACK * 8.0;
-            let way = if roll(1) % 2 == 0 { 1.0 } else { -1.0 };
-            let speed = 0.9 + (roll(2) % 100) as f32 / 100.0 * 0.9;
-            (along, way, speed, (roll(3) % LOOKS.len() as u32) as usize)
+            Resident {
+                along: (roll(0) % 1000) as f32 / 1000.0 * TRACK * 8.0,
+                way: if roll(1) % 2 == 0 { 1.0 } else { -1.0 },
+                speed: 0.9 + (roll(2) % 100) as f32 / 100.0 * 0.9,
+                look: Look::random(((roll(3) as u64) << 32) | roll(4) as u64),
+            }
         })
         .collect()
 }
@@ -102,6 +112,7 @@ fn populate(
     mut commands: Commands,
     seed: Res<CitySeed>,
     library: Res<VoxLibrary>,
+    mut meshes: ResMut<Assets<Mesh>>,
     players: Query<&Transform, With<Player>>,
     mut housed: ResMut<Housed>,
     mut here: Local<Option<IVec2>>,
@@ -132,31 +143,40 @@ fn populate(
             let lot = gen::centre(coord);
             let people = residents(seed.0, coord)
                 .into_iter()
-                .map(|(along, way, speed, look)| {
-                    let body = format!("npc_{}_body", LOOKS[look]);
-                    let leg = format!("npc_{}_leg", LOOKS[look]);
-                    let size = library.size(&leg).as_vec3() * VOXEL;
+                .map(|resident| {
+                    // Two meshes a person: everything above the hips, and a
+                    // leg used twice.
+                    let voxel = resident.look.voxel();
+                    let (body, leg) = (resident.look.body(), resident.look.leg());
+                    let size = leg.size.as_vec3() * voxel;
                     let hip = size.y - 0.02;
+                    let piece = |mesh: Handle<Mesh>, at: Vec3| {
+                        (
+                            Mesh3d(mesh),
+                            MeshMaterial3d(library.material.clone()),
+                            Transform::from_translation(at).with_scale(Vec3::splat(voxel)),
+                        )
+                    };
+                    let (body, leg) = (meshes.add(body.mesh()), meshes.add(leg.mesh()));
                     commands
                         .spawn((
                             Npc {
                                 lot,
-                                along,
-                                way,
-                                speed,
+                                along: resident.along,
+                                way: resident.way,
+                                speed: resident.speed,
                                 pause: 0.0,
-                                stride: along,
+                                stride: resident.along,
                                 hop: 0.0,
-                                look,
                             },
                             Transform::default(),
                             Visibility::default(),
                         ))
                         .with_children(|figure| {
-                            figure.spawn((
-                                NpcBody,
-                                library.place(&body, Vec3::new(0.0, hip, 0.0), VOXEL, 0),
-                            ));
+                            // The body's model is deeper behind (hair, a
+                            // bag) than in front: its middle is not the
+                            // figure's.
+                            figure.spawn((NpcBody, piece(body, Vec3::new(0.0, hip, 3.0 * voxel))));
                             for side in [-1.0, 1.0] {
                                 figure.spawn((
                                     NpcLeg {
@@ -164,7 +184,7 @@ fn populate(
                                         hip: Vec3::new(side * (size.x / 2.0 + 0.02), hip, -0.02),
                                         length: size.y,
                                     },
-                                    library.place(&leg, Vec3::ZERO, VOXEL, 0),
+                                    piece(leg.clone(), Vec3::ZERO),
                                 ));
                             }
                         })
@@ -246,7 +266,7 @@ fn react(
                 npc.hop = 1.0;
                 *turn += 1;
                 said.write(OtherSaid {
-                    text: passer_by(&status.lang, remark, *turn + npc.look).to_string(),
+                    text: passer_by(&status.lang, remark, *turn + npc.stride as usize).to_string(),
                     at: at + Vec3::Y * 1.75,
                 });
             }
@@ -343,6 +363,15 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn the_people_of_a_street_are_not_copies() {
+        let looks: std::collections::HashSet<Look> = (0..60)
+            .flat_map(|i| residents(3, IVec2::new(i, 1)))
+            .map(|r| r.look)
+            .collect();
+        assert!(looks.len() > 40, "{} looks", looks.len());
     }
 
     #[test]

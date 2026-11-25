@@ -553,6 +553,24 @@
   transition: background var(--motion-feedback), border-color var(--motion-feedback), color var(--motion-feedback), transform var(--motion-feedback) var(--motion-ease);
 }
 .ui-chip:active { transform: scale(0.96); }
+
+/* A row of colours to pick one from (components/choice.js `swatches`). */
+.ui-swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+.ui-swatch {
+  width: 28px; height: 28px; padding: 0; border-radius: 50%; flex-shrink: 0; cursor: pointer;
+  background: var(--swatch, transparent);
+  border: 1px solid color-mix(in srgb, var(--text, #888) 22%, transparent);
+  outline: 2px solid transparent; outline-offset: 2px;
+  transition: outline-color var(--motion-feedback), transform var(--motion-feedback) var(--motion-ease);
+}
+.ui-swatch:active { transform: scale(0.92); }
+.ui-swatch[aria-checked="true"] { outline-color: var(--accent); }
+.ui-swatch:focus-visible { outline-color: var(--accent); outline-width: 3px; }
+/* "None": an empty ring with a stroke through it. */
+.ui-swatch--none {
+  background: linear-gradient(135deg, transparent 46%, color-mix(in srgb, var(--text, #888) 55%, transparent) 46% 54%, transparent 54%);
+}
+html[data-phone="1"] .ui-swatch { width: 36px; height: 36px; }
 .ui-chip .ui-icon { width: 15px; height: 15px; }
 
 .ui-avatar {

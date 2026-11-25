@@ -151,9 +151,8 @@ its own pace, wait when the character is in the way, and answer from a short
 list when walked into or greeted (`saluta`, `ciao`, `wave`, `hello`: the
 character waves and the nearest one within 7 m replies). Only the character
 has a brain; theirs are template lines, shown in a second bubble where they
-stand. Who lives on a lot comes from the city's seed. They are the
-character's own shapes in other clothes, drawn in three pieces each, and
-exist only in the nine chunks around the player.
+stand. Who lives on a lot, and what each looks like, comes from the city's
+seed. They exist only in the nine chunks around the player.
 
 **Cars and bikes** (`game/src/traffic.rs`) keep to the right-hand lane, give
 way at crossings (streets along `x` yield), and **always stop for the
@@ -223,16 +222,53 @@ once: neighbouring faces of one colour and one shading become one rectangle
 (greedy meshing), and soft ambient occlusion is baked into the vertex
 colours. `VoxLibrary::place(name, at, voxel, quarter_turns)` is what a
 module spawns; the voxel's size is the placer's choice (25 cm for buildings,
-4 cm for the character).
+10 cm for cars). People are not files: see "The character's look".
 
-### The character's look
+### The character's look, and the wardrobe
 
-A small round figure of its own, deliberately not a block-headed one: a big
-soft head under a beanie with a pompom, eyes with a glint, a hoodie with a
-scarf, a round backpack, short limbs with mitten hands. Its parts are
-ellipsoids cut from the voxel grid at 4 cm a voxel (`head`, `torso`,
-`backpack`, `arm`, `leg` in `tools/make_assets.py`). The game measures the
-joints from the models, so a redrawn part fits without touching the code.
+Nobody in the game is drawn by hand. A figure is sculpted from a **look**
+(`game/src/figure.rs`): sixteen small numbers saying which skin, which hair
+and in what colour, a beard or not, glasses, a hat, what it wears, how tall
+it is. Its parts are ellipsoids cut from the voxel grid at about 4 cm a
+voxel: a big soft head, a body, short limbs with mitten hands. The face is
+on the front of the head: wide-set eyes with a glint, brows, cheeks, a small
+mouth.
+
+| Choice | Options |
+| --- | --- |
+| Skin | 8 tones |
+| Height | small, medium, tall |
+| Hair | shaved, short, fringe, long, bob, ponytail, bun, curly, spiky; 10 colours |
+| Beard | none, stubble, moustache, goatee, full |
+| Glasses | none, round, sunglasses |
+| Hat | none, beanie, beanie with pompom, cap, sun hat, bow; 12 colours |
+| Top | hoodie, T-shirt, jacket, stripes, dress; 12 colours, 12 for the details |
+| Scarf | none or 12 colours |
+| Bottom | trousers, shorts, skirt; 12 colours |
+| Shoes | 12 colours |
+| Backpack | none or 12 colours |
+
+**The wardrobe** (`web/wardrobe.js`) is where the player chooses. It opens
+the first time the game is played, and from the button in the corner after
+that. The camera goes round to the front of the character, a soft light
+comes on, the character stands still and takes no orders, and every choice
+rebuilds it on the spot. One button rolls a look at random, the other keeps
+the look (per profile, in the browser's storage) and closes. The panel is
+built from the game's own list (`hw_look_options`) with LiteAura's shared
+controls (colours as `swatches`, styles as chips), so a choice added in
+`figure.rs` shows up without the page being touched; its words, in Italian
+and English, are in `wardrobe.js`.
+
+**Passers-by are made the same way**, each from a number out of the city's
+seed (`Look::random`): the same lot has the same people every time, and no
+two streets the same crowd. The unusual is kept unusual (most have no beard,
+no glasses, natural hair). A passer-by is drawn in two meshes, everything
+above the hips and a leg used twice.
+
+To add an option: add its name to the list in `figure.rs` and handle its
+number where the part is sculpted. A look from outside the game (the page,
+an older save) is never trusted: missing fields take their default, values
+out of range are brought in.
 
 ### Commands
 

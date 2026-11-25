@@ -55,6 +55,27 @@ impl VoxModel {
         self.cells[index] = colour;
     }
 
+    /// A model from its cells (`x + size.x * (y + size.y * z)`) and its
+    /// palette of 256 colours: for models made in the game, not read from a
+    /// file.
+    pub fn from_parts(size: UVec3, cells: Vec<u8>, palette: Vec<[u8; 3]>) -> Self {
+        debug_assert_eq!(cells.len(), (size.x * size.y * size.z) as usize);
+        debug_assert_eq!(palette.len(), 256);
+        Self {
+            size,
+            cells,
+            palette,
+        }
+    }
+
+    /// The sRGB colour of the voxel at a position, if there is one.
+    pub fn colour_at(&self, x: i32, y: i32, z: i32) -> Option<[u8; 3]> {
+        match self.at(x, y, z) {
+            0 => None,
+            index => Some(self.palette[index as usize]),
+        }
+    }
+
     /// How many voxels are filled.
     pub fn filled(&self) -> usize {
         self.cells.iter().filter(|c| **c != 0).count()
@@ -500,23 +521,21 @@ mod tests {
 
     #[test]
     fn the_front_of_a_model_faces_minus_z() {
-        // The head's face (dark eyes) is on MagicaVoxel's low-y side.
-        let (_, bytes) = VOX_ASSETS.iter().find(|(name, _)| *name == "head").unwrap();
-        let head = VoxModel::parse(bytes).unwrap();
-        let ink = (1..=255u8)
-            .find(|i| head.palette[*i as usize] == [52, 52, 68])
-            .unwrap();
-        let half = head.size.z as i32 / 2;
-        let inked = |depths: std::ops::Range<i32>| {
+        // A car's headlights are on MagicaVoxel's low-y side, its tail
+        // lights on the other.
+        let (_, car) = models().find(|(name, _)| *name == "car_red").unwrap();
+        let half = car.size.z as i32 / 2;
+        let has = |rgb: [u8; 3], depths: std::ops::Range<i32>| {
             depths
                 .flat_map(|z| {
-                    (0..head.size.x as i32)
-                        .flat_map(move |x| (0..head.size.y as i32).map(move |y| (x, y, z)))
+                    (0..car.size.x as i32)
+                        .flat_map(move |x| (0..car.size.y as i32).map(move |y| (x, y, z)))
                 })
-                .any(|(x, y, z)| head.at(x, y, z) == ink)
+                .any(|(x, y, z)| car.colour_at(x, y, z) == Some(rgb))
         };
-        let (on_front, on_back) = (inked(0..half), inked(half..head.size.z as i32));
-        assert!(on_front && !on_back);
+        let headlight = [255, 246, 200];
+        assert!(has(headlight, 0..half));
+        assert!(!has(headlight, half..car.size.z as i32));
     }
 
     #[test]

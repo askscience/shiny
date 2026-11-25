@@ -36,7 +36,14 @@ const KEYS: &[(KeyCode, Order)] = &[
     (KeyCode::KeyC, Order::Clip),
 ];
 
-fn keys(pressed: Res<ButtonInput<KeyCode>>, mut commands: MessageWriter<Order>) {
+fn keys(
+    pressed: Res<ButtonInput<KeyCode>>,
+    wardrobe: Res<crate::bridge::Wardrobe>,
+    mut commands: MessageWriter<Order>,
+) {
+    if wardrobe.0 {
+        return;
+    }
     for (key, command) in KEYS {
         if pressed.just_pressed(*key) {
             commands.write(*command);

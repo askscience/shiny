@@ -14,6 +14,7 @@
 //! * [`gen`] — the city generator: a seed in, lots, props and places out.
 //! * [`city`] — the chunks of the city around the player, and its solids.
 //! * [`sky`] — the light: pastel sky, soft sun, day turning to evening.
+//! * [`figure`] — the character and the passers-by, sculpted from a look.
 //! * [`player`] — the character: walking, turning, bumping.
 //! * [`camera`] — third person, following softly.
 //! * [`movers`] — where everything that moves is, for whoever must avoid it.
@@ -36,6 +37,7 @@ pub mod brain;
 pub mod bridge;
 pub mod camera;
 pub mod city;
+pub mod figure;
 pub mod gen;
 pub mod hud;
 pub mod intent;

@@ -4,6 +4,7 @@
 
 use bevy::prelude::*;
 
+use crate::bridge::Wardrobe;
 use crate::city::{SolidKind, Solids, START};
 use crate::player::{Bumped, Player};
 
@@ -26,6 +27,11 @@ pub struct Direction {
     orbit: f32,
 }
 
+/// A soft light from the camera, on only in the wardrobe: there the camera
+/// is in front of the figure, which is often the side away from the sun.
+#[derive(Component)]
+struct Fill;
+
 /// How long the look at a bump lasts, and how slow the first part of it is.
 const IMPACT: f32 = 1.1;
 const SLOW: f32 = 0.35;
@@ -42,6 +48,16 @@ impl Plugin for CameraPlugin {
 }
 
 fn spawn(mut commands: Commands) {
+    commands.spawn((
+        Fill,
+        DirectionalLight {
+            illuminance: 0.0,
+            shadow_maps_enabled: false,
+            color: Color::srgb(1.0, 0.97, 0.92),
+            ..default()
+        },
+        Transform::default(),
+    ));
     commands.spawn((
         Camera3d::default(),
         FollowCamera,
@@ -117,10 +133,15 @@ pub fn room_behind(solids: &Solids, from: Vec2, back: Vec2) -> f32 {
 fn follow(
     time: Res<Time<Real>>,
     direction: Res<Direction>,
+    wardrobe: Res<Wardrobe>,
     solids: Res<Solids>,
     mut room: Local<Option<f32>>,
     players: Query<(&Player, &Transform), Without<FollowCamera>>,
     mut cameras: Query<&mut Transform, With<FollowCamera>>,
+    mut fills: Query<
+        (&mut DirectionalLight, &mut Transform),
+        (With<Fill>, Without<FollowCamera>, Without<Player>),
+    >,
 ) {
     let (Ok((player, at)), Ok(mut camera)) = (players.single(), cameras.single_mut()) else {
         return;
@@ -130,6 +151,32 @@ fn follow(
     let frame = Quat::from_rotation_y(player.facing + direction.orbit);
     let ground = Vec3::new(at.translation.x, 0.0, at.translation.z);
     let ease = 1.0 - (-4.0 * time.delta_secs()).exp();
+    if let Ok((mut fill, mut aim)) = fills.single_mut() {
+        let want = if wardrobe.0 { 6500.0 } else { 0.0 };
+        if fill.illuminance != want {
+            fill.illuminance = want;
+        }
+        if wardrobe.0 {
+            // It shines the way the camera looks.
+            aim.rotation = camera.rotation;
+        }
+    }
+    if wardrobe.0 {
+        // The wardrobe: from the front, close, the figure a little to one
+        // side so the choices have the other, swaying slowly to show it
+        // round.
+        let sway = (time.elapsed_secs() * 0.5).sin() * 0.5;
+        let frame = Quat::from_rotation_y(player.facing + sway);
+        let ground = Vec3::new(at.translation.x, 0.0, at.translation.z);
+        let want = ground + frame * Vec3::new(0.0, 1.25, -3.3);
+        camera.translation = camera.translation.lerp(want, ease);
+        let aside = Quat::from_rotation_y(player.facing) * Vec3::new(-0.75, 0.0, 0.0);
+        let look = camera
+            .looking_at(ground + Vec3::Y * 0.8 + aside, Vec3::Y)
+            .rotation;
+        camera.rotation = camera.rotation.slerp(look, ease.max(0.2));
+        return;
+    }
     // The look at a bump comes in close and low.
     let close = 1.0 - 0.42 * (direction.impact / IMPACT).min(1.0);
     let back = frame * Vec3::new(BEHIND.x, 0.0, BEHIND.z) * close;

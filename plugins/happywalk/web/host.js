@@ -53,6 +53,13 @@ window.addEventListener('message', (event) => {
   const data = event.data;
   if (event.origin !== window.location.origin || data?.type !== 'shiny:context') return;
   context = { locale: data.locale || context.locale };
+  // The page wears the shell's theme.
+  if (data.theme) {
+    document.documentElement.dataset.theme = data.theme;
+    document.getElementById('theme-tokens').href = `/themes/${data.theme}/tokens.css`;
+    document.getElementById('theme-components').href = `/themes/${data.theme}/components.css`;
+  }
+  if (data.mode) document.documentElement.style.colorScheme = data.mode;
 });
 
 function stored(key) {
@@ -212,6 +219,66 @@ async function startListening() {
   processor.connect(audioContext.destination);
   report({ voice: 'listening', lang: sttLang, detail: '' });
   log(`listening (${sttLang}${grammar.length ? `, ${grammar.length} phrases` : ', free speech'})`);
+}
+
+/* ── The wardrobe ────────────────────────────────────────────── */
+
+// How the character looks is the player's: chosen in the wardrobe the first
+// time, kept per profile, and changed whenever they like.
+
+let wardrobe = null;
+let wardrobeButton = null;
+
+function lookKey() {
+  let id = null;
+  try { id = JSON.parse(stored('traveler') || 'null')?.id; } catch (_) { /* none */ }
+  return id ? `happywalk.look.${id}` : 'happywalk.look';
+}
+
+function savedLook() {
+  try { return JSON.parse(stored(lookKey()) || 'null'); } catch (_) { return null; }
+}
+
+function keepLook(look) {
+  try { window.localStorage.setItem(lookKey(), JSON.stringify(look)); } catch (_) { /* storage blocked */ }
+}
+
+async function openWardrobe() {
+  if (!game) return;
+  const { createWardrobe, word } = await import('./wardrobe.js');
+  const { iconButton } = await import('../../ui/index.js');
+  const lang = voiceLang();
+  const slot = document.getElementById('wardrobe-slot');
+  if (!wardrobeButton) {
+    wardrobeButton = iconButton({ icon: 'ui/user', label: word(lang, 'open'), onClick: openWardrobe });
+    wardrobeButton.id = 'wardrobe-open';
+    slot.appendChild(wardrobeButton);
+  }
+  if (!wardrobe) {
+    const look = savedLook() || JSON.parse(game.hw_look_sample(0));
+    wardrobe = createWardrobe({
+      options: JSON.parse(game.hw_look_options()),
+      look,
+      lang,
+      onChange: (next) => game.hw_look(JSON.stringify(next)),
+      onRandom: () => {
+        const next = JSON.parse(game.hw_look_sample(1 + Math.floor(Math.random() * 4294967295)));
+        wardrobe.setLook(next);
+        game.hw_look(JSON.stringify(next));
+      },
+      onDone: (next) => {
+        keepLook(next);
+        wardrobe.hidden = true;
+        wardrobeButton.hidden = false;
+        game.hw_wardrobe(false);
+        log('look kept');
+      },
+    });
+    slot.appendChild(wardrobe);
+  }
+  wardrobe.hidden = false;
+  wardrobeButton.hidden = true;
+  game.hw_wardrobe(true);
 }
 
 /* ── Clips ───────────────────────────────────────────────────── */
@@ -391,6 +458,9 @@ window.happywalkHost = {
     game?.hw_spoke(id, ok, ms);
   },
 
+  /** Open the wardrobe, where the player dresses the character. */
+  openWardrobe,
+
   /** Keep the last seconds of play as a clip; hw_clip_saved follows. */
   saveClip,
 
@@ -442,6 +512,16 @@ async function start() {
       if (!String(error?.message || error).includes('Using exceptions for control flow')) throw error;
     }
   });
+  // The look kept from last time; with none, the first thing the player
+  // does is choose one.
+  const look = savedLook();
+  if (look) game.hw_look(JSON.stringify(look));
+  await openWardrobe().catch((error) => log(`wardrobe failed: ${error?.message || error}`));
+  if (look) {
+    wardrobe.hidden = true;
+    wardrobeButton.hidden = false;
+    game.hw_wardrobe(false);
+  }
   startClips();
   try {
     await startListening();

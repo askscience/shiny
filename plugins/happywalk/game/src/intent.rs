@@ -11,7 +11,7 @@
 
 use bevy::prelude::*;
 
-use crate::bridge::{now_ms, Heard, Host, HostStatus};
+use crate::bridge::{now_ms, Heard, Host, HostStatus, Wardrobe};
 use crate::gen::PlaceKind;
 use crate::telemetry::Lap;
 
@@ -381,11 +381,17 @@ fn teach_recogniser(status: Res<HostStatus>, host: Res<Host>, mut taught: Local<
 fn understand(
     mut heard: MessageReader<Heard>,
     status: Res<HostStatus>,
+    wardrobe: Res<Wardrobe>,
     mut utterance: ResMut<Utterance>,
     mut commands: MessageWriter<Order>,
     mut lost: MessageWriter<NotUnderstood>,
     mut laps: MessageWriter<Lap>,
 ) {
+    if wardrobe.0 {
+        // Being dressed: what is said is not for the character.
+        heard.clear();
+        return;
+    }
     let vocabulary = vocabulary(&status.lang);
     for h in heard.read() {
         let (fresh, total) = utterance.fresh(vocabulary, &h.text, h.is_final);

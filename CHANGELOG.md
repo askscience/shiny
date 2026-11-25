@@ -39,8 +39,15 @@
   at the camera as it speaks. Houses have balconies with pots, shutters,
   climbers, chimneys and roof gardens, in a manner of their own in each
   district, and shops have their wares outside. Commands exist in Italian,
-  English, Spanish, French and German. See
+  English, Spanish, French and German. The character is the player's to
+  dress: a wardrobe opens at the first game (skin, height, hair, beard,
+  glasses, hat, clothes, scarf, shoes, backpack, each with its colours, and
+  a button for a random look), and every passer-by is a person of its own
+  made the same way from the city's seed. See
   `plugins/happywalk/docs/README.md`.
+- **Shared UI: `swatches`.** A row of colours to pick one from, with roving
+  keyboard focus like `segmented` and a "none" choice
+  (`web/ui/components/choice.js`).
 - **Plugins: a web game is built when its plugin is published.** The
   publish workflow runs `plugins/<name>/scripts/build-web.sh` when a plugin
   has one, and CI tests the Happy Walk game and checks that it compiles for

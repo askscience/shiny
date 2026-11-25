@@ -84,3 +84,56 @@ export function segmented({ label, options = [], value, onChange } = {}) {
   node.destroy = () => resources.dispose();
   return node;
 }
+
+/**
+ * A row of colours to pick one from: round swatches with roving keyboard
+ * focus, like `segmented` for values that are best shown, not named. Each
+ * option is `{ value, color, label }`; an option without a `color` is the
+ * "none" choice and shows as an empty ring with a stroke through it. The
+ * `label` is the swatch's accessible name and tooltip.
+ */
+export function swatches({ label, options = [], value, onChange } = {}) {
+  const node = document.createElement('div');
+  node.className = 'ui-swatches';
+  node.setAttribute('role', 'radiogroup');
+  if (label) node.setAttribute('aria-label', label);
+  const resources = createResources();
+  let selected = value ?? options[0]?.value;
+  const buttons = options.map(option => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `ui-swatch${option.color ? '' : ' ui-swatch--none'}`;
+    button.setAttribute('role', 'radio');
+    if (option.color) button.style.setProperty('--swatch', option.color);
+    if (option.label) { button.setAttribute('aria-label', option.label); button.title = option.label; }
+    resources.on(button, 'click', () => node.setValue(option.value));
+    node.appendChild(button);
+    return button;
+  });
+  function paint() {
+    buttons.forEach((button, index) => {
+      const active = options[index].value === selected;
+      button.setAttribute('aria-checked', String(active));
+      button.tabIndex = active ? 0 : -1;
+    });
+  }
+  node.setValue = (next, { silent = false } = {}) => {
+    if (!options.some(option => option.value === next)) return;
+    const changed = next !== selected;
+    selected = next; paint();
+    if (changed && !silent) onChange?.(next);
+  };
+  Object.defineProperty(node, 'value', { get: () => selected });
+  resources.on(node, 'keydown', event => {
+    if (!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End'].includes(event.key)) return;
+    event.preventDefault();
+    const position = options.findIndex(option => option.value === selected);
+    const rtl = document.documentElement.dir === 'rtl';
+    const forward = event.key === 'ArrowDown' || event.key === (rtl ? 'ArrowLeft' : 'ArrowRight');
+    const next = event.key === 'Home' ? 0 : event.key === 'End' ? options.length - 1 : (position + (forward ? 1 : -1) + options.length) % options.length;
+    node.setValue(options[next].value); buttons[next].focus();
+  });
+  paint();
+  node.destroy = () => resources.dispose();
+  return node;
+}

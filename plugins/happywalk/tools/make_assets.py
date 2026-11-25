@@ -10,8 +10,10 @@ drawn there only has to use the same palette and keep its name.
 
 Axes are MagicaVoxel's: x to the right, y into the screen (the front of a
 model is its low-y side), z up. Sizes are in voxels; the game decides how
-big a voxel is where it places the model (a building's are 25 cm, the
-character's 6.25 cm).
+big a voxel is where it places the model (a building's are 25 cm).
+
+People are not here: the character and the passers-by are sculpted in the
+game from a look (`game/src/figure.rs`), so they can be dressed.
 
 To add a model: write a function that returns a `Model`, add it to MODELS.
 """
@@ -371,140 +373,6 @@ def sign_board():
     return m
 
 
-# ── The character, in parts ──────────────────────────────────────────────
-# A small round figure, not a stack of boxes: a big soft head under a beanie
-# with a pompom, a hoodie with a scarf, short limbs with mitten hands. Shapes
-# are ellipsoids cut from the voxel grid, at 4 cm a voxel.
-#
-# Each part hangs from its joint: the game puts the top centre of a limb at
-# the shoulder or the hip and swings it from there.
-
-
-def ellipsoid(m, cx, cy, cz, rx, ry, rz, colour, keep=lambda x, y, z: True):
-    """Fill the ellipsoid centred on (cx, cy, cz) (centres may be halves)."""
-    sx, sy, sz = m.size
-    for x in range(sx):
-        for y in range(sy):
-            for z in range(sz):
-                d = ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 + ((z - cz) / rz) ** 2
-                if d <= 1.0 and keep(x, y, z):
-                    m.set(x, y, z, colour)
-
-
-def head(hat="pack", hair="hair", pompom=True):
-    m = Model(17, 17, 21)
-    c = 8
-    # The face: a soft ball, a little wider than tall.
-    ellipsoid(m, c, c, 7, 8.4, 8.0, 7.4, "skin")
-    # Hair shows under the hat, at the back and beside the cheeks.
-    ellipsoid(m, c, c + 0.8, 8, 8.6, 8.0, 7.2, hair, keep=lambda x, y, z: y >= 9 or (z >= 9 and (x <= 2 or x >= 14)))
-    # The beanie, with a turned-up brim and a pompom.
-    ellipsoid(m, c, c, 9, 8.9, 8.6, 7.6, hat, keep=lambda x, y, z: z >= 11)
-    ellipsoid(m, c, c, 11, 9.0, 8.8, 1.6, "trim", keep=lambda x, y, z: 10 <= z <= 11)
-    if pompom:
-        ellipsoid(m, c, c, 18.2, 2.6, 2.6, 2.6, "trim")
-    # Eyes with a glint, cheeks, a small smile: all on the front (low y).
-    front = {}
-    for x in range(17):
-        ys = [y for y in range(17) if (x, y, 6) in m.cells]
-        if ys:
-            front[x] = min(ys)
-    def face(x, z, colour):
-        ys = [y for y in range(17) if (x, y, z) in m.cells]
-        if ys:
-            m.set(x, min(ys), z, colour)
-    for ex in (5, 11):
-        for z in (6, 7, 8):
-            face(ex, z, "ink")
-        face(ex, 8, "trim")
-        face(ex + (1 if ex < c else -1), 7, "ink")
-    for bx in (3, 13):
-        face(bx, 5, "blush")
-        face(bx, 4, "blush")
-    for sx_ in (7, 8, 9):
-        face(sx_, 4, "ink")
-    face(6, 5, "ink")
-    face(10, 5, "ink")
-    return m
-
-
-def torso(shirt="shirt", accent="awning", scarf="roof_red"):
-    m = Model(11, 9, 11)
-    # A hoodie: round shoulders, a little wider at the hem.
-    ellipsoid(m, 5, 4, 5, 5.6, 4.4, 6.6, shirt)
-    ellipsoid(m, 5, 4, 0.5, 5.4, 4.3, 2.2, shirt)
-    # A pocket on the front, the hood resting on the back.
-    for x in (3, 4, 5, 6, 7):
-        ys = [y for y in range(9) if (x, y, 3) in m.cells]
-        if ys:
-            m.set(x, min(ys), 3, accent)
-    ellipsoid(m, 5, 6.6, 8.4, 3.6, 2.2, 2.4, accent)
-    # The scarf, with an end hanging at the front.
-    ellipsoid(m, 5, 4, 10, 4.2, 3.8, 1.3, scarf, keep=lambda x, y, z: z >= 9)
-    for z in (6, 7, 8):
-        ys = [y for y in range(9) if (7, y, z) in m.cells]
-        if ys:
-            m.set(7, min(ys), z, scarf)
-    return m
-
-
-def backpack():
-    m = Model(8, 5, 8)
-    ellipsoid(m, 3.5, 1.5, 3.5, 4.2, 3.4, 4.3, "lilac")
-    for x in range(1, 7):
-        ys = [y for y in range(5) if (x, y, 2) in m.cells]
-        if ys:
-            m.set(x, max(ys), 2, "trim")
-    ys = [y for y in range(5) if (4, y, 5) in m.cells]
-    if ys:
-        m.set(4, max(ys), 5, "flower")
-        m.set(3, max(ys), 5, "lamp")
-    return m
-
-
-def arm(shirt="shirt", accent="awning"):
-    m = Model(4, 4, 9)
-    ellipsoid(m, 1.5, 1.5, 5.5, 2.1, 2.1, 4.2, shirt, keep=lambda x, y, z: z >= 2)
-    m.box(0, 0, 2, 3, 3, 2, accent)
-    # A mitten.
-    ellipsoid(m, 1.5, 1.5, 1.0, 2.0, 2.0, 1.6, "skin", keep=lambda x, y, z: z <= 1)
-    return m
-
-
-def leg(trousers="trousers"):
-    m = Model(4, 7, 8)
-    ellipsoid(m, 1.5, 4, 5, 2.2, 2.2, 4.0, trousers, keep=lambda x, y, z: z >= 2)
-    # A round-toed shoe, longer at the front (low y).
-    ellipsoid(m, 1.5, 3.2, 0.8, 2.2, 3.4, 1.5, "shoe", keep=lambda x, y, z: z <= 1)
-    for x in range(4):
-        for y in range(7):
-            if (x, y, 0) in m.cells:
-                m.set(x, y, 0, "ink")
-    return m
-
-
-# ── Passers-by ───────────────────────────────────────────────────────────
-# The same shapes in other clothes. A passer-by is drawn in three pieces (a
-# body with head and arms, and two legs), so a street full of them stays
-# cheap.
-
-PEOPLE = {
-    "a": dict(hat="roof_red", hair="hair", shirt="sky", accent="roof_blue", scarf="trim", trousers="ink", pompom=False),
-    "b": dict(hat="lamp", hair="wood", shirt="rose", accent="roof_red", scarf="lilac", trousers="roof_blue", pompom=True),
-    "c": dict(hat="roof_blue", hair="ink", shirt="mint", accent="roof_green", scarf="awning", trousers="bark", pompom=False),
-    "d": dict(hat="lilac", hair="bark", shirt="cream", accent="wood", scarf="roof_green", trousers="metal", pompom=True),
-}
-
-
-def person_body(hat, hair, shirt, accent, scarf, trousers, pompom):
-    m = Model(19, 17, 31)
-    m.paste(torso(shirt, accent, scarf), 4, 4, 0)
-    m.paste(head(hat, hair, pompom), 1, 0, 10)
-    for dx in (0, 15):
-        m.paste(arm(shirt, accent), dx, 6, 1)
-    return m
-
-
 # ── Traffic ──────────────────────────────────────────────────────────────
 
 
@@ -600,19 +468,12 @@ MODELS = {
     "tree_dark": lambda: tree("leaf_dark"),
     "bench": bench,
     "planter": planter,
-    "head": head,
-    "torso": torso,
-    "backpack": backpack,
-    "arm": arm,
-    "leg": leg,
     "car_red": lambda: car("roof_red"),
     "car_blue": lambda: car("roof_blue"),
     "car_cream": lambda: car("cream"),
     "bike_a": lambda: bike("mint", "roof_red"),
     "bike_b": lambda: bike("rose", "roof_blue"),
     "cone": cone,
-    **{f"npc_{key}_body": (lambda look=look: person_body(**look)) for key, look in PEOPLE.items()},
-    **{f"npc_{key}_leg": (lambda look=look: leg(look["trousers"])) for key, look in PEOPLE.items()},
 }
 
 

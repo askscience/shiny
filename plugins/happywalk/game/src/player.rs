@@ -6,7 +6,9 @@ use std::f32::consts::{FRAC_PI_2, PI};
 
 use bevy::prelude::*;
 
+use crate::bridge::{LookChosen, Wardrobe};
 use crate::city::{SolidKind, Solids, START};
+use crate::figure::Look;
 use crate::intent::Order;
 use crate::movers::Movers;
 use crate::vox::VoxLibrary;
@@ -204,82 +206,141 @@ pub struct PlayerPlugin;
 
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_message::<Bumped>()
+        app.init_resource::<PlayerLook>()
+            .add_message::<Bumped>()
             .add_message::<Waved>()
             .init_resource::<Movers>()
             .add_systems(Startup, spawn)
-            .add_systems(Update, (glance, walk, animate).chain().in_set(PlayerSet));
+            .add_systems(
+                Update,
+                (choose, dress, glance, walk, animate)
+                    .chain()
+                    .in_set(PlayerSet),
+            );
     }
 }
 
-/// Metres to a voxel of the character.
-const VOXEL: f32 = 0.04;
+/// How the character looks. Changing it dresses the character again.
+#[derive(Resource, Default, Clone, Copy, Debug)]
+pub struct PlayerLook(pub Look);
 
-fn spawn(mut commands: Commands, library: Res<VoxLibrary>) {
-    // A part hangs below its joint: its model's top centre is at the joint.
-    let hang = |name: &str, forward: f32| {
-        let down = library.size(name).y as f32 * VOXEL;
-        library.place(name, Vec3::new(0.0, -down, forward), VOXEL, 0)
-    };
-    // Everything is measured from the models, so a redrawn part fits.
-    let size = |name: &str| library.size(name).as_vec3() * VOXEL;
-    let (leg, torso, arm, pack) = (size("leg"), size("torso"), size("arm"), size("backpack"));
+/// A part of the figure hanging from the character: all of them are
+/// replaced when the look changes.
+#[derive(Component)]
+struct FigurePart;
+
+fn spawn(mut commands: Commands) {
+    commands.spawn((
+        Player::default(),
+        Transform::from_translation(START),
+        Visibility::default(),
+    ));
+}
+
+/// The look the page chose, or kept from last time.
+fn choose(mut chosen: MessageReader<LookChosen>, mut look: ResMut<PlayerLook>) {
+    for choice in chosen.read() {
+        if look.0 != choice.0 {
+            look.0 = choice.0;
+        }
+    }
+}
+
+/// Build the figure from the look: at the start, and whenever it changes.
+fn dress(
+    mut commands: Commands,
+    look: Res<PlayerLook>,
+    library: Res<VoxLibrary>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    players: Query<Entity, With<Player>>,
+    old: Query<Entity, With<FigurePart>>,
+) {
+    if !look.is_changed() {
+        return;
+    }
+    let Ok(player) = players.single() else { return };
+    for part in &old {
+        commands.entity(part).despawn();
+    }
+    let parts = look.0.parts();
+    let voxel = look.0.voxel();
+    // Everything is measured from the parts, so any look fits together.
+    let size = |model: &crate::vox::VoxModel| model.size.as_vec3() * voxel;
+    let (leg, torso, arm) = (size(&parts.leg), size(&parts.torso), size(&parts.arm));
     let hip = leg.y - 0.02;
     let shoulder = hip + torso.y - 0.1;
     let chest = torso.y - 0.06;
-    let reach = (torso.x + arm.x) / 2.0 - 0.03;
+    // The body is two voxels narrower than its model (room for a skirt).
+    let reach = (torso.x - 2.0 * voxel + arm.x) / 2.0 - 0.03;
     let apart = leg.x / 2.0 + 0.02;
-    let behind = (torso.z + pack.z) / 2.0 - 0.06;
-
-    commands
-        .spawn((
-            Player::default(),
-            Transform::from_translation(START),
-            Visibility::default(),
-        ))
-        .with_children(|figure| {
-            for side in [-1.0, 1.0] {
-                figure
-                    .spawn((
-                        Limb { side, reach: 0.75 },
-                        Transform::from_xyz(side * apart, hip, 0.0),
-                        Visibility::default(),
-                    ))
-                    .with_children(|leg| {
-                        leg.spawn(hang("leg", -0.02));
-                    });
-                figure
-                    .spawn((
-                        Limb {
-                            side: -side,
-                            reach: 0.95,
-                        },
-                        Transform::from_xyz(side * reach, shoulder, 0.0),
-                        Visibility::default(),
-                    ))
-                    .with_children(|arm| {
-                        arm.spawn(hang("arm", 0.0));
-                    });
-            }
+    let material = library.material.clone();
+    let mut piece = |model: &crate::vox::VoxModel, at: Vec3| {
+        (
+            Mesh3d(meshes.add(model.mesh())),
+            MeshMaterial3d(material.clone()),
+            Transform::from_translation(at).with_scale(Vec3::splat(voxel)),
+        )
+    };
+    let (leg_piece, arm_piece) = (
+        piece(&parts.leg, Vec3::new(0.0, -leg.y, -0.02)),
+        piece(&parts.arm, Vec3::new(0.0, -arm.y, 0.0)),
+    );
+    let torso_piece = piece(&parts.torso, Vec3::ZERO);
+    let head_piece = piece(&parts.head, Vec3::ZERO);
+    let pack_piece = parts.backpack.as_ref().map(|pack| {
+        let behind = (torso.z + size(pack).z) / 2.0 - 0.1;
+        piece(pack, Vec3::new(0.0, 0.06, behind))
+    });
+    commands.entity(player).with_children(|figure| {
+        // Legs swing from the hip, arms from the shoulder: each is a joint
+        // with its part hanging below it.
+        for side in [-1.0, 1.0] {
             figure
                 .spawn((
-                    Body,
-                    Transform::from_xyz(0.0, hip, 0.0),
+                    FigurePart,
+                    Limb { side, reach: 0.75 },
+                    Transform::from_xyz(side * apart, hip, 0.0),
                     Visibility::default(),
                 ))
-                .with_children(|body| {
-                    body.spawn(library.place("torso", Vec3::ZERO, VOXEL, 0));
-                    body.spawn(library.place("backpack", Vec3::new(0.0, 0.06, behind), VOXEL, 0));
-                    body.spawn((
-                        Head,
-                        Transform::from_xyz(0.0, chest, 0.0),
-                        Visibility::default(),
-                    ))
-                    .with_children(|head| {
-                        head.spawn(library.place("head", Vec3::ZERO, VOXEL, 0));
-                    });
+                .with_children(|joint| {
+                    joint.spawn(leg_piece.clone());
                 });
-        });
+            figure
+                .spawn((
+                    FigurePart,
+                    Limb {
+                        side: -side,
+                        reach: 0.95,
+                    },
+                    Transform::from_xyz(side * reach, shoulder, 0.0),
+                    Visibility::default(),
+                ))
+                .with_children(|joint| {
+                    joint.spawn(arm_piece.clone());
+                });
+        }
+        figure
+            .spawn((
+                FigurePart,
+                Body,
+                Transform::from_xyz(0.0, hip, 0.0),
+                Visibility::default(),
+            ))
+            .with_children(|body| {
+                body.spawn(torso_piece);
+                if let Some(pack) = pack_piece {
+                    body.spawn(pack);
+                }
+                body.spawn((
+                    Head,
+                    Transform::from_xyz(0.0, chest, 0.0),
+                    Visibility::default(),
+                ))
+                .with_children(|head| {
+                    head.spawn(head_piece);
+                });
+            });
+    });
 }
 
 /// A line said after something went wrong comes with a look at the camera.
@@ -295,6 +356,7 @@ fn walk(
     time: Res<Time>,
     solids: Res<Solids>,
     movers: Res<Movers>,
+    wardrobe: Res<Wardrobe>,
     mut waves: MessageWriter<Waved>,
     mut orders: MessageReader<Order>,
     mut placed: MessageReader<crate::bridge::Placed>,
@@ -320,6 +382,9 @@ fn walk(
     // A long frame must not carry the character through a wall.
     let dt = time.delta_secs().min(0.05);
     let at = Vec2::new(transform.translation.x, transform.translation.z);
+    if wardrobe.0 {
+        player.walking = false;
+    }
     player.waving = (player.waving - dt).max(0.0);
     player.glance = (player.glance - dt).max(0.0);
     let (at, bumped) = player.step(at, dt, &solids, &movers);
