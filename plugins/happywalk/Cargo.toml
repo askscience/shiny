@@ -1,0 +1,21 @@
+[package]
+name = "shiny-happywalk-plugin"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "shiny_happywalk_plugin"
+crate-type = ["rlib"]
+
+[[bin]]
+name = "shiny-plugin-happywalk"
+path = "src/main.rs"
+
+[dependencies]
+shiny-plugin-sdk = { path = "../../crates/shiny-plugin-sdk" }
+serde = { version = "1", features = ["derive"] }
+async-trait = "0.1"
+serde_json = "1"
+axum = { version = "0.7", features = ["json"] }
+tokio = { version = "1", features = ["time"] }
+tracing = "0.1"

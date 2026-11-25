@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Happy Walk, a game steered by voice (in development, not published).**
+  The foundations of a third-person walk through a pastel voxel city where
+  the character is moved only by voice and answers back: a Bevy game built
+  for the web and framed in a window (`plugins/happywalk/game`), a bridge to
+  LiteAura's own speech recognition (Vosk with a restricted vocabulary and
+  partial results), language model and voice, and a log of how long every
+  link of that chain takes. See `plugins/happywalk/docs/README.md`.
+- **Plugins: `publish = false` keeps a plugin in development out of the
+  catalogue.** Until now a new plugin directory on `main` was published by
+  its first push; with this line in `plugin.toml` it is neither offered nor
+  packed.
+
 ### Changed
 
 - **Sign-in and lock screens: nothing moves while nobody is there.** The two

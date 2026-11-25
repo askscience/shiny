@@ -46,6 +46,8 @@ for manifest in "$REPO"/plugins/*/plugin.toml; do
     [ "$name" = "hello" ] && continue
     if [ -n "${PLUGIN_NAMES:-}" ] && [ "${ONLY#* "$name" }" = "$ONLY" ]; then continue; fi
     grep -Eq '^runtime[[:space:]]*=[[:space:]]*"process"' "$manifest" || continue
+    # In development (`publish = false`): never packed.
+    grep -Eq '^publish[[:space:]]*=[[:space:]]*false' "$manifest" && continue
     version=$(sed -n 's/^version = "\(.*\)"/\1/p' "$manifest" | head -1)
     file="$name-$version-linux-$ARCH.tar.gz"
     "$REPO/scripts/stage-plugin.sh" "$name" "$stage/$name" "$TARGET"

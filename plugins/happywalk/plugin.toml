@@ -1,0 +1,13 @@
+name = "happywalk"
+version = "0.1.0"
+api_level = 1
+runtime = "process"
+entry_symbol = "shiny_plugin_entry"
+kind = "hybrid"
+description = "Happy Walk: walk a character through a pastel voxel city using only your voice; it knows it is being steered, and says so"
+summary = "Happy Walk: a walk steered by voice"
+author = "shiny"
+web_dir = "web"
+category = "Games"
+# In development: not in the catalogue until this line goes.
+publish = false

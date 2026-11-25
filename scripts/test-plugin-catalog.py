@@ -2,6 +2,7 @@
 """Tests for scripts/plugin-catalog.py. Run: python3 scripts/test-plugin-catalog.py"""
 import importlib.util
 import pathlib
+import tempfile
 import unittest
 
 HERE = pathlib.Path(__file__).resolve().parent
@@ -102,6 +103,17 @@ class Repository(unittest.TestCase):
             self.assertNotIn(library, plugins)
         # Nothing raises: every version and min_host in the tree is well formed.
         catalog.pending(index(), plugins, "amd64")
+
+    def test_a_plugin_in_development_is_not_published(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = pathlib.Path(tmp)
+            for name, extra in (("ready", ""), ("draft", "publish = false\n")):
+                folder = repo / "plugins" / name
+                folder.mkdir(parents=True)
+                (folder / "plugin.toml").write_text(
+                    f'name = "{name}"\nversion = "0.1.0"\nruntime = "process"\n{extra}'
+                )
+            self.assertEqual(sorted(catalog.repo_plugins(repo)), ["ready"])
 
 
 if __name__ == "__main__":

@@ -6994,6 +6994,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "shiny-happywalk-plugin"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "serde",
+ "serde_json",
+ "shiny-plugin-sdk",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "shiny-hello-plugin"
 version = "0.1.0"
 dependencies = [

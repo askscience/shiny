@@ -62,6 +62,10 @@ def repo_plugins(repo=REPO):
             data = tomllib.load(handle)
         if data.get("runtime") != "process":
             continue
+        # A plugin still in development says `publish = false`: it lives on
+        # main without being offered to anybody.
+        if data.get("publish") is False:
+            continue
         found[name] = data
     return found
 

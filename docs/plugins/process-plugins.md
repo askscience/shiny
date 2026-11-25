@@ -139,6 +139,11 @@ publishing, so:
   hours;
 - a plugin that only needs rebuilding (the SDK it is built with changed) is
   published the same way: raise its version.
+- a **new** plugin has no published version, so its first push would publish
+  it: while it is in development, put `publish = false` in its `plugin.toml`.
+  It then lives on `main` without being offered or packed
+  (`scripts/plugin-catalog.py`, `scripts/build-plugin-archives.sh`); remove
+  the line when it is ready.
 
 On such a push `.github/workflows/publish-plugins.yml`:
 
