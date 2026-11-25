@@ -20,6 +20,8 @@
 //! * [`npc`] — passers-by on the pavements.
 //! * [`traffic`] — cars and bikes that always stop for the character.
 //! * [`brain`] — what the character says, asked of the user's language model.
+//! * [`nav`] — "go to the bakery": routes along the streets, walked alone.
+//! * [`quest`] — errands: small things to do, five to a round.
 //! * [`lines`] — stand-in lines for when the model cannot answer.
 //! * [`hud`] — the speech bubble, "I am listening", what was understood.
 
@@ -40,8 +42,10 @@ pub mod intent;
 pub mod keyboard;
 pub mod lines;
 pub mod movers;
+pub mod nav;
 pub mod npc;
 pub mod player;
+pub mod quest;
 pub mod sky;
 pub mod telemetry;
 pub mod traffic;
@@ -94,6 +98,8 @@ pub fn app(seed: u64, pixel_ratio: f32) -> App {
         camera::CameraPlugin,
         npc::NpcPlugin,
         traffic::TrafficPlugin,
+        nav::NavPlugin,
+        quest::QuestPlugin,
         brain::BrainPlugin,
         hud::HudPlugin,
     ));

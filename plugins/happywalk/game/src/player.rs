@@ -123,6 +123,8 @@ impl Player {
             }
             Order::Slower => self.pace = self.pace.slower(),
             Order::Wave => self.waving = 1.4,
+            // Where to go is the navigator's business.
+            Order::GoTo(_) => {}
         }
     }
 

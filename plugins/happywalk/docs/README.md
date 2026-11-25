@@ -165,6 +165,29 @@ the boxes of what it moves, and the player's step tests them after the
 city's solids, so walking into a passer-by or the side of a car is a bump
 like any other.
 
+### Going places, and errands
+
+**"Vai al forno."** A place named in an order (`forno`, `edicola`, `parco`,
+`piazza`, `bar`, `fiorista`, `fruttivendolo`; `bakery`, `newsstand`, `park`
+and so on in English) sets a route to the nearest one within eight chunks,
+and the character walks it by itself (`game/src/nav.rs`): down the street it
+is on to the right crossing, then along the street the place is on. Routes
+are lists of points from a plain function and never leave the streets. Any
+order about where to go ends the walk, and so does walking into something.
+If there is no such place near, the character says so.
+
+**Errands** (`game/src/quest.rs`) are small things to do, one at a time:
+buy bread, fetch the paper, sit in the park. Each is a row in a table (the
+place, the words in each language, how to tell the model). The city's seed
+decides the order; being within 3 m of the place does the errand, however
+the character got there; five make a round. The corner of the screen shows
+the errand in hand, an arrow towards it, the distance and the count.
+
+The character's brain knows the errand ("Your errand right now: buy bread
+at the bakery") in everything it is asked, says a line when one is done or a
+round is over, and may answer a free sentence with a place to go: "ho fame"
+can become a walk to the bakery.
+
 ### Voxel models
 
 Everything made of voxels is a MagicaVoxel `.vox` file in
@@ -205,6 +228,8 @@ its grammar, so it only proposes these words.
 | Stop | fermati, fermo, ferma, stop, alt | stop, halt | stands still |
 | Faster | (più) veloce, corri | faster, run | one pace up: slow, walk, run; sets off if standing |
 | Slower | (più) piano, lento, rallenta | slower, slow (down) | one pace down |
+| Wave | saluta, ciao, buongiorno | wave, hello, hi | waves; a passer-by nearby answers |
+| Go to | forno, edicola, parco, piazza, bar, fiorista, fruttivendolo | bakery, newsstand, park, square, cafe, florist, grocer | walks to the nearest such place by itself |
 
 Words around a command are skipped, so "gira a sinistra, per favore" is a
 left turn and "vai a destra" is a walk and a turn.
@@ -385,11 +410,8 @@ These are rules, not hopes: new work follows them.
 - **Phase 5, people and traffic (done):** passers-by with template lines,
   cars and bikes that always stop for the character, the `saluta` order.
   Not done: things that tumble when kicked (and so no avian3d yet).
-- **Phase 6, errands:** `QuestPlugin`. Everyday tasks given in plain words
-  ("buy bread", "post the letter", "find the cat"), with places from the
-  generator, a note of what is carried, and the character commenting on how
-  it is going. Free sentences that name a place become a walk there ("vai
-  al forno"). Done when a ten-minute session has a beginning and an end.
+- **Phase 6, errands (done):** places as orders, routes along the streets
+  walked alone, errands in rounds of five, the brain aware of them.
 - **Phase 7, made to be shared:** `ClipPlugin` (the last seconds always
   recorded, exported with the transcript and the bubble burnt in),
   `CameraPlugin` cuts for the funny moments (a bump in slow motion, the

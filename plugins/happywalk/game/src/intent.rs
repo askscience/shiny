@@ -12,6 +12,7 @@
 use bevy::prelude::*;
 
 use crate::bridge::{now_ms, Heard, Host, HostStatus};
+use crate::gen::PlaceKind;
 use crate::telemetry::Lap;
 
 /// What the character can be told to do.
@@ -26,6 +27,8 @@ pub enum Order {
     Slower,
     /// Greet whoever is near.
     Wave,
+    /// Walk to the nearest place of a kind.
+    GoTo(PlaceKind),
 }
 
 /// A whole sentence in which there was no command.
@@ -66,8 +69,32 @@ const ITALIAN: Vocabulary = Vocabulary {
         ("saluta", Order::Wave),
         ("ciao", Order::Wave),
         ("buongiorno", Order::Wave),
+        ("forno", Order::GoTo(PlaceKind::Bakery)),
+        ("panetteria", Order::GoTo(PlaceKind::Bakery)),
+        ("pane", Order::GoTo(PlaceKind::Bakery)),
+        ("fiorista", Order::GoTo(PlaceKind::Florist)),
+        ("fiori", Order::GoTo(PlaceKind::Florist)),
+        ("bar", Order::GoTo(PlaceKind::Cafe)),
+        ("caffe", Order::GoTo(PlaceKind::Cafe)),
+        ("fruttivendolo", Order::GoTo(PlaceKind::Grocer)),
+        ("frutta", Order::GoTo(PlaceKind::Grocer)),
+        ("edicola", Order::GoTo(PlaceKind::Newsstand)),
+        ("giornale", Order::GoTo(PlaceKind::Newsstand)),
+        ("parco", Order::GoTo(PlaceKind::Park)),
+        ("piazza", Order::GoTo(PlaceKind::Square)),
     ],
-    phrases: &["più veloce", "più piano", "a sinistra", "a destra", "gira"],
+    phrases: &[
+        "più veloce",
+        "più piano",
+        "a sinistra",
+        "a destra",
+        "gira",
+        "caffè",
+        "al",
+        "alla",
+        "in",
+        "dal",
+    ],
 };
 
 const ENGLISH: Vocabulary = Vocabulary {
@@ -89,8 +116,28 @@ const ENGLISH: Vocabulary = Vocabulary {
         ("wave", Order::Wave),
         ("hello", Order::Wave),
         ("hi", Order::Wave),
+        ("bakery", Order::GoTo(PlaceKind::Bakery)),
+        ("bread", Order::GoTo(PlaceKind::Bakery)),
+        ("florist", Order::GoTo(PlaceKind::Florist)),
+        ("flowers", Order::GoTo(PlaceKind::Florist)),
+        ("cafe", Order::GoTo(PlaceKind::Cafe)),
+        ("coffee", Order::GoTo(PlaceKind::Cafe)),
+        ("grocer", Order::GoTo(PlaceKind::Grocer)),
+        ("greengrocer", Order::GoTo(PlaceKind::Grocer)),
+        ("fruit", Order::GoTo(PlaceKind::Grocer)),
+        ("newsstand", Order::GoTo(PlaceKind::Newsstand)),
+        ("newspaper", Order::GoTo(PlaceKind::Newsstand)),
+        ("park", Order::GoTo(PlaceKind::Park)),
+        ("square", Order::GoTo(PlaceKind::Square)),
     ],
-    phrases: &["turn left", "turn right", "slow down", "go back"],
+    phrases: &[
+        "turn left",
+        "turn right",
+        "slow down",
+        "go back",
+        "café",
+        "to the",
+    ],
 };
 
 /// The vocabulary for a language code; English when the game has none.
@@ -234,6 +281,23 @@ mod tests {
         assert_eq!(it.commands("gira a sinistra poi fermati"), [Left, Stop]);
         assert_eq!(it.commands("buonasera a tutti"), []);
         assert_eq!(it.commands("saluta"), [Wave]);
+    }
+
+    #[test]
+    fn a_place_is_somewhere_to_go() {
+        let it = vocabulary("it");
+        assert_eq!(
+            it.commands("vai al forno"),
+            [Forward, GoTo(PlaceKind::Bakery)]
+        );
+        assert_eq!(
+            it.commands("andiamo a prendere un caffè in piazza"),
+            [GoTo(PlaceKind::Cafe), GoTo(PlaceKind::Square)]
+        );
+        assert_eq!(
+            vocabulary("en").commands("to the park please"),
+            [GoTo(PlaceKind::Park)]
+        );
     }
 
     #[test]

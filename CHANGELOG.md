@@ -31,7 +31,9 @@
   squares, and named places (the bakery, the newsstand, the park), loaded
   around the player as it walks. Passers-by walk the pavements and answer
   when greeted or walked into; cars and bikes drive the streets and always
-  stop for the character, with a hoot. See
+  stop for the character, with a hoot. Naming a place ("vai al forno")
+  sends the character there by itself along the streets, and errands (buy
+  bread, fetch the paper, a walk in the park) come five to a round. See
   `plugins/happywalk/docs/README.md`.
 - **Plugins: `publish = false` keeps a plugin in development out of the
   catalogue.** Until now a new plugin directory on `main` was published by

@@ -18,10 +18,13 @@ use bevy::prelude::*;
 
 use crate::bridge::{BrainAnswered, BrainRequest, Host, HostStatus};
 use crate::city::SolidKind;
+use crate::gen::PlaceKind;
 use crate::hud::LastHeard;
 use crate::intent::{NotUnderstood, Order};
 use crate::lines::{stand_in, Topic};
+use crate::nav::NoSuchPlace;
 use crate::player::{Bumped, Pace, Player, PlayerSet};
+use crate::quest::{ErrandDone, Quest, ERRANDS, ROUND};
 use crate::traffic::Hooted;
 
 /// A line the character says: spoken by the host, shown in a bubble.
@@ -44,6 +47,8 @@ pub struct Memory {
     moments: VecDeque<String>,
     lines: VecDeque<String>,
     bumps_at: HashMap<(i32, i32), u32>,
+    /// What the character is out to do, in plain words.
+    pub errand: String,
     turns: HashMap<u8, usize>,
 }
 
@@ -69,6 +74,8 @@ impl Memory {
             Topic::Bump(SolidKind::Lamp) => 1,
             Topic::NotUnderstood => 3,
             Topic::Hooted => 5,
+            Topic::Errand => 6,
+            Topic::NoSuchPlace => 7,
             Topic::Bump(_) => 4,
         };
         let turn = self.turns.entry(slot).or_insert(0);
@@ -126,6 +133,9 @@ pub fn situation(memory: &Memory, last_said: &str, now: &str) -> String {
             out.push_str(&format!("- {line}\n"));
         }
     }
+    if !memory.errand.is_empty() {
+        out.push_str(&format!("Your errand right now: {}.\n", memory.errand));
+    }
     if !last_said.is_empty() {
         out.push_str(&format!("The player's last words: \"{last_said}\".\n"));
     }
@@ -142,6 +152,14 @@ const ACTIONS: &[(&str, Order)] = &[
     ("stop", Order::Stop),
     ("faster", Order::Faster),
     ("slower", Order::Slower),
+    ("wave", Order::Wave),
+    ("go_bakery", Order::GoTo(PlaceKind::Bakery)),
+    ("go_florist", Order::GoTo(PlaceKind::Florist)),
+    ("go_cafe", Order::GoTo(PlaceKind::Cafe)),
+    ("go_greengrocer", Order::GoTo(PlaceKind::Grocer)),
+    ("go_newsstand", Order::GoTo(PlaceKind::Newsstand)),
+    ("go_park", Order::GoTo(PlaceKind::Park)),
+    ("go_square", Order::GoTo(PlaceKind::Square)),
 ];
 
 struct Waiting {
@@ -173,6 +191,9 @@ fn notice(
     mut bumps: MessageReader<Bumped>,
     mut lost: MessageReader<NotUnderstood>,
     mut hoots: MessageReader<Hooted>,
+    mut errands: MessageReader<ErrandDone>,
+    mut nowhere: MessageReader<NoSuchPlace>,
+    quest: Res<Quest>,
     mut last_hoot: Local<f32>,
     players: Query<&Transform, With<Player>>,
     last: Res<LastHeard>,
@@ -181,6 +202,49 @@ fn notice(
     mut asked: ResMut<Asked>,
 ) {
     let now = time.elapsed_secs();
+    let errand = quest.errand().map(|e| e.task).unwrap_or_default();
+    if memory.errand != errand {
+        memory.errand = errand.to_string();
+    }
+    for done in errands.read() {
+        let mut moment = format!(
+            "you got there and did your errand: {} ({} of {ROUND} this round)",
+            ERRANDS[done.errand].task, done.done
+        );
+        if done.round_over {
+            moment.push_str(", which finishes the round: all the errands are done");
+        }
+        let request = BrainRequest {
+            situation: situation(&memory, &last.text, &format!("{moment}.")),
+            allowed_actions: Vec::new(),
+            lang: String::new(),
+        };
+        let id = host.ask_brain(&request);
+        asked.0.push(Waiting {
+            id,
+            asked_at: now,
+            topic: Topic::Errand,
+            moment,
+        });
+    }
+    for missing in nowhere.read() {
+        let moment = format!(
+            "the player sent you to {}, but there is none anywhere near",
+            missing.kind.name()
+        );
+        let request = BrainRequest {
+            situation: situation(&memory, &last.text, &format!("{moment}.")),
+            allowed_actions: Vec::new(),
+            lang: String::new(),
+        };
+        let id = host.ask_brain(&request);
+        asked.0.push(Waiting {
+            id,
+            asked_at: now,
+            topic: Topic::NoSuchPlace,
+            moment,
+        });
+    }
     for bump in bumps.read() {
         let at = players
             .single()
@@ -348,6 +412,10 @@ mod tests {
         assert!(later.contains("- you hit a lamp post"));
         assert!(later.contains("- Bel palo."));
         assert!(!later.contains("last words"));
+        memory.errand = "buy bread at the bakery".into();
+        assert!(
+            situation(&memory, "", "x").contains("Your errand right now: buy bread at the bakery.")
+        );
     }
 
     #[test]

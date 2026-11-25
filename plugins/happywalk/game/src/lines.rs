@@ -13,6 +13,10 @@ pub enum Topic {
     NotUnderstood,
     /// A car or a bike had to stop for the character.
     Hooted,
+    /// An errand was done.
+    Errand,
+    /// A place was asked for that is nowhere near.
+    NoSuchPlace,
 }
 
 /// What a passer-by is answering to.
@@ -59,6 +63,8 @@ struct Lines {
     /// Anything else in the street.
     thing: &'static [&'static str],
     hooted: &'static [&'static str],
+    errand: &'static [&'static str],
+    nowhere: &'static [&'static str],
 }
 
 const ITALIAN: Lines = Lines {
@@ -91,6 +97,15 @@ const ITALIAN: Lines = Lines {
         "Suona a me? Io eseguo ordini.",
         "In mezzo alla strada. Idea tua, ricordiamolo.",
         "Tranquillo, si è fermato. Stavolta.",
+    ],
+    errand: &[
+        "Fatto. E senza sbattere, quasi.",
+        "Commissione fatta. Merito tuo, dicono.",
+        "Eccoci. La prossima?",
+    ],
+    nowhere: &[
+        "Qui vicino non ce n'è. Ho guardato, giuro.",
+        "Non so dove sia. Tu lo sai?",
     ],
 };
 
@@ -125,6 +140,15 @@ const ENGLISH: Lines = Lines {
         "The middle of the road. Your idea, let's remember.",
         "Relax, it stopped. This time.",
     ],
+    errand: &[
+        "Done. And almost without crashing.",
+        "Errand done. Thanks to you, they say.",
+        "Here we are. What's next?",
+    ],
+    nowhere: &[
+        "There's none around here. I looked, honest.",
+        "No idea where that is. Do you know?",
+    ],
 };
 
 fn lines(lang: &str) -> &'static Lines {
@@ -143,6 +167,8 @@ pub fn stand_in(lang: &str, topic: Topic, turn: usize) -> &'static str {
         Topic::Bump(SolidKind::Lamp) => lines.lamp,
         Topic::NotUnderstood => lines.lost,
         Topic::Hooted => lines.hooted,
+        Topic::Errand => lines.errand,
+        Topic::NoSuchPlace => lines.nowhere,
         Topic::Bump(_) => lines.thing,
     };
     list[turn % list.len()]
