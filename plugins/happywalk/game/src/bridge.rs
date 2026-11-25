@@ -136,6 +136,8 @@ pub fn now_ms() -> f64 {
 
 // ── The queue the host fills ─────────────────────────────────────────────
 
+// Off the web only tests feed the queue, and only with recognised text.
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 #[derive(Debug)]
 enum Inbound {
     Heard(Heard),

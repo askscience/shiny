@@ -1,23 +1,23 @@
-//! What the character says when it walks into something: fixed lines for
-//! now (its brain writes them later). It knows it is steered by voice, it is
-//! ironic about it, and it is never mean.
+//! Stand-in lines, for when the character's brain cannot answer: the AI is
+//! switched off, there is no model, or its answer is late. The character
+//! never stays silent after a bump. Same voice as the brain is asked for: it
+//! knows it is steered by voice, it is ironic about it, and it is never mean.
 
-use bevy::prelude::*;
-
-use crate::bridge::{Host, HostStatus};
 use crate::city::SolidKind;
-use crate::player::Bumped;
 
-/// A line the character says: spoken by the host, shown in a bubble.
-#[derive(Message, Clone, Debug)]
-pub struct Said {
-    pub text: String,
+/// What a line is about.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Topic {
+    Bump(SolidKind),
+    /// The player said something that was no command.
+    NotUnderstood,
 }
 
 struct Lines {
     building: &'static [&'static str],
     lamp: &'static [&'static str],
     edge: &'static [&'static str],
+    lost: &'static [&'static str],
 }
 
 const ITALIAN: Lines = Lines {
@@ -40,6 +40,11 @@ const ITALIAN: Lines = Lines {
         "Qui finisce il quartiere. E anche la tua idea.",
         "Oltre non si va. Lo dice la siepe, non io.",
         "Bella siepe. Torniamo indietro?",
+    ],
+    lost: &[
+        "Bello. E io cosa dovrei farci?",
+        "Non ho capito, ma annuisco lo stesso.",
+        "Parole grosse. Proviamo con avanti?",
     ],
 };
 
@@ -64,6 +69,11 @@ const ENGLISH: Lines = Lines {
         "No further. The hedge says so, not me.",
         "Lovely hedge. Shall we turn around?",
     ],
+    lost: &[
+        "Lovely. And what do I do with that?",
+        "No idea what that means, but I'm nodding.",
+        "Big words. Shall we try forward?",
+    ],
 };
 
 fn lines(lang: &str) -> &'static Lines {
@@ -73,47 +83,17 @@ fn lines(lang: &str) -> &'static Lines {
     }
 }
 
-/// The `turn`-th line for a bump: each list is gone through in order, so a
-/// line does not come back before the others were said.
-pub fn line_for(lang: &str, into: SolidKind, turn: usize) -> &'static str {
+/// The `turn`-th stand-in line about `topic`: each list is gone through in
+/// order, so a line does not come back before the others were said.
+pub fn stand_in(lang: &str, topic: Topic, turn: usize) -> &'static str {
     let lines = lines(lang);
-    let list = match into {
-        SolidKind::Building => lines.building,
-        SolidKind::Lamp => lines.lamp,
-        SolidKind::Edge => lines.edge,
+    let list = match topic {
+        Topic::Bump(SolidKind::Building) => lines.building,
+        Topic::Bump(SolidKind::Lamp) => lines.lamp,
+        Topic::Bump(SolidKind::Edge) => lines.edge,
+        Topic::NotUnderstood => lines.lost,
     };
     list[turn % list.len()]
-}
-
-pub struct LinesPlugin;
-
-impl Plugin for LinesPlugin {
-    fn build(&self, app: &mut App) {
-        app.add_message::<Said>()
-            .add_systems(Update, react.after(crate::player::PlayerSet));
-    }
-}
-
-fn react(
-    mut bumps: MessageReader<Bumped>,
-    status: Res<HostStatus>,
-    mut host: ResMut<Host>,
-    mut said: MessageWriter<Said>,
-    mut turns: Local<[usize; 3]>,
-) {
-    for bump in bumps.read() {
-        let slot = match bump.into {
-            SolidKind::Building => 0,
-            SolidKind::Lamp => 1,
-            SolidKind::Edge => 2,
-        };
-        let text = line_for(&status.lang, bump.into, turns[slot]);
-        turns[slot] += 1;
-        host.say(text);
-        said.write(Said {
-            text: text.to_string(),
-        });
-    }
 }
 
 #[cfg(test)]
@@ -122,10 +102,14 @@ mod tests {
 
     #[test]
     fn lines_go_round_without_repeating() {
-        let first = line_for("it", SolidKind::Lamp, 0);
-        let second = line_for("it", SolidKind::Lamp, 1);
-        assert_ne!(first, second);
-        assert_eq!(line_for("it", SolidKind::Lamp, ITALIAN.lamp.len()), first);
-        assert_eq!(line_for("de", SolidKind::Edge, 0), ENGLISH.edge[0]);
+        let lamp = Topic::Bump(SolidKind::Lamp);
+        let first = stand_in("it", lamp, 0);
+        assert_ne!(first, stand_in("it", lamp, 1));
+        assert_eq!(stand_in("it", lamp, ITALIAN.lamp.len()), first);
+        assert_eq!(
+            stand_in("de", Topic::Bump(SolidKind::Edge), 0),
+            ENGLISH.edge[0]
+        );
+        assert_eq!(stand_in("it", Topic::NotUnderstood, 0), ITALIAN.lost[0]);
     }
 }

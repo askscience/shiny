@@ -3,9 +3,9 @@
 
 use bevy::prelude::*;
 
+use crate::brain::Said;
 use crate::bridge::{Heard, HostStatus};
 use crate::camera::FollowCamera;
-use crate::lines::Said;
 use crate::player::Player;
 use crate::telemetry::Latency;
 

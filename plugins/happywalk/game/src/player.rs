@@ -13,6 +13,8 @@ use crate::intent::Order;
 #[derive(Message, Clone, Copy, Debug)]
 pub struct Bumped {
     pub into: SolidKind,
+    /// How fast it was going.
+    pub pace: Pace,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -334,7 +336,10 @@ fn walk(
     transform.translation.z = at.y;
     transform.rotation = Quat::from_rotation_y(player.facing);
     if let Some(into) = bumped {
-        bumps.write(Bumped { into });
+        bumps.write(Bumped {
+            into,
+            pace: player.pace,
+        });
     }
     crate::bridge::publish_state(format!(
         r#"{{"x":{:.3},"z":{:.3},"facing":{:.3},"walking":{},"pace":"{:?}","jolt":{:.2}}}"#,

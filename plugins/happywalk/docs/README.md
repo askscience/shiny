@@ -47,9 +47,12 @@ Nothing is reimplemented, and the user's settings decide:
   language (`/api/voice/models/vosk/<lang>.tar.gz`). The page gives it a
   **restricted vocabulary** (the game's `Host::set_grammar`) and forwards
   **partial results**, so a command can act before the sentence ends.
-- **Language model:** the one chosen in Settings → AI (`ai.ollama_model`,
-  else the server's default), through `ctx.ollama()`. LiteAura's backend is
-  Ollama; there is no separate llama.cpp to run. It is off when the user
+- **Language model:** the assistant's own choice in Settings → AI, read the
+  way the core reads it (`src/brain.rs`): the user's OpenAI-compatible
+  endpoint when one is set up (`ai.provider`, `ai.openai_base_url`,
+  `ai.openai_model`, with the core's check on the address), otherwise the
+  server's Ollama with the user's model (`ai.ollama_model`) or the server's
+  default. There is no separate llama.cpp to run. It is off when the user
   turned AI off (`ai.enabled`).
 - **Voice:** `/api/tts` with the user's engine, voice and speed.
 
@@ -77,11 +80,16 @@ character does not hear itself.
 ### The brain route
 
 `POST /api/happywalk/brain` takes `{situation, allowed_actions, lang}` and
-answers `{answer: {action, say} | null, reason, model, ms}`. The model is
-asked for one JSON object; `src/brain.rs` takes the first object in the reply,
-keeps the action only if the game offered it, and trims the line to one short
-sentence. No answer (`reason`: `ai-off`, `unavailable`, `late` after 6 s,
-`malformed`) is a normal outcome: the game uses a line of its own.
+answers `{answer: {action, say} | null, reason, model, ms}`. The system
+prompt is the character (steered by voice and aware of it, ironic, warm,
+never mean) and asks for one JSON object. On Ollama the output is
+**constrained** to that shape (`format`, a JSON schema whose `action` is an
+enum of the offered actions), with no reasoning trace and few tokens, so a
+small model cannot wander off; an OpenAI-compatible endpoint is asked the same
+way without the constraint. Either way `src/brain.rs` then takes the first
+object in the reply, keeps the action only if the game offered it, and trims
+the line to one short sentence. No answer (`reason`: `ai-off`, `unavailable`,
+`late` after 6 s, `malformed`) is a normal outcome.
 
 ## The game so far
 
@@ -127,16 +135,35 @@ it is reported as `NotUnderstood`, which Phase 2 gives to the model.
 Everything that can be walked into is a `Solid`: a box aligned to the ground
 grid, of a kind (building, lamp post, the hedge at the edge). The character
 takes a small square on the ground and a step that would touch a solid is
-not taken: it stops, is thrown back a little with its arms up, and says a
-line. The lines are fixed lists per language and per kind
-(`game/src/lines.rs`), gone through in order so one does not come back before
-the others; each is spoken by the host and shown in a bubble over the
-character's head. After a bump it turns on the spot before walking off, so
-turning away from a wall does not hit it again.
+not taken: it stops, is thrown back a little with its arms up, and says
+something. After a bump it turns on the spot before walking off, so turning
+away from a wall does not hit it again.
 
 This is the game's own collision test, a few lines that are easy to unit
 test; avian3d comes in when something has to move and collide on its own
 (traffic, objects).
+
+### What the character says
+
+Its lines are written by the user's language model, not by the game
+(`game/src/brain.rs`, `BrainPlugin`). When something happens the brain
+describes the moment and asks for one line:
+
+- **a bump:** what the player last said, what was hit and at what pace, and
+  how many times this very spot was hit ("for the third time at this very
+  spot");
+- **a sentence that was no command:** the sentence, with the seven orders
+  offered as actions; if the model picks one it is carried out, so "andiamo
+  un po' più svelti" can become *faster*.
+
+Each request also carries a **short memory**: the last six moments and the
+last six lines said, with the instruction to say something different.
+
+The line is spoken by the host and shown in a bubble over the character's
+head. **The moment does not wait:** if no answer is here within 2.5 seconds,
+or the AI is off or unreachable, the character says a stand-in line from a
+short fixed list (`game/src/lines.rs`) and a late answer is dropped. The
+stand-ins exist only for that.
 
 ### Known limits
 
@@ -202,7 +229,8 @@ the engine's built-in font has no accented letters.
   from partial results; keyboard as a fallback; bumping into a building stops
   the character and gets a line from a fixed list. Done when the time from the
   end of the word to the movement is under 300 ms.
-- **Phase 2, the character's brain:** the lines for bumps and misunderstood
+- **Phase 2, the character's brain (built; not yet tried with a real
+  model):** the lines for bumps and misunderstood
   commands come from the model ("you said X, Y happened"); free sentences are
   answered with valid actions only; a fixed personality; lines spoken and
   shown in a bubble; a short memory for running jokes; a template line when
@@ -213,8 +241,7 @@ the engine's built-in font has no accented letters.
   meshed greedily with soft ambient occlusion; interchangeable character
   parts; soft light, a pastel sky, a light day/evening cycle.
 
-Modules still to come, each a Bevy plugin: `BrainPlugin` (context and
-validation; free sentences from `IntentPlugin` go to it), `VoxPlugin`, a
+Modules still to come, each a Bevy plugin: `VoxPlugin`, a
 procedural `CityPlugin`, `NpcPlugin`, `TrafficPlugin`, `QuestPlugin`,
 `ClipPlugin`. Physics: avian3d with grid-aligned boxes.
 

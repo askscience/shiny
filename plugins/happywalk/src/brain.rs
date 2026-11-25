@@ -52,8 +52,9 @@ fn language(lang: &str) -> &'static str {
 pub fn system_prompt(request: &Request) -> String {
     format!(
         "You are the character of a video game, walking through a small pastel city. \
-         A player steers you with their voice, and you know it. You are ironic and warm, \
-         never mean, never rude; you tease the player when their orders go wrong. \
+         A player steers you with their voice, and you know it: you only do what they say, \
+         so whatever goes wrong is their doing. You are ironic and warm, never mean, never rude, \
+         and you tease the player about it. Never repeat a line you said before. \
          Answer with one JSON object and nothing else: \
          {{\"action\": one of [{actions}], \"say\": a single short spoken line in {language}, at most 15 words}}. \
          Use an empty action when none fits.",
@@ -96,6 +97,167 @@ fn preference(ctx: &PluginCtx, uid: &str, key: &str) -> Option<String> {
     }
 }
 
+/// Where the user's assistant runs, as chosen in Settings → AI.
+#[derive(Debug, PartialEq)]
+pub enum Provider {
+    /// The server's Ollama, with the user's model or the server's default.
+    Ollama { url: String, model: String },
+    /// The user's own OpenAI-compatible endpoint.
+    OpenAi {
+        base: String,
+        key: String,
+        model: String,
+    },
+}
+
+impl Provider {
+    pub fn model(&self) -> &str {
+        match self {
+            Provider::Ollama { model, .. } | Provider::OpenAi { model, .. } => model,
+        }
+    }
+}
+
+/// The same choice the assistant makes (`src/services/ai.rs` in the core):
+/// the OpenAI-compatible endpoint when the user set one up completely and its
+/// address is acceptable, Ollama otherwise.
+fn provider(ctx: &PluginCtx, uid: &str) -> Provider {
+    let pref = |key: &str| preference(ctx, uid, key);
+    if pref("ai.provider").as_deref() == Some("openai") {
+        if let (Some(base), Some(model)) = (pref("ai.openai_base_url"), pref("ai.openai_model")) {
+            if safe_base_url(&base) {
+                return Provider::OpenAi {
+                    base: base.trim_end_matches('/').to_string(),
+                    key: pref("ai.openai_api_key").unwrap_or_default(),
+                    model,
+                };
+            }
+            tracing::warn!("happywalk: refusing unsafe ai.openai_base_url; using Ollama instead");
+        }
+    }
+    Provider::Ollama {
+        url: ctx.config.ollama_url.trim_end_matches('/').to_string(),
+        model: pref("ai.ollama_model").unwrap_or_else(|| ctx.config.ollama_model.clone()),
+    }
+}
+
+/// The core's rule for a user-supplied endpoint: http(s), and not a
+/// link-local, unspecified, broadcast or multicast address.
+pub fn safe_base_url(url: &str) -> bool {
+    let Ok(parsed) = reqwest::Url::parse(url.trim()) else {
+        return false;
+    };
+    if !matches!(parsed.scheme(), "http" | "https") {
+        return false;
+    }
+    let Some(host) = parsed.host_str() else {
+        return false;
+    };
+    match host
+        .trim_start_matches('[')
+        .trim_end_matches(']')
+        .parse::<std::net::IpAddr>()
+    {
+        Ok(std::net::IpAddr::V4(v4)) => {
+            let o = v4.octets();
+            !(v4.is_link_local()
+                || v4.is_unspecified()
+                || v4.is_broadcast()
+                || v4.is_multicast()
+                || v4.is_documentation()
+                || o[0] == 0)
+        }
+        Ok(std::net::IpAddr::V6(v6)) => {
+            !(v6.is_unspecified() || v6.is_multicast() || (v6.segments()[0] & 0xffc0) == 0xfe80)
+        }
+        Err(_) => true,
+    }
+}
+
+/// The shape the answer must have. Ollama constrains the model's output to
+/// it (its `format`), so a small model cannot wander off into prose.
+fn answer_schema(allowed: &[String]) -> serde_json::Value {
+    let mut actions: Vec<&str> = allowed.iter().map(String::as_str).collect();
+    actions.push("");
+    json!({
+        "type": "object",
+        "properties": {
+            "action": { "type": "string", "enum": actions },
+            "say": { "type": "string" },
+        },
+        "required": ["action", "say"],
+    })
+}
+
+fn http() -> &'static reqwest::Client {
+    static CLIENT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
+    CLIENT.get_or_init(reqwest::Client::new)
+}
+
+/// One question, one reply: the model's text.
+async fn ask(provider: &Provider, request: &Request) -> Result<String, String> {
+    let messages = json!([
+        { "role": "system", "content": system_prompt(request) },
+        { "role": "user", "content": request.situation },
+    ]);
+    match provider {
+        Provider::Ollama { url, model } => {
+            let mut body = json!({
+                "model": model,
+                "messages": messages,
+                "stream": false,
+                "format": answer_schema(&request.allowed_actions),
+                // A line is short, and the moment passes quickly: no
+                // reasoning trace, few tokens, the model kept loaded.
+                "think": false,
+                "keep_alive": "30m",
+                "options": { "num_predict": 96, "temperature": 0.9 },
+            });
+            let mut reply = http()
+                .post(format!("{url}/api/chat"))
+                .json(&body)
+                .send()
+                .await
+                .map_err(|e| e.to_string())?;
+            if reply.status() == reqwest::StatusCode::BAD_REQUEST {
+                // Some models refuse the `think` switch outright.
+                body.as_object_mut().map(|b| b.remove("think"));
+                reply = http()
+                    .post(format!("{url}/api/chat"))
+                    .json(&body)
+                    .send()
+                    .await
+                    .map_err(|e| e.to_string())?;
+            }
+            if !reply.status().is_success() {
+                return Err(format!("Ollama answered {}", reply.status()));
+            }
+            let data: serde_json::Value = reply.json().await.map_err(|e| e.to_string())?;
+            Ok(data["message"]["content"]
+                .as_str()
+                .unwrap_or_default()
+                .to_string())
+        }
+        Provider::OpenAi { base, key, model } => {
+            let body = json!({ "model": model, "messages": messages, "stream": false, "max_tokens": 96, "temperature": 0.9 });
+            let mut call = http().post(format!("{base}/chat/completions")).json(&body);
+            if !key.is_empty() {
+                call = call.bearer_auth(key);
+            }
+            let reply = call.send().await.map_err(|e| e.to_string())?;
+            if !reply.status().is_success() {
+                // The endpoint's own text stays out of the log line a page reads.
+                return Err(format!("the endpoint answered {}", reply.status()));
+            }
+            let data: serde_json::Value = reply.json().await.map_err(|e| e.to_string())?;
+            Ok(data["choices"][0]["message"]["content"]
+                .as_str()
+                .unwrap_or_default()
+                .to_string())
+        }
+    }
+}
+
 /// `POST /api/happywalk/brain` → `{answer: {action, say} | null, reason, model, ms}`.
 pub fn route(ctx: Arc<PluginCtx>) -> RouteHandler {
     bridged_route(move |req: axum::extract::Request| {
@@ -118,19 +280,9 @@ pub fn route(ctx: Arc<PluginCtx>) -> RouteHandler {
             ) {
                 return Ok(none("ai-off", "", started));
             }
-            // The model the user chose in Settings, else the server's default.
-            let model = preference(&ctx, &uid, "ai.ollama_model");
-            let client = ctx.ollama().await;
-            let name = model
-                .clone()
-                .unwrap_or_else(|| client.default_model().to_string());
-            let messages = vec![
-                ("system".to_string(), system_prompt(&request)),
-                ("user".to_string(), request.situation.clone()),
-            ];
-            let reply =
-                tokio::time::timeout(ANSWER_WITHIN, client.chat(messages, model.as_deref())).await;
-            let text = match reply {
+            let provider = provider(&ctx, &uid);
+            let name = provider.model().to_string();
+            let text = match tokio::time::timeout(ANSWER_WITHIN, ask(&provider, &request)).await {
                 Err(_) => return Ok(none("late", &name, started)),
                 Ok(Err(e)) => {
                     tracing::info!("happywalk: the brain got no answer: {e}");
@@ -185,6 +337,25 @@ mod tests {
     fn nothing_usable_is_no_answer() {
         assert_eq!(parse("I would rather not.", &allowed()), None);
         assert_eq!(parse(r#"{"action": "fly"}"#, &allowed()), None);
+    }
+
+    #[test]
+    fn the_schema_offers_the_actions_and_none() {
+        let schema = answer_schema(&allowed());
+        assert_eq!(
+            schema["properties"]["action"]["enum"],
+            json!(["stop", "turn_left", ""])
+        );
+    }
+
+    #[test]
+    fn a_user_endpoint_must_be_a_plain_web_address() {
+        assert!(safe_base_url("https://api.example.com/v1"));
+        assert!(safe_base_url("http://127.0.0.1:1234/v1"));
+        assert!(!safe_base_url("file:///etc/passwd"));
+        assert!(!safe_base_url("http://169.254.169.254/latest"));
+        assert!(!safe_base_url("http://0.0.0.0/v1"));
+        assert!(!safe_base_url("not a url"));
     }
 
     #[test]

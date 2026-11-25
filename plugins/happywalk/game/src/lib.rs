@@ -13,12 +13,14 @@
 //! * [`city`] — the neighbourhood and everything in it that is solid.
 //! * [`player`] — the character: walking, turning, bumping.
 //! * [`camera`] — third person, following softly.
-//! * [`lines`] — what the character says when things go wrong.
+//! * [`brain`] — what the character says, asked of the user's language model.
+//! * [`lines`] — stand-in lines for when the model cannot answer.
 //! * [`hud`] — the speech bubble, "I am listening", what was understood.
 
 // Bevy's queries are long types by nature.
 #![allow(clippy::type_complexity)]
 
+pub mod brain;
 pub mod bridge;
 pub mod camera;
 pub mod city;
@@ -62,7 +64,7 @@ pub fn app() -> App {
         city::CityPlugin,
         player::PlayerPlugin,
         camera::CameraPlugin,
-        lines::LinesPlugin,
+        brain::BrainPlugin,
         hud::HudPlugin,
     ));
     app

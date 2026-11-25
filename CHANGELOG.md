@@ -15,8 +15,13 @@
   blocks that walks, turns, changes pace and stops on spoken commands
   (Italian and English, acted on from partial results; the keyboard does the
   same for testing), and bumps into buildings, lamp posts and the hedge with
-  a jolt and an ironic line, spoken and shown in a bubble. See
-  `plugins/happywalk/docs/README.md`.
+  a jolt and an ironic line, spoken and shown in a bubble. The lines are
+  written by the language model chosen in Settings (the user's
+  OpenAI-compatible endpoint, or Ollama with the answer constrained to the
+  expected shape), from what the player said, what happened and a short
+  memory of earlier moments; a sentence that is no command goes to the model
+  too, which may answer with one of the orders. A fixed line is said only
+  when the model is off or late. See `plugins/happywalk/docs/README.md`.
 - **Plugins: `publish = false` keeps a plugin in development out of the
   catalogue.** Until now a new plugin directory on `main` was published by
   its first push; with this line in `plugin.toml` it is neither offered nor
