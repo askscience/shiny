@@ -1,6 +1,7 @@
 //! `SkyPlugin`: the light. A pastel sky, a soft sun and a slow turn from day
 //! to evening and back, all from one number ([`Daylight`]).
 
+use bevy::light::CascadeShadowConfigBuilder;
 use bevy::prelude::*;
 
 /// Where the day is: 0 is full day, 1 is evening.
@@ -31,6 +32,9 @@ pub fn evening_at(seconds: f32, cycle: f32) -> f32 {
     let smooth = |x: f32| x * x * (3.0 - 2.0 * x);
     smooth(ramp(0.45, 0.65)) - smooth(ramp(0.85, 1.0))
 }
+
+/// How far from the camera shadows are drawn, in metres.
+pub const SHADOWS_TO: f32 = 38.0;
 
 #[derive(Component)]
 struct Sun;
@@ -81,6 +85,14 @@ fn setup(mut commands: Commands) {
             shadow_maps_enabled: true,
             ..default()
         },
+        // Shadows are the dearest thing drawn (the city is rendered twice):
+        // one cascade, and only as far as a shadow can be told from haze.
+        CascadeShadowConfigBuilder {
+            num_cascades: 1,
+            maximum_distance: SHADOWS_TO,
+            ..default()
+        }
+        .build(),
         Transform::default(),
     ));
     commands.insert_resource(GlobalAmbientLight {

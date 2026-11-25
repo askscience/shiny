@@ -16,6 +16,9 @@
 //! * [`sky`] — the light: pastel sky, soft sun, day turning to evening.
 //! * [`player`] — the character: walking, turning, bumping.
 //! * [`camera`] — third person, following softly.
+//! * [`movers`] — where everything that moves is, for whoever must avoid it.
+//! * [`npc`] — passers-by on the pavements.
+//! * [`traffic`] — cars and bikes that always stop for the character.
 //! * [`brain`] — what the character says, asked of the user's language model.
 //! * [`lines`] — stand-in lines for when the model cannot answer.
 //! * [`hud`] — the speech bubble, "I am listening", what was understood.
@@ -36,9 +39,12 @@ pub mod hud;
 pub mod intent;
 pub mod keyboard;
 pub mod lines;
+pub mod movers;
+pub mod npc;
 pub mod player;
 pub mod sky;
 pub mod telemetry;
+pub mod traffic;
 pub mod vox;
 
 use bevy::prelude::*;
@@ -46,8 +52,14 @@ use bevy::prelude::*;
 /// The canvas the page provides for the game.
 pub const CANVAS: &str = "#happywalk-canvas";
 
-/// The game, in the city grown from `seed`.
-pub fn app(seed: u64) -> App {
+/// The most device pixels drawn per CSS pixel. A high-density screen would
+/// otherwise have the game shade four or more times the pixels for a look
+/// that is made of big flat squares anyway.
+pub const MAX_PIXEL_RATIO: f32 = 1.5;
+
+/// The game, in the city grown from `seed`, on a screen of `pixel_ratio`
+/// device pixels per CSS pixel.
+pub fn app(seed: u64, pixel_ratio: f32) -> App {
     let mut app = App::new();
     app.insert_resource(city::CitySeed(seed));
     app.add_plugins(
@@ -55,6 +67,8 @@ pub fn app(seed: u64) -> App {
             .set(WindowPlugin {
                 primary_window: Some(Window {
                     title: "Happy Walk".into(),
+                    resolution: bevy::window::WindowResolution::default()
+                        .with_scale_factor_override(pixel_ratio.clamp(1.0, MAX_PIXEL_RATIO)),
                     canvas: Some(CANVAS.into()),
                     fit_canvas_to_parent: true,
                     // The page keeps its own shortcuts (and the shell its own).
@@ -78,15 +92,18 @@ pub fn app(seed: u64) -> App {
         city::CityPlugin,
         player::PlayerPlugin,
         camera::CameraPlugin,
+        npc::NpcPlugin,
+        traffic::TrafficPlugin,
         brain::BrainPlugin,
         hud::HudPlugin,
     ));
     app
 }
 
-/// Called by the page once the module is loaded, with the city's seed.
+/// Called by the page once the module is loaded, with the city's seed and
+/// the screen's pixel ratio.
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen::prelude::wasm_bindgen]
-pub fn hw_start(seed: u32) {
-    app(seed as u64).run();
+pub fn hw_start(seed: u32, pixel_ratio: f32) {
+    app(seed as u64, pixel_ratio).run();
 }

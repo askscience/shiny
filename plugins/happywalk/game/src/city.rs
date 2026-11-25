@@ -12,6 +12,7 @@
 use std::collections::HashMap;
 
 use bevy::asset::RenderAssetUsages;
+use bevy::light::NotShadowCaster;
 use bevy::mesh::{Indices, PrimitiveTopology};
 use bevy::prelude::*;
 
@@ -31,6 +32,9 @@ pub const START: Vec3 = Vec3::new(PITCH / 2.0, 0.0, PITCH / 2.0);
 const NEAR: i32 = 2;
 /// ...and are dropped once they are this far.
 const FAR: i32 = 3;
+/// Chunks this near get everything; farther ones only what shows from a
+/// distance (buildings, trees, lamp posts).
+const DETAILED: i32 = 1;
 /// Chunks spawned in one frame, so walking never stutters.
 const PER_FRAME: usize = 2;
 
@@ -96,7 +100,7 @@ impl Solids {
 
 /// The chunks on screen, and what was spawned for each.
 #[derive(Resource, Default)]
-struct Loaded(HashMap<IVec2, Vec<Entity>>);
+struct Loaded(HashMap<IVec2, (bool, Vec<Entity>)>);
 
 /// What every chunk's ground is made of, made once.
 #[derive(Resource)]
@@ -206,17 +210,29 @@ fn stream(
         return;
     }
 
-    let far: Vec<IVec2> = loaded
+    // Drop what is too far, and what is on screen at the wrong detail (it is
+    // spawned again below at the right one).
+    let stale: Vec<IVec2> = loaded
         .0
-        .keys()
-        .copied()
-        .filter(|c| (*c - home).abs().max_element() > FAR)
+        .iter()
+        .filter(|(coord, (detailed, _))| {
+            let ring = (**coord - home).abs().max_element();
+            ring > FAR || (ring <= NEAR && *detailed != (ring <= DETAILED))
+        })
+        .map(|(coord, _)| *coord)
         .collect();
-    for coord in far {
-        for entity in loaded.0.remove(&coord).unwrap_or_default() {
+    for coord in stale {
+        for entity in loaded
+            .0
+            .remove(&coord)
+            .map(|(_, entities)| entities)
+            .unwrap_or_default()
+        {
             commands.entity(entity).despawn();
         }
-        solids.unload(coord);
+        if (coord - home).abs().max_element() > FAR {
+            solids.unload(coord);
+        }
     }
 
     let mut missing: Vec<IVec2> = (-NEAR..=NEAR)
@@ -232,6 +248,7 @@ fn stream(
     }
     for coord in missing.into_iter().take(budget) {
         let chunk = gen::chunk(seed.0, coord);
+        let detailed = (coord - home).abs().max_element() <= DETAILED;
         let lot = gen::centre(coord);
         let mut entities = Vec::with_capacity(chunk.props.len() + 3);
         let slab =
@@ -240,6 +257,7 @@ fn stream(
                     .spawn((
                         Mesh3d(ground.slab.clone()),
                         MeshMaterial3d(material.clone()),
+                        NotShadowCaster,
                         Transform::from_xyz(lot.x, y, lot.y).with_scale(size),
                     ))
                     .id()
@@ -266,11 +284,16 @@ fn stream(
                 .spawn((
                     Mesh3d(ground.dashes.clone()),
                     MeshMaterial3d(ground.line.clone()),
+                    NotShadowCaster,
                     Transform::from_xyz(lot.x, 0.0, lot.y),
                 ))
                 .id(),
         );
-        for prop in &chunk.props {
+        for prop in chunk
+            .props
+            .iter()
+            .filter(|prop| detailed || prop.shows_from_afar())
+        {
             entities.push(
                 commands
                     .spawn(library.place(
@@ -283,7 +306,7 @@ fn stream(
             );
         }
         solids.load(&chunk);
-        loaded.0.insert(coord, entities);
+        loaded.0.insert(coord, (detailed, entities));
     }
 }
 

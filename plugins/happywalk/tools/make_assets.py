@@ -82,6 +82,12 @@ class Model:
                 for z in range(z0, z1 + 1):
                     self.set(x, y, z, colour)
 
+    def paste(self, other, dx, dy, dz):
+        """Copy another model's voxels in, moved by (dx, dy, dz)."""
+        back = {index: name for name, index in INDEX.items()}
+        for (x, y, z), colour in other.cells.items():
+            self.set(x + dx, y + dy, z + dz, back[colour])
+
     def write(self, path):
         sx, sy, sz = self.size
         size = struct.pack("<4sii3i", b"SIZE", 12, 0, sx, sy, sz)
@@ -111,8 +117,8 @@ def building(wall, roof, floors, width=24, depth=24, shop=False, lit=(), awning=
     x0, y0, x1, y1 = 1, 1, width, depth
     top = 10 + floors * storey
     m.box(x0, y0, 0, x1, y1, top - 1, wall)
-    # Hollow it: only the shell is ever seen, and fewer voxels mesh faster.
-    m.box(x0 + 1, y0 + 1, 1, x1 - 1, y1 - 1, top - 2, None)
+    # Left solid: only faces next to air are meshed, so a hollow building
+    # would be drawn twice, outside and in.
     # A skirting band and a band between the storeys.
     m.box(x0, y0, 0, x1, y1, 0, "stone")
     for f in range(floors + 1):
@@ -192,7 +198,10 @@ def tree(crown="leaf"):
         for x in range(6 - r, 7 + r):
             for y in range(6 - r, 7 + r):
                 if abs(x - 6) + abs(y - 6) <= r + 2:
-                    m.set(x, y, z, crown if (x + y + z) % 5 else other)
+                    # Patches of the other green, two voxels big, so the
+                    # faces still merge into large rectangles.
+                    patch = ((x // 3) * 7 + (y // 3) * 5 + (z // 2) * 3) % 6 == 0
+                    m.set(x, y, z, other if patch else crown)
     return m
 
 
@@ -212,21 +221,6 @@ def planter():
     for x, y, c in ((2, 2, "flower"), (5, 2, "leaf"), (2, 5, "leaf"), (5, 5, "flower"), (3, 4, "lamp")):
         m.box(x, y, 4, x, y, 5, "leaf_dark")
         m.set(x, y, 6, c)
-    return m
-
-
-def hedge():
-    """One 4 m piece of the hedge around the neighbourhood."""
-    m = Model(16, 4, 5)
-    m.box(0, 0, 0, 15, 3, 3, "leaf")
-    for x in range(16):
-        for y in range(4):
-            if (x * 7 + y * 3) % 5 == 0:
-                m.set(x, y, 4, "leaf_dark")
-            elif (x + y) % 2 == 0:
-                m.set(x, y, 4, "leaf")
-            if (x * 5 + y * 11) % 23 == 0:
-                m.set(x, y, 4, "flower")
     return m
 
 
@@ -284,17 +278,18 @@ def ellipsoid(m, cx, cy, cz, rx, ry, rz, colour, keep=lambda x, y, z: True):
                     m.set(x, y, z, colour)
 
 
-def head():
+def head(hat="pack", hair="hair", pompom=True):
     m = Model(17, 17, 21)
     c = 8
     # The face: a soft ball, a little wider than tall.
     ellipsoid(m, c, c, 7, 8.4, 8.0, 7.4, "skin")
     # Hair shows under the hat, at the back and beside the cheeks.
-    ellipsoid(m, c, c + 0.8, 8, 8.6, 8.0, 7.2, "hair", keep=lambda x, y, z: y >= 9 or (z >= 9 and (x <= 2 or x >= 14)))
+    ellipsoid(m, c, c + 0.8, 8, 8.6, 8.0, 7.2, hair, keep=lambda x, y, z: y >= 9 or (z >= 9 and (x <= 2 or x >= 14)))
     # The beanie, with a turned-up brim and a pompom.
-    ellipsoid(m, c, c, 9, 8.9, 8.6, 7.6, "pack", keep=lambda x, y, z: z >= 11)
+    ellipsoid(m, c, c, 9, 8.9, 8.6, 7.6, hat, keep=lambda x, y, z: z >= 11)
     ellipsoid(m, c, c, 11, 9.0, 8.8, 1.6, "trim", keep=lambda x, y, z: 10 <= z <= 11)
-    ellipsoid(m, c, c, 18.2, 2.6, 2.6, 2.6, "trim")
+    if pompom:
+        ellipsoid(m, c, c, 18.2, 2.6, 2.6, 2.6, "trim")
     # Eyes with a glint, cheeks, a small smile: all on the front (low y).
     front = {}
     for x in range(17):
@@ -320,23 +315,23 @@ def head():
     return m
 
 
-def torso():
+def torso(shirt="shirt", accent="awning", scarf="roof_red"):
     m = Model(11, 9, 11)
     # A hoodie: round shoulders, a little wider at the hem.
-    ellipsoid(m, 5, 4, 5, 5.6, 4.4, 6.6, "shirt")
-    ellipsoid(m, 5, 4, 0.5, 5.4, 4.3, 2.2, "shirt")
+    ellipsoid(m, 5, 4, 5, 5.6, 4.4, 6.6, shirt)
+    ellipsoid(m, 5, 4, 0.5, 5.4, 4.3, 2.2, shirt)
     # A pocket on the front, the hood resting on the back.
     for x in (3, 4, 5, 6, 7):
         ys = [y for y in range(9) if (x, y, 3) in m.cells]
         if ys:
-            m.set(x, min(ys), 3, "awning")
-    ellipsoid(m, 5, 6.6, 8.4, 3.6, 2.2, 2.4, "awning")
+            m.set(x, min(ys), 3, accent)
+    ellipsoid(m, 5, 6.6, 8.4, 3.6, 2.2, 2.4, accent)
     # The scarf, with an end hanging at the front.
-    ellipsoid(m, 5, 4, 10, 4.2, 3.8, 1.3, "roof_red", keep=lambda x, y, z: z >= 9)
+    ellipsoid(m, 5, 4, 10, 4.2, 3.8, 1.3, scarf, keep=lambda x, y, z: z >= 9)
     for z in (6, 7, 8):
         ys = [y for y in range(9) if (7, y, z) in m.cells]
         if ys:
-            m.set(7, min(ys), z, "roof_red")
+            m.set(7, min(ys), z, scarf)
     return m
 
 
@@ -354,24 +349,111 @@ def backpack():
     return m
 
 
-def arm():
+def arm(shirt="shirt", accent="awning"):
     m = Model(4, 4, 9)
-    ellipsoid(m, 1.5, 1.5, 5.5, 2.1, 2.1, 4.2, "shirt", keep=lambda x, y, z: z >= 2)
-    m.box(0, 0, 2, 3, 3, 2, "awning")
+    ellipsoid(m, 1.5, 1.5, 5.5, 2.1, 2.1, 4.2, shirt, keep=lambda x, y, z: z >= 2)
+    m.box(0, 0, 2, 3, 3, 2, accent)
     # A mitten.
     ellipsoid(m, 1.5, 1.5, 1.0, 2.0, 2.0, 1.6, "skin", keep=lambda x, y, z: z <= 1)
     return m
 
 
-def leg():
+def leg(trousers="trousers"):
     m = Model(4, 7, 8)
-    ellipsoid(m, 1.5, 4, 5, 2.2, 2.2, 4.0, "trousers", keep=lambda x, y, z: z >= 2)
+    ellipsoid(m, 1.5, 4, 5, 2.2, 2.2, 4.0, trousers, keep=lambda x, y, z: z >= 2)
     # A round-toed shoe, longer at the front (low y).
     ellipsoid(m, 1.5, 3.2, 0.8, 2.2, 3.4, 1.5, "shoe", keep=lambda x, y, z: z <= 1)
     for x in range(4):
         for y in range(7):
             if (x, y, 0) in m.cells:
                 m.set(x, y, 0, "ink")
+    return m
+
+
+# ── Passers-by ───────────────────────────────────────────────────────────
+# The same shapes in other clothes. A passer-by is drawn in three pieces (a
+# body with head and arms, and two legs), so a street full of them stays
+# cheap.
+
+PEOPLE = {
+    "a": dict(hat="roof_red", hair="hair", shirt="sky", accent="roof_blue", scarf="trim", trousers="ink", pompom=False),
+    "b": dict(hat="lamp", hair="wood", shirt="rose", accent="roof_red", scarf="lilac", trousers="roof_blue", pompom=True),
+    "c": dict(hat="roof_blue", hair="ink", shirt="mint", accent="roof_green", scarf="awning", trousers="bark", pompom=False),
+    "d": dict(hat="lilac", hair="bark", shirt="cream", accent="wood", scarf="roof_green", trousers="metal", pompom=True),
+}
+
+
+def person_body(hat, hair, shirt, accent, scarf, trousers, pompom):
+    m = Model(19, 17, 31)
+    m.paste(torso(shirt, accent, scarf), 4, 4, 0)
+    m.paste(head(hat, hair, pompom), 1, 0, 10)
+    for dx in (0, 15):
+        m.paste(arm(shirt, accent), dx, 6, 1)
+    return m
+
+
+# ── Traffic ──────────────────────────────────────────────────────────────
+
+
+def car(paint):
+    """A small round-cornered car, 10 cm a voxel; the front is low y."""
+    m = Model(18, 36, 15)
+    m.box(1, 1, 3, 16, 34, 8, paint)
+    for x, y in ((1, 1), (16, 1), (1, 34), (16, 34)):
+        m.box(x, y, 3, x, y, 8, None)
+    # The cabin, with glass all round.
+    m.box(2, 10, 9, 15, 27, 13, paint)
+    m.box(2, 10, 9, 15, 10, 12, "glass")
+    m.box(2, 27, 9, 15, 27, 12, "glass")
+    m.box(2, 12, 10, 2, 25, 12, "glass")
+    m.box(15, 12, 10, 15, 25, 12, "glass")
+    m.box(3, 11, 14, 14, 26, 14, paint)
+    # Lights, bumpers, wheels.
+    for x in (3, 4, 13, 14):
+        m.set(x, 1, 6, "lamp")
+        m.set(x, 34, 6, "roof_red")
+    m.box(2, 0, 3, 15, 0, 4, "metal")
+    m.box(2, 35, 3, 15, 35, 4, "metal")
+    for x in (0, 16):
+        for y in (6, 26):
+            m.box(x, y, 0, x + 1, y + 4, 4, "ink")
+            m.set(x if x == 0 else x + 1, y + 2, 2, "trim")
+    return m
+
+
+def bike(shirt, hat):
+    """A bicycle with its rider, 10 cm a voxel; the front is low y."""
+    m = Model(7, 18, 17)
+    for y0 in (0, 12):
+        for y in range(y0, y0 + 6):
+            for z in range(0, 6):
+                d = ((y - y0 - 2.5) ** 2 + (z - 2.5) ** 2) ** 0.5
+                if 1.8 <= d <= 3.0:
+                    m.set(3, y, z, "ink")
+    m.box(3, 3, 4, 3, 14, 4, "roof_red")
+    m.box(3, 3, 4, 3, 3, 9, "metal")
+    m.box(1, 3, 9, 5, 3, 9, "metal")
+    m.box(3, 11, 5, 3, 11, 7, "metal")
+    m.box(2, 10, 8, 4, 12, 8, "ink")
+    # The rider: legs, a leaning body, a head with a hat.
+    m.box(2, 8, 5, 2, 10, 8, "trousers")
+    m.box(4, 8, 5, 4, 10, 8, "trousers")
+    m.box(1, 6, 9, 5, 10, 12, shirt)
+    m.box(1, 4, 10, 1, 5, 10, "skin")
+    m.box(5, 4, 10, 5, 5, 10, "skin")
+    m.box(1, 5, 13, 5, 9, 15, "skin")
+    m.box(1, 5, 16, 5, 9, 16, hat)
+    m.box(1, 8, 14, 5, 9, 15, hat)
+    return m
+
+
+def cone():
+    m = Model(5, 5, 7)
+    m.box(0, 0, 0, 4, 4, 0, "awning")
+    m.box(1, 1, 1, 3, 3, 3, "awning")
+    m.box(1, 1, 2, 3, 3, 2, "trim")
+    m.box(2, 2, 4, 2, 2, 6, "awning")
+    m.set(2, 2, 5, "trim")
     return m
 
 
@@ -395,12 +477,19 @@ MODELS = {
     "tree_dark": lambda: tree("leaf_dark"),
     "bench": bench,
     "planter": planter,
-    "hedge": hedge,
     "head": head,
     "torso": torso,
     "backpack": backpack,
     "arm": arm,
     "leg": leg,
+    "car_red": lambda: car("roof_red"),
+    "car_blue": lambda: car("roof_blue"),
+    "car_cream": lambda: car("cream"),
+    "bike_a": lambda: bike("mint", "roof_red"),
+    "bike_b": lambda: bike("rose", "roof_blue"),
+    "cone": cone,
+    **{f"npc_{key}_body": (lambda look=look: person_body(**look)) for key, look in PEOPLE.items()},
+    **{f"npc_{key}_leg": (lambda look=look: leg(look["trousers"])) for key, look in PEOPLE.items()},
 }
 
 

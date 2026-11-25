@@ -29,7 +29,10 @@
   in a beanie, and the sky turns slowly from day to evening. The city is
   endless and grown from a seed: districts, lots of homes, shops, parks and
   squares, and named places (the bakery, the newsstand, the park), loaded
-  around the player as it walks. See `plugins/happywalk/docs/README.md`.
+  around the player as it walks. Passers-by walk the pavements and answer
+  when greeted or walked into; cars and bikes drive the streets and always
+  stop for the character, with a hoot. See
+  `plugins/happywalk/docs/README.md`.
 - **Plugins: `publish = false` keeps a plugin in development out of the
   catalogue.** Until now a new plugin directory on `main` was published by
   its first push; with this line in `plugin.toml` it is neither offered nor

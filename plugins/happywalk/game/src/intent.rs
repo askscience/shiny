@@ -24,6 +24,8 @@ pub enum Order {
     Stop,
     Faster,
     Slower,
+    /// Greet whoever is near.
+    Wave,
 }
 
 /// A whole sentence in which there was no command.
@@ -61,6 +63,9 @@ const ITALIAN: Vocabulary = Vocabulary {
         ("piano", Order::Slower),
         ("lento", Order::Slower),
         ("rallenta", Order::Slower),
+        ("saluta", Order::Wave),
+        ("ciao", Order::Wave),
+        ("buongiorno", Order::Wave),
     ],
     phrases: &["più veloce", "più piano", "a sinistra", "a destra", "gira"],
 };
@@ -81,6 +86,9 @@ const ENGLISH: Vocabulary = Vocabulary {
         ("run", Order::Faster),
         ("slower", Order::Slower),
         ("slow", Order::Slower),
+        ("wave", Order::Wave),
+        ("hello", Order::Wave),
+        ("hi", Order::Wave),
     ],
     phrases: &["turn left", "turn right", "slow down", "go back"],
 };
@@ -224,7 +232,8 @@ mod tests {
         assert_eq!(it.commands("più veloce"), [Faster]);
         assert_eq!(it.commands("piu piano"), [Slower]);
         assert_eq!(it.commands("gira a sinistra poi fermati"), [Left, Stop]);
-        assert_eq!(it.commands("buongiorno"), []);
+        assert_eq!(it.commands("buonasera a tutti"), []);
+        assert_eq!(it.commands("saluta"), [Wave]);
     }
 
     #[test]

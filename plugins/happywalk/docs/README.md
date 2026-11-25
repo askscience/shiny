@@ -141,6 +141,30 @@ prints the lots and districts around the start and the nearest place of
 each kind. `happywalkHost.place(x, z, facing)` puts the character somewhere
 (tests and screenshots).
 
+### People and traffic
+
+**Passers-by** (`game/src/npc.rs`) walk round the kerb of their lot, each at
+its own pace, wait when the character is in the way, and answer from a short
+list when walked into or greeted (`saluta`, `ciao`, `wave`, `hello`: the
+character waves and the nearest one within 7 m replies). Only the character
+has a brain; theirs are template lines, shown in a second bubble where they
+stand. Who lives on a lot comes from the city's seed. They are the
+character's own shapes in other clothes, drawn in three pieces each, and
+exist only in the nine chunks around the player.
+
+**Cars and bikes** (`game/src/traffic.rs`) keep to the right-hand lane, give
+way at crossings (streets along `x` yield), and **always stop for the
+character**: a vehicle slows as the gap closes and never moves into the box
+around the player, so standing in a lane gets a hoot ("BEEP!", and a line
+from the character's brain at most every 25 seconds), never a hit. Walking
+down the middle line of a street is in nobody's lane. Six vehicles are kept
+around the player, each new one arriving from beyond the fog.
+
+`game/src/movers.rs` is how the two meet the rest: every frame each writes
+the boxes of what it moves, and the player's step tests them after the
+city's solids, so walking into a passer-by or the side of a car is a bump
+like any other.
+
 ### Voxel models
 
 Everything made of voxels is a MagicaVoxel `.vox` file in
@@ -312,16 +336,26 @@ These are rules, not hopes: new work follows them.
 
 - **Few draw calls.** All voxel models share one material (colour is in the
   vertices) and placed copies share their mesh, so the renderer batches
-  them. Greedy meshing keeps a building at a few hundred quads.
+  them.
+- **Few triangles.** Greedy meshing, solid models (a hollow one would be
+  drawn inside too) and no undersides keep a building at 300 to 550 quads.
+  `cargo run --example stats` in `game/` lists every model's cost; one that
+  is placed many times is worth keeping light.
+- **Shadows only nearby.** Shadows draw the city a second time: one
+  cascade, 38 m, and the ground casts none.
+- **Not more pixels than the look needs.** At most 1.5 device pixels per CSS
+  pixel are drawn, whatever the screen's density.
+- **Only the city nearby exists.** 25 chunks are on screen at most, their
+  ground three shared meshes each; the outer ring is drawn without benches,
+  planters and fountains; passers-by live in the nearest nine.
 - **Collision looks only nearby.** Solids are kept per chunk; a step tests
   the one or two chunks it touches, however big the city is.
-- **Only the city nearby exists.** 25 chunks are on screen at most; their
-  ground is three shared meshes each.
 - **A small engine.** Bevy is built with only the features the game uses
   (`game/Cargo.toml`); the release build is optimised for size.
 - **Frames first.** Recognition runs in a worker, the model and the voice
-  are requests; the game's own systems do no work when nothing changed
-  (texts are rewritten only when their source changes).
+  are requests; systems that have nothing new do nothing (texts are
+  rewritten only when their source changes, chunks are looked at only when
+  the player enters a new one).
 - Targets to hold as the game grows: 60 frames a second on the kiosk's
   GPU, under 150 draw calls in view, under 10 MB to download.
 
@@ -348,13 +382,9 @@ These are rules, not hopes: new work follows them.
   named places), chunks spawned and dropped around the player, no edge.
   Still to do in later phases: lots of other sizes and streets that are not
   a plain grid, building fronts assembled from kit pieces.
-- **Phase 5, people and traffic:** `NpcPlugin` (passers-by with routines on
-  the pavements, template lines, the model only for the one being talked
-  to) and `TrafficPlugin` (cars and bikes on street lanes, stopping at
-  crossings). Collisions that are comic, never violent: avian3d for the
-  things that tumble (cones, boxes, a dropped ice cream). New orders:
-  "saluta", "aspetta", "attraversa". Done when crossing a street is a small
-  adventure.
+- **Phase 5, people and traffic (done):** passers-by with template lines,
+  cars and bikes that always stop for the character, the `saluta` order.
+  Not done: things that tumble when kicked (and so no avian3d yet).
 - **Phase 6, errands:** `QuestPlugin`. Everyday tasks given in plain words
   ("buy bread", "post the letter", "find the cat"), with places from the
   generator, a note of what is carried, and the character commenting on how

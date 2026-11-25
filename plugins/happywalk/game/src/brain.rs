@@ -22,6 +22,7 @@ use crate::hud::LastHeard;
 use crate::intent::{NotUnderstood, Order};
 use crate::lines::{stand_in, Topic};
 use crate::player::{Bumped, Pace, Player, PlayerSet};
+use crate::traffic::Hooted;
 
 /// A line the character says: spoken by the host, shown in a bubble.
 #[derive(Message, Clone, Debug)]
@@ -67,6 +68,7 @@ impl Memory {
             Topic::Bump(SolidKind::Building) => 0,
             Topic::Bump(SolidKind::Lamp) => 1,
             Topic::NotUnderstood => 3,
+            Topic::Hooted => 5,
             Topic::Bump(_) => 4,
         };
         let turn = self.turns.entry(slot).or_insert(0);
@@ -95,6 +97,9 @@ fn thing(into: SolidKind) -> &'static str {
         SolidKind::Planter => "a flower planter",
         SolidKind::Fountain => "a fountain",
         SolidKind::Kiosk => "the newsstand",
+        SolidKind::Person => "a passer-by, who was not amused",
+        SolidKind::Car => "the side of a car",
+        SolidKind::Bike => "a cyclist",
     }
 }
 
@@ -167,6 +172,8 @@ fn notice(
     time: Res<Time>,
     mut bumps: MessageReader<Bumped>,
     mut lost: MessageReader<NotUnderstood>,
+    mut hoots: MessageReader<Hooted>,
+    mut last_hoot: Local<f32>,
     players: Query<&Transform, With<Player>>,
     last: Res<LastHeard>,
     mut memory: ResMut<Memory>,
@@ -205,6 +212,31 @@ fn notice(
             id,
             asked_at: now,
             topic: Topic::Bump(bump.into),
+            moment,
+        });
+    }
+    for hoot in hoots.read() {
+        // Being hooted at is funny once in a while, not every time.
+        if now - *last_hoot < 25.0 && *last_hoot > 0.0 {
+            continue;
+        }
+        *last_hoot = now.max(0.001);
+        let who = if hoot.by == SolidKind::Bike {
+            "a cyclist had to brake and rang the bell"
+        } else {
+            "a car had to brake hard and hooted"
+        };
+        let moment = format!("standing in the road where you were told to, {who} at you");
+        let request = BrainRequest {
+            situation: situation(&memory, &last.text, &format!("{moment}. Nobody was hurt.")),
+            allowed_actions: Vec::new(),
+            lang: String::new(),
+        };
+        let id = host.ask_brain(&request);
+        asked.0.push(Waiting {
+            id,
+            asked_at: now,
+            topic: Topic::Hooted,
             moment,
         });
     }

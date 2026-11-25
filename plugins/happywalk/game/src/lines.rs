@@ -11,6 +11,45 @@ pub enum Topic {
     Bump(SolidKind),
     /// The player said something that was no command.
     NotUnderstood,
+    /// A car or a bike had to stop for the character.
+    Hooted,
+}
+
+/// What a passer-by is answering to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Remark {
+    WalkedInto,
+    Greeted,
+}
+
+/// A passer-by's line. These are always from the list: only the character
+/// has a brain.
+pub fn passer_by(lang: &str, remark: Remark, turn: usize) -> &'static str {
+    let italian = lang.starts_with("it");
+    let list: &[&str] = match (remark, italian) {
+        (Remark::WalkedInto, true) => &[
+            "Ehi, guardi dove va!",
+            "Tutto bene?",
+            "Piano, piano!",
+            "Di nuovo lei?",
+            "Scusi, eh!",
+        ],
+        (Remark::WalkedInto, false) => &[
+            "Hey, watch it!",
+            "Are you all right?",
+            "Easy, easy!",
+            "You again?",
+            "Excuse you!",
+        ],
+        (Remark::Greeted, true) => &["Buongiorno!", "Salve!", "Ciao!", "Bella giornata, eh?"],
+        (Remark::Greeted, false) => &[
+            "Good morning!",
+            "Hello there!",
+            "Hi!",
+            "Lovely day, isn't it?",
+        ],
+    };
+    list[turn % list.len()]
 }
 
 struct Lines {
@@ -19,6 +58,7 @@ struct Lines {
     lost: &'static [&'static str],
     /// Anything else in the street.
     thing: &'static [&'static str],
+    hooted: &'static [&'static str],
 }
 
 const ITALIAN: Lines = Lines {
@@ -46,6 +86,11 @@ const ITALIAN: Lines = Lines {
         "C'era una cosa. Adesso lo sappiamo in due.",
         "Tutta la città libera, e tu scegli questo.",
         "Io l'avevo visto. Tu no, evidentemente.",
+    ],
+    hooted: &[
+        "Suona a me? Io eseguo ordini.",
+        "In mezzo alla strada. Idea tua, ricordiamolo.",
+        "Tranquillo, si è fermato. Stavolta.",
     ],
 };
 
@@ -75,6 +120,11 @@ const ENGLISH: Lines = Lines {
         "A whole city to walk in, and you choose this.",
         "I saw it coming. You, clearly, did not.",
     ],
+    hooted: &[
+        "Hooting at me? I only follow orders.",
+        "The middle of the road. Your idea, let's remember.",
+        "Relax, it stopped. This time.",
+    ],
 };
 
 fn lines(lang: &str) -> &'static Lines {
@@ -92,6 +142,7 @@ pub fn stand_in(lang: &str, topic: Topic, turn: usize) -> &'static str {
         Topic::Bump(SolidKind::Building) => lines.building,
         Topic::Bump(SolidKind::Lamp) => lines.lamp,
         Topic::NotUnderstood => lines.lost,
+        Topic::Hooted => lines.hooted,
         Topic::Bump(_) => lines.thing,
     };
     list[turn % list.len()]
@@ -100,6 +151,12 @@ pub fn stand_in(lang: &str, topic: Topic, turn: usize) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn passers_by_answer_in_the_language() {
+        assert_eq!(passer_by("it", Remark::Greeted, 0), "Buongiorno!");
+        assert_eq!(passer_by("en", Remark::WalkedInto, 5), "Hey, watch it!");
+    }
 
     #[test]
     fn lines_go_round_without_repeating() {

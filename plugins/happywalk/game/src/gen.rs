@@ -32,6 +32,10 @@ pub enum SolidKind {
     Planter,
     Fountain,
     Kiosk,
+    /// A passer-by.
+    Person,
+    Car,
+    Bike,
 }
 
 /// A box on the ground, as seen from above (`x`, `z`).
@@ -104,6 +108,17 @@ impl Prop {
     pub fn solid_foot(mut self, kind: SolidKind, half: f32) -> Self {
         self.solid = Some((kind, Some(Vec2::splat(half))));
         self
+    }
+
+    /// Whether it is worth drawing in a chunk seen from a distance.
+    pub fn shows_from_afar(&self) -> bool {
+        matches!(
+            self.solid,
+            Some((
+                SolidKind::Building | SolidKind::Tree | SolidKind::Lamp | SolidKind::Kiosk,
+                _
+            ))
+        )
     }
 
     /// The box it takes on the ground, given its model's size in voxels.
@@ -427,7 +442,8 @@ pub fn chunk(seed: u64, coord: IVec2) -> Chunk {
         }
     }
     // A lamp post at two corners of every lot.
-    let reach = PAVED / 2.0 - 0.35;
+    // Back from the kerb, where passers-by walk.
+    let reach = PAVED / 2.0 - 0.95;
     for corner in [Vec2::new(1.0, 1.0), Vec2::new(-1.0, -1.0)] {
         out.props
             .push(Prop::new("lamp", lot + corner * reach, 0.125).solid_foot(SolidKind::Lamp, 0.16));
@@ -438,7 +454,8 @@ pub fn chunk(seed: u64, coord: IVec2) -> Chunk {
 /// Trees, benches and planters on the strip of pavement around buildings.
 fn street_furniture(seed: u64, coord: IVec2, props: &mut Vec<Prop>) {
     let lot = centre(coord);
-    let strip = PAVED / 2.0 - 0.75;
+    // Clear of the kerb, where passers-by walk.
+    let strip = PAVED / 2.0 - 0.95;
     for (i, (side, along)) in [
         (Vec2::X, Vec2::Y),
         (Vec2::NEG_X, Vec2::Y),
@@ -466,7 +483,7 @@ fn street_furniture(seed: u64, coord: IVec2, props: &mut Vec<Prop>) {
                     .solid(SolidKind::Bench),
             ),
             1 => props.push(
-                Prop::new("planter", lot + side * strip - along * 3.9, 0.125)
+                Prop::new("planter", lot + side * strip - along * 3.9, 0.1)
                     .solid(SolidKind::Planter),
             ),
             _ => {}

@@ -9,14 +9,26 @@ use crate::camera::FollowCamera;
 use crate::player::Player;
 use crate::telemetry::Latency;
 
+/// Somebody else says something: a passer-by, a car's horn. Shown in a
+/// bubble at that place in the world for a moment.
+#[derive(Message, Clone, Debug)]
+pub struct OtherSaid {
+    pub text: String,
+    pub at: Vec3,
+}
+
 pub struct HudPlugin;
 
 impl Plugin for HudPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<LastHeard>()
+            .add_message::<OtherSaid>()
             .add_systems(Startup, setup)
             .add_systems(Update, (remember, draw, toggle_timings).chain())
-            .add_systems(PostUpdate, bubble.after(TransformSystems::Propagate));
+            .add_systems(
+                PostUpdate,
+                (bubble, other_bubble).after(TransformSystems::Propagate),
+            );
     }
 }
 
@@ -49,8 +61,19 @@ struct Bubble {
 #[derive(Component)]
 struct BubbleText;
 
+/// The other speaker's bubble: where in the world it hangs.
+#[derive(Component)]
+struct OtherBubble {
+    left: f32,
+    at: Vec3,
+}
+
+#[derive(Component)]
+struct OtherBubbleText;
+
 const INK: Color = Color::srgb(0.20, 0.22, 0.30);
 const BUBBLE_WIDTH: f32 = 340.0;
+const OTHER_WIDTH: f32 = 240.0;
 
 fn setup(mut commands: Commands, mut fonts: ResMut<Assets<Font>>) {
     let font = fonts.add(Font::from_bytes(
@@ -105,6 +128,63 @@ fn setup(mut commands: Commands, mut fonts: ResMut<Assets<Font>>) {
                 BubbleText,
             ));
         });
+
+    commands
+        .spawn((
+            OtherBubble {
+                left: 0.0,
+                at: Vec3::ZERO,
+            },
+            Node {
+                position_type: PositionType::Absolute,
+                width: Val::Px(OTHER_WIDTH),
+                padding: UiRect::axes(Val::Px(12.0), Val::Px(7.0)),
+                justify_content: JustifyContent::Center,
+                border_radius: BorderRadius::all(Val::Px(14.0)),
+                ..default()
+            },
+            BackgroundColor(Color::srgba(1.0, 0.98, 0.90, 0.94)),
+            Visibility::Hidden,
+        ))
+        .with_children(|bubble| {
+            bubble.spawn((
+                Text::new(""),
+                text(15.0),
+                TextLayout::justify(Justify::Center),
+                OtherBubbleText,
+            ));
+        });
+}
+
+fn other_bubble(
+    time: Res<Time>,
+    mut said: MessageReader<OtherSaid>,
+    cameras: Query<(&Camera, &GlobalTransform), With<FollowCamera>>,
+    mut bubbles: Query<(&mut OtherBubble, &mut Node, &mut Visibility)>,
+    mut texts: Query<&mut Text, With<OtherBubbleText>>,
+) {
+    let Ok((mut bubble, mut node, mut visibility)) = bubbles.single_mut() else {
+        return;
+    };
+    for line in said.read() {
+        if let Ok(mut text) = texts.single_mut() {
+            **text = line.text.clone();
+        }
+        bubble.at = line.at;
+        bubble.left = 1.6 + line.text.chars().count() as f32 * 0.05;
+    }
+    bubble.left = (bubble.left - time.delta_secs()).max(0.0);
+    let Ok((camera, view)) = cameras.single() else {
+        return;
+    };
+    match camera.world_to_viewport(view, bubble.at) {
+        Ok(at) if bubble.left > 0.0 => {
+            *visibility = Visibility::Visible;
+            node.left = Val::Px(at.x - OTHER_WIDTH / 2.0);
+            node.top = Val::Px((at.y - 50.0).max(8.0));
+        }
+        _ => *visibility = Visibility::Hidden,
+    }
 }
 
 fn remember(mut heard: MessageReader<Heard>, mut last: ResMut<LastHeard>) {

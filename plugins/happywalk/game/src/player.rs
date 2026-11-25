@@ -8,14 +8,23 @@ use bevy::prelude::*;
 
 use crate::city::{SolidKind, Solids, START};
 use crate::intent::Order;
+use crate::movers::Movers;
 use crate::vox::VoxLibrary;
 
 /// The character walked into something.
 #[derive(Message, Clone, Copy, Debug)]
 pub struct Bumped {
     pub into: SolidKind,
+    /// Where the character was.
+    pub at: Vec2,
     /// How fast it was going.
     pub pace: Pace,
+}
+
+/// The character waved.
+#[derive(Message, Clone, Copy, Debug)]
+pub struct Waved {
+    pub at: Vec2,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -70,6 +79,8 @@ pub struct Player {
     /// Seconds of jolt left after a bump, and which way it throws.
     pub jolt: f32,
     thrown: Vec2,
+    /// Seconds of waving left.
+    pub waving: f32,
     /// Where the limbs are in their swing, and how wide it is (0..1).
     stride: f32,
     swing: f32,
@@ -84,6 +95,7 @@ impl Default for Player {
             pace: Pace::Walk,
             jolt: 0.0,
             thrown: Vec2::ZERO,
+            waving: 0.0,
             stride: 0.0,
             swing: 0.0,
         }
@@ -110,6 +122,7 @@ impl Player {
                 self.walking = true;
             }
             Order::Slower => self.pace = self.pace.slower(),
+            Order::Wave => self.waving = 1.4,
         }
     }
 
@@ -120,7 +133,13 @@ impl Player {
 
     /// One step of `dt` seconds from `at`. Returns the new place and what
     /// was walked into, if anything.
-    pub fn step(&mut self, at: Vec2, dt: f32, solids: &Solids) -> (Vec2, Option<SolidKind>) {
+    pub fn step(
+        &mut self,
+        at: Vec2,
+        dt: f32,
+        solids: &Solids,
+        movers: &Movers,
+    ) -> (Vec2, Option<SolidKind>) {
         let turn = self.heading - self.facing;
         let most = TURN_RATE * dt;
         self.facing += turn.clamp(-most, most);
@@ -130,7 +149,7 @@ impl Player {
             // Thrown back a little, away from what was hit (wherever the
             // character has turned to since), as long as there is room.
             let back = at + self.thrown * 1.6 * dt * (self.jolt / JOLT);
-            if solids.hit(back, RADIUS).is_none() {
+            if solids.hit(back, RADIUS).is_none() && movers.hit(back, RADIUS).is_none() {
                 at = back;
             }
             self.jolt = (self.jolt - dt).max(0.0);
@@ -142,7 +161,10 @@ impl Player {
             return (at, None);
         }
         let next = at + self.forward() * self.pace.speed() * dt;
-        match solids.hit(next, RADIUS) {
+        match solids
+            .hit(next, RADIUS)
+            .or_else(|| movers.hit(next, RADIUS))
+        {
             Some(into) => {
                 self.walking = false;
                 self.jolt = JOLT;
@@ -176,6 +198,8 @@ pub struct PlayerPlugin;
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.add_message::<Bumped>()
+            .add_message::<Waved>()
+            .init_resource::<Movers>()
             .add_systems(Startup, spawn)
             .add_systems(Update, (walk, animate).chain().in_set(PlayerSet));
     }
@@ -254,6 +278,8 @@ fn spawn(mut commands: Commands, library: Res<VoxLibrary>) {
 fn walk(
     time: Res<Time>,
     solids: Res<Solids>,
+    movers: Res<Movers>,
+    mut waves: MessageWriter<Waved>,
     mut orders: MessageReader<Order>,
     mut placed: MessageReader<crate::bridge::Placed>,
     mut bumps: MessageWriter<Bumped>,
@@ -264,6 +290,11 @@ fn walk(
     };
     for order in orders.read() {
         player.obey(*order);
+        if *order == Order::Wave {
+            waves.write(Waved {
+                at: Vec2::new(transform.translation.x, transform.translation.z),
+            });
+        }
     }
     for place in placed.read() {
         transform.translation = Vec3::new(place.at.x, 0.0, place.at.y);
@@ -273,13 +304,15 @@ fn walk(
     // A long frame must not carry the character through a wall.
     let dt = time.delta_secs().min(0.05);
     let at = Vec2::new(transform.translation.x, transform.translation.z);
-    let (at, bumped) = player.step(at, dt, &solids);
+    player.waving = (player.waving - dt).max(0.0);
+    let (at, bumped) = player.step(at, dt, &solids, &movers);
     transform.translation.x = at.x;
     transform.translation.z = at.y;
     transform.rotation = Quat::from_rotation_y(player.facing);
     if let Some(into) = bumped {
         bumps.write(Bumped {
             into,
+            at,
             pace: player.pace,
         });
     }
@@ -317,6 +350,13 @@ fn animate(
     for (limb, mut transform) in &mut limbs {
         // Thrown up in surprise when it bumps.
         let surprise = if limb.reach > 0.9 { -jolt * 2.2 } else { 0.0 };
+        // A wave: one arm up, swinging from the shoulder.
+        if limb.reach > 0.9 && limb.side < 0.0 && player.waving > 0.0 {
+            let up = (player.waving / 0.25).min(1.0) * ((1.4 - player.waving) / 0.25).min(1.0);
+            transform.rotation = Quat::from_rotation_z((player.waving * 14.0).sin() * 0.35 * up)
+                * Quat::from_rotation_x(-2.7 * up);
+            continue;
+        }
         transform.rotation = Quat::from_rotation_x(limb.side * swing * limb.reach + surprise);
     }
     if let Ok(mut body) = bodies.single_mut() {
@@ -342,7 +382,7 @@ mod tests {
         steps: usize,
     ) -> (Vec2, Option<SolidKind>) {
         for _ in 0..steps {
-            let (next, bumped) = player.step(at, 1.0 / 60.0, solids);
+            let (next, bumped) = player.step(at, 1.0 / 60.0, solids, &Movers::default());
             at = next;
             if bumped.is_some() || !player.walking {
                 return (at, bumped);
@@ -358,7 +398,7 @@ mod tests {
         player.obey(Order::Left);
         player.obey(Order::Forward);
         for _ in 0..30 {
-            at = player.step(at, 1.0 / 60.0, solids).0;
+            at = player.step(at, 1.0 / 60.0, solids, &Movers::default()).0;
         }
         (player, at)
     }
@@ -398,7 +438,7 @@ mod tests {
         // off, back to the street.
         player.obey(Order::Back);
         for _ in 0..120 {
-            let (next, bumped) = player.step(at, 1.0 / 60.0, &solids);
+            let (next, bumped) = player.step(at, 1.0 / 60.0, &solids, &Movers::default());
             assert_eq!(bumped, None);
             at = next;
         }
@@ -415,11 +455,40 @@ mod tests {
         };
         let mut at = Vec2::new(START.x, START.z);
         for _ in 0..120 {
-            at = player.step(at, 1.0 / 60.0, &solids).0;
+            at = player.step(at, 1.0 / 60.0, &solids, &Movers::default()).0;
         }
         assert_eq!(player.jolt, 0.0);
-        let still = player.step(at, 1.0 / 60.0, &solids).0;
+        let still = player.step(at, 1.0 / 60.0, &solids, &Movers::default()).0;
         assert_eq!(still, at);
+    }
+
+    #[test]
+    fn a_passer_by_in_the_way_is_a_bump_too() {
+        use crate::movers::Mover;
+        let solids = Solids::new(SEED);
+        let mut player = Player::default();
+        player.obey(Order::Forward);
+        let start = Vec2::new(START.x, START.z);
+        let movers = Movers {
+            people: vec![Mover {
+                at: start + Vec2::new(0.0, -3.0),
+                half: Vec2::splat(0.28),
+                kind: SolidKind::Person,
+            }],
+            vehicles: Vec::new(),
+        };
+        let mut at = start;
+        let mut bumped = None;
+        for _ in 0..600 {
+            let (next, hit) = player.step(at, 1.0 / 60.0, &solids, &movers);
+            at = next;
+            if hit.is_some() {
+                bumped = hit;
+                break;
+            }
+        }
+        assert_eq!(bumped, Some(SolidKind::Person));
+        assert!(at.y > start.y - 3.0);
     }
 
     #[test]
@@ -440,5 +509,7 @@ mod tests {
         assert!((player.heading - PI).abs() < 1e-6);
         player.obey(Order::Right);
         assert!((player.heading - FRAC_PI_2).abs() < 1e-6);
+        player.obey(Order::Wave);
+        assert!(player.waving > 0.0);
     }
 }

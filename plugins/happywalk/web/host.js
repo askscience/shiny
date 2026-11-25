@@ -334,7 +334,7 @@ async function start() {
   log(`city seed ${seed}`);
   // Bevy takes over the page's event loop from here (it throws to do so).
   queueMicrotask(() => {
-    try { game.hw_start(seed); } catch (error) {
+    try { game.hw_start(seed, window.devicePixelRatio || 1); } catch (error) {
       if (!String(error?.message || error).includes('Using exceptions for control flow')) throw error;
     }
   });

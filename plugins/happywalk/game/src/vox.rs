@@ -55,6 +55,11 @@ impl VoxModel {
         self.cells[index] = colour;
     }
 
+    /// How many voxels are filled.
+    pub fn filled(&self) -> usize {
+        self.cells.iter().filter(|c| **c != 0).count()
+    }
+
     /// The voxel at a position, `0` outside the model.
     pub fn at(&self, x: i32, y: i32, z: i32) -> u8 {
         let inside = |v: i32, size: u32| v >= 0 && (v as u32) < size;
@@ -148,6 +153,10 @@ impl VoxModel {
             let (u, v) = ((d + 1) % 3, (d + 2) % 3);
             for side in [-1i32, 1] {
                 for slice in 0..size[d] {
+                    // The underside of a model stands on the ground: never seen.
+                    if d == 1 && side < 0 && slice == 0 {
+                        continue;
+                    }
                     // What shows on this slice, facing `side` along `d`.
                     let mut mask: Vec<Option<(u8, [u8; 4])>> =
                         vec![None; (size[u] * size[v]) as usize];
@@ -344,6 +353,13 @@ impl VoxLibrary {
     }
 }
 
+/// Every built-in model, by name.
+pub fn models() -> impl Iterator<Item = (&'static str, VoxModel)> {
+    VOX_ASSETS
+        .iter()
+        .filter_map(|(name, bytes)| VoxModel::parse(bytes).ok().map(|model| (*name, model)))
+}
+
 /// The size in voxels of every built-in model, without a renderer: for code
 /// that lays things out (and its tests).
 pub fn sizes() -> HashMap<&'static str, UVec3> {
@@ -405,9 +421,11 @@ mod tests {
     }
 
     #[test]
-    fn a_solid_block_is_six_quads() {
+    fn a_solid_block_is_five_quads() {
+        // Four sides and the top; the underside stands on the ground.
         let quads = solid(UVec3::new(8, 5, 3)).quads();
-        assert_eq!(quads.len(), 6);
+        assert_eq!(quads.len(), 5);
+        assert!(!quads.iter().any(|q| q.normal == [0.0, -1.0, 0.0]));
         assert!(quads.iter().all(|q| q.shade == [0; 4]));
     }
 
