@@ -104,53 +104,102 @@ class Model:
 # ── Buildings ────────────────────────────────────────────────────────────
 
 
-def building(wall, roof, floors, width=24, depth=24, shop=False, lit=(), awning="awning", sign=None, boxes=None):
-    """A block of flats: a ground floor with a door (a shop window and an
-    awning when `shop`), `floors` storeys of windows on all four sides, and a
-    roof slab that overhangs by one voxel. `lit` lists (storey, column)
-    windows whose light is on. A shop can have its own `awning` colour, a
-    `sign` board over it, and `boxes` of that colour of flowers under the
-    front windows."""
+def building(
+    wall,
+    roof,
+    floors,
+    width=24,
+    depth=24,
+    shop=False,
+    lit=(),
+    awning="awning",
+    sign=None,
+    boxes=None,
+    balconies=(),
+    shutters=None,
+    climber=None,
+    chimney=False,
+    garden=False,
+    band="trim",
+):
+    """A house or a block of flats, front on the low-y side.
+
+    A ground floor with a door (a shop window and an awning when `shop`),
+    `floors` storeys of windows on all four sides, and a roof slab that
+    overhangs by one voxel. On top of that, whatever makes it its own:
+
+    - `lit`: (storey, column) windows whose light is on;
+    - `awning`, `sign`: a shop's colours;
+    - `boxes`: flower boxes of that colour under the front windows;
+    - `balconies`: (storey, column) front windows with a balcony, a railing
+      and pots on it;
+    - `shutters`: a colour for shutters beside the front windows;
+    - `climber`: "left" or "right": a plant up that corner of the front;
+    - `chimney`, `garden`: on the roof;
+    - `band`: the colour of the bands between storeys.
+    """
     storey = 9
-    height = 10 + floors * storey + 3
-    m = Model(width + 2, depth + 2, height)
-    x0, y0, x1, y1 = 1, 1, width, depth
+    front = 3  # room in front of the wall for awnings and balconies
     top = 10 + floors * storey
-    m.box(x0, y0, 0, x1, y1, top - 1, wall)
+    m = Model(width + 2, depth + 1 + front, top + (7 if chimney or garden else 3))
+    x0, y0, x1, y1 = 1, front, width, front + depth - 1
     # Left solid: only faces next to air are meshed, so a hollow building
     # would be drawn twice, outside and in.
-    # A skirting band and a band between the storeys.
+    m.box(x0, y0, 0, x1, y1, top - 1, wall)
     m.box(x0, y0, 0, x1, y1, 0, "stone")
     for f in range(floors + 1):
         z = 9 + f * storey
-        for x in range(x0, x1 + 1):
-            m.set(x, y0, z, "trim")
-            m.set(x, y1, z, "trim")
-        for y in range(y0, y1 + 1):
-            m.set(x0, y, z, "trim")
-            m.set(x1, y, z, "trim")
+        m.box(x0, y0, z, x1, y0, z, band)
+        m.box(x0, y1, z, x1, y1, z, band)
+        m.box(x0, y0, z, x0, y1, z, band)
+        m.box(x1, y0, z, x1, y1, z, band)
     # Windows: columns of 3 wide, 4 tall, on every side.
-    columns = [c for c in range(x0 + 3, x1 - 4, 6)]
+    columns = list(range(x0 + 3, x1 - 4, 6))
+    side_columns = list(range(y0 + 3, y1 - 4, 6))
     for f in range(floors):
         z = 12 + f * storey
         for i, c in enumerate(columns):
             pane = "glass_lit" if (f, i) in lit else "glass"
-            for side_y in (y0, y1):
-                m.box(c, side_y, z, c + 2, side_y, z + 3, pane)
-                m.box(c - 1, side_y, z - 1, c + 3, side_y, z - 1, "trim")
-            for side_x in (x0, x1):
-                m.box(side_x, c, z, side_x, c + 2, z + 3, "glass")
-                m.box(side_x, c - 1, z - 1, side_x, c + 3, z - 1, "trim")
-    # The ground floor, on the front (low y).
+            m.box(c, y0, z, c + 2, y0, z + 3, pane)
+            m.box(c, y1, z, c + 2, y1, z + 3, "glass")
+            m.box(c - 1, y0, z - 1, c + 3, y0, z - 1, "trim")
+            m.box(c - 1, y1, z - 1, c + 3, y1, z - 1, "trim")
+            if shutters:
+                m.box(c - 1, y0 - 1, z, c - 1, y0 - 1, z + 3, shutters)
+                m.box(c + 3, y0 - 1, z, c + 3, y0 - 1, z + 3, shutters)
+            if (f, i) in balconies:
+                # A slab, a railing, and two pots.
+                m.box(c - 2, y0 - 2, z - 2, c + 4, y0 - 1, z - 2, "stone")
+                m.box(c - 2, y0 - 2, z - 1, c + 4, y0 - 2, z, "metal")
+                m.box(c - 2, y0 - 1, z - 1, c - 2, y0 - 1, z, "metal")
+                m.box(c + 4, y0 - 1, z - 1, c + 4, y0 - 1, z, "metal")
+                m.box(c - 1, y0 - 2, z - 1, c + 3, y0 - 2, z - 1, None)
+                for px, bloom in ((c - 1, "flower"), (c + 3, "lamp")):
+                    m.set(px, y0 - 1, z - 1, "bark")
+                    m.set(px, y0 - 1, z, "leaf")
+                    m.set(px, y0 - 1, z + 1, bloom)
+            elif boxes:
+                m.box(c - 1, y0 - 1, z - 1, c + 3, y0 - 1, z - 1, "bark")
+                for x in range(c - 1, c + 4):
+                    m.set(x, y0 - 1, z, boxes if x % 2 else "leaf")
+        for c in side_columns:
+            m.box(x0, c, z, x0, c + 2, z + 3, "glass")
+            m.box(x1, c, z, x1, c + 2, z + 3, "glass")
+            m.box(x0, c - 1, z - 1, x0, c + 3, z - 1, "trim")
+            m.box(x1, c - 1, z - 1, x1, c + 3, z - 1, "trim")
+    # The ground floor.
     door_x = x0 + width // 2 - 2
     m.box(door_x, y0, 1, door_x + 3, y0, 6, "door")
     m.set(door_x + 3, y0, 3, "lamp")
+    m.box(door_x - 1, y0 - 1, 0, door_x + 4, y0 - 1, 0, "stone")
     if shop:
         m.box(x0 + 2, y0, 2, door_x - 2, y0, 6, "glass")
         m.box(door_x + 6, y0, 2, x1 - 2, y0, 6, "glass")
         for x in range(x0, x1 + 1):
-            m.set(x, y0 - 1, 8, awning if (x // 2) % 2 == 0 else "trim")
-            m.set(x, y0 - 1, 7, awning if (x // 2) % 2 == 0 else "trim")
+            stripe = awning if (x // 2) % 2 == 0 else "trim"
+            m.set(x, y0 - 1, 8, stripe)
+            m.set(x, y0 - 2, 7, stripe)
+            m.set(x, y0 - 1, 7, stripe)
         if sign:
             m.box(x0 + 5, y0 - 1, 10, x1 - 5, y0 - 1, 12, sign)
             for x in range(x0 + 7, x1 - 6, 3):
@@ -158,22 +207,37 @@ def building(wall, roof, floors, width=24, depth=24, shop=False, lit=(), awning=
     else:
         m.box(x0 + 3, y0, 3, x0 + 5, y0, 6, "glass")
         m.box(x1 - 5, y0, 3, x1 - 3, y0, 6, "glass")
-    if boxes:
-        for f in range(floors):
-            z = 11 + f * storey
-            for c in columns:
-                m.box(c - 1, y0 - 1, z - 1, c + 3, y0 - 1, z - 1, "bark")
-                for x in range(c - 1, c + 4):
-                    m.set(x, y0 - 1, z, boxes if x % 2 else "leaf")
-    # The roof: an overhanging slab, a parapet, and something on it.
-    m.box(0, 0, top, width + 1, depth + 1, top, roof)
-    for x in range(0, width + 2):
-        m.set(x, 0, top + 1, roof)
-        m.set(x, depth + 1, top + 1, roof)
-    for y in range(0, depth + 2):
-        m.set(0, y, top + 1, roof)
-        m.set(width + 1, y, top + 1, roof)
+    if climber:
+        # Up one corner of the front, wandering a little, with a few flowers.
+        base = x0 if climber == "left" else x1
+        inward = 1 if climber == "left" else -1
+        for z in range(1, top - 2):
+            reach = 2 + (z * 7 // 5) % 3 + (1 if z % 4 == 0 else 0)
+            for k in range(reach):
+                if (z + k) % 5 != 0:
+                    m.set(base + inward * k, y0 - 1, z, "leaf_dark" if (z + k) % 3 else "leaf")
+            if z % 6 == 2:
+                m.set(base + inward * (reach - 1), y0 - 1, z, "flower")
+    # The roof: an overhanging slab and a parapet, and what stands on it.
+    m.box(x0 - 1, y0 - 1, top, x1 + 1, y1 + 1, top, roof)
+    m.box(x0 - 1, y0 - 1, top + 1, x1 + 1, y0 - 1, top + 1, roof)
+    m.box(x0 - 1, y1 + 1, top + 1, x1 + 1, y1 + 1, top + 1, roof)
+    m.box(x0 - 1, y0 - 1, top + 1, x0 - 1, y1 + 1, top + 1, roof)
+    m.box(x1 + 1, y0 - 1, top + 1, x1 + 1, y1 + 1, top + 1, roof)
     m.box(x0 + 4, y1 - 7, top + 1, x0 + 7, y1 - 4, top + 2, "stone")
+    if chimney:
+        m.box(x1 - 6, y0 + 4, top + 1, x1 - 4, y0 + 6, top + 5, "door")
+        m.box(x1 - 7, y0 + 3, top + 6, x1 - 3, y0 + 7, top + 6, "stone")
+    if garden:
+        m.box(x0 + 9, y0 + 3, top + 1, x1 - 3, y0 + 9, top + 1, "bark")
+        for x in range(x0 + 9, x1 - 2):
+            for y in range(y0 + 3, y0 + 10):
+                if (x * 3 + y * 5) % 4:
+                    m.set(x, y, top + 2, "leaf" if (x + y) % 3 else "leaf_dark")
+                if (x * 7 + y * 3) % 11 == 0:
+                    m.set(x, y, top + 3, "flower" if (x + y) % 2 else "lamp")
+        m.box(x0 + 12, y0 + 5, top + 2, x0 + 12, y0 + 5, top + 5, "bark")
+        m.box(x0 + 11, y0 + 4, top + 5, x0 + 13, y0 + 6, top + 6, "leaf_dark")
     return m
 
 
@@ -255,6 +319,55 @@ def kiosk():
     for x in range(16):
         m.set(x, 0, 11, "roof_green" if (x // 2) % 2 == 0 else "trim")
     m.box(5, 4, 13, 10, 7, 14, "roof_green")
+    return m
+
+
+# ── In front of the shops ────────────────────────────────────────────────
+
+
+def cafe_table():
+    """A round table with two chairs and a cup on it."""
+    m = Model(14, 7, 8)
+    m.box(6, 3, 0, 7, 3, 5, "metal")
+    m.box(4, 1, 6, 9, 5, 6, "trim")
+    m.set(6, 3, 7, "roof_red")
+    for x in (0, 11):
+        m.box(x, 2, 0, x + 2, 4, 3, "wood")
+        back = x if x == 0 else x + 2
+        m.box(back, 2, 4, back, 4, 7, "wood")
+    return m
+
+
+def crates():
+    """Crates of fruit, as outside a greengrocer's."""
+    m = Model(12, 6, 7)
+    for x0, fruit in ((0, "roof_red"), (6, "awning")):
+        m.box(x0, 0, 0, x0 + 5, 5, 2, "wood")
+        m.box(x0 + 1, 1, 3, x0 + 4, 4, 3, fruit)
+    m.box(3, 1, 3, 8, 4, 5, "wood")
+    m.box(4, 2, 6, 7, 3, 6, "leaf")
+    return m
+
+
+def flower_buckets():
+    m = Model(12, 5, 8)
+    for i, bloom in enumerate(("flower", "lamp", "roof_red")):
+        x = i * 4 + 1
+        m.box(x, 1, 0, x + 2, 3, 3, "metal")
+        m.box(x + 1, 2, 4, x + 1, 2, 5, "leaf_dark")
+        m.box(x, 1, 6, x + 2, 3, 7, bloom)
+        m.set(x + 1, 2, 7, "leaf")
+    return m
+
+
+def sign_board():
+    """An A-frame board on the pavement."""
+    m = Model(6, 5, 9)
+    m.box(0, 1, 0, 5, 1, 8, "wood")
+    m.box(0, 3, 0, 5, 3, 6, "wood")
+    m.box(1, 0, 3, 4, 0, 7, "ink")
+    m.box(2, 0, 6, 3, 0, 6, "trim")
+    m.box(1, 0, 4, 4, 0, 4, "trim")
     return m
 
 
@@ -458,18 +571,28 @@ def cone():
 
 
 MODELS = {
-    # Homes.
-    "building_rose": lambda: building("rose", "roof_red", 2, lit=[(0, 1)], boxes="flower"),
-    "building_peach": lambda: building("peach", "roof_red", 3, lit=[(2, 0), (1, 2)]),
-    "building_sky": lambda: building("sky", "roof_blue", 4, lit=[(3, 1)]),
-    "building_lilac": lambda: building("lilac", "roof_blue", 3, lit=[(1, 0)], boxes="lamp"),
-    "building_mint": lambda: building("mint", "roof_green", 2, width=22, depth=22),
-    "building_cream": lambda: building("cream", "roof_green", 5, width=22, depth=24, lit=[(4, 2), (2, 1)]),
+    # Homes, in three manners, one per district.
+    # The old centre: warm walls, red roofs, balconies with pots, shutters.
+    "home_old_a": lambda: building("cream", "roof_red", 3, balconies=[(0, 1), (1, 0), (1, 2), (2, 1)], shutters="roof_green", lit=[(2, 0)], chimney=True),
+    "home_old_b": lambda: building("peach", "roof_red", 2, balconies=[(0, 0), (0, 2), (1, 1)], shutters="door", boxes="flower", lit=[(1, 2)]),
+    "home_old_c": lambda: building("rose", "roof_red", 4, width=22, depth=24, balconies=[(1, 1), (3, 0), (3, 2)], shutters="trim", lit=[(0, 1), (2, 2)], chimney=True),
+    # The town: cool colours, taller, flower boxes, climbers.
+    "home_town_a": lambda: building("sky", "roof_blue", 4, boxes="lamp", climber="left", lit=[(3, 1)]),
+    "home_town_b": lambda: building("lilac", "roof_blue", 3, boxes="flower", lit=[(1, 0)], chimney=True, band="stone"),
+    "home_town_c": lambda: building("cream", "roof_blue", 5, width=22, depth=24, balconies=[(2, 1), (4, 1)], climber="right", lit=[(4, 2), (2, 0)]),
+    # The green side: low houses, plants up the walls and on the roofs.
+    "home_garden_a": lambda: building("mint", "roof_green", 2, width=22, depth=22, climber="left", garden=True, boxes="flower"),
+    "home_garden_b": lambda: building("cream", "roof_green", 1, climber="right", garden=True, shutters="roof_green", lit=[(0, 1)]),
+    "home_garden_c": lambda: building("peach", "roof_green", 2, balconies=[(1, 1)], climber="left", garden=True, shutters="leaf_dark"),
     # Shops: what they sell is in their name, and in the generator's table.
-    "shop_bakery": lambda: building("cream", "roof_red", 1, shop=True, awning="awning", sign="wood", lit=[(0, 0)]),
-    "shop_florist": lambda: building("mint", "roof_green", 2, shop=True, awning="flower", sign="leaf_dark", boxes="flower"),
-    "shop_cafe": lambda: building("rose", "roof_blue", 2, shop=True, awning="roof_red", sign="door", lit=[(1, 1)]),
-    "shop_grocer": lambda: building("peach", "roof_green", 1, width=24, depth=20, shop=True, awning="leaf", sign="bark"),
+    "shop_bakery": lambda: building("cream", "roof_red", 1, shop=True, awning="awning", sign="wood", lit=[(0, 0)], shutters="door", chimney=True),
+    "shop_florist": lambda: building("mint", "roof_green", 2, shop=True, awning="flower", sign="leaf_dark", boxes="flower", climber="right"),
+    "shop_cafe": lambda: building("rose", "roof_blue", 2, shop=True, awning="roof_red", sign="door", lit=[(1, 1)], balconies=[(1, 0), (1, 2)]),
+    "shop_grocer": lambda: building("peach", "roof_green", 1, width=24, depth=20, shop=True, awning="leaf", sign="bark", boxes="lamp"),
+    "cafe_table": cafe_table,
+    "crates": crates,
+    "flower_buckets": flower_buckets,
+    "sign_board": sign_board,
     "fountain": fountain,
     "kiosk": kiosk,
     "lamp": lamp,

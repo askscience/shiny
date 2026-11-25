@@ -222,19 +222,26 @@ impl District {
     }
 }
 
-const HOMES: [&str; 6] = [
-    "building_rose",
-    "building_peach",
-    "building_sky",
-    "building_lilac",
-    "building_mint",
-    "building_cream",
-];
-const SHOPS: [(&str, PlaceKind); 4] = [
-    ("shop_bakery", PlaceKind::Bakery),
-    ("shop_florist", PlaceKind::Florist),
-    ("shop_cafe", PlaceKind::Cafe),
-    ("shop_grocer", PlaceKind::Grocer),
+impl District {
+    /// The houses of this part of town: each district has its own manner.
+    fn homes(self) -> &'static [&'static str] {
+        match self {
+            // Warm walls, red roofs, balconies with pots, shutters.
+            District::Centre => &["home_old_a", "home_old_b", "home_old_c"],
+            // Cool colours, taller, flower boxes, a climber here and there.
+            District::Residential => &["home_town_a", "home_town_b", "home_town_c"],
+            // Low houses with plants up the walls and on the roofs.
+            District::Green => &["home_garden_a", "home_garden_b", "home_garden_c"],
+        }
+    }
+}
+
+/// The shops: the building, the place it is, and what stands outside it.
+const SHOPS: [(&str, PlaceKind, &str); 4] = [
+    ("shop_bakery", PlaceKind::Bakery, "sign_board"),
+    ("shop_florist", PlaceKind::Florist, "flower_buckets"),
+    ("shop_cafe", PlaceKind::Cafe, "cafe_table"),
+    ("shop_grocer", PlaceKind::Grocer, "crates"),
 ];
 
 /// A number from the seed, a chunk and a purpose: the generator's only
@@ -335,15 +342,25 @@ pub fn chunk(seed: u64, coord: IVec2) -> Chunk {
                 // Fronts look away from the middle of the lot.
                 let (turns, facing) = if corner.1 < 0.0 { (0, -1.0) } else { (2, 1.0) };
                 let model = if shop {
-                    let (model, place) =
+                    let (model, place, outside) =
                         SHOPS[pick(seed, coord, salt, SHOPS.len() as u32) as usize];
                     out.places.push(Place {
                         kind: place,
                         at: Vec2::new(at.x, lot.y + facing * front),
                     });
+                    // Its wares on the pavement, beside the door, towards
+                    // the corner of the lot.
+                    let beside =
+                        Vec2::new(at.x + corner.0 * 2.1, lot.y + facing * (PAVED / 2.0 - 0.95));
+                    out.props.push(
+                        Prop::new(outside, beside, 0.1)
+                            .turned(turns)
+                            .solid(SolidKind::Bench),
+                    );
                     model
                 } else {
-                    HOMES[pick(seed, coord, salt, HOMES.len() as u32) as usize]
+                    let homes = district(seed, coord).homes();
+                    homes[pick(seed, coord, salt, homes.len() as u32) as usize]
                 };
                 out.props.push(
                     Prop::new(model, at, 0.25)

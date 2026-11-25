@@ -36,7 +36,10 @@
   bread, fetch the paper, a walk in the park) come five to a round. The
   last seconds of play are always recorded and "clip" keeps them as a video
   with sound; a bump gets a close slowed look and the character looks back
-  at the camera as it speaks. See `plugins/happywalk/docs/README.md`.
+  at the camera as it speaks. Houses have balconies with pots, shutters,
+  climbers, chimneys and roof gardens, in a manner of their own in each
+  district, and shops have their wares outside. See
+  `plugins/happywalk/docs/README.md`.
 - **Plugins: `publish = false` keeps a plugin in development out of the
   catalogue.** Until now a new plugin directory on `main` was published by
   its first push; with this line in `plugin.toml` it is neither offered nor

@@ -109,7 +109,8 @@ it. `gen::chunk(seed, coord)` is a pure function: the same seed gives the
 same city everywhere, and nothing is stored.
 
 - **Districts** (centre, residential, green) come from smooth noise four
-  chunks wide; a district only sets how likely each kind of lot is.
+  chunks wide. A district sets how likely each kind of lot is and which
+  houses are built there, so walking across town the look changes.
 - **Lots:** *homes* and *shops* (four buildings facing the streets, trees,
   benches and planters on the pavement), *parks* (grass, trees on a loose
   grid, a fountain or flowers, benches) and *squares* (a fountain, a
@@ -433,20 +434,16 @@ These are rules, not hopes: new work follows them.
 - **Phase 7, made to be shared (done):** clips of the last seconds with
   sound, a close slowed look at bumps, the look back at the camera, a title,
   photo mode.
-- **Phase 8, refinement of the look** (asked for by the author on
-  2026-11-25; the examples are his, the list is open):
-  - buildings with more to look at: balconies, flower pots on sills,
-    climbing plants, shutters, signs, chimneys, roof gardens, laundry lines;
-  - shops that read as what they are (bakery, newsstand, florist, café with
-    tables outside, greengrocer with crates);
-  - several districts with their own palette accents, building kit and
-    street furniture (old centre, seaside, market, park side), chosen by the
-    generator of Phase 4;
-  - the character kept clearly its own figure, not a block-headed one: see
-    "The character's look" above.
-
-  All of it is content for `tools/make_assets.py` and the generator's
-  tables: no engine work.
+- **Phase 8, refinement of the look (done; asked for by the author on
+  2026-11-25):** a building is a function with options (balconies with pots,
+  shutters, flower boxes, a climber up a corner, a chimney, a roof garden),
+  each district has its own manner of house (old centre: warm walls, red
+  roofs, balconies and shutters; town: cool colours, taller, flower boxes
+  and climbers; green side: low houses with plants on walls and roofs), and
+  shops have their wares outside (a board, buckets of flowers, a table with
+  chairs, crates of fruit). All of it is content in
+  `tools/make_assets.py` and the generator's tables. More of the same is
+  welcome any time: laundry lines, signs with letters, a market, a seaside.
 - **Phase 9, ready to publish:** the game built in CI, performance checked
   against the budget on the kiosk, the licences of every model weight and
   font checked, more languages for commands and stand-in lines, then

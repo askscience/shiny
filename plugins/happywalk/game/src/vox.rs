@@ -521,13 +521,22 @@ mod tests {
 
     #[test]
     fn greedy_meshing_keeps_buildings_small() {
-        let (_, bytes) = VOX_ASSETS
-            .iter()
-            .find(|(name, _)| *name == "building_sky")
-            .unwrap();
-        let model = VoxModel::parse(bytes).unwrap();
-        let quads = model.quads().len();
-        assert!(quads < 2500, "{quads} quads");
+        // A building is tens of thousands of voxels and about a thousand
+        // quads: what the renderer draws is what shows, not what is there.
+        let mut seen = 0;
+        for (name, model) in
+            models().filter(|(name, _)| name.starts_with("home_") || name.starts_with("shop_"))
+        {
+            let quads = model.quads().len();
+            assert!(quads < 1500, "{name}: {quads} quads");
+            assert!(
+                quads * 8 < model.filled(),
+                "{name}: {quads} quads for {} voxels",
+                model.filled()
+            );
+            seen += 1;
+        }
+        assert!(seen >= 10);
     }
 
     #[test]
