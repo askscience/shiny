@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **Touch Bar: the shell no longer runs out of memory while the bar
+  animates.** Every picture grabbed from the bar's page was kept alive
+  forever by its own "ready" handler, which leaked about 13 MB a second at
+  the ambient rate until the kernel killed the shell. Each grab is now freed
+  as soon as its picture has been read.
+
 ## [0.3.3] - 2026-11-23
 
 ### Changed

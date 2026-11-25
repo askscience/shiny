@@ -1228,11 +1228,19 @@ void bar_tick() {
     auto grab = bar->view->grabToImage(bar->size);
     if (!grab) return;
     bar->pending = grab;
-    QObject::connect(grab.data(), &QQuickItemGrabResult::ready, bar->timer, [grab, bursting]() {
+    // The slot must not hold the grab strongly: the connection lives on the
+    // grab result itself, so a captured QSharedPointer keeps every result (and
+    // its image) alive forever — at the ambient rate that leaked ~13 MB/s until
+    // the kernel killed the shell. `pending` is the only owner; it is handed to
+    // a queued call so the result is freed after its own signal has returned.
+    QQuickItemGrabResult *result = grab.data();
+    QObject::connect(result, &QQuickItemGrabResult::ready, bar->timer, [result, bursting]() {
         Bar *bar = g_bar;
         if (!bar) return;
+        QSharedPointer<QQuickItemGrabResult> done = std::move(bar->pending);
         bar->pending.reset();
-        QImage image = grab->image().convertToFormat(QImage::Format_RGB32);
+        QImage image = result->image().convertToFormat(QImage::Format_RGB32);
+        QMetaObject::invokeMethod(qApp, [done]() {}, Qt::QueuedConnection);
         if (image.isNull()) return;
         const bool changed = image != bar->last;
         if (changed) {
