@@ -111,6 +111,23 @@ jobs:
           for name in $NAMES; do packages+=(-p "shiny-$name-plugin"); done
           cargo build --release --locked "${packages[@]}"
 
+      # A plugin whose window is a game built for the web brings its own
+      # build script (the output is not in the repository).
+      - name: Build the web games
+        shell: bash
+        env:
+          NAMES: ${{ needs.plan.outputs.names }}
+        run: |
+          set -euo pipefail
+          for name in $NAMES; do
+            script="plugins/$name/scripts/build-web.sh"
+            [ -x "$script" ] || continue
+            rustup target add wasm32-unknown-unknown
+            want=$(sed -n 's/^wasm-bindgen = "=\(.*\)"/\1/p' "plugins/$name/game/Cargo.toml")
+            cargo install wasm-bindgen-cli --version "$want" --locked
+            "$script"
+          done
+
       - uses: actions/download-artifact@v4
         with:
           name: published-catalogue

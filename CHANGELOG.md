@@ -38,8 +38,13 @@
   with sound; a bump gets a close slowed look and the character looks back
   at the camera as it speaks. Houses have balconies with pots, shutters,
   climbers, chimneys and roof gardens, in a manner of their own in each
-  district, and shops have their wares outside. See
+  district, and shops have their wares outside. Commands exist in Italian,
+  English, Spanish, French and German. See
   `plugins/happywalk/docs/README.md`.
+- **Plugins: a web game is built when its plugin is published.** The
+  publish workflow runs `plugins/<name>/scripts/build-web.sh` when a plugin
+  has one, and CI tests the Happy Walk game and checks that it compiles for
+  the web.
 - **Plugins: `publish = false` keeps a plugin in development out of the
   catalogue.** Until now a new plugin directory on `main` was published by
   its first push; with this line in `plugin.toml` it is neither offered nor

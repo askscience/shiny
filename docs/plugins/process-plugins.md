@@ -144,6 +144,11 @@ publishing, so:
   It then lives on `main` without being offered or packed
   (`scripts/plugin-catalog.py`, `scripts/build-plugin-archives.sh`); remove
   the line when it is ready.
+- a plugin whose window is a game built for the web keeps its build output
+  out of the repository and brings `plugins/<name>/scripts/build-web.sh`:
+  the publish workflow runs it before packing (it needs the
+  `wasm32-unknown-unknown` target and the `wasm-bindgen` CLI the game
+  pins).
 
 On such a push `.github/workflows/publish-plugins.yml`:
 

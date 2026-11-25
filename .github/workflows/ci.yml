@@ -22,6 +22,29 @@ jobs:
       - name: Build native fixtures and run Rust tests
         run: scripts/test-rust.sh
 
+  # The Happy Walk game is its own workspace (plugins/happywalk/game): its
+  # rules are tested natively, and it must compile for the web.
+  happywalk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: plugins/happywalk/game
+      - name: The voxel models are what the script writes
+        run: |
+          python3 plugins/happywalk/tools/make_assets.py > /dev/null
+          git diff --exit-code -- plugins/happywalk/game/assets/vox
+      - name: Game tests
+        working-directory: plugins/happywalk/game
+        run: cargo test --locked
+      - name: The game compiles for the web
+        working-directory: plugins/happywalk/game
+        run: cargo check --locked --target wasm32-unknown-unknown
+
   web:
     runs-on: ubuntu-latest
     steps:

@@ -147,10 +147,148 @@ const ENGLISH: Vocabulary = Vocabulary {
     ],
 };
 
+const SPANISH: Vocabulary = Vocabulary {
+    lang: "es",
+    words: &[
+        ("adelante", Order::Forward),
+        ("avanza", Order::Forward),
+        ("camina", Order::Forward),
+        ("atras", Order::Back),
+        ("izquierda", Order::Left),
+        ("derecha", Order::Right),
+        ("para", Order::Stop),
+        ("alto", Order::Stop),
+        ("quieto", Order::Stop),
+        ("rapido", Order::Faster),
+        ("corre", Order::Faster),
+        ("despacio", Order::Slower),
+        ("lento", Order::Slower),
+        ("saluda", Order::Wave),
+        ("hola", Order::Wave),
+        ("clip", Order::Clip),
+        ("guarda", Order::Clip),
+        ("panaderia", Order::GoTo(PlaceKind::Bakery)),
+        ("pan", Order::GoTo(PlaceKind::Bakery)),
+        ("floristeria", Order::GoTo(PlaceKind::Florist)),
+        ("flores", Order::GoTo(PlaceKind::Florist)),
+        ("cafe", Order::GoTo(PlaceKind::Cafe)),
+        ("fruteria", Order::GoTo(PlaceKind::Grocer)),
+        ("fruta", Order::GoTo(PlaceKind::Grocer)),
+        ("quiosco", Order::GoTo(PlaceKind::Newsstand)),
+        ("periodico", Order::GoTo(PlaceKind::Newsstand)),
+        ("parque", Order::GoTo(PlaceKind::Park)),
+        ("plaza", Order::GoTo(PlaceKind::Square)),
+    ],
+    phrases: &[
+        "más rápido",
+        "más despacio",
+        "a la izquierda",
+        "a la derecha",
+        "atrás",
+        "café",
+        "panadería",
+        "frutería",
+        "floristería",
+        "periódico",
+        "gira",
+    ],
+};
+
+const FRENCH: Vocabulary = Vocabulary {
+    lang: "fr",
+    words: &[
+        ("avance", Order::Forward),
+        ("marche", Order::Forward),
+        ("arriere", Order::Back),
+        ("recule", Order::Back),
+        ("gauche", Order::Left),
+        ("droite", Order::Right),
+        ("stop", Order::Stop),
+        ("arrete", Order::Stop),
+        ("halte", Order::Stop),
+        ("vite", Order::Faster),
+        ("cours", Order::Faster),
+        ("doucement", Order::Slower),
+        ("lentement", Order::Slower),
+        ("salue", Order::Wave),
+        ("bonjour", Order::Wave),
+        ("salut", Order::Wave),
+        ("clip", Order::Clip),
+        ("enregistre", Order::Clip),
+        ("boulangerie", Order::GoTo(PlaceKind::Bakery)),
+        ("pain", Order::GoTo(PlaceKind::Bakery)),
+        ("fleuriste", Order::GoTo(PlaceKind::Florist)),
+        ("fleurs", Order::GoTo(PlaceKind::Florist)),
+        ("cafe", Order::GoTo(PlaceKind::Cafe)),
+        ("primeur", Order::GoTo(PlaceKind::Grocer)),
+        ("fruits", Order::GoTo(PlaceKind::Grocer)),
+        ("kiosque", Order::GoTo(PlaceKind::Newsstand)),
+        ("journal", Order::GoTo(PlaceKind::Newsstand)),
+        ("parc", Order::GoTo(PlaceKind::Park)),
+        ("place", Order::GoTo(PlaceKind::Square)),
+    ],
+    phrases: &[
+        "plus vite",
+        "plus doucement",
+        "à gauche",
+        "à droite",
+        "arrière",
+        "arrête",
+        "café",
+        "tourne",
+        "en avant",
+    ],
+};
+
+const GERMAN: Vocabulary = Vocabulary {
+    lang: "de",
+    words: &[
+        ("vorwarts", Order::Forward),
+        ("los", Order::Forward),
+        ("geh", Order::Forward),
+        ("zuruck", Order::Back),
+        ("links", Order::Left),
+        ("rechts", Order::Right),
+        ("stopp", Order::Stop),
+        ("halt", Order::Stop),
+        ("schneller", Order::Faster),
+        ("lauf", Order::Faster),
+        ("langsamer", Order::Slower),
+        ("langsam", Order::Slower),
+        ("winke", Order::Wave),
+        ("hallo", Order::Wave),
+        ("clip", Order::Clip),
+        ("speichern", Order::Clip),
+        ("backerei", Order::GoTo(PlaceKind::Bakery)),
+        ("brot", Order::GoTo(PlaceKind::Bakery)),
+        ("blumenladen", Order::GoTo(PlaceKind::Florist)),
+        ("blumen", Order::GoTo(PlaceKind::Florist)),
+        ("cafe", Order::GoTo(PlaceKind::Cafe)),
+        ("kaffee", Order::GoTo(PlaceKind::Cafe)),
+        ("obstladen", Order::GoTo(PlaceKind::Grocer)),
+        ("obst", Order::GoTo(PlaceKind::Grocer)),
+        ("kiosk", Order::GoTo(PlaceKind::Newsstand)),
+        ("zeitung", Order::GoTo(PlaceKind::Newsstand)),
+        ("park", Order::GoTo(PlaceKind::Park)),
+        ("platz", Order::GoTo(PlaceKind::Square)),
+    ],
+    phrases: &[
+        "vorwärts",
+        "zurück",
+        "nach links",
+        "nach rechts",
+        "bäckerei",
+        "café",
+    ],
+};
+
 /// The vocabulary for a language code; English when the game has none.
 pub fn vocabulary(lang: &str) -> &'static Vocabulary {
     match lang.split('-').next().unwrap_or("") {
         "it" => &ITALIAN,
+        "es" => &SPANISH,
+        "fr" => &FRENCH,
+        "de" => &GERMAN,
         _ => &ENGLISH,
     }
 }
@@ -162,7 +300,14 @@ fn plain(word: &str) -> String {
             'è' | 'é' => Some('e'),
             'ì' | 'í' => Some('i'),
             'ò' | 'ó' => Some('o'),
-            'ù' | 'ú' => Some('u'),
+            'ù' | 'ú' | 'û' | 'ü' => Some('u'),
+            'â' | 'ä' => Some('a'),
+            'ê' | 'ë' => Some('e'),
+            'î' | 'ï' => Some('i'),
+            'ô' | 'ö' => Some('o'),
+            'ñ' => Some('n'),
+            'ç' => Some('c'),
+            'ß' => Some('s'),
             c if c.is_alphanumeric() => Some(c),
             _ => None,
         })
@@ -343,6 +488,34 @@ mod tests {
         for word in ["avanti", "fermati", "più veloce"] {
             assert!(grammar.contains(&word), "{word}");
         }
+    }
+
+    #[test]
+    fn other_languages_have_the_whole_set_of_orders() {
+        for lang in ["it", "en", "es", "fr", "de"] {
+            let vocabulary = vocabulary(lang);
+            assert_eq!(vocabulary.lang, lang);
+            let has = |order: Order| vocabulary.words.iter().any(|(_, o)| *o == order);
+            for order in [Forward, Back, Left, Right, Stop, Faster, Slower, Wave, Clip] {
+                assert!(has(order), "{lang}: no word for {order:?}");
+            }
+            for kind in PlaceKind::ALL {
+                assert!(has(GoTo(kind)), "{lang}: no word for {kind:?}");
+            }
+            // Words are stored the way they are matched: plain, lower case.
+            for (word, _) in vocabulary.words {
+                assert_eq!(plain(word), *word, "{lang}");
+            }
+        }
+        assert_eq!(
+            vocabulary("es").commands("más rápido a la panadería"),
+            [Faster, GoTo(PlaceKind::Bakery)]
+        );
+        assert_eq!(vocabulary("fr").commands("arrête"), [Stop]);
+        assert_eq!(
+            vocabulary("de").commands("zurück zur Bäckerei".to_lowercase().as_str()),
+            [Back, GoTo(PlaceKind::Bakery)]
+        );
     }
 
     #[test]

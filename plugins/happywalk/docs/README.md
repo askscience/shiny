@@ -6,8 +6,10 @@ voice and answers back, with irony, when things go wrong: bumping into walls,
 people, cars and bikes, or orders it misunderstood. Everyday life, small tasks
 and errands, nothing violent. The aim is clips worth sharing.
 
-The plugin is in development: `publish = false` in `plugin.toml` keeps it out
-of the catalogue (`scripts/plugin-catalog.py`).
+The plugin is built through all its planned phases but **not published**:
+`publish = false` in `plugin.toml` keeps it out of the catalogue
+(`scripts/plugin-catalog.py`) until it has been played on the real machine
+(see "Before it is published").
 
 ## How it is built
 
@@ -235,8 +237,8 @@ joints from the models, so a redrawn part fits without touching the code.
 ### Commands
 
 `game/src/intent.rs` turns recognised words into orders with no model in
-between. The vocabulary is per language (Italian and English; any other
-language uses the English words) and is also what the recogniser is given as
+between. The vocabulary is per language (Italian, English, Spanish, French
+and German; any other language uses the English words) and is also what the recogniser is given as
 its grammar, so it only proposes these words.
 
 | Order | Italian | English | What the character does |
@@ -302,6 +304,10 @@ stand-ins exist only for that.
 
 ### Known limits
 
+- Other languages than Italian and English have their commands but not
+  their own errand texts or stand-in lines (those fall back to English;
+  the model's lines are in the player's language anyway).
+- The camera keeps out of buildings, not out of tree crowns.
 - With a restricted grammar the recogniser maps other speech onto the
   nearest command: a recorded English sentence fed to the Italian commands
   produced a stream of orders. Background talk will move the character.
@@ -444,9 +450,57 @@ These are rules, not hopes: new work follows them.
   chairs, crates of fruit). All of it is content in
   `tools/make_assets.py` and the generator's tables. More of the same is
   welcome any time: laundry lines, signs with letters, a market, a seaside.
-- **Phase 9, ready to publish:** the game built in CI, performance checked
-  against the budget on the kiosk, the licences of every model weight and
-  font checked, more languages for commands and stand-in lines, then
-  `publish = false` goes.
+- **Phase 9, ready to publish (prepared, not published):** the publish
+  workflow builds the game for the web (`build-web.sh`) before packing the
+  plugin; CI tests the game, checks that it compiles for the web and that
+  the committed models are what the script writes; commands in Italian,
+  English, Spanish, French and German. `publish = false` stays until the
+  author has played it with a real voice on the kiosk; see "Before it is
+  published".
 
-Before any release the licences of the model weights have to be checked.
+## Before it is published
+
+What nobody has checked yet, because it needs the real machine and a
+person:
+
+1. **Play it by voice.** Every command so far was typed or injected. The
+   time from the end of a word to the movement (the target is under 300 ms)
+   is unmeasured with a real voice.
+2. **Frame rate on the kiosk's GPU.** Every run here was on a software
+   renderer (2 to 8 frames a second). The budget above is 60.
+3. **Stray speech.** With a restricted grammar the recogniser maps other
+   speech onto the nearest command (a recorded English sentence fed to the
+   Italian commands produced a stream of orders). Decoy words would soften
+   it.
+4. **The voice.** `/api/tts` was replaced by a stand-in in the tests.
+5. **Ollama.** The constrained-output path was never run against a model
+   (the server's default is a cloud model with no credit left); the
+   OpenAI-compatible path was, and answers in about a second.
+6. **Clips in the shell.** The download works in a browser; whether the
+   kiosk's shell files it where the player expects is untried.
+
+To try it on the kiosk:
+
+```sh
+plugins/happywalk/scripts/build-web.sh
+cargo build --release -p shiny-happywalk-plugin
+scripts/stage-plugin.sh happywalk ~/.local/share/shiny/plugins/happywalk
+```
+
+then restart the server (or let its plugin watcher pick the new files up)
+and open Happy Walk from the tray.
+
+## Licences
+
+| What | Licence | Note |
+| --- | --- | --- |
+| Bevy and its crates | MIT or Apache-2.0 | see `game/Cargo.lock` for the full tree |
+| DejaVu Sans Bold (`game/assets/`) | Bitstream Vera / DejaVu licence | free to redistribute; the licence file is beside it |
+| The voxel models | this repository's | written by `tools/make_assets.py` |
+| Vosk and its models | Apache-2.0 for the library; **each language's model has its own licence** | the models are LiteAura's (`voice/download_vosk.py`): check the ones shipped |
+| The language model | the user's own choice in Settings | nothing is shipped with the game |
+| The voice (Supertonic, Qwen) | LiteAura's | **to check before release**, as for any use of them |
+
+The two lines in bold are the "licences of the model weights" the plan asks
+to verify before a release: they are LiteAura's engines, not the game's,
+but the game is one more use of them.
