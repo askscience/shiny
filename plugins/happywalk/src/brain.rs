@@ -75,7 +75,7 @@ pub fn parse(text: &str, allowed: &[String]) -> Option<Answer> {
     let end = text.rfind('}')?;
     let mut answer: Answer = serde_json::from_str(text.get(start..=end)?).ok()?;
     answer.action = answer.action.trim().to_lowercase();
-    if !allowed.iter().any(|a| *a == answer.action) {
+    if !allowed.contains(&answer.action) {
         answer.action.clear();
     }
     let line = answer.say.split_whitespace().collect::<Vec<_>>().join(" ");
