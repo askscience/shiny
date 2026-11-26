@@ -47,6 +47,11 @@
   (with their hands on the handlebars and their feet on turning pedals).
   Cars come in four kinds (hatchbacks, a taxi, delivery vans, an ice-cream
   van), with turning wheels, a driver at the wheel and a horn of their own.
+  Each player names their town in the wardrobe, and the name is the city:
+  the same name, the same town. The wardrobe is a studio with a podium
+  before a painted town. A mystery generator writes fair, levelled cases
+  (absurd crimes, suspects, traces, sightings, alibis) for the detective
+  story the game is becoming.
   The character has a personality of its own (theatrical, a proud citizen
   with grudges against lamp posts and a weakness for bread), each line is
   asked from a different comic angle, and the model is told concretely what

@@ -118,6 +118,9 @@ fn set_out(
     mut route: ResMut<Route>,
     mut none: MessageWriter<NoSuchPlace>,
 ) {
+    if seed.is_changed() && !seed.is_added() {
+        *route = Route::default();
+    }
     let Ok(player) = players.single() else { return };
     let at = Vec2::new(player.translation.x, player.translation.z);
     for order in orders.read() {

@@ -149,7 +149,14 @@ fn progress(
     players: Query<&Transform, With<Player>>,
     mut quest: ResMut<Quest>,
     mut done: MessageWriter<ErrandDone>,
+    wardrobe: Res<crate::bridge::Wardrobe>,
 ) {
+    if seed.is_changed() && !seed.is_added() {
+        *quest = Quest::default();
+    }
+    if wardrobe.0 {
+        return;
+    }
     let Ok(player) = players.single() else { return };
     let at = Vec2::new(player.translation.x, player.translation.z);
     let last = match quest.current {

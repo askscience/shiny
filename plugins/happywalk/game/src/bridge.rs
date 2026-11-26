@@ -174,6 +174,7 @@ enum Inbound {
     Place { x: f32, z: f32, facing: f32 },
     Clip { ok: bool, seconds: f32 },
     Look(String),
+    City(String),
     Wardrobe(bool),
 }
 
@@ -303,6 +304,20 @@ mod exports {
         serde_json::to_string(&look).unwrap_or_default()
     }
 
+    /// The player named their city: the game moves to the city that name
+    /// stands for.
+    #[wasm_bindgen]
+    pub fn hw_city(name: &str) {
+        push(Inbound::City(name.to_string()));
+    }
+
+    /// The seed a city name stands for, to start the game in it.
+    #[wasm_bindgen]
+    pub fn hw_city_seed(name: &str) -> u32 {
+        let seed = crate::city::seed_for(name);
+        (seed ^ (seed >> 32)) as u32 | 1
+    }
+
     #[wasm_bindgen]
     pub fn hw_status(json: &str) {
         push(Inbound::Status(json.to_string()));
@@ -381,6 +396,7 @@ fn pump(
     mut placed: MessageWriter<Placed>,
     mut clips: MessageWriter<ClipSaved>,
     mut looks: MessageWriter<LookChosen>,
+    mut cities: MessageWriter<crate::city::CityNamed>,
     mut wardrobe: ResMut<Wardrobe>,
     mut laps: MessageWriter<Lap>,
     mut status: ResMut<HostStatus>,
@@ -453,6 +469,9 @@ fn pump(
                 if let Ok(look) = serde_json::from_str::<crate::figure::Look>(&json) {
                     looks.write(LookChosen(look.checked()));
                 }
+            }
+            Inbound::City(name) => {
+                cities.write(crate::city::CityNamed(name));
             }
             Inbound::Wardrobe(open) => {
                 if wardrobe.0 != open {

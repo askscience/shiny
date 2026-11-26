@@ -28,6 +28,7 @@ bevy = { version = "0.20", default-features = false, features = [
     "web",
     "bevy_color",
     "bevy_image",
+    "png",
     "bevy_mesh",
     "bevy_camera",
     "bevy_light",

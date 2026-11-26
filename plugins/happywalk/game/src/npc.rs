@@ -116,7 +116,19 @@ fn populate(
     players: Query<&Transform, With<Player>>,
     mut housed: ResMut<Housed>,
     mut here: Local<Option<IVec2>>,
+    wardrobe: Res<crate::bridge::Wardrobe>,
 ) {
+    if seed.is_changed() && !seed.is_added() {
+        for (_, people) in housed.0.drain() {
+            for entity in people {
+                commands.entity(entity).despawn();
+            }
+        }
+        *here = None;
+    }
+    if wardrobe.0 {
+        return;
+    }
     let Ok(player) = players.single() else { return };
     let home = gen::chunk_of(Vec2::new(player.translation.x, player.translation.z));
     if *here == Some(home) {

@@ -267,9 +267,23 @@ mouth.
 
 **The wardrobe** (`web/wardrobe.js`) is where the player chooses. It opens
 the first time the game is played, and from the button in the corner after
-that. The camera goes round to the front of the character, a soft light
-comes on, the character stands still and takes no orders, and every choice
-rebuilds it on the spot. One button rolls a look at random, the other keeps
+that. The character goes to a **studio** far from the city
+(`game/src/studio.rs`): it stands on a round podium before a painted
+backdrop of a pastel town (`game/assets/backdrop.png`, drawn by
+`tools/make_backdrop.py`; a picture, not the game's own city). The backdrop
+hangs from the camera and is sized to cover any window without being
+stretched; the camera goes round to the front, a soft light comes on, the
+character takes no orders, and every choice rebuilds it on the spot. (The
+browser cannot draw the game's canvas see-through, so the picture is in the
+game, not behind it.)
+
+**The town's name comes first**, at the top of the wardrobe, with a button
+that suggests one (Borgo Pastello, Villa Confetto, Pandolce...). **The name
+is the city:** it is hashed into the seed (`city::seed_for`), so the same
+name always gives the same town, and naming it anew moves the game to that
+town at once (the old one is dropped and the new one grows around the
+character). The name is kept per profile, and the character's brain is told
+it. One button rolls a look at random, the other keeps
 the look (per profile, in the browser's storage) and closes. The panel is
 built from the game's own list (`hw_look_options`) with LiteAura's shared
 controls (colours as `swatches`, styles as chips), so a choice added in
@@ -391,6 +405,60 @@ a row: every line different, about a second each.
   players; a list of decoy words in the grammar would soften it.
 - The game is slower than real time below 20 frames a second (a long frame
   never carries the character through a wall).
+
+## Mysteries
+
+The game is turning into a detective story: the character is the assistant
+of a detective who is never seen (the player, the Voice), and the town has
+small absurd crimes to solve. This part is being built; the generator is
+done.
+
+### The case generator
+
+`game/src/case.rs` writes a whole case from the town's seed, a case number
+and a level, before anyone plays it: the crime, the motive, who reports it,
+the suspects (name, job, manner, a little innocent secret, a look from the
+figure generator, where they hang out, the traces they carry, an alibi) and
+the clues. The language model will only act it out: it cannot change the
+culprit or invent a clue that matters.
+
+Crimes are rows in a table, all absurd: all the bread gone overnight, the
+fountain painted blue, forty ducks in the café, the florist's flowers
+swapped for broccoli, a scarf knitted for every tree in the park, chairs
+glued to the café's ceiling...
+
+Three kinds of clue:
+
+- **a trace** at the scene (floury footprints, drops of blue paint, a trail
+  of feathers...); whoever did it carries it, and some jobs carry it too (a
+  baker is always floury), learned by talking to them;
+- **a sighting**: something a witness saw of the culprit (glasses, a beard,
+  a hat, tall, short, the colour of their hair or clothes), which the player
+  can check by looking at the suspects, since every one is drawn
+  differently;
+- **an alibi**: innocents were somewhere in twos or threes and each names
+  the other, so asking either confirms it; the culprit claims to have been
+  with someone who was in fact elsewhere.
+
+**Every case is fair**: the generator only keeps a case where the culprit
+fits every clue and each innocent is ruled out by at least one
+(`Case::is_fair`). Tests check it on four towns, eight levels, sixty cases
+each.
+
+**Levels** make cases longer:
+
+| Level | Suspects | What changes |
+| --- | --- | --- |
+| 1 | 3 | only the culprit carries the trace: the trace settles it |
+| 2 | 4 | an innocent carries the same trace; witnesses to find |
+| 3 | 5 | alibis; sightings rule out fewer at a time |
+| 4+ | 6 | more innocents with the trace, more clues needed |
+
+To read a case without playing it:
+
+```sh
+cd plugins/happywalk/game && cargo run --example case -- "Borgo Pastello" 4 4
+```
 
 ## Latency
 

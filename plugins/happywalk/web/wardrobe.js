@@ -10,7 +10,7 @@
 // A choice added in figure.rs appears here by itself. Its words are looked up
 // in WORDS below; one that is not there yet is shown by its name.
 
-import { chip, iconButton, swatches } from '../../ui/index.js';
+import { chip, iconButton, input, swatches } from '../../ui/index.js';
 
 const WORDS = {
   it: {
@@ -25,6 +25,7 @@ const WORDS = {
     hoodie: 'Felpa', tee: 'Maglietta', jacket: 'Giacca', stripes: 'Righe', dress: 'Vestito',
     trousers: 'Pantaloni', shorts: 'Corti', skirt: 'Gonna',
     random: 'A caso', done: 'Fatto', open: 'Cambia aspetto', colour: 'Colore',
+    city: 'La tua città', suggest: 'Proponi un nome',
   },
   en: {
     skin: 'Skin', height: 'Height', hair: 'Hair', hair_colour: 'Hair colour', beard: 'Beard', glasses: 'Glasses',
@@ -38,8 +39,22 @@ const WORDS = {
     hoodie: 'Hoodie', tee: 'T-shirt', jacket: 'Jacket', stripes: 'Stripes', dress: 'Dress',
     trousers: 'Trousers', shorts: 'Shorts', skirt: 'Skirt',
     random: 'Surprise me', done: 'Done', open: 'Change the look', colour: 'Colour',
+    city: 'Your town', suggest: 'Suggest a name',
   },
 };
+
+/** Names to suggest for a town, sweet and a little silly. */
+const TOWNS = {
+  it: ['Borgo Pastello', 'Villa Confetto', 'Pandolce', 'Monte Marzapane', 'Porto Meringa', 'Castel Caramello', 'San Biscotto', 'Fiordilatte', 'Poggio Cannella', 'Vico Zucchero', 'Ponte Gelato', 'Cascina Brioche'],
+  en: ['Pastel Bay', 'Marshmallow Hill', 'Sugarbrook', 'Little Meringue', 'Toffee Cross', 'Cinnamon Harbour', 'Biscuit Green', 'Puddington', 'Jellybean Row', 'Muffin Vale'],
+};
+
+/** A town name to suggest, different from `not`. */
+export function suggestTown(lang, not = '') {
+  const list = TOWNS[String(lang).split('-')[0]] || TOWNS.en;
+  const choices = list.filter((name) => name !== not);
+  return choices[Math.floor(Math.random() * choices.length)];
+}
 
 /** The word for `key` in `lang`, in English, or the key itself. */
 export function word(lang, key) {
@@ -51,9 +66,10 @@ export function word(lang, key) {
  *
  * `options` is the game's menu; `look` the look to start from; `onChange`
  * gets the whole look after every choice, `onRandom` is asked for a new one,
- * `onDone` closes. Returns the panel element, with `setLook(look)`.
+ * `onDone` closes with the look and the town's name. Returns the panel
+ * element, with `setLook(look)`.
  */
-export function createWardrobe({ options, look, lang = 'en', onChange, onRandom, onDone }) {
+export function createWardrobe({ options, look, city = '', lang = 'en', onChange, onRandom, onDone }) {
   const current = { ...look };
   const panel = document.createElement('aside');
   panel.className = 'wardrobe';
@@ -61,6 +77,20 @@ export function createWardrobe({ options, look, lang = 'en', onChange, onRandom,
   const rows = document.createElement('div');
   rows.className = 'wardrobe-rows';
   const controls = new Map();
+
+  // The town comes first: it is the player's own, and its name is the city.
+  const town = document.createElement('div');
+  town.className = 'wardrobe-row';
+  const townLabel = document.createElement('label');
+  townLabel.className = 'ui-eyebrow';
+  townLabel.textContent = word(lang, 'city');
+  townLabel.htmlFor = 'wardrobe-city';
+  const townLine = document.createElement('div');
+  townLine.className = 'wardrobe-town';
+  const townName = input({ id: 'wardrobe-city', value: city || suggestTown(lang), maxlength: 40, autocomplete: 'off', label: word(lang, 'city') });
+  townLine.append(townName, iconButton({ icon: 'ui/magic-wand', label: word(lang, 'suggest'), onClick: () => { townName.value = suggestTown(lang, townName.value); } }));
+  town.append(townLabel, townLine);
+  rows.appendChild(town);
 
   for (const option of options) {
     const row = document.createElement('div');
@@ -101,7 +131,7 @@ export function createWardrobe({ options, look, lang = 'en', onChange, onRandom,
   const foot = document.createElement('div');
   foot.className = 'wardrobe-foot';
   foot.appendChild(iconButton({ icon: 'ui/refresh', label: word(lang, 'random'), onClick: () => onRandom?.() }));
-  foot.appendChild(iconButton({ icon: 'ui/check', label: word(lang, 'done'), variant: 'primary', onClick: () => onDone?.({ ...current }) }));
+  foot.appendChild(iconButton({ icon: 'ui/check', label: word(lang, 'done'), variant: 'primary', onClick: () => onDone?.({ ...current }, townName.value.trim() || suggestTown(lang)) }));
   panel.append(rows, foot);
 
   panel.setLook = (next) => {

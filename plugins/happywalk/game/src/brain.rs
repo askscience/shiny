@@ -52,6 +52,8 @@ pub struct Memory {
     errand_at: Option<f32>,
     /// What the character is out to do, in plain words.
     pub errand: String,
+    /// What the player called the town.
+    pub city: String,
     turns: HashMap<u8, usize>,
 }
 
@@ -175,6 +177,9 @@ pub fn situation(memory: &Memory, last_said: &str, now: &str) -> String {
 /// [`situation`], with how the character feels and what the hour is.
 pub fn situation_with(memory: &Memory, last_said: &str, now: &str, feeling: &str) -> String {
     let mut out = String::new();
+    if !memory.city.is_empty() {
+        out.push_str(&format!("Your town is called {}.\n", memory.city));
+    }
     if !memory.moments.is_empty() {
         out.push_str("Earlier, oldest first:\n");
         for moment in &memory.moments {
@@ -252,6 +257,7 @@ fn notice(
     mut errands: MessageReader<ErrandDone>,
     mut nowhere: MessageReader<NoSuchPlace>,
     quest: Res<Quest>,
+    city: Res<crate::city::CityName>,
     daylight: Res<crate::sky::Daylight>,
     mut last_hoot: Local<f32>,
     last: Res<LastHeard>,
@@ -260,6 +266,9 @@ fn notice(
     mut asked: ResMut<Asked>,
 ) {
     let now = time.elapsed_secs();
+    if memory.city != city.0 {
+        memory.city = city.0.clone();
+    }
     let errand = quest.errand().map(|e| e.task).unwrap_or_default();
     if memory.errand != errand {
         memory.errand = errand.to_string();

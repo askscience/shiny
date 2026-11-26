@@ -288,7 +288,11 @@ fn arrivals(
     mut garage: ResMut<Garage>,
     players: Query<&Transform, With<Player>>,
     vehicles: Query<(Entity, &Vehicle)>,
+    wardrobe: Res<crate::bridge::Wardrobe>,
 ) {
+    if wardrobe.0 {
+        return;
+    }
     let Ok(player) = players.single() else { return };
     let player = Vec2::new(player.translation.x, player.translation.z);
     let (mut cars, mut bikes) = (0, 0);

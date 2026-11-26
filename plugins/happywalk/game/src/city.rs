@@ -21,6 +21,27 @@ pub use crate::gen::{Solid, SolidKind, PAVED, PAVEMENT, PITCH};
 use crate::player::Player;
 use crate::vox::VoxLibrary;
 
+/// What the player called their city.
+#[derive(Resource, Clone, Debug, Default)]
+pub struct CityName(pub String);
+
+/// The player named their city (or renamed it).
+#[derive(Message, Clone, Debug)]
+pub struct CityNamed(pub String);
+
+/// The seed of the city a name stands for: the same name, the same city,
+/// whatever the case or the spaces around it.
+pub fn seed_for(name: &str) -> u64 {
+    let name = name.trim().to_lowercase();
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for byte in name.bytes() {
+        hash ^= byte as u64;
+        hash = hash.wrapping_mul(0x0100_0000_01b3);
+    }
+    // Never 0: the generator's dice want a nonzero start.
+    hash | 1
+}
+
 /// The seed the city grows from.
 #[derive(Resource, Clone, Copy, Debug)]
 pub struct CitySeed(pub u64);
@@ -99,6 +120,25 @@ impl Solids {
     }
 }
 
+/// A name from the player: the city it stands for replaces this one.
+fn rename(
+    mut named: MessageReader<CityNamed>,
+    mut name: ResMut<CityName>,
+    mut seed: ResMut<CitySeed>,
+) {
+    for new in named.read() {
+        let clean = new.0.trim();
+        if clean.is_empty() || clean == name.0 {
+            continue;
+        }
+        name.0 = clean.to_string();
+        let next = seed_for(clean);
+        if seed.0 != next {
+            seed.0 = next;
+        }
+    }
+}
+
 /// The chunks on screen, and what was spawned for each.
 #[derive(Resource, Default)]
 struct Loaded(HashMap<IVec2, (bool, Vec<Entity>)>);
@@ -127,6 +167,9 @@ impl Plugin for CityPlugin {
         app.insert_resource(CitySeed(seed))
             .insert_resource(Solids::new(seed))
             .init_resource::<Loaded>()
+            .init_resource::<CityName>()
+            .add_message::<CityNamed>()
+            .add_systems(PreUpdate, rename)
             .add_systems(Startup, prepare_ground)
             .add_systems(Update, stream);
     }
@@ -198,7 +241,23 @@ fn stream(
     mut loaded: ResMut<Loaded>,
     mut solids: ResMut<Solids>,
     mut here: Local<Option<IVec2>>,
+    wardrobe: Res<crate::bridge::Wardrobe>,
 ) {
+    // A new name is a new city: everything of the old one goes.
+    if seed.is_changed() && !seed.is_added() {
+        for (_, (_, entities)) in loaded.0.drain() {
+            for entity in entities {
+                commands.entity(entity).despawn();
+            }
+        }
+        *solids = Solids::new(seed.0);
+        *here = None;
+    }
+    // While the character is being dressed it is in the studio, far away:
+    // the city stays as it is.
+    if wardrobe.0 {
+        return;
+    }
     let at = players
         .single()
         .map(|t| Vec2::new(t.translation.x, t.translation.z))
@@ -323,6 +382,27 @@ pub fn a_built_lot(seed: u64) -> IVec2 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_name_is_always_the_same_city() {
+        assert_eq!(seed_for("Borgo Pastello"), seed_for("  borgo pastello "));
+        assert_ne!(seed_for("Borgo Pastello"), seed_for("Villa Confetto"));
+        assert_ne!(seed_for(""), 0);
+        // Every name gives a city the walk can start in.
+        for name in [
+            "Borgo Pastello",
+            "Villa Confetto",
+            "Pandolce",
+            "Marshmallow Bay",
+            "Zzz",
+        ] {
+            assert_eq!(
+                Solids::new(seed_for(name)).hit(Vec2::new(START.x, START.z), 0.4),
+                None,
+                "{name}"
+            );
+        }
+    }
 
     #[test]
     fn the_walk_starts_in_the_open() {

@@ -228,6 +228,8 @@ async function startListening() {
 
 let wardrobe = null;
 let wardrobeButton = null;
+/** The city the game started in. */
+let startCity = '';
 
 function lookKey() {
   let id = null;
@@ -239,6 +241,18 @@ function savedLook() {
   try { return JSON.parse(stored(lookKey()) || 'null'); } catch (_) { return null; }
 }
 
+function cityKey() {
+  return lookKey().replace('happywalk.look', 'happywalk.city');
+}
+
+function savedCity() {
+  return stored(cityKey()) || '';
+}
+
+function keepCity(name) {
+  try { window.localStorage.setItem(cityKey(), name); } catch (_) { /* storage blocked */ }
+}
+
 function keepLook(look) {
   try { window.localStorage.setItem(lookKey(), JSON.stringify(look)); } catch (_) { /* storage blocked */ }
 }
@@ -246,6 +260,7 @@ function keepLook(look) {
 async function openWardrobe() {
   if (!game) return;
   const { createWardrobe, word } = await import('./wardrobe.js');
+  const city = savedCity() || startCity;
   const { iconButton } = await import('../../ui/index.js');
   const lang = voiceLang();
   const slot = document.getElementById('wardrobe-slot');
@@ -259,6 +274,7 @@ async function openWardrobe() {
     wardrobe = createWardrobe({
       options: JSON.parse(game.hw_look_options()),
       look,
+      city,
       lang,
       onChange: (next) => game.hw_look(JSON.stringify(next)),
       onRandom: () => {
@@ -266,8 +282,13 @@ async function openWardrobe() {
         wardrobe.setLook(next);
         game.hw_look(JSON.stringify(next));
       },
-      onDone: (next) => {
+      onDone: (next, town) => {
         keepLook(next);
+        // A new name is a new city: the game builds it while the panel
+        // closes.
+        if (town !== savedCity()) log(`city: ${town}`);
+        keepCity(town);
+        game.hw_city(town);
         wardrobe.hidden = true;
         wardrobeButton.hidden = false;
         game.hw_wardrobe(false);
@@ -506,17 +527,24 @@ async function start() {
   log(`latency game-load ${(performance.now() - started).toFixed(0)} ms (build ${built.build})`);
   say('');
   game.hw_status(JSON.stringify(status));
-  // The city grows from a seed: `?seed=` in the address for a known city,
-  // otherwise a new one every time.
+  // The city is the player's: its name (chosen in the wardrobe) is its
+  // seed, so the same name is the same city every time. Before a name is
+  // chosen the game starts in one it suggests. `?seed=` in the address
+  // overrides it (tests).
+  const { suggestTown } = await import('./wardrobe.js');
+  startCity = savedCity() || suggestTown(voiceLang());
   const asked = Number(new URLSearchParams(window.location.search).get('seed'));
-  const seed = Number.isInteger(asked) && asked > 0 ? asked >>> 0 : (Math.random() * 0xffffffff) >>> 0;
-  log(`city seed ${seed}`);
+  const seed = Number.isInteger(asked) && asked > 0 ? asked >>> 0 : game.hw_city_seed(startCity);
+  log(`city "${startCity}", seed ${seed}`);
   // Bevy takes over the page's event loop from here (it throws to do so).
   queueMicrotask(() => {
     try { game.hw_start(seed, window.devicePixelRatio || 1); } catch (error) {
       if (!String(error?.message || error).includes('Using exceptions for control flow')) throw error;
     }
   });
+  // Its name, so the character knows where it lives (the seed already
+  // matches, so nothing is rebuilt).
+  if (!asked) game.hw_city(startCity);
   // The look kept from last time; with none, the first thing the player
   // does is choose one.
   const look = savedLook();

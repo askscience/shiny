@@ -12,11 +12,13 @@
 //! * [`keyboard`] — the same commands from keys, for testing.
 //! * [`vox`] — voxel models: `.vox` files meshed greedily, found by name.
 //! * [`gen`] — the city generator: a seed in, lots, props and places out.
+//! * [`case`] — the mystery generator: a fair case for a city and a level.
 //! * [`city`] — the chunks of the city around the player, and its solids.
 //! * [`sky`] — the light: pastel sky, soft sun, day turning to evening.
 //! * [`figure`] — the character and the passers-by, sculpted from a look.
 //! * [`player`] — the character: walking, turning, bumping.
 //! * [`camera`] — third person, following softly.
+//! * [`studio`] — where the character is dressed: a podium before a painted town.
 //! * [`movers`] — where everything that moves is, for whoever must avoid it.
 //! * [`npc`] — passers-by on the pavements.
 //! * [`traffic`] — cars and bikes that always stop for the character.
@@ -36,6 +38,7 @@
 pub mod brain;
 pub mod bridge;
 pub mod camera;
+pub mod case;
 pub mod city;
 pub mod figure;
 pub mod gen;
@@ -49,6 +52,7 @@ pub mod npc;
 pub mod player;
 pub mod quest;
 pub mod sky;
+pub mod studio;
 pub mod telemetry;
 pub mod traffic;
 pub mod vox;
@@ -98,6 +102,10 @@ pub fn app(seed: u64, pixel_ratio: f32) -> App {
         city::CityPlugin,
         player::PlayerPlugin,
         camera::CameraPlugin,
+    ))
+    // A tuple holds fifteen plugins at most: the rest in a second one.
+    .add_plugins((
+        studio::StudioPlugin,
         npc::NpcPlugin,
         traffic::TrafficPlugin,
         nav::NavPlugin,

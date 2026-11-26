@@ -151,6 +151,12 @@ fn follow(
     let frame = Quat::from_rotation_y(player.facing + direction.orbit);
     let ground = Vec3::new(at.translation.x, 0.0, at.translation.z);
     let ease = 1.0 - (-4.0 * time.delta_secs()).exp();
+    // To or from the studio: a cut, not a flight across the map.
+    let ease = if camera.translation.distance(at.translation) > 60.0 {
+        1.0
+    } else {
+        ease
+    };
     if let Ok((mut fill, mut aim)) = fills.single_mut() {
         let want = if wardrobe.0 { 6500.0 } else { 0.0 };
         if fill.illuminance != want {
