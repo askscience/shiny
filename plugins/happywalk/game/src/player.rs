@@ -17,6 +17,8 @@ use crate::vox::VoxLibrary;
 #[derive(Message, Clone, Copy, Debug)]
 pub struct Bumped {
     pub into: SolidKind,
+    /// The model of what was hit (see `brain::describe`).
+    pub what: &'static str,
     /// Where the character was.
     pub at: Vec2,
     /// How fast it was going.
@@ -83,6 +85,8 @@ pub struct Player {
     /// Seconds of jolt left after a bump, and which way it throws.
     pub jolt: f32,
     thrown: Vec2,
+    /// The model of the last thing walked into.
+    pub hit_model: &'static str,
     /// Seconds of waving left.
     pub waving: f32,
     /// Seconds left of looking over its shoulder at the camera.
@@ -102,6 +106,7 @@ impl Default for Player {
             jolt: 0.0,
             thrown: Vec2::ZERO,
             waving: 0.0,
+            hit_model: "",
             glance: 0.0,
             stride: 0.0,
             swing: 0.0,
@@ -170,11 +175,17 @@ impl Player {
             return (at, None);
         }
         let next = at + self.forward() * self.pace.speed() * dt;
-        match solids
-            .hit(next, RADIUS)
-            .or_else(|| movers.hit(next, RADIUS))
-        {
-            Some(into) => {
+        let hit = solids
+            .what(next, RADIUS)
+            .map(|solid| (solid.kind, solid.model))
+            .or_else(|| {
+                movers
+                    .what(next, RADIUS)
+                    .map(|mover| (mover.kind, mover.model))
+            });
+        match hit {
+            Some((into, model)) => {
+                self.hit_model = model;
                 self.walking = false;
                 self.jolt = JOLT;
                 self.thrown = -self.forward();
@@ -394,6 +405,7 @@ fn walk(
     if let Some(into) = bumped {
         bumps.write(Bumped {
             into,
+            what: player.hit_model,
             at,
             pace: player.pace,
         });
@@ -560,6 +572,7 @@ mod tests {
                 at: start + Vec2::new(0.0, -3.0),
                 half: Vec2::splat(0.28),
                 kind: SolidKind::Person,
+                model: "person",
             }],
             vehicles: Vec::new(),
         };

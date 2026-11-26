@@ -11,6 +11,7 @@ use std::f32::consts::{FRAC_PI_2, PI};
 use bevy::prelude::*;
 
 use crate::city::{CitySeed, PITCH};
+use crate::figure::Look;
 use crate::gen::SolidKind;
 use crate::hud::OtherSaid;
 use crate::movers::{Dice, Mover, Movers};
@@ -33,6 +34,18 @@ const GONE: f32 = 66.0;
 /// How far from the middle of the street a lane's middle is.
 const LANE: f32 = 1.5;
 const VOXEL: f32 = 0.1;
+/// A bicycle is drawn finer than a car.
+const BIKE_VOXEL: f32 = 0.05;
+/// Where a cyclist sits, from the middle of the bicycle's base.
+const SADDLE: Vec3 = Vec3::new(0.0, 0.86, 0.2);
+
+/// A cyclist's leg, turning the pedals.
+#[derive(Component)]
+struct Pedal {
+    side: f32,
+    hip: Vec3,
+    length: f32,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Axis {
@@ -56,6 +69,10 @@ pub struct Vehicle {
     pub cruise: f32,
     /// Seconds since it last hooted (it does not lean on the horn).
     quiet: f32,
+    /// The model it is drawn with.
+    pub model: &'static str,
+    /// Where a cyclist's pedals are in their turn.
+    pedal: f32,
 }
 
 impl Vehicle {
@@ -104,6 +121,7 @@ impl Vehicle {
             at: self.at(),
             half,
             kind: self.kind,
+            model: self.model,
         }
     }
 
@@ -134,6 +152,7 @@ impl Vehicle {
         };
         let change = if want < self.speed { 14.0 } else { 3.0 } * dt;
         self.speed += (want - self.speed).clamp(-change, change);
+        self.pedal += self.speed * dt * 2.2;
         let mut step = self.speed * dt;
         if let Some(gap) = gap {
             step = step.min((gap - 0.05).max(0.0));
@@ -156,7 +175,7 @@ impl Plugin for TrafficPlugin {
     fn build(&self, app: &mut App) {
         app.add_message::<Hooted>()
             .add_systems(Startup, open_garage)
-            .add_systems(Update, (arrivals, drive).chain().before(PlayerSet));
+            .add_systems(Update, (arrivals, drive, pedal).chain().before(PlayerSet));
     }
 }
 
@@ -168,6 +187,7 @@ fn open_garage(mut commands: Commands, seed: Res<CitySeed>) {
 fn arrivals(
     mut commands: Commands,
     library: Res<VoxLibrary>,
+    mut meshes: ResMut<Assets<Mesh>>,
     mut garage: ResMut<Garage>,
     players: Query<&Transform, With<Player>>,
     vehicles: Query<(Entity, &Vehicle)>,
@@ -205,7 +225,7 @@ fn arrivals(
     let way = if dice.below(2) == 0 { 1.0 } else { -1.0 };
     let (model, cruise) = match kind {
         SolidKind::Bike => (
-            ["bike_a", "bike_b"][dice.below(2) as usize],
+            ["bike_a", "bike_b", "bike_c"][dice.below(3) as usize],
             3.2 + dice.unit() * 1.2,
         ),
         _ => (
@@ -223,6 +243,8 @@ fn arrivals(
         speed: cruise,
         cruise,
         quiet: 10.0,
+        model,
+        pedal: 0.0,
     };
     // Not on top of one already there.
     if vehicles
@@ -232,10 +254,43 @@ fn arrivals(
         return;
     }
     let at = vehicle.at();
-    commands.spawn((
-        vehicle,
-        library.place(model, Vec3::new(at.x, 0.0, at.y), VOXEL, 0),
-    ));
+    if kind != SolidKind::Bike {
+        commands.spawn((
+            vehicle,
+            library.place(model, Vec3::new(at.x, 0.0, at.y), VOXEL, 0),
+        ));
+        return;
+    }
+    // A cyclist is a person like the passers-by, sat on the saddle.
+    let look = Look::random(((dice.roll() as u64) << 32) | dice.roll() as u64);
+    let voxel = look.voxel();
+    let leg = look.leg();
+    let length = leg.size.y as f32 * voxel;
+    let piece = |mesh: Handle<Mesh>, at: Vec3| {
+        (
+            Mesh3d(mesh),
+            MeshMaterial3d(library.material.clone()),
+            Transform::from_translation(at).with_scale(Vec3::splat(voxel)),
+        )
+    };
+    let (body, leg) = (meshes.add(look.body().mesh()), meshes.add(leg.mesh()));
+    commands
+        .spawn((
+            vehicle,
+            Transform::from_xyz(at.x, 0.0, at.y),
+            Visibility::default(),
+        ))
+        .with_children(|bike| {
+            bike.spawn(library.place(model, Vec3::ZERO, BIKE_VOXEL, 0));
+            // Leaning over the handlebars, the body's middle over the saddle.
+            let mut seat = piece(body, Vec3::new(0.0, SADDLE.y, SADDLE.z + 3.0 * voxel));
+            seat.2.rotation = Quat::from_rotation_x(-0.32);
+            bike.spawn(seat);
+            for side in [-1.0, 1.0] {
+                let hip = Vec3::new(side * (0.07 + voxel), SADDLE.y, SADDLE.z);
+                bike.spawn((Pedal { side, hip, length }, piece(leg.clone(), hip)));
+            }
+        });
 }
 
 /// Everything drives on, braking for what is ahead and giving way.
@@ -303,6 +358,23 @@ fn drive(
     }
 }
 
+/// Cyclists' legs go round with the pedals.
+fn pedal(vehicles: Query<(&Vehicle, &Children)>, mut legs: Query<(&Pedal, &mut Transform)>) {
+    for (vehicle, children) in &vehicles {
+        for child in children.iter() {
+            if let Ok((leg, mut transform)) = legs.get_mut(child) {
+                // Forward of straight down, more or less as the pedal turns;
+                // the two legs half a turn apart.
+                let swing =
+                    0.75 + 0.45 * (vehicle.pedal + leg.side * std::f32::consts::FRAC_PI_2).sin();
+                let turn = Quat::from_rotation_x(swing);
+                transform.rotation = turn;
+                transform.translation = leg.hip + turn * Vec3::new(0.0, -leg.length, 0.0);
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -317,6 +389,8 @@ mod tests {
             speed: 6.0,
             cruise: 6.0,
             quiet: 10.0,
+            model: "car_red",
+            pedal: 0.0,
         }
     }
 

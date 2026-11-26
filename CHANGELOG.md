@@ -43,7 +43,11 @@
   dress: a wardrobe opens at the first game (skin, height, hair, beard,
   glasses, hat, clothes, scarf, shoes, backpack, each with its colours, and
   a button for a random look), and every passer-by is a person of its own
-  made the same way from the city's seed, no two alike. See
+  made the same way from the city's seed, no two alike, cyclists included.
+  The character has a personality of its own (theatrical, a proud citizen
+  with grudges against lamp posts and a weakness for bread), each line is
+  asked from a different comic angle, and the model is told concretely what
+  happened (what was hit, how often, the hour, a mood that builds up). See
   `plugins/happywalk/docs/README.md`.
 - **Shared UI: `swatches`.** A row of colours to pick one from, with roving
   keyboard focus like `segmented` and a "none" choice

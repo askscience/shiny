@@ -49,6 +49,38 @@ fn language(lang: &str) -> &'static str {
     }
 }
 
+/// Who the character is: its own file, to be edited without touching code.
+pub const PERSONALITY: &str = include_str!("personality.md");
+
+/// Ways to make a line funny. One is suggested for each line, at random, so
+/// two moments in a row are never joked about the same way.
+pub const ANGLES: &[&str] = &[
+    "a tragic overreaction, as if it were the last act of an opera",
+    "deadpan understatement",
+    "a nature-documentary narrator describing yourself",
+    "a petty grudge against the thing, as if it did it on purpose",
+    "speak to the people who will watch this clip",
+    "an absurd comparison",
+    "desperate optimism: the bright side, however small",
+    "a philosophical thought far too deep for the moment",
+    "a backhanded compliment to the player",
+    "a breaking-news report",
+    "a callback to something that happened earlier, if anything fits",
+    "make it about food",
+    "a very polite complaint to the city council",
+    "pretend it was all part of your plan",
+    "a sports commentator, live",
+    "a dramatic confession",
+];
+
+/// The angle for one line: different from one request to the next.
+pub fn angle(salt: u64) -> &'static str {
+    let mut z = salt.wrapping_add(0x9E37_79B9_7F4A_7C15);
+    z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+    ANGLES[((z ^ (z >> 31)) % ANGLES.len() as u64) as usize]
+}
+
 pub fn system_prompt(request: &Request) -> String {
     let actions = if request.allowed_actions.is_empty() {
         "\"action\": \"\" (there is nothing to do, only something to say)".to_string()
@@ -64,14 +96,17 @@ pub fn system_prompt(request: &Request) -> String {
         )
     };
     format!(
-        "You are the character of a video game, walking through a small pastel city. \
-         A player steers you with their voice, and you know it: you only do what they say, \
-         so whatever goes wrong is their doing. You are ironic and warm, never mean, never rude, \
-         and you tease the player about it. Never repeat a line you said before. \
+        "{PERSONALITY}\n\
          Answer at once, without deliberating, with one JSON object and nothing else: \
-         {{{actions}, \"say\": a single short spoken line in {language}, at most 15 words}}.",
+         {{{actions}, \"say\": your one spoken line, in {language}, at most 18 words}}.",
         language = language(&request.lang),
     )
+}
+
+/// What the model is told about the moment: the game's description, and the
+/// angle to try this time.
+pub fn user_message(request: &Request, salt: u64) -> String {
+    format!("{}\nThis time, go for: {}.", request.situation, angle(salt))
 }
 
 /// The model's text as a checked answer: the first JSON object in it, an
@@ -210,10 +245,10 @@ fn http() -> &'static reqwest::Client {
 }
 
 /// One question, one reply: the model's text.
-async fn ask(provider: &Provider, request: &Request) -> Result<String, String> {
+async fn ask(provider: &Provider, request: &Request, salt: u64) -> Result<String, String> {
     let messages = json!([
         { "role": "system", "content": system_prompt(request) },
-        { "role": "user", "content": request.situation },
+        { "role": "user", "content": user_message(request, salt) },
     ]);
     match provider {
         Provider::Ollama { url, model } => {
@@ -226,7 +261,7 @@ async fn ask(provider: &Provider, request: &Request) -> Result<String, String> {
                 // reasoning trace, few tokens, the model kept loaded.
                 "think": false,
                 "keep_alive": "30m",
-                "options": { "num_predict": 96, "temperature": 0.9 },
+                "options": { "num_predict": 96, "temperature": 1.0, "repeat_penalty": 1.2 },
             });
             let mut reply = http()
                 .post(format!("{url}/api/chat"))
@@ -258,7 +293,16 @@ async fn ask(provider: &Provider, request: &Request) -> Result<String, String> {
             // counts against the limit: leave room for it. JSON mode and
             // "no thinking" are asked for first; an endpoint that does not
             // know them refuses the request, which is then sent plain.
-            let plain = json!({ "model": model, "messages": messages, "stream": false, "max_tokens": 700, "temperature": 0.9 });
+            let plain = json!({
+                "model": model,
+                "messages": messages,
+                "stream": false,
+                "max_tokens": 700,
+                "temperature": 1.0,
+                // Words and turns of phrase it already used cost it.
+                "frequency_penalty": 0.7,
+                "presence_penalty": 0.6,
+            });
             let mut asked = plain.clone();
             asked["response_format"] = json!({ "type": "json_object" });
             asked["thinking"] = json!({ "type": "disabled" });
@@ -318,15 +362,21 @@ pub fn route(ctx: Arc<PluginCtx>) -> RouteHandler {
                 return Ok(none("ai-off", "", started));
             }
             let provider = provider(&ctx, &uid);
+            // A different number every request: the angle of the line.
+            let salt = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos() as u64)
+                .unwrap_or_default();
             let name = provider.model().to_string();
-            let text = match tokio::time::timeout(ANSWER_WITHIN, ask(&provider, &request)).await {
-                Err(_) => return Ok(none("late", &name, started)),
-                Ok(Err(e)) => {
-                    tracing::info!("happywalk: the brain got no answer: {e}");
-                    return Ok(none("unavailable", &name, started));
-                }
-                Ok(Ok(text)) => text,
-            };
+            let text =
+                match tokio::time::timeout(ANSWER_WITHIN, ask(&provider, &request, salt)).await {
+                    Err(_) => return Ok(none("late", &name, started)),
+                    Ok(Err(e)) => {
+                        tracing::info!("happywalk: the brain got no answer: {e}");
+                        return Ok(none("unavailable", &name, started));
+                    }
+                    Ok(Ok(text)) => text,
+                };
             match parse(&text, &request.allowed_actions) {
                 None => {
                     let shown: String = text.chars().take(200).collect();
@@ -427,6 +477,34 @@ mod tests {
         assert!(!safe_base_url("http://169.254.169.254/latest"));
         assert!(!safe_base_url("http://0.0.0.0/v1"));
         assert!(!safe_base_url("not a url"));
+    }
+
+    #[test]
+    fn the_character_has_a_personality_and_angles_vary() {
+        let prompt = system_prompt(&Request {
+            situation: String::new(),
+            allowed_actions: Vec::new(),
+            lang: "it".into(),
+        });
+        assert!(prompt.starts_with(PERSONALITY));
+        assert!(prompt.contains("Italian"));
+        let angles: std::collections::HashSet<&str> =
+            (0..200u64).map(|i| angle(i * 7919)).collect();
+        assert!(
+            angles.len() > ANGLES.len() * 3 / 4,
+            "{} angles of {}",
+            angles.len(),
+            ANGLES.len()
+        );
+        let message = user_message(
+            &Request {
+                situation: "Now: x".into(),
+                allowed_actions: Vec::new(),
+                lang: "it".into(),
+            },
+            1,
+        );
+        assert!(message.starts_with("Now: x\nThis time, go for: "));
     }
 
     #[test]

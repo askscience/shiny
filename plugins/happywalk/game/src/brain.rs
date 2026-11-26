@@ -23,7 +23,7 @@ use crate::hud::LastHeard;
 use crate::intent::{NotUnderstood, Order};
 use crate::lines::{stand_in, Topic};
 use crate::nav::NoSuchPlace;
-use crate::player::{Bumped, Pace, Player, PlayerSet};
+use crate::player::{Bumped, Pace, PlayerSet};
 use crate::quest::{ErrandDone, Quest, ERRANDS, ROUND};
 use crate::traffic::Hooted;
 
@@ -47,6 +47,9 @@ pub struct Memory {
     moments: VecDeque<String>,
     lines: VecDeque<String>,
     bumps_at: HashMap<(i32, i32), u32>,
+    /// When the recent bumps and errands were (game seconds).
+    bumped_at: VecDeque<f32>,
+    errand_at: Option<f32>,
     /// What the character is out to do, in plain words.
     pub errand: String,
     turns: HashMap<u8, usize>,
@@ -66,6 +69,20 @@ impl Memory {
         let count = self.bumps_at.entry(spot).or_insert(0);
         *count += 1;
         *count
+    }
+
+    /// How the character feels, from how the last minutes went.
+    pub fn mood(&self, now: f32) -> &'static str {
+        let recent = self.bumped_at.iter().filter(|t| now - **t < 90.0).count();
+        if self.errand_at.is_some_and(|t| now - t < 25.0) && recent < 2 {
+            return "You are still glowing with pride from the errand you just did.";
+        }
+        match recent {
+            0 | 1 => "",
+            2 => "You are getting a little ruffled.",
+            3 | 4 => "You are fed up, theatrically so.",
+            _ => "You are at the end of your tether and say so like a soap opera.",
+        }
     }
 
     fn next_stand_in(&mut self, lang: &str, topic: Topic) -> &'static str {
@@ -95,19 +112,45 @@ fn ordinal(n: u32) -> String {
     }
 }
 
-fn thing(into: SolidKind) -> &'static str {
+/// What was walked into, in a few concrete words: the joke is in the
+/// detail.
+pub fn describe(into: SolidKind, model: &str) -> String {
+    let named = match model {
+        m if m.starts_with("home_old") => {
+            "the front door of an old townhouse with flowerpots on every balcony"
+        }
+        m if m.starts_with("home_town") => "the wall of a tall pastel block of flats",
+        m if m.starts_with("home_garden") => "a little house smothered in climbing plants",
+        "shop_bakery" => "the bakery's shop window, full of bread",
+        "shop_florist" => "the florist's window",
+        "shop_cafe" => "the café's window, under its striped awning",
+        "shop_grocer" => "the greengrocer's window",
+        "sign_board" => "the bakery's chalkboard sign on the pavement",
+        "flower_buckets" => "the florist's buckets of flowers on the pavement",
+        "cafe_table" => "a café table outside, with someone's coffee on it",
+        "crates" => "the crates of fruit outside the greengrocer's",
+        "car_red" => "the side of a parked-looking red car that was in fact driving",
+        "car_blue" => "the side of a small blue car",
+        "car_cream" => "the side of a cream-coloured car",
+        m if m.starts_with("bike") => "a cyclist",
+        _ => "",
+    };
+    if !named.is_empty() {
+        return named.to_string();
+    }
     match into {
         SolidKind::Building => "the wall of a building",
         SolidKind::Lamp => "a lamp post",
         SolidKind::Tree => "a tree",
         SolidKind::Bench => "a bench",
         SolidKind::Planter => "a flower planter",
-        SolidKind::Fountain => "a fountain",
+        SolidKind::Fountain => "the edge of the fountain",
         SolidKind::Kiosk => "the newsstand",
         SolidKind::Person => "a passer-by, who was not amused",
         SolidKind::Car => "the side of a car",
         SolidKind::Bike => "a cyclist",
     }
+    .to_string()
 }
 
 fn pace(pace: Pace) -> &'static str {
@@ -120,6 +163,11 @@ fn pace(pace: Pace) -> &'static str {
 
 /// The moment in plain words, with what came before it.
 pub fn situation(memory: &Memory, last_said: &str, now: &str) -> String {
+    situation_with(memory, last_said, now, "")
+}
+
+/// [`situation`], with how the character feels and what the hour is.
+pub fn situation_with(memory: &Memory, last_said: &str, now: &str, feeling: &str) -> String {
     let mut out = String::new();
     if !memory.moments.is_empty() {
         out.push_str("Earlier, oldest first:\n");
@@ -137,7 +185,11 @@ pub fn situation(memory: &Memory, last_said: &str, now: &str) -> String {
         out.push_str(&format!("Your errand right now: {}.\n", memory.errand));
     }
     if !last_said.is_empty() {
-        out.push_str(&format!("The player's last words: \"{last_said}\".\n"));
+        out.push_str(&format!("The player's last order: \"{last_said}\".\n"));
+    }
+    if !feeling.is_empty() {
+        out.push_str(feeling);
+        out.push('\n');
     }
     out.push_str(&format!("Now: {now}\nSay your one line about it."));
     out
@@ -194,8 +246,8 @@ fn notice(
     mut errands: MessageReader<ErrandDone>,
     mut nowhere: MessageReader<NoSuchPlace>,
     quest: Res<Quest>,
+    daylight: Res<crate::sky::Daylight>,
     mut last_hoot: Local<f32>,
-    players: Query<&Transform, With<Player>>,
     last: Res<LastHeard>,
     mut memory: ResMut<Memory>,
     mut host: ResMut<Host>,
@@ -207,6 +259,7 @@ fn notice(
         memory.errand = errand.to_string();
     }
     for done in errands.read() {
+        memory.errand_at = Some(now);
         let mut moment = format!(
             "you got there and did your errand: {} ({} of {ROUND} this round)",
             ERRANDS[done.errand].task, done.done
@@ -245,16 +298,21 @@ fn notice(
             moment,
         });
     }
+    let hour = if daylight.evening > 0.5 {
+        "It is evening; the street lamps are on."
+    } else {
+        ""
+    };
     for bump in bumps.read() {
-        let at = players
-            .single()
-            .map(|t| Vec2::new(t.translation.x, t.translation.z))
-            .unwrap_or_default();
-        let times = memory.bump(at);
+        let times = memory.bump(bump.at);
+        memory.bumped_at.push_back(now);
+        while memory.bumped_at.len() > 12 {
+            memory.bumped_at.pop_front();
+        }
         let mut moment = format!(
-            "doing as told, you walked {} straight into {}",
+            "you walked {} into {}",
             pace(bump.pace),
-            thing(bump.into)
+            describe(bump.into, bump.what)
         );
         if times > 1 {
             moment.push_str(&format!(
@@ -262,11 +320,18 @@ fn notice(
                 ordinal(times)
             ));
         }
+        let feeling = [memory.mood(now), hour]
+            .iter()
+            .filter(|s| !s.is_empty())
+            .copied()
+            .collect::<Vec<_>>()
+            .join(" ");
         let request = BrainRequest {
-            situation: situation(
+            situation: situation_with(
                 &memory,
                 &last.text,
-                &format!("{moment}, and stopped with a jolt."),
+                &format!("{moment}, and bounced off."),
+                &feeling,
             ),
             allowed_actions: Vec::new(),
             lang: String::new(),
@@ -404,18 +469,39 @@ mod tests {
     fn the_situation_tells_the_moment_and_what_came_before() {
         let mut memory = Memory::default();
         let fresh = situation(&memory, "avanti", "you walked into a wall.");
-        assert!(fresh.starts_with("The player's last words: \"avanti\"."));
+        assert!(fresh.starts_with("The player's last order: \"avanti\"."));
         assert!(fresh.contains("Now: you walked into a wall."));
         Memory::keep(&mut memory.moments, "you hit a lamp post".into());
         Memory::keep(&mut memory.lines, "Bel palo.".into());
         let later = situation(&memory, "", "you walked into a wall.");
         assert!(later.contains("- you hit a lamp post"));
         assert!(later.contains("- Bel palo."));
-        assert!(!later.contains("last words"));
+        assert!(!later.contains("last order"));
         memory.errand = "buy bread at the bakery".into();
         assert!(
             situation(&memory, "", "x").contains("Your errand right now: buy bread at the bakery.")
         );
+    }
+
+    #[test]
+    fn a_bump_is_described_by_what_was_hit() {
+        assert!(describe(SolidKind::Building, "shop_bakery").contains("bakery"));
+        assert!(describe(SolidKind::Bench, "cafe_table").contains("café table"));
+        assert!(describe(SolidKind::Building, "home_garden_b").contains("climbing plants"));
+        assert_eq!(describe(SolidKind::Lamp, "lamp"), "a lamp post");
+        assert!(describe(SolidKind::Car, "car_blue").contains("blue car"));
+    }
+
+    #[test]
+    fn the_mood_follows_the_bumps() {
+        let mut memory = Memory::default();
+        assert_eq!(memory.mood(100.0), "");
+        memory.bumped_at.extend([60.0, 80.0, 95.0]);
+        assert!(memory.mood(100.0).contains("fed up"));
+        // A while later it has calmed down.
+        assert_eq!(memory.mood(400.0), "");
+        memory.errand_at = Some(395.0);
+        assert!(memory.mood(400.0).contains("pride"));
     }
 
     #[test]

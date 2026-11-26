@@ -44,6 +44,8 @@ pub struct Solid {
     pub min: Vec2,
     pub max: Vec2,
     pub kind: SolidKind,
+    /// The model it is, for describing it (empty when it is none).
+    pub model: &'static str,
 }
 
 impl Solid {
@@ -52,6 +54,7 @@ impl Solid {
             min: centre - half,
             max: centre + half,
             kind,
+            model: "",
         }
     }
 
@@ -130,7 +133,10 @@ impl Prop {
         } else {
             own
         };
-        Some(Solid::around(self.at, half.unwrap_or(own), kind))
+        Some(Solid {
+            model: self.model,
+            ..Solid::around(self.at, half.unwrap_or(own), kind)
+        })
     }
 }
 

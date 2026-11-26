@@ -154,7 +154,10 @@ has a brain; theirs are template lines, shown in a second bubble where they
 stand. Who lives on a lot, and what each looks like, comes from the city's
 seed. They exist only in the nine chunks around the player.
 
-**Cars and bikes** (`game/src/traffic.rs`) keep to the right-hand lane, give
+**Cars and bikes** (`game/src/traffic.rs`). A cyclist is a person like the
+passers-by (`figure.rs`), every one different, sat on a bicycle drawn at
+5 cm a voxel (frame, saddle, handlebars, one with a basket), leaning over
+the bars, legs turning the pedals. Vehicles keep to the right-hand lane, give
 way at crossings (streets along `x` yield), and **always stop for the
 character**: a vehicle slows as the gap closes and never moves into the box
 around the player, so standing in a lane gets a hoot ("BEEP!", and a line
@@ -321,25 +324,45 @@ test; avian3d comes in when something has to move and collide on its own
 
 ### What the character says
 
-Its lines are written by the user's language model, not by the game
-(`game/src/brain.rs`, `BrainPlugin`). When something happens the brain
-describes the moment and asks for one line:
+Its lines are written by the user's language model, not by the game. Three
+things make them funny rather than samey:
 
-- **a bump:** what the player last said, what was hit and at what pace, and
-  how many times this very spot was hit ("for the third time at this very
-  spot");
-- **a sentence that was no command:** the sentence, with the seven orders
-  offered as actions; if the model picks one it is carried out, so "andiamo
-  un po' più svelti" can become *faster*.
+- **A personality of its own**, in a file of its own
+  (`src/personality.md`, the start of every request): a small voxel person
+  who knows a voice from outside steers it, theatrical about small things, a
+  proud citizen with opinions on every house, petty grudges against objects
+  (lamp posts are plotting against it), a weakness for bread, warm
+  underneath; and how it talks (one spoken line, concrete, varied, a list of
+  worn-out phrases it must not use). Change the character there.
+- **A different angle for every line** (`ANGLES` in `src/brain.rs`): an
+  operatic tragedy, deadpan understatement, a nature-documentary narrator, a
+  grudge, a word to whoever will watch the clip, a breaking-news report, a
+  polite complaint to the city council, a sports commentator, and more; one
+  is picked at random and suggested with the moment. The model is also asked
+  not to repeat words and turns of phrase (frequency and presence penalties,
+  or Ollama's repeat penalty).
+- **Concrete moments** (`game/src/brain.rs`): not "you walked into a
+  building" but what it was (the bakery's window full of bread, a café table
+  with someone's coffee, a house smothered in climbing plants, the side of a
+  blue car), how fast, how many times at that spot, the errand in hand, the
+  player's last order, the hour (evening, with the lamps on), and a **mood**
+  that builds as the bumps add up (a little ruffled, fed up, at the end of
+  its tether like a soap opera) and turns to pride after an errand. The last
+  six moments and six lines go with it, with the instruction to say
+  something different.
 
-Each request also carries a **short memory**: the last six moments and the
-last six lines said, with the instruction to say something different.
+A sentence that was no command is asked about too, with the orders offered
+as actions; if the model picks one it is carried out, so "andiamo un po' più
+svelti" can become *faster*.
 
 The line is spoken by the host and shown in a bubble over the character's
 head. **The moment does not wait:** if no answer is here within 2.5 seconds,
 or the AI is off or unreachable, the character says a stand-in line from a
 short fixed list (`game/src/lines.rs`) and a late answer is dropped. The
 stand-ins exist only for that.
+
+Tried on 2026-11-26 against an OpenAI-compatible model over eight moments in
+a row: every line different, about a second each.
 
 ### Known limits
 

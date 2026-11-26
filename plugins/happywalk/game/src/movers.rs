@@ -13,6 +13,8 @@ pub struct Mover {
     pub at: Vec2,
     pub half: Vec2,
     pub kind: SolidKind,
+    /// The model it is ("person" for a passer-by), for describing it.
+    pub model: &'static str,
 }
 
 impl Mover {
@@ -32,6 +34,11 @@ pub struct Movers {
 impl Movers {
     pub fn all(&self) -> impl Iterator<Item = &Mover> {
         self.people.iter().chain(&self.vehicles)
+    }
+
+    /// The first moving thing a square at `at` would touch, whole.
+    pub fn what(&self, at: Vec2, radius: f32) -> Option<&Mover> {
+        self.all().find(|mover| mover.touches(at, radius))
     }
 
     /// The first moving thing a square at `at` would touch.
@@ -75,11 +82,13 @@ mod tests {
                 at: Vec2::new(2.0, 0.0),
                 half: Vec2::splat(0.3),
                 kind: SolidKind::Person,
+                model: "person",
             }],
             vehicles: vec![Mover {
                 at: Vec2::new(0.0, 10.0),
                 half: Vec2::new(0.9, 1.8),
                 kind: SolidKind::Car,
+                model: "car_red",
             }],
         };
         assert_eq!(

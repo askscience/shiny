@@ -402,29 +402,55 @@ def car(paint):
     return m
 
 
-def bike(shirt, hat):
-    """A bicycle with its rider, 10 cm a voxel; the front is low y."""
-    m = Model(7, 18, 17)
-    for y0 in (0, 12):
-        for y in range(y0, y0 + 6):
-            for z in range(0, 6):
-                d = ((y - y0 - 2.5) ** 2 + (z - 2.5) ** 2) ** 0.5
-                if 1.8 <= d <= 3.0:
-                    m.set(3, y, z, "ink")
-    m.box(3, 3, 4, 3, 14, 4, "roof_red")
-    m.box(3, 3, 4, 3, 3, 9, "metal")
-    m.box(1, 3, 9, 5, 3, 9, "metal")
-    m.box(3, 11, 5, 3, 11, 7, "metal")
-    m.box(2, 10, 8, 4, 12, 8, "ink")
-    # The rider: legs, a leaning body, a head with a hat.
-    m.box(2, 8, 5, 2, 10, 8, "trousers")
-    m.box(4, 8, 5, 4, 10, 8, "trousers")
-    m.box(1, 6, 9, 5, 10, 12, shirt)
-    m.box(1, 4, 10, 1, 5, 10, "skin")
-    m.box(5, 4, 10, 5, 5, 10, "skin")
-    m.box(1, 5, 13, 5, 9, 15, "skin")
-    m.box(1, 5, 16, 5, 9, 16, hat)
-    m.box(1, 8, 14, 5, 9, 15, hat)
+def line(m, a, b, colour, thick=0):
+    """A straight tube from a to b (x, y, z), `thick` voxels each way in x."""
+    steps = int(max(abs(b[k] - a[k]) for k in range(3)) * 2) + 1
+    for i in range(steps + 1):
+        t = i / steps
+        p = [round(a[k] + (b[k] - a[k]) * t) for k in range(3)]
+        for dx in range(-thick, thick + 1):
+            m.set(p[0] + dx, p[1], p[2], colour)
+
+
+def bike(frame, basket=False):
+    """A bicycle, 5 cm a voxel, front on the low-y side, no rider: the game
+    sits a person on it (`game/src/traffic.rs`)."""
+    m = Model(9, 36, 22)
+    x = 4
+    front, rear, hub_z = (6, 6), (29, 6), 6
+    for (wy, wz) in (front, rear):
+        for y in range(wy - 7, wy + 8):
+            for z in range(0, 13):
+                d = ((y - wy) ** 2 + (z - wz) ** 2) ** 0.5
+                if 4.9 <= d <= 6.4:
+                    m.set(x, y, z, "ink")
+                elif d < 1.2:
+                    m.set(x, y, z, "metal")
+                elif d < 4.9 and (y - wy == 0 or z - wz == 0):
+                    m.set(x, y, z, "trim")
+    bracket, seat, head = (x, 18, 6), (x, 21, 15), (x, 9, 16)
+    line(m, bracket, seat, frame)
+    line(m, seat, (x, rear[0], hub_z), frame)
+    line(m, bracket, (x, rear[0], hub_z), frame)
+    line(m, bracket, head, frame)
+    line(m, seat, head, frame)
+    line(m, head, (x, front[0], hub_z), "metal")
+    # Saddle, handlebars with grips, pedals.
+    m.box(x - 1, 19, 16, x + 1, 23, 16, "ink")
+    m.box(x, 9, 17, x, 9, 18, "metal")
+    m.box(0, 8, 18, 8, 8, 18, "metal")
+    m.box(0, 8, 18, 1, 8, 18, "ink")
+    m.box(7, 8, 18, 8, 8, 18, "ink")
+    m.box(x - 3, 18, 6, x + 3, 18, 6, "metal")
+    m.box(x - 3, 17, 6, x - 3, 19, 6, "ink")
+    m.box(x + 3, 17, 6, x + 3, 19, 6, "ink")
+    m.set(x, 7, 15, "lamp")
+    m.box(x, 30, 12, x, 33, 13, "roof_red")
+    if basket:
+        m.box(1, 1, 13, 7, 5, 17, "wood")
+        m.box(2, 2, 14, 6, 4, 17, None)
+        m.box(2, 2, 15, 3, 3, 16, "leaf")
+        m.box(5, 3, 16, 6, 4, 17, "awning")
     return m
 
 
@@ -471,8 +497,9 @@ MODELS = {
     "car_red": lambda: car("roof_red"),
     "car_blue": lambda: car("roof_blue"),
     "car_cream": lambda: car("cream"),
-    "bike_a": lambda: bike("mint", "roof_red"),
-    "bike_b": lambda: bike("rose", "roof_blue"),
+    "bike_a": lambda: bike("roof_red"),
+    "bike_b": lambda: bike("roof_blue", basket=True),
+    "bike_c": lambda: bike("mint"),
     "cone": cone,
 }
 

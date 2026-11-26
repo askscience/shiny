@@ -71,6 +71,11 @@ impl Solids {
 
     /// The first solid a square at `at` would touch.
     pub fn hit(&self, at: Vec2, radius: f32) -> Option<SolidKind> {
+        self.what(at, radius).map(|solid| solid.kind)
+    }
+
+    /// The first solid a square at `at` would touch, whole.
+    pub fn what(&self, at: Vec2, radius: f32) -> Option<Solid> {
         // A lot's solids stay on its pavement, so only the chunks the square
         // itself lies in can matter.
         let low = gen::chunk_of(at - Vec2::splat(radius));
@@ -79,15 +84,11 @@ impl Solids {
             for z in low.y..=high.y {
                 let coord = IVec2::new(x, z);
                 let found = match self.loaded.get(&coord) {
-                    Some(solids) => solids
-                        .iter()
-                        .find(|s| s.touches(at, radius))
-                        .map(|s| s.kind),
+                    Some(solids) => solids.iter().find(|s| s.touches(at, radius)).copied(),
                     None => self
                         .of(&gen::chunk(self.seed, coord))
-                        .iter()
-                        .find(|s| s.touches(at, radius))
-                        .map(|s| s.kind),
+                        .into_iter()
+                        .find(|s| s.touches(at, radius)),
                 };
                 if found.is_some() {
                     return found;

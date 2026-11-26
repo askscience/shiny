@@ -648,6 +648,21 @@ fn head(look: &Look) -> Sculpt {
         }
     }
 
+    // A hat sits on the head: whatever hair stood above its brim goes, or
+    // curls and spikes poke through it.
+    if matches!(
+        HATS[look.hat as usize % HATS.len()],
+        "beanie" | "pompom" | "cap" | "sunhat"
+    ) {
+        for z in 0..m.size.z {
+            for y in 11..m.size.y {
+                for x in 0..m.size.x {
+                    let index = m.index(x, y, z);
+                    m.cells[index] = 0;
+                }
+            }
+        }
+    }
     match HATS[look.hat as usize % HATS.len()] {
         "beanie" | "pompom" => {
             m.ball(
@@ -989,6 +1004,33 @@ mod tests {
         let mut shorts = plain;
         shorts.bottom = 1;
         assert_ne!(shorts.leg(), plain.leg());
+    }
+
+    #[test]
+    fn hair_does_not_poke_through_a_hat() {
+        for hair in 0..HAIR_STYLES.len() as u8 {
+            let look = Look {
+                hair,
+                hat: 1,
+                hat_colour: 9,
+                hair_colour: 1,
+                ..Look::default()
+            };
+            let head = look.parts().head;
+            let hair_rgb = HAIR[1];
+            for x in 0..17 {
+                for y in 12..21 {
+                    for z in 0..19 {
+                        assert_ne!(
+                            head.colour_at(x, y, z),
+                            Some(hair_rgb),
+                            "{} at {x},{y},{z}",
+                            HAIR_STYLES[hair as usize]
+                        );
+                    }
+                }
+            }
+        }
     }
 
     #[test]

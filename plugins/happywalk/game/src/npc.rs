@@ -235,6 +235,7 @@ fn stroll(
             at,
             half: Vec2::splat(0.28),
             kind: SolidKind::Person,
+            model: "person",
         });
     }
 }
