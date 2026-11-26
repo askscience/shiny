@@ -157,7 +157,8 @@ seed. They exist only in the nine chunks around the player.
 **Cars and bikes** (`game/src/traffic.rs`). A cyclist is a person like the
 passers-by (`figure.rs`), every one different, sat on a bicycle drawn at
 5 cm a voxel (frame, saddle, handlebars, one with a basket), leaning over
-the bars, legs turning the pedals. Vehicles keep to the right-hand lane, give
+the bars with its hands on the grips (its arms are separate pieces, aimed
+from the shoulders), legs turning the pedals. Vehicles keep to the right-hand lane, give
 way at crossings (streets along `x` yield), and **always stop for the
 character**: a vehicle slows as the gap closes and never moves into the box
 around the player, so standing in a lane gets a hoot ("BEEP!", and a line

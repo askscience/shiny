@@ -11,7 +11,7 @@ use std::f32::consts::{FRAC_PI_2, PI};
 use bevy::prelude::*;
 
 use crate::city::{CitySeed, PITCH};
-use crate::figure::Look;
+use crate::figure::{self, Look};
 use crate::gen::SolidKind;
 use crate::hud::OtherSaid;
 use crate::movers::{Dice, Mover, Movers};
@@ -38,6 +38,10 @@ const VOXEL: f32 = 0.1;
 const BIKE_VOXEL: f32 = 0.05;
 /// Where a cyclist sits, from the middle of the bicycle's base.
 const SADDLE: Vec3 = Vec3::new(0.0, 0.86, 0.2);
+/// How far a cyclist leans forward, in radians.
+const LEAN: f32 = 0.7;
+/// Where a cyclist's hands hold the handlebars (left, right).
+const GRIPS: [Vec3; 2] = [Vec3::new(-0.17, 0.94, -0.47), Vec3::new(0.17, 0.94, -0.47)];
 
 /// A cyclist's leg, turning the pedals.
 #[derive(Component)]
@@ -273,7 +277,13 @@ fn arrivals(
             Transform::from_translation(at).with_scale(Vec3::splat(voxel)),
         )
     };
-    let (body, leg) = (meshes.add(look.body().mesh()), meshes.add(leg.mesh()));
+    let arm_model = look.arm();
+    let arm_length = arm_model.size.y as f32 * voxel;
+    let (body, leg, arm) = (
+        meshes.add(look.body_without_arms().mesh()),
+        meshes.add(leg.mesh()),
+        meshes.add(arm_model.mesh()),
+    );
     commands
         .spawn((
             vehicle,
@@ -282,10 +292,22 @@ fn arrivals(
         ))
         .with_children(|bike| {
             bike.spawn(library.place(model, Vec3::ZERO, BIKE_VOXEL, 0));
-            // Leaning over the handlebars, the body's middle over the saddle.
-            let mut seat = piece(body, Vec3::new(0.0, SADDLE.y, SADDLE.z + 3.0 * voxel));
-            seat.2.rotation = Quat::from_rotation_x(-0.32);
+            // Leaning well over the handlebars, sat on the saddle.
+            let lean = Quat::from_rotation_x(-LEAN);
+            let seat_at = Vec3::new(0.0, SADDLE.y, SADDLE.z + 2.0 * voxel);
+            let mut seat = piece(body, seat_at);
+            seat.2.rotation = lean;
             bike.spawn(seat);
+            // Each arm from its shoulder to its grip: turned to point there,
+            // and as long as it takes (a voxel figure's arms are short).
+            for (shoulder, grip) in figure::SHOULDERS.iter().zip(GRIPS) {
+                let shoulder = seat_at + lean * (*shoulder * voxel);
+                let reach = grip - shoulder;
+                let mut hold = piece(arm.clone(), grip);
+                hold.2.rotation = Quat::from_rotation_arc(Vec3::Y, -reach.normalize());
+                hold.2.scale.y *= (reach.length() / arm_length).clamp(0.8, 1.5);
+                bike.spawn(hold);
+            }
             for side in [-1.0, 1.0] {
                 let hip = Vec3::new(side * (0.07 + voxel), SADDLE.y, SADDLE.z);
                 bike.spawn((Pedal { side, hip, length }, piece(leg.clone(), hip)));
@@ -463,6 +485,34 @@ mod tests {
                     vehicle.drive(1.0 / 60.0, None);
                 }
                 assert!(vehicle.speed > cruise * 0.9);
+            }
+        }
+    }
+
+    #[test]
+    fn a_cyclist_reaches_the_handlebars() {
+        // For every height, the arm stretched from the shoulder ends on the
+        // grip without being pulled out of shape.
+        for height in 0..3u8 {
+            let look = Look {
+                height,
+                ..Look::default()
+            };
+            let voxel = look.voxel();
+            let arm = look.arm().size.y as f32 * voxel;
+            let seat = Vec3::new(0.0, SADDLE.y, SADDLE.z + 2.0 * voxel);
+            for (shoulder, grip) in figure::SHOULDERS.iter().zip(GRIPS) {
+                let shoulder = seat + Quat::from_rotation_x(-LEAN) * (*shoulder * voxel);
+                let stretch = (grip - shoulder).length() / arm;
+                assert!(
+                    (0.8..=1.5).contains(&stretch),
+                    "height {height}: stretch {stretch}"
+                );
+                assert!(
+                    shoulder.z > grip.z,
+                    "the hands are in front of the shoulders"
+                );
+                assert!(shoulder.y > grip.y, "and below them");
             }
         }
     }

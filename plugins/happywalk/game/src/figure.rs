@@ -907,6 +907,10 @@ fn backpack(look: &Look) -> Option<Sculpt> {
     Some(m)
 }
 
+/// Where the shoulders of a [`Look::body`] are, in voxels from the middle of
+/// its base: left and right, the arm's top, the middle of its depth.
+pub const SHOULDERS: [Vec3; 2] = [Vec3::new(-8.0, 10.0, -2.5), Vec3::new(7.0, 10.0, -2.5)];
+
 /// A figure's parts, each hung from its joint by whoever animates it.
 pub struct Parts {
     pub head: VoxModel,
@@ -931,12 +935,30 @@ impl Look {
     /// Head, body, arms and bag as one model, for a figure that only swings
     /// its legs (a passer-by): one mesh instead of five.
     pub fn body(&self) -> VoxModel {
+        self.body_with(true)
+    }
+
+    /// [`body`](Self::body) with the arms left off, for a figure whose arms
+    /// reach for something (a cyclist's handlebars). [`SHOULDERS`] says where
+    /// they go.
+    pub fn body_without_arms(&self) -> VoxModel {
+        self.body_with(false)
+    }
+
+    /// An arm on its own, hanging from its top: the shoulder.
+    pub fn arm(&self) -> VoxModel {
+        arm(self).model()
+    }
+
+    fn body_with(&self, arms: bool) -> VoxModel {
         let mut m = Sculpt::new(19, 31, 24);
         m.paste(&torso(self), IVec3::new(3, 0, 4));
         m.paste(&head(self), IVec3::new(1, 10, 0));
         let arm = arm(self);
         for x in [0, 15] {
-            m.paste(&arm, IVec3::new(x, 1, 7));
+            if arms {
+                m.paste(&arm, IVec3::new(x, 1, 7));
+            }
         }
         if let Some(pack) = backpack(self) {
             m.paste(&pack, IVec3::new(5, 2, 14));
