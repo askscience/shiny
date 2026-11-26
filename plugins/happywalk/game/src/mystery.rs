@@ -3,9 +3,13 @@
 //! The generator (`case.rs`) writes a case; this module puts it in the
 //! town and runs it:
 //!
-//! 1. **The case opens.** Whoever reports it comes up to the character and
-//!    tells what happened (the model plays them); the notebook gets the crime
-//!    and what they saw.
+//! 0. **Someone needs help.** Cases are met on the way: after a few errands
+//!    (`ERRANDS_BEFORE_CALL`), someone waits on the pavement along the way to
+//!    the next one (`caller_spot`), an exclamation mark over their head, and
+//!    calls out when the character comes near. Errands go on meanwhile.
+//! 1. **The case opens** when the character reaches them: they tell what
+//!    happened (the model plays them); the notebook gets the crime and what
+//!    they saw. Errands wait until it is over.
 //! 2. **The scene.** A floating question mark marks where it happened;
 //!    going there finds the trace.
 //! 3. **The suspects** wait on the pavement by their usual place, a name
@@ -37,7 +41,7 @@ use crate::city::{CityName, CitySeed, Solids, PAVED};
 use crate::gen;
 use crate::hud::{GameFont, OtherSaid};
 use crate::intent::NotUnderstood;
-use crate::nav::REACH;
+use crate::nav::{self, REACH};
 use crate::player::{Player, PlayerSet};
 use crate::vox::VoxLibrary;
 
@@ -49,6 +53,19 @@ const AT_SCENE: f32 = 3.0;
 const TAGS_WITHIN: f32 = 16.0;
 /// Seconds to wait for the model before a stand-in line.
 const PATIENCE: f32 = 4.0;
+/// Errands done between one case and someone else needing help.
+pub const ERRANDS_BEFORE_CALL: u32 = 2;
+/// Someone who needs help waits this far along the way to the errand (or
+/// most of the way, on a short walk): ahead, where the character will pass.
+const CALLER_AHEAD: f32 = 30.0;
+/// They call out when the character is this near...
+const HEARD_WITHIN: f32 = 14.0;
+/// ...and tell their story when it is this near.
+const AT_CALLER: f32 = 2.6;
+/// How high the exclamation mark floats: just over a head.
+const ALERT_HEIGHT: f32 = 1.55;
+/// From the middle of a street to a spot on the pavement beside it.
+const KERBSIDE: f32 = (gen::PITCH - PAVED) / 2.0 + 0.9;
 
 /// How far the player has come, kept by the page between games.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -69,9 +86,11 @@ impl Progress {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum Phase {
-    /// No case yet (the wardrobe is open, or the game is starting).
+    /// No case: errands.
     #[default]
     Waiting,
+    /// Someone needs help, at `Mystery::caller`; errands go on.
+    Calling,
     Investigating,
     Solved,
     Failed,
@@ -94,9 +113,22 @@ pub struct Mystery {
     pub notes: Vec<String>,
     /// Who was accused, once someone is.
     pub accused: Option<usize>,
+    /// Errands done since the last case.
+    pub errands: u32,
+    /// Where whoever needs help waits, and whether they have called out.
+    pub caller: Vec2,
+    pub called: bool,
 }
 
 impl Mystery {
+    /// A case is being solved, or its outcome is on show: errands wait.
+    pub fn busy(&self) -> bool {
+        matches!(
+            self.phase,
+            Phase::Investigating | Phase::Solved | Phase::Failed
+        )
+    }
+
     /// A short description for the character's brain.
     pub fn briefing(&self) -> String {
         match &self.case {
@@ -153,6 +185,10 @@ struct Client {
 #[derive(Component)]
 struct ClueMarker;
 
+/// The exclamation mark over whoever needs help.
+#[derive(Component)]
+struct Alert;
+
 #[derive(Component)]
 struct NameTag(usize);
 
@@ -185,7 +221,7 @@ impl Plugin for MysteryPlugin {
             .add_message::<Question>()
             .add_systems(
                 Update,
-                (open, notice, listen, ask, accuse, answers, publish)
+                (call, open, notice, listen, ask, accuse, answers, publish)
                     .chain()
                     .after(PlayerSet),
             )
@@ -200,10 +236,6 @@ fn italian(status: &HostStatus) -> bool {
 
 /// A spot on the pavement by a place, clear of what stands there.
 pub fn pavement_spot(solids: &Solids, place: Vec2) -> Vec2 {
-    let on_pavement = |p: Vec2| {
-        let off = (p - gen::centre(gen::chunk_of(p))).abs();
-        off.x < PAVED / 2.0 - 0.3 && off.y < PAVED / 2.0 - 0.3
-    };
     for direction in [Vec2::X, Vec2::NEG_X, Vec2::Y, Vec2::NEG_Y] {
         let kerb = place + direction * 2.3;
         if !on_pavement(kerb) {
@@ -218,6 +250,235 @@ pub fn pavement_spot(solids: &Solids, place: Vec2) -> Vec2 {
         }
     }
     place
+}
+
+/// Is a point on a lot's pavement (not the street)?
+fn on_pavement(p: Vec2) -> bool {
+    let off = (p - gen::centre(gen::chunk_of(p))).abs();
+    off.x < PAVED / 2.0 - 0.3 && off.y < PAVED / 2.0 - 0.3
+}
+
+/// Where someone who needs help waits: on the pavement beside the way from
+/// `from` along `points` (a route), `CALLER_AHEAD` metres on (most of the
+/// way, on a short walk), clear of what stands there. The character walks
+/// past it doing the errand.
+pub fn caller_spot(solids: &Solids, from: Vec2, points: &[Vec2]) -> Vec2 {
+    let mut want = CALLER_AHEAD.min(nav::length(from, points) * 0.7);
+    let (mut at, mut point, mut way) = (from, from, Vec2::X);
+    for p in points {
+        let d = at.distance(*p);
+        if d > 0.01 {
+            way = (*p - at) / d;
+            if want <= d {
+                point = at + way * want;
+                break;
+            }
+            want -= d;
+        }
+        at = *p;
+        point = at;
+    }
+    // Out in the open if there is room: under a tree, the exclamation mark
+    // over their head would be lost in the leaves.
+    for open in [true, false] {
+        for step in [0.0, 1.5, -1.5, 3.0, -3.0, 4.5, -4.5, 6.0, -6.0] {
+            for side in [1.0, -1.0] {
+                let spot = point + way * step + way.perp() * side * KERBSIDE;
+                if on_pavement(spot)
+                    && solids.hit(spot, 0.45).is_none()
+                    && !(open && solids.any(spot, 2.2, gen::SolidKind::Tree))
+                {
+                    return spot;
+                }
+            }
+        }
+    }
+    pavement_spot(solids, point)
+}
+
+/// The look of case `number`'s client.
+fn client_look(seed: u64, number: u32) -> crate::figure::Look {
+    crate::figure::Look::random(seed ^ (number as u64).wrapping_mul(0xA24B_AED4_963E_E407))
+}
+
+/// A person of the case (a suspect, the client) standing at `at`.
+fn spawn_person(
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    library: &VoxLibrary,
+    look: &crate::figure::Look,
+    at: Vec3,
+) -> Entity {
+    let voxel = look.voxel();
+    let (body, leg) = (look.body(), look.leg());
+    let size = leg.size.as_vec3() * voxel;
+    let hip = size.y - 0.02;
+    let piece = |mesh: Handle<Mesh>, offset: Vec3| {
+        (
+            Mesh3d(mesh),
+            MeshMaterial3d(library.material.clone()),
+            Transform::from_translation(offset).with_scale(Vec3::splat(voxel)),
+        )
+    };
+    let (body, leg) = (meshes.add(body.mesh()), meshes.add(leg.mesh()));
+    commands
+        .spawn((Transform::from_translation(at), Visibility::default()))
+        .with_children(|figure| {
+            figure.spawn(piece(body, Vec3::new(0.0, hip, 3.0 * voxel)));
+            for side in [-1.0, 1.0] {
+                figure.spawn(piece(
+                    leg.clone(),
+                    Vec3::new(side * (size.x / 2.0 + 0.02), 0.0, -0.02),
+                ));
+            }
+        })
+        .id()
+}
+
+/// After a few errands, someone needs help: they wait along the way to the
+/// next errand, and call out when the character comes near.
+#[allow(clippy::too_many_arguments)]
+fn call(
+    mut commands: Commands,
+    seed: Res<CitySeed>,
+    city: Res<CityName>,
+    status: Res<HostStatus>,
+    wardrobe: Res<Wardrobe>,
+    solids: Res<Solids>,
+    library: Res<VoxLibrary>,
+    quest: Res<crate::quest::Quest>,
+    time: Res<Time>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut mystery: ResMut<Mystery>,
+    mut host: ResMut<Host>,
+    mut pending: ResMut<Pending>,
+    mut errands: MessageReader<crate::quest::ErrandDone>,
+    players: Query<&Transform, With<Player>>,
+    // Whoever is calling, and what is left of the last case.
+    callers: Query<
+        Entity,
+        Or<(
+            With<Client>,
+            With<Alert>,
+            With<Suspect>,
+            With<ClueMarker>,
+            With<NameTag>,
+        )>,
+    >,
+) {
+    for _ in errands.read() {
+        if mystery.phase == Phase::Waiting {
+            mystery.errands += 1;
+        }
+    }
+    // A new town, or the wardrobe: whoever was calling goes home.
+    let new_town = seed.is_changed() && !seed.is_added();
+    if new_town {
+        mystery.errands = 0;
+    }
+    if mystery.phase == Phase::Calling && (new_town || wardrobe.0) {
+        for entity in &callers {
+            commands.entity(entity).despawn();
+        }
+        mystery.phase = Phase::Waiting;
+        return;
+    }
+    // Back to the errands: the last case's people go home.
+    if mystery.phase == Phase::Waiting && mystery.case.is_some() {
+        for entity in &callers {
+            commands.entity(entity).despawn();
+        }
+        mystery.case = None;
+    }
+    let Ok(player) = players.single() else { return };
+    let at = Vec2::new(player.translation.x, player.translation.z);
+    let it = italian(&status);
+    match mystery.phase {
+        Phase::Waiting => {
+            if wardrobe.0 || status.lang.is_empty() || mystery.errands < ERRANDS_BEFORE_CALL {
+                return;
+            }
+            let Some((_, place)) = quest.current else {
+                return;
+            };
+            let spot = caller_spot(&solids, at, &nav::route(at, place.at));
+            // The case they bring: the first that has its scene near them.
+            let mut number = mystery.progress.case;
+            while gen::nearest_place(
+                seed.0,
+                spot,
+                case::case(seed.0, number, mystery.progress.level())
+                    .crime
+                    .at,
+                REACH,
+            )
+            .is_none()
+            {
+                number += 1;
+            }
+            mystery.progress.case = number;
+            for entity in &callers {
+                commands.entity(entity).despawn();
+            }
+            let caller = spawn_person(
+                &mut commands,
+                &mut meshes,
+                &library,
+                &client_look(seed.0, number),
+                Vec3::new(spot.x, gen::PAVEMENT, spot.y),
+            );
+            commands.entity(caller).insert(Client {
+                left: f32::INFINITY,
+            });
+            commands.spawn((
+                Alert,
+                library.place("alert", Vec3::new(spot.x, ALERT_HEIGHT, spot.y), 0.08, 0),
+                NotShadowCaster,
+            ));
+            mystery.caller = spot;
+            mystery.called = false;
+            mystery.errands = 0;
+            mystery.phase = Phase::Calling;
+            crate::bridge::host_log(&format!(
+                "someone needs help at {:.0},{:.0}",
+                spot.x, spot.y
+            ));
+        }
+        Phase::Calling if !mystery.called && mystery.caller.distance(at) < HEARD_WITHIN => {
+            mystery.called = true;
+            let case = case::case(seed.0, mystery.progress.case, mystery.progress.level());
+            let town = if city.0.is_empty() {
+                "the town".to_string()
+            } else {
+                city.0.clone()
+            };
+            let persona = format!(
+                "You are {name}, a resident of {town} in a funny video game, {manner}. Something has just happened to you ({what})                  and you spot a detective's assistant (a small voxel person) across the street. Call them over: one very short shouted line,                  in {lang_name}, without telling what happened yet. Never mention being a game character.",
+                name = case.client.0,
+                manner = case.client.1,
+                what = case.crime.what,
+                lang_name = if it { "Italian" } else { "English" },
+            );
+            let id = host.ask_brain(&BrainRequest {
+                persona,
+                situation: "Call the detective's assistant over.".into(),
+                ..default()
+            });
+            pending.0.insert(
+                id,
+                Waiting {
+                    asked_at: time.elapsed_secs(),
+                    speaker: Speaker::Client,
+                    stand_in: if it {
+                        "Ehi! Aiuto, di qua!".into()
+                    } else {
+                        "Hey! Help, over here!".into()
+                    },
+                },
+            );
+        }
+        _ => {}
+    }
 }
 
 /// Who a suspect is, for the model: their facts and how to behave.
@@ -401,7 +662,7 @@ pub fn accusation(case: &Case, text: &str) -> Option<usize> {
         .position(|s| words.contains(&s.name.to_lowercase().as_str()))
 }
 
-/// Start a case when there is none and the player is in town.
+/// Open the case when the character reaches whoever needs help.
 #[allow(clippy::too_many_arguments)]
 fn open(
     mut commands: Commands,
@@ -418,7 +679,16 @@ fn open(
     mut requests: MessageReader<Detective>,
     mut words: ResMut<crate::intent::ExtraWords>,
     players: Query<(&Player, &Transform)>,
-    people: Query<Entity, Or<(With<Suspect>, With<Client>, With<ClueMarker>, With<NameTag>)>>,
+    mut people: Query<
+        (Entity, Option<&mut Client>),
+        Or<(
+            With<Suspect>,
+            With<ClueMarker>,
+            With<NameTag>,
+            With<Alert>,
+            With<Client>,
+        )>,
+    >,
     time: Res<Time>,
 ) {
     for request in requests.read() {
@@ -433,16 +703,32 @@ fn open(
     // A new town is a new case, from the top.
     if seed.is_changed() && !seed.is_added() && mystery.case.is_some() {
         mystery.phase = Phase::Waiting;
-    }
-    if mystery.phase != Phase::Waiting || wardrobe.0 || status.lang.is_empty() {
-        return;
+        for (entity, _) in &people {
+            commands.entity(entity).despawn();
+        }
     }
     let Ok((player, transform)) = players.single() else {
         return;
     };
     let at = Vec2::new(transform.translation.x, transform.translation.z);
-    for entity in &people {
-        commands.entity(entity).despawn();
+    if mystery.phase != Phase::Calling
+        || mystery.caller.distance(at) > AT_CALLER
+        || wardrobe.0
+        || status.lang.is_empty()
+    {
+        return;
+    }
+    // Whoever called stays a while to see how it goes; the rest of the last
+    // case goes.
+    let mut caller_here = false;
+    for (entity, client) in &mut people {
+        match client {
+            Some(mut client) => {
+                client.left = 30.0;
+                caller_here = true;
+            }
+            None => commands.entity(entity).despawn(),
+        }
     }
     // The case: its scene and its people placed in this town.
     let mut number = mystery.progress.case;
@@ -469,49 +755,15 @@ fn open(
         library.place("clue", Vec3::new(marker.x, 1.2, marker.y), 0.06, 0),
         NotShadowCaster,
     ));
-    let person = |commands: &mut Commands,
-                  meshes: &mut Assets<Mesh>,
-                  look: &crate::figure::Look,
-                  at: Vec3,
-                  extra: (Option<Suspect>, Option<Client>)| {
-        let voxel = look.voxel();
-        let (body, leg) = (look.body(), look.leg());
-        let size = leg.size.as_vec3() * voxel;
-        let hip = size.y - 0.02;
-        let piece = |mesh: Handle<Mesh>, offset: Vec3| {
-            (
-                Mesh3d(mesh),
-                MeshMaterial3d(library.material.clone()),
-                Transform::from_translation(offset).with_scale(Vec3::splat(voxel)),
-            )
-        };
-        let (body, leg) = (meshes.add(body.mesh()), meshes.add(leg.mesh()));
-        let mut entity = commands.spawn((Transform::from_translation(at), Visibility::default()));
-        if let Some(suspect) = extra.0 {
-            entity.insert(suspect);
-        }
-        if let Some(client) = extra.1 {
-            entity.insert(client);
-        }
-        entity.with_children(|figure| {
-            figure.spawn(piece(body, Vec3::new(0.0, hip, 3.0 * voxel)));
-            for side in [-1.0, 1.0] {
-                figure.spawn(piece(
-                    leg.clone(),
-                    Vec3::new(side * (size.x / 2.0 + 0.02), 0.0, -0.02),
-                ));
-            }
-        });
-        entity.id()
-    };
     for (s, (suspect, spot)) in case.suspects.iter().zip(&spots).enumerate() {
-        person(
+        let who = spawn_person(
             &mut commands,
             &mut meshes,
+            &library,
             &suspect.look,
             Vec3::new(spot.x, gen::PAVEMENT, spot.y),
-            (Some(Suspect(s)), None),
         );
+        commands.entity(who).insert(Suspect(s));
         commands.spawn((
             NameTag(s),
             Text::new(suspect.name),
@@ -522,21 +774,21 @@ fn open(
             Visibility::Hidden,
         ));
     }
-    // Whoever reports it comes up to the character.
-    let ahead = Vec2::new(-player.facing.sin(), -player.facing.cos());
-    // In front and to one side, so the two speech bubbles do not cover
-    // each other.
-    let client_at = at + ahead * 1.6 + ahead.perp() * 1.3;
-    let client_look =
-        crate::figure::Look::random(seed.0 ^ (number as u64).wrapping_mul(0xA24B_AED4_963E_E407));
-    person(
-        &mut commands,
-        &mut meshes,
-        &client_look,
-        Vec3::new(client_at.x, 0.0, client_at.y),
-        (None, Some(Client { left: 30.0 })),
-    );
-
+    // If they are gone, someone comes up to the character instead.
+    if !caller_here {
+        let ahead = Vec2::new(-player.facing.sin(), -player.facing.cos());
+        // In front and to one side, so the two speech bubbles do not cover
+        // each other.
+        let client_at = at + ahead * 1.6 + ahead.perp() * 1.3;
+        let client = spawn_person(
+            &mut commands,
+            &mut meshes,
+            &library,
+            &client_look(seed.0, number),
+            Vec3::new(client_at.x, 0.0, client_at.y),
+        );
+        commands.entity(client).insert(Client { left: 30.0 });
+    }
     let it = italian(&status);
     let lang = status.lang.as_str();
     let client_sightings: Vec<String> = case
@@ -1018,6 +1270,10 @@ struct Notebook<'a> {
     questions: Vec<&'static str>,
     /// Where the scene is (x, z), for the page to point the way.
     scene: [f32; 2],
+    /// Where whoever needs help waits, while they do; and where the errand
+    /// in hand is done.
+    caller: Option<[f32; 2]>,
+    errand: Option<[f32; 2]>,
 }
 
 #[derive(Serialize)]
@@ -1035,6 +1291,7 @@ fn publish(
     status: Res<HostStatus>,
     mystery: Res<Mystery>,
     talking: Res<Talking>,
+    quest: Res<crate::quest::Quest>,
     players: Query<&Transform, With<Player>>,
     mut last: Local<String>,
 ) {
@@ -1074,6 +1331,7 @@ fn publish(
     let notebook = Notebook {
         phase: match mystery.phase {
             Phase::Waiting => "waiting",
+            Phase::Calling => "calling",
             Phase::Investigating => "investigating",
             Phase::Solved => "solved",
             Phase::Failed => "failed",
@@ -1094,6 +1352,11 @@ fn publish(
             .map(|(en, itq)| if it { *itq } else { *en })
             .collect(),
         scene: [mystery.scene.x.round(), mystery.scene.y.round()],
+        caller: (mystery.phase == Phase::Calling)
+            .then(|| [mystery.caller.x.round(), mystery.caller.y.round()]),
+        errand: quest
+            .current
+            .map(|(_, place)| [place.at.x.round(), place.at.y.round()]),
     };
     let json = serde_json::to_string(&notebook).unwrap_or_default();
     if *last != json {
@@ -1145,12 +1408,28 @@ fn idle(
     }
 }
 
-/// The scene's question mark turns and bobs.
-fn spin(time: Res<Time>, mut markers: Query<&mut Transform, With<ClueMarker>>) {
+/// The scene's question mark turns and bobs; the exclamation mark over
+/// whoever needs help jumps.
+fn spin(
+    time: Res<Time>,
+    mut markers: Query<&mut Transform, (With<ClueMarker>, Without<Alert>)>,
+    mut alerts: Query<&mut Transform, (With<Alert>, Without<FollowCamera>)>,
+    cameras: Query<&Transform, (With<FollowCamera>, Without<Alert>, Without<ClueMarker>)>,
+) {
     let t = time.elapsed_secs();
     for mut marker in &mut markers {
         marker.rotation = Quat::from_rotation_y(t * 1.5);
         marker.translation.y = 1.2 + (t * 2.0).sin() * 0.12;
+    }
+    let view = cameras.single().map(|c| c.translation).ok();
+    for mut alert in &mut alerts {
+        // Always facing the camera, so it reads from any side.
+        if let Some(view) = view {
+            let d = view - alert.translation;
+            // (The glyph's face looks along the model's x.)
+            alert.rotation = Quat::from_rotation_y(d.x.atan2(d.z) - std::f32::consts::FRAC_PI_2);
+        }
+        alert.translation.y = ALERT_HEIGHT + (t * 5.0).sin().abs() * 0.2;
     }
 }
 
@@ -1283,6 +1562,36 @@ mod tests {
             let spot = pavement_spot(&solids, place.at);
             assert_eq!(solids.hit(spot, 0.4), None, "{kind:?}");
             assert!(spot.distance(place.at) < 6.0, "{kind:?}");
+        }
+    }
+
+    #[test]
+    fn whoever_needs_help_waits_on_the_way() {
+        for town in ["Borgo Pastello", "Valfiorita", "Ponte Lungo"] {
+            let seed = seed_for(town);
+            let solids = Solids::new(seed);
+            let from = Vec2::new(11.0, 3.0);
+            for kind in PlaceKind::ALL {
+                let place = gen::nearest_place(seed, from, kind, REACH).unwrap();
+                let points = nav::route(from, place.at);
+                let spot = caller_spot(&solids, from, &points);
+                assert_eq!(solids.hit(spot, 0.4), None, "{town} {kind:?}");
+                // Beside the way, not off somewhere else...
+                let mut nearest = f32::MAX;
+                let mut at = from;
+                for p in &points {
+                    for k in 0..=20 {
+                        nearest = nearest.min(spot.distance(at.lerp(*p, k as f32 / 20.0)));
+                    }
+                    at = *p;
+                }
+                assert!(nearest < KERBSIDE + 5.0, "{town} {kind:?}: {nearest}");
+                // ...and ahead: a walk to reach, unless the errand is near.
+                let walk = nav::length(from, &points);
+                if walk > 20.0 {
+                    assert!(spot.distance(from) > 8.0, "{town} {kind:?}");
+                }
+            }
         }
     }
 

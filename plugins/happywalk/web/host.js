@@ -530,6 +530,11 @@ window.happywalkHost = {
   /** Put the character somewhere (tests and screenshots). */
   place(x, z, facing = 0) { game?.hw_place(x, z, facing); },
 
+  /** How much the game draws (meshes, on screen, triangles): for measuring. */
+  get render() {
+    try { return JSON.parse(game?.hw_render() || 'null'); } catch (_) { return null; }
+  },
+
   /** Where the cars and bikes are (tests and screenshots). */
   get traffic() {
     try { return JSON.parse(game?.hw_traffic() || '[]'); } catch (_) { return []; }

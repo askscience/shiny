@@ -11,15 +11,13 @@
 
 use std::collections::HashMap;
 
-use bevy::asset::RenderAssetUsages;
-use bevy::light::NotShadowCaster;
-use bevy::mesh::{Indices, PrimitiveTopology};
 use bevy::prelude::*;
 
 use crate::gen::{self, LotKind};
 pub use crate::gen::{Solid, SolidKind, PAVED, PAVEMENT, PITCH};
 use crate::player::Player;
-use crate::vox::VoxLibrary;
+use crate::vox::{Geometry, VoxLibrary};
+use bevy::camera::visibility::VisibilityRange;
 
 /// What the player called their city.
 #[derive(Resource, Clone, Debug, Default)]
@@ -56,8 +54,9 @@ const FAR: i32 = 3;
 /// Chunks this near get everything; farther ones only what shows from a
 /// distance (buildings, trees, lamp posts).
 const DETAILED: i32 = 1;
-/// Chunks spawned in one frame, so walking never stutters.
-const PER_FRAME: usize = 2;
+/// Chunks built in one frame, so walking never stutters (merging a
+/// chunk's geometry takes a moment).
+const PER_FRAME: usize = 1;
 
 /// Everything that stops the character, anywhere in the city.
 #[derive(Resource)]
@@ -97,19 +96,29 @@ impl Solids {
 
     /// The first solid a square at `at` would touch, whole.
     pub fn what(&self, at: Vec2, radius: f32) -> Option<Solid> {
+        self.find(at, radius, |_| true)
+    }
+
+    /// Is there a solid of this kind within the square?
+    pub fn any(&self, at: Vec2, radius: f32, kind: SolidKind) -> bool {
+        self.find(at, radius, |s| s.kind == kind).is_some()
+    }
+
+    fn find(&self, at: Vec2, radius: f32, wanted: impl Fn(&Solid) -> bool) -> Option<Solid> {
         // A lot's solids stay on its pavement, so only the chunks the square
         // itself lies in can matter.
         let low = gen::chunk_of(at - Vec2::splat(radius));
         let high = gen::chunk_of(at + Vec2::splat(radius));
+        let fits = |s: &Solid| s.touches(at, radius) && wanted(s);
         for x in low.x..=high.x {
             for z in low.y..=high.y {
                 let coord = IVec2::new(x, z);
                 let found = match self.loaded.get(&coord) {
-                    Some(solids) => solids.iter().find(|s| s.touches(at, radius)).copied(),
+                    Some(solids) => solids.iter().find(|s| fits(s)).copied(),
                     None => self
                         .of(&gen::chunk(self.seed, coord))
                         .into_iter()
-                        .find(|s| s.touches(at, radius)),
+                        .find(|s| fits(s)),
                 };
                 if found.is_some() {
                     return found;
@@ -143,17 +152,80 @@ fn rename(
 #[derive(Resource, Default)]
 struct Loaded(HashMap<IVec2, (bool, Vec<Entity>)>);
 
-/// What every chunk's ground is made of, made once.
-#[derive(Resource)]
-struct Ground {
-    slab: Handle<Mesh>,
-    dashes: Handle<Mesh>,
-    asphalt: Handle<StandardMaterial>,
-    stone: Handle<StandardMaterial>,
-    grass: Handle<StandardMaterial>,
-    square: Handle<StandardMaterial>,
-    line: Handle<StandardMaterial>,
+/// The dashes down the middle of the two streets a chunk owns (the one along
+/// its `+x` side and the one along its `+z` side): centre and half size,
+/// around the middle of the lot.
+fn dashes() -> Vec<(Vec2, Vec2)> {
+    let mut out = Vec::new();
+    let street = PITCH / 2.0;
+    let mut along = -PITCH / 2.0 + 1.1;
+    while along < PITCH / 2.0 {
+        // Not across the crossing itself.
+        if along < PAVED / 2.0 {
+            out.push((Vec2::new(street, along), Vec2::new(0.08, 0.7)));
+            out.push((Vec2::new(along, street), Vec2::new(0.7, 0.08)));
+        }
+        along += 3.3;
+    }
+    out
 }
+
+/// A colour from sRGB bytes, as a vertex colour.
+fn rgb(r: u8, g: u8, b: u8) -> [f32; 4] {
+    let c = Color::srgb_u8(r, g, b).to_linear();
+    [c.red, c.green, c.blue, 1.0]
+}
+
+/// Everything of a chunk that stands still, as one mesh around the middle
+/// of its lot: the street, the pavement (stone, grass or the square's
+/// paving), the dashes, and every prop. A far chunk takes the halved models
+/// and leaves the small things out.
+pub fn chunk_geometry(chunk: &gen::Chunk, library: &VoxLibrary, far: bool) -> Geometry {
+    let lot = gen::centre(chunk.coord);
+    let mut out = Geometry::default();
+    let half = PITCH / 2.0;
+    out.floor(
+        Vec2::splat(-half),
+        Vec2::splat(half),
+        0.0,
+        rgb(184, 188, 204),
+    );
+    let paving = match chunk.kind {
+        LotKind::Park => rgb(190, 228, 196),
+        LotKind::Square => rgb(244, 232, 214),
+        _ => rgb(229, 226, 220),
+    };
+    out.block(
+        Vec3::new(-PAVED / 2.0, 0.0, -PAVED / 2.0),
+        Vec3::new(PAVED / 2.0, PAVEMENT, PAVED / 2.0),
+        paving,
+    );
+    let line = rgb(247, 245, 230);
+    for (centre, size) in dashes() {
+        out.floor(centre - size, centre + size, 0.012, line);
+    }
+    for prop in chunk
+        .props
+        .iter()
+        .filter(|prop| !far || prop.shows_from_afar())
+    {
+        let Some(model) = library.geometry(prop.model, far) else {
+            continue;
+        };
+        let voxel = if far { prop.voxel * 2.0 } else { prop.voxel };
+        let place = Transform::from_xyz(prop.at.x - lot.x, prop.lift, prop.at.y - lot.y)
+            .with_rotation(Quat::from_rotation_y(
+                prop.quarter_turns as f32 * std::f32::consts::FRAC_PI_2,
+            ))
+            .with_scale(Vec3::splat(voxel));
+        out.append(model, &place);
+    }
+    out
+}
+
+/// Chunks whose middle is farther than this from the camera are not drawn:
+/// all of them is in the fog by then.
+const DRAWN_WITHIN: f32 = 72.0;
 
 pub struct CityPlugin;
 
@@ -170,65 +242,8 @@ impl Plugin for CityPlugin {
             .init_resource::<CityName>()
             .add_message::<CityNamed>()
             .add_systems(PreUpdate, rename)
-            .add_systems(Startup, prepare_ground)
             .add_systems(Update, stream);
     }
-}
-
-/// The dashes down the middle of the two streets a chunk owns (the one along
-/// its `+x` side and the one along its `+z` side), as one mesh.
-fn dashes_mesh() -> Mesh {
-    let mut positions = Vec::new();
-    let mut indices = Vec::new();
-    let mut quad = |centre: Vec2, half: Vec2| {
-        let first = positions.len() as u32;
-        for (dx, dz) in [(-1.0, -1.0), (-1.0, 1.0), (1.0, 1.0), (1.0, -1.0)] {
-            positions.push([centre.x + dx * half.x, 0.012, centre.y + dz * half.y]);
-        }
-        indices.extend([first, first + 1, first + 2, first, first + 2, first + 3]);
-    };
-    let street = PITCH / 2.0;
-    let mut along = -PITCH / 2.0 + 1.1;
-    while along < PITCH / 2.0 {
-        // Not across the crossing itself.
-        if along < PAVED / 2.0 {
-            quad(Vec2::new(street, along), Vec2::new(0.08, 0.7));
-            quad(Vec2::new(along, street), Vec2::new(0.7, 0.08));
-        }
-        along += 3.3;
-    }
-    let normals = vec![[0.0, 1.0, 0.0]; positions.len()];
-    Mesh::new(
-        PrimitiveTopology::TriangleList,
-        RenderAssetUsages::RENDER_WORLD,
-    )
-    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
-    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
-    .with_inserted_indices(Indices::U32(indices))
-}
-
-fn prepare_ground(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-) {
-    let mut matte = |r: u8, g: u8, b: u8| {
-        materials.add(StandardMaterial {
-            base_color: Color::srgb_u8(r, g, b),
-            perceptual_roughness: 1.0,
-            reflectance: 0.05,
-            ..default()
-        })
-    };
-    commands.insert_resource(Ground {
-        asphalt: matte(184, 188, 204),
-        stone: matte(229, 226, 220),
-        grass: matte(190, 228, 196),
-        square: matte(244, 232, 214),
-        line: matte(247, 245, 230),
-        slab: meshes.add(Cuboid::new(1.0, 1.0, 1.0)),
-        dashes: meshes.add(dashes_mesh()),
-    });
 }
 
 /// Keep the chunks around the player on screen.
@@ -236,7 +251,7 @@ fn stream(
     mut commands: Commands,
     seed: Res<CitySeed>,
     library: Res<VoxLibrary>,
-    ground: Res<Ground>,
+    mut meshes: ResMut<Assets<Mesh>>,
     players: Query<&Transform, With<Player>>,
     mut loaded: ResMut<Loaded>,
     mut solids: ResMut<Solids>,
@@ -310,61 +325,18 @@ fn stream(
         let chunk = gen::chunk(seed.0, coord);
         let detailed = (coord - home).abs().max_element() <= DETAILED;
         let lot = gen::centre(coord);
-        let mut entities = Vec::with_capacity(chunk.props.len() + 3);
-        let slab =
-            |commands: &mut Commands, y: f32, size: Vec3, material: &Handle<StandardMaterial>| {
-                commands
-                    .spawn((
-                        Mesh3d(ground.slab.clone()),
-                        MeshMaterial3d(material.clone()),
-                        NotShadowCaster,
-                        Transform::from_xyz(lot.x, y, lot.y).with_scale(size),
-                    ))
-                    .id()
-            };
-        entities.push(slab(
-            &mut commands,
-            -0.25,
-            Vec3::new(PITCH, 0.5, PITCH),
-            &ground.asphalt,
-        ));
-        let paving = match chunk.kind {
-            LotKind::Park => &ground.grass,
-            LotKind::Square => &ground.square,
-            _ => &ground.stone,
-        };
-        entities.push(slab(
-            &mut commands,
-            PAVEMENT / 2.0,
-            Vec3::new(PAVED, PAVEMENT, PAVED),
-            paving,
-        ));
-        entities.push(
-            commands
-                .spawn((
-                    Mesh3d(ground.dashes.clone()),
-                    MeshMaterial3d(ground.line.clone()),
-                    NotShadowCaster,
-                    Transform::from_xyz(lot.x, 0.0, lot.y),
-                ))
-                .id(),
-        );
-        for prop in chunk
-            .props
-            .iter()
-            .filter(|prop| detailed || prop.shows_from_afar())
-        {
-            entities.push(
-                commands
-                    .spawn(library.place(
-                        prop.model,
-                        Vec3::new(prop.at.x, prop.lift, prop.at.y),
-                        prop.voxel,
-                        prop.quarter_turns,
-                    ))
-                    .id(),
-            );
-        }
+        // The whole chunk in one draw.
+        let geometry = chunk_geometry(&chunk, &library, !detailed);
+        let triangles = geometry.triangles() as u32;
+        let entities = vec![commands
+            .spawn((
+                Mesh3d(meshes.add(geometry.mesh())),
+                MeshMaterial3d(library.material.clone()),
+                Transform::from_xyz(lot.x, 0.0, lot.y),
+                VisibilityRange::abrupt(0.0, DRAWN_WITHIN),
+                crate::vox::Triangles(triangles),
+            ))
+            .id()];
         solids.load(&chunk);
         loaded.0.insert(coord, (detailed, entities));
     }
@@ -458,16 +430,11 @@ mod tests {
 
     #[test]
     fn the_dashes_stay_out_of_the_crossing() {
-        let mesh = dashes_mesh();
-        let positions = mesh
-            .attribute(Mesh::ATTRIBUTE_POSITION)
-            .unwrap()
-            .as_float3()
-            .unwrap();
-        assert!(!positions.is_empty());
-        for p in positions {
-            let (x, z) = (p[0], p[2]);
-            assert!(!(x > PAVED / 2.0 && z > PAVED / 2.0), "{p:?}");
+        let dashes = dashes();
+        assert!(!dashes.is_empty());
+        for (centre, half) in dashes {
+            let far = centre + half;
+            assert!(!(far.x > PAVED / 2.0 && far.y > PAVED / 2.0), "{centre:?}");
         }
     }
 }

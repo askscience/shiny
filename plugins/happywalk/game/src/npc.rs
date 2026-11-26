@@ -9,6 +9,7 @@
 use std::collections::HashMap;
 use std::f32::consts::{FRAC_PI_2, PI};
 
+use bevy::camera::visibility::VisibilityRange;
 use bevy::prelude::*;
 
 use crate::city::{CitySeed, PAVED};
@@ -103,7 +104,30 @@ impl Plugin for NpcPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Housed>()
             .add_systems(Update, (populate, stroll).chain().before(PlayerSet))
-            .add_systems(Update, (react, animate).chain().after(PlayerSet));
+            .add_systems(Update, (react, animate).chain().after(PlayerSet))
+            .add_systems(PostUpdate, hide_far_movers);
+    }
+}
+
+/// People and vehicles farther than this from the camera are not drawn: the
+/// fog is thick by 54 m and they are small.
+pub const MOVERS_DRAWN_WITHIN: f32 = 56.0;
+
+/// Every piece of a passer-by, a car or a cyclist stops being drawn beyond
+/// `MOVERS_DRAWN_WITHIN`. The range goes on each mesh (it is not inherited),
+/// as soon as it appears.
+fn hide_far_movers(
+    mut commands: Commands,
+    added: Query<Entity, (Added<Mesh3d>, Without<VisibilityRange>)>,
+    parents: Query<&ChildOf>,
+    movers: Query<(), Or<(With<Npc>, With<crate::traffic::Vehicle>)>>,
+) {
+    for piece in &added {
+        if parents.iter_ancestors(piece).any(|up| movers.contains(up)) {
+            commands
+                .entity(piece)
+                .insert(VisibilityRange::abrupt(0.0, MOVERS_DRAWN_WITHIN));
+        }
     }
 }
 

@@ -274,24 +274,28 @@ impl VoxModel {
     /// The model as a mesh: positions in voxels around the centre of the
     /// base, normals, and vertex colours with the occlusion in them.
     pub fn mesh(&self) -> Mesh {
+        self.geometry().mesh()
+    }
+
+    /// The model's faces as vertex arrays, around the centre of its base,
+    /// in voxels.
+    pub fn geometry(&self) -> Geometry {
         let quads = self.quads();
         let centre = [self.size.x as f32 / 2.0, 0.0, self.size.z as f32 / 2.0];
-        let mut positions = Vec::with_capacity(quads.len() * 4);
-        let mut normals = Vec::with_capacity(quads.len() * 4);
-        let mut colours = Vec::with_capacity(quads.len() * 4);
-        let mut indices: Vec<u32> = Vec::with_capacity(quads.len() * 6);
+        let mut out = Geometry::with_capacity(quads.len());
         for quad in &quads {
-            let first = positions.len() as u32;
+            let first = out.positions.len() as u32;
             let base = self.colour(quad.colour);
             for (corner, shade) in quad.corners.iter().zip(quad.shade) {
-                positions.push([
+                out.positions.push([
                     corner[0] - centre[0],
                     corner[1] - centre[1],
                     corner[2] - centre[2],
                 ]);
-                normals.push(quad.normal);
+                out.normals.push(quad.normal);
                 let s = SHADE[shade as usize];
-                colours.push([base[0] * s, base[1] * s, base[2] * s, 1.0]);
+                out.colours
+                    .push([base[0] * s, base[1] * s, base[2] * s, 1.0]);
             }
             // Split along the diagonal that keeps the shading smooth.
             let split = if quad.shade[0] + quad.shade[2] > quad.shade[1] + quad.shade[3] {
@@ -305,17 +309,196 @@ impl VoxModel {
                 } else {
                     [i[0], i[1], i[2]]
                 };
-                indices.extend(tri.map(|k| first + k));
+                out.indices.extend(tri.map(|k| first + k));
             }
         }
+        out
+    }
+
+    /// The same model at half the resolution: each block of 2×2×2 voxels
+    /// becomes one, of the colour most of them have, if at least two are
+    /// filled. About a quarter of the faces: what far chunks are drawn with.
+    pub fn halved(&self) -> VoxModel {
+        let size = (self.size + UVec3::ONE) / 2;
+        let mut out = VoxModel {
+            size,
+            cells: vec![0; (size.x * size.y * size.z) as usize],
+            palette: self.palette.clone(),
+        };
+        for z in 0..size.z {
+            for y in 0..size.y {
+                for x in 0..size.x {
+                    let mut counts: [(u8, u8); 8] = [(0, 0); 8];
+                    let mut filled = 0;
+                    for (dx, dy, dz) in [
+                        (0, 0, 0),
+                        (1, 0, 0),
+                        (0, 1, 0),
+                        (1, 1, 0),
+                        (0, 0, 1),
+                        (1, 0, 1),
+                        (0, 1, 1),
+                        (1, 1, 1),
+                    ] {
+                        let colour = self.at(
+                            (x * 2 + dx) as i32,
+                            (y * 2 + dy) as i32,
+                            (z * 2 + dz) as i32,
+                        );
+                        if colour == 0 {
+                            continue;
+                        }
+                        filled += 1;
+                        if let Some(slot) = counts.iter_mut().find(|(c, n)| *c == colour || *n == 0)
+                        {
+                            *slot = (colour, slot.1 + 1);
+                        }
+                    }
+                    if filled >= 2 {
+                        let colour = counts
+                            .iter()
+                            .max_by_key(|(_, n)| *n)
+                            .map(|(c, _)| *c)
+                            .unwrap_or(0);
+                        out.set(x, y, z, colour);
+                    }
+                }
+            }
+        }
+        out
+    }
+}
+
+/// Vertex arrays to draw: positions, normals, colours (linear, with the
+/// shading in them) and triangles. Several are merged into one mesh to draw
+/// many things in one go.
+#[derive(Clone, Debug, Default)]
+pub struct Geometry {
+    pub positions: Vec<[f32; 3]>,
+    pub normals: Vec<[f32; 3]>,
+    pub colours: Vec<[f32; 4]>,
+    pub indices: Vec<u32>,
+}
+
+impl Geometry {
+    pub fn with_capacity(quads: usize) -> Self {
+        Self {
+            positions: Vec::with_capacity(quads * 4),
+            normals: Vec::with_capacity(quads * 4),
+            colours: Vec::with_capacity(quads * 4),
+            indices: Vec::with_capacity(quads * 6),
+        }
+    }
+
+    pub fn triangles(&self) -> usize {
+        self.indices.len() / 3
+    }
+
+    /// Add `other`, placed by `transform`.
+    pub fn append(&mut self, other: &Geometry, transform: &Transform) {
+        let first = self.positions.len() as u32;
+        let matrix = transform.to_matrix();
+        let turn = transform.rotation;
+        self.positions.extend(
+            other
+                .positions
+                .iter()
+                .map(|p| matrix.transform_point3(Vec3::from(*p)).to_array()),
+        );
+        self.normals.extend(
+            other
+                .normals
+                .iter()
+                .map(|n| (turn * Vec3::from(*n)).to_array()),
+        );
+        self.colours.extend_from_slice(&other.colours);
+        self.indices.extend(other.indices.iter().map(|i| i + first));
+    }
+
+    /// A flat rectangle facing up, from `min` to `max` (x, z) at height `y`.
+    pub fn floor(&mut self, min: Vec2, max: Vec2, y: f32, colour: [f32; 4]) {
+        self.quad(
+            [
+                [min.x, y, min.y],
+                [min.x, y, max.y],
+                [max.x, y, max.y],
+                [max.x, y, min.y],
+            ],
+            [0.0, 1.0, 0.0],
+            colour,
+        );
+    }
+
+    /// A box's top and four sides (no bottom: it stands on the ground).
+    pub fn block(&mut self, min: Vec3, max: Vec3, colour: [f32; 4]) {
+        self.floor(
+            Vec2::new(min.x, min.z),
+            Vec2::new(max.x, max.z),
+            max.y,
+            colour,
+        );
+        let (a, b) = (min, max);
+        self.quad(
+            [
+                [a.x, a.y, b.z],
+                [b.x, a.y, b.z],
+                [b.x, b.y, b.z],
+                [a.x, b.y, b.z],
+            ],
+            [0.0, 0.0, 1.0],
+            colour,
+        );
+        self.quad(
+            [
+                [b.x, a.y, a.z],
+                [a.x, a.y, a.z],
+                [a.x, b.y, a.z],
+                [b.x, b.y, a.z],
+            ],
+            [0.0, 0.0, -1.0],
+            colour,
+        );
+        self.quad(
+            [
+                [b.x, a.y, b.z],
+                [b.x, a.y, a.z],
+                [b.x, b.y, a.z],
+                [b.x, b.y, b.z],
+            ],
+            [1.0, 0.0, 0.0],
+            colour,
+        );
+        self.quad(
+            [
+                [a.x, a.y, a.z],
+                [a.x, a.y, b.z],
+                [a.x, b.y, b.z],
+                [a.x, b.y, a.z],
+            ],
+            [-1.0, 0.0, 0.0],
+            colour,
+        );
+    }
+
+    /// One rectangle, corners anticlockwise seen from where it faces.
+    fn quad(&mut self, corners: [[f32; 3]; 4], normal: [f32; 3], colour: [f32; 4]) {
+        let first = self.positions.len() as u32;
+        self.positions.extend(corners);
+        self.normals.extend([normal; 4]);
+        self.colours.extend([colour; 4]);
+        self.indices
+            .extend([first, first + 1, first + 2, first, first + 2, first + 3]);
+    }
+
+    pub fn mesh(&self) -> Mesh {
         Mesh::new(
             PrimitiveTopology::TriangleList,
             RenderAssetUsages::RENDER_WORLD,
         )
-        .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
-        .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
-        .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, colours)
-        .with_inserted_indices(Indices::U32(indices))
+        .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, self.positions.clone())
+        .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, self.normals.clone())
+        .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, self.colours.clone())
+        .with_inserted_indices(Indices::U32(self.indices.clone()))
     }
 }
 
@@ -330,10 +513,17 @@ pub struct Quad {
     flipped: bool,
 }
 
+/// How many triangles a voxel mesh has, carried by what shows it (the mesh
+/// data itself is on the GPU), for counting what is drawn.
+#[derive(Component, Clone, Copy, Debug)]
+pub struct Triangles(pub u32);
+
 /// Every voxel model, by name, meshed once.
 #[derive(Resource)]
 pub struct VoxLibrary {
-    models: HashMap<&'static str, (UVec3, Handle<Mesh>)>,
+    models: HashMap<&'static str, (UVec3, Handle<Mesh>, u32)>,
+    /// Each model's vertex arrays, full and halved, to merge into chunks.
+    geometry: HashMap<&'static str, (Geometry, Geometry)>,
     /// The one material all voxel models share.
     pub material: Handle<StandardMaterial>,
 }
@@ -343,7 +533,7 @@ impl VoxLibrary {
     /// logged once and drawn as nothing.
     pub fn mesh(&self, name: &str) -> Handle<Mesh> {
         match self.models.get(name) {
-            Some((_, mesh)) => mesh.clone(),
+            Some((_, mesh, _)) => mesh.clone(),
             None => {
                 error!("no voxel model named {name:?} in assets/vox");
                 Handle::default()
@@ -355,7 +545,7 @@ impl VoxLibrary {
     pub fn size(&self, name: &str) -> UVec3 {
         self.models
             .get(name)
-            .map(|(size, _)| *size)
+            .map(|(size, _, _)| *size)
             .unwrap_or(UVec3::ONE)
     }
 
@@ -365,12 +555,23 @@ impl VoxLibrary {
         (
             Mesh3d(self.mesh(name)),
             MeshMaterial3d(self.material.clone()),
+            Triangles(self.models.get(name).map(|m| m.2).unwrap_or(0)),
             Transform::from_translation(at)
                 .with_rotation(Quat::from_rotation_y(
                     quarter_turns as f32 * std::f32::consts::FRAC_PI_2,
                 ))
                 .with_scale(Vec3::splat(voxel)),
         )
+    }
+}
+
+impl VoxLibrary {
+    /// A model's vertex arrays (in voxels, around the centre of its base):
+    /// full, or halved for far away (its voxels then count double).
+    pub fn geometry(&self, name: &str, far: bool) -> Option<&Geometry> {
+        self.geometry
+            .get(name)
+            .map(|(full, half)| if far { half } else { full })
     }
 }
 
@@ -404,13 +605,16 @@ fn load(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     let mut models = HashMap::new();
+    let mut geometry = HashMap::new();
     let mut quads = 0;
     for (name, bytes) in VOX_ASSETS {
         match VoxModel::parse(bytes) {
             Ok(model) => {
+                geometry.insert(*name, (model.geometry(), model.halved().geometry()));
                 let mesh = model.mesh();
-                quads += mesh.indices().map(|i| i.len() / 6).unwrap_or(0);
-                models.insert(*name, (model.size, meshes.add(mesh)));
+                let triangles = mesh.indices().map(|i| i.len() / 3).unwrap_or(0);
+                quads += triangles / 2;
+                models.insert(*name, (model.size, meshes.add(mesh), triangles as u32));
             }
             Err(e) => error!("voxel model {name}: {e}"),
         }
@@ -422,7 +626,11 @@ fn load(
         reflectance: 0.05,
         ..default()
     });
-    commands.insert_resource(VoxLibrary { models, material });
+    commands.insert_resource(VoxLibrary {
+        models,
+        geometry,
+        material,
+    });
 }
 
 #[cfg(test)]
@@ -556,6 +764,58 @@ mod tests {
             seen += 1;
         }
         assert!(seen >= 10);
+    }
+
+    #[test]
+    fn a_halved_model_is_lighter_and_the_same_shape() {
+        for (name, model) in
+            models().filter(|(name, _)| name.starts_with("home_") || name.starts_with("tree"))
+        {
+            let half = model.halved();
+            assert_eq!(half.size, (model.size + UVec3::ONE) / 2, "{name}");
+            let (full, coarse) = (model.quads().len(), half.quads().len());
+            assert!(coarse * 2 < full, "{name}: {coarse} of {full}");
+            // About as tall and as wide: nothing went missing.
+            let filled_top = |m: &VoxModel| {
+                (0..m.size.y as i32)
+                    .rev()
+                    .find(|y| {
+                        (0..m.size.x as i32)
+                            .any(|x| (0..m.size.z as i32).any(|z| m.at(x, *y, z) != 0))
+                    })
+                    .unwrap()
+            };
+            assert!(
+                (filled_top(&half) * 2 - filled_top(&model)).abs() <= 2,
+                "{name}"
+            );
+        }
+    }
+
+    #[test]
+    fn merged_geometry_keeps_every_triangle_where_it_was_put() {
+        let model = solid(UVec3::new(2, 2, 2));
+        let one = model.geometry();
+        let mut merged = Geometry::default();
+        merged.append(&one, &Transform::from_xyz(10.0, 0.0, 0.0));
+        merged.append(
+            &one,
+            &Transform::from_xyz(-10.0, 0.0, 0.0).with_scale(Vec3::splat(0.5)),
+        );
+        assert_eq!(merged.triangles(), one.triangles() * 2);
+        assert!(merged.positions[..one.positions.len()]
+            .iter()
+            .all(|p| p[0] >= 9.0));
+        assert!(merged.positions[one.positions.len()..]
+            .iter()
+            .all(|p| p[0] <= -9.5));
+        assert!(merged
+            .indices
+            .iter()
+            .all(|i| (*i as usize) < merged.positions.len()));
+        let mut ground = Geometry::default();
+        ground.block(Vec3::ZERO, Vec3::ONE, [1.0; 4]);
+        assert_eq!(ground.triangles(), 10);
     }
 
     #[test]

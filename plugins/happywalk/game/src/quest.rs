@@ -158,8 +158,8 @@ fn progress(
     if seed.is_changed() && !seed.is_added() {
         *quest = Quest::default();
     }
-    // While there is a case to solve, errands wait.
-    if wardrobe.0 || mystery.case.is_some() {
+    // While a case is being solved (and its outcome shown), errands wait.
+    if wardrobe.0 || mystery.busy() {
         return;
     }
     let Ok(player) = players.single() else { return };
@@ -201,7 +201,7 @@ fn show(
     mut panels: Query<&mut Visibility, With<QuestPanel>>,
 ) {
     // The notebook of the case takes the corner while there is one.
-    let hidden = mystery.case.is_some();
+    let hidden = mystery.busy();
     for mut visibility in &mut panels {
         let want = if hidden {
             Visibility::Hidden
@@ -256,11 +256,24 @@ fn show(
     // To the nearest five metres: the text changes a few times a minute, not
     // sixty times a second.
     let metres = (place.at.distance(at) / 5.0).round() as i32 * 5;
-    let text = format!(
+    let mut text = format!(
         "{what}\n{} {metres} m   {}/{ROUND}",
         arrow(at, player.facing, place.at),
         quest.done
     );
+    // Someone needs help: where.
+    if mystery.phase == crate::mystery::Phase::Calling {
+        let help = if status.lang.starts_with("it") {
+            "Qualcuno chiede aiuto"
+        } else {
+            "Someone needs help"
+        };
+        let metres = (mystery.caller.distance(at) / 5.0).round() as i32 * 5;
+        text.push_str(&format!(
+            "\n! {help}  {} {metres} m",
+            arrow(at, player.facing, mystery.caller)
+        ));
+    }
     if *shown != text {
         **label = text.clone();
         *shown = text;

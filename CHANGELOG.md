@@ -56,7 +56,13 @@
   and answer questions (from the notebook or freely by voice) as the model
   plays them, and an accusation closes the case with a confession or an
   escape. A notebook beside the game shows the clues and works without a
-  microphone.
+  microphone. Cases are met on the way: after a couple of errands, someone
+  who needs help waits on the pavement along the way to the next one, an
+  exclamation mark over their head, calls out as the character comes near,
+  and tells their story when reached; afterwards the notebook sends the
+  character back to the errands. The city is drawn in far fewer pieces:
+  each chunk is one mesh, far chunks use coarser models, nothing beyond the
+  fog is drawn, and the shadow map is smaller.
   The character has a personality of its own (theatrical, a proud citizen
   with grudges against lamp posts and a weakness for bread), each line is
   asked from a different comic angle, and the model is told concretely what

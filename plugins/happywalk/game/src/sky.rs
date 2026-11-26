@@ -45,6 +45,9 @@ impl Plugin for SkyPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Daylight>()
             .insert_resource(ClearColor(DAY.sky))
+            // Shadows reach 38 m: a map half the default size is sharp
+            // enough for blocky shapes, and a quarter of the work.
+            .insert_resource(bevy::light::DirectionalLightShadowMap { size: 1024 })
             .add_systems(Startup, setup)
             .add_systems(Update, turn);
     }

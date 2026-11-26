@@ -25,6 +25,8 @@ pub struct Lap {
 /// The latest and the average of each link.
 #[derive(Resource, Default)]
 pub struct Latency {
+    /// Meshes in the world, meshes drawn, triangles drawn.
+    pub drawn: (u32, u32, u64),
     links: BTreeMap<&'static str, Stat>,
 }
 
@@ -66,8 +68,39 @@ impl Plugin for TelemetryPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Latency>()
             .add_message::<Lap>()
-            .add_systems(Last, log_laps);
+            .add_systems(Last, log_laps)
+            .add_systems(Last, count_drawn);
     }
+}
+
+/// Count what is drawn, twice a second: meshes in the world, how many the
+/// camera actually draws (after culling), and the triangles of the voxel
+/// models among them (mesh data lives on the GPU, so they carry their own
+/// count). The F3 panel
+/// and `hw_render` show it.
+fn count_drawn(
+    time: Res<Time<Real>>,
+    drawn: Query<(&ViewVisibility, Option<&crate::vox::Triangles>), With<Mesh3d>>,
+    mut latency: ResMut<Latency>,
+    mut since: Local<f32>,
+) {
+    *since += time.delta_secs();
+    if *since < 0.5 {
+        return;
+    }
+    *since = 0.0;
+    let (mut all, mut seen, mut triangles) = (0u32, 0u32, 0u64);
+    for (visibility, count) in &drawn {
+        all += 1;
+        if visibility.get() {
+            seen += 1;
+            triangles += count.map(|c| c.0 as u64).unwrap_or(0);
+        }
+    }
+    latency.drawn = (all, seen, triangles);
+    crate::bridge::publish_render(format!(
+        r#"{{"meshes":{all},"visible":{seen},"triangles":{triangles}}}"#
+    ));
 }
 
 fn log_laps(mut laps: MessageReader<Lap>, mut latency: ResMut<Latency>) {

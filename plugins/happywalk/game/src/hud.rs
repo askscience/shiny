@@ -410,6 +410,10 @@ fn draw(
                 })
                 .collect::<Vec<_>>()
                 .join("\n");
+            let (all, seen, triangles) = latency.drawn;
+            text.push_str(&format!(
+                "\ndrawn  {seen} of {all} meshes, {triangles} triangles"
+            ));
         }
     }
 }

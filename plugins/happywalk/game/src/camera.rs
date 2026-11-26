@@ -61,6 +61,9 @@ fn spawn(mut commands: Commands) {
     commands.spawn((
         Camera3d::default(),
         FollowCamera,
+        // The sun is the only light: no point in sorting lights into
+        // clusters every frame (it showed in the profile).
+        bevy::light::cluster::ClusterConfig::Single,
         // The city has no edge; the fog is where it stops being drawn
         // (`sky.rs` keeps it the colour of the sky).
         DistanceFog {

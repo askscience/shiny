@@ -418,13 +418,19 @@ tangled as the levels go up.
 
 `game/src/mystery.rs` puts a generated case in the town and runs it:
 
-1. **The case opens** as soon as the character is in town (after the
-   wardrobe): whoever reports it comes up and tells what happened (the
-   model plays them, from the case's facts); the notebook gets the crime and
-   anything they saw.
-2. **The scene** is marked by a floating question mark by its place;
+1. **Someone needs help.** Cases are met while running errands. After two
+   errands (`ERRANDS_BEFORE_CALL`), someone waits on the pavement along the
+   way to the next one, about 30 m ahead (or most of the way, on a short
+   walk), in the open rather than under a tree, with an exclamation mark
+   jumping over their head (`caller_spot`). The errand panel adds "someone
+   needs help", with an arrow and the distance. Within 14 m they call out
+   (a short line from the model, playing them); errands go on meanwhile.
+2. **The case opens** when the character reaches them: they tell what
+   happened (the model plays them, from the case's facts); the notebook
+   gets the crime and anything they saw.
+3. **The scene** is marked by a floating question mark by its place;
    walking up to it finds the trace, and the character comments.
-3. **The suspects** wait on the pavement by their usual places (the bakery,
+4. **The suspects** wait on the pavement by their usual places (the bakery,
    the newsstand...), each a person of their own with a name over the head.
    Next to one, the notebook offers three quick questions (where were you,
    did you see anything, what is that on you), and by voice anything can be
@@ -435,17 +441,19 @@ tangled as the levels go up.
    about where they were and never admits it. Talking to someone writes in
    the notebook what shows (the traces they carry), where they say they
    were, and what they saw.
-4. **The accusation**, by voice ("è stato Lino", "accuso Lino") or with the
+5. **The accusation**, by voice ("è stato Lino", "accuso Lino") or with the
    notebook's button. Right: the culprit confesses with their absurd motive
    and the character gloats. Wrong: the culprit gets away and the character
-   says what it thinks. Either way the notebook offers the next case.
+   says what it thinks. Either way the notebook offers to go back to the
+   errands; the case's people go home, and two errands later someone else
+   needs help.
 
 **The notebook** (`web/notebook.js`) is drawn by the page from what the
 game publishes (`hw_case`) a few times a second, with LiteAura's controls,
 and folds away. It is also what makes the game playable without a
 microphone. **Progress** (the next case's number, cases solved and failed)
 is kept per profile; the level goes up one every two cases solved. While a
-case is on, errands wait.
+case is open, errands wait.
 
 Tried on 2026-11-26 against the configured model, a whole level-1 case
 from report to confession: every line in character, about a second each.
@@ -565,20 +573,41 @@ These are rules, not hopes: new work follows them.
 
 ### Performance budget
 
-- **Few draw calls.** All voxel models share one material (colour is in the
-  vertices) and placed copies share their mesh, so the renderer batches
-  them.
+- **One draw a chunk.** Everything of a chunk that stands still (the
+  street, the pavement, the dashes, buildings, trees, benches...) is merged
+  into one mesh when the chunk is built (`city::chunk_geometry`): the models
+  share one material with the colour in the vertices, so nothing is lost. A
+  chunk is about one draw instead of twenty. People and vehicles stay
+  separate, since they move.
+- **Coarser far away.** Chunks beyond the nearest ring are built from each
+  model halved (2×2×2 voxels become one, of the colour most of them have;
+  `VoxModel::halved`), about a quarter of the faces, and without the small
+  things.
+- **Nothing past the fog.** Chunks farther than 72 m from the camera, and
+  people, cars and bikes farther than 56 m, are not drawn
+  (`VisibilityRange`); frustum culling skips what is behind. The fog is
+  thick from 54 m, so nothing visibly pops.
 - **Few triangles.** Greedy meshing, solid models (a hollow one would be
   drawn inside too) and no undersides keep a building at 300 to 550 quads.
   `cargo run --example stats` in `game/` lists every model's cost; one that
   is placed many times is worth keeping light.
 - **Shadows only nearby.** Shadows draw the city a second time: one
-  cascade, 38 m, and the ground casts none.
+  cascade, 38 m, on a 1024-pixel map (a quarter of the default's work,
+  sharp enough for blocky shapes).
+- **No light sorting.** The sun is the only light, so the camera keeps a
+  single light cluster instead of sorting lights into a grid each frame.
 - **Not more pixels than the look needs.** At most 1.5 device pixels per CSS
   pixel are drawn, whatever the screen's density.
-- **Only the city nearby exists.** 25 chunks are on screen at most, their
-  ground three shared meshes each; the outer ring is drawn without benches,
-  planters and fountains; passers-by live in the nearest nine.
+- **Only the city nearby exists.** 25 chunks are on screen at most, built
+  one a frame so walking never stutters; passers-by live in the nearest
+  nine.
+- **Measured, not guessed.** F3 shows, under the latencies, how many meshes
+  exist, how many are drawn and their triangles; the page reads the same as
+  `happywalkHost.render`. On 2026-11-26 (seed 2026, 1280×720, the same four
+  views) the meshes in the world went from about 490-570 to 90-120 and the
+  meshes drawn from 220-270 to 40-90, at the same triangles; frame time on
+  the CPU went from 14.4 to 13.4 ms. What is left is mostly the engine's own
+  fixed cost per frame (allocations, bind groups), not what is drawn.
 - **Collision looks only nearby.** Solids are kept per chunk; a step tests
   the one or two chunks it touches, however big the city is.
 - **A small engine.** Bevy is built with only the features the game uses

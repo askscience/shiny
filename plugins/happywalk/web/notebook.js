@@ -4,19 +4,19 @@
 // its lines in the player's language, the suspects, who is next to the
 // character. This panel shows it with LiteAura's controls and sends the
 // detective's moves back: a quick question to the suspect nearby, an
-// accusation, the next case. Everything also works by voice; the panel is
+// accusation, back to the errands. Everything also works by voice; the panel is
 // what makes the game playable without a microphone.
 
 import { button, chip, iconButton } from '../../ui/index.js';
 
 const WORDS = {
   it: {
-    title: 'Taccuino', suspects: 'Indiziati', notes: 'Indizi', accuse: 'Accusa', next: 'Prossimo caso',
+    title: 'Taccuino', suspects: 'Indiziati', notes: 'Indizi', accuse: 'Accusa', next: 'Torna alle commissioni',
     near: 'Stai parlando con', talked: 'sentito', solved: 'Caso risolto!', failed: 'Il colpevole è scappato',
     level: 'Livello', away: 'm', fold: 'Chiudi il taccuino', open: 'Apri il taccuino', score: 'Risolti',
   },
   en: {
-    title: 'Notebook', suspects: 'Suspects', notes: 'Clues', accuse: 'Accuse', next: 'Next case',
+    title: 'Notebook', suspects: 'Suspects', notes: 'Clues', accuse: 'Accuse', next: 'Back to errands',
     near: 'Talking to', talked: 'questioned', solved: 'Case solved!', failed: 'The culprit got away',
     level: 'Level', away: 'm', fold: 'Close the notebook', open: 'Open the notebook', score: 'Solved',
   },
@@ -120,7 +120,8 @@ export function createNotebook({ game, lang = 'en', onProgress }) {
         lastProgress = progress;
         onProgress?.(book.progress);
       }
-      panel.hidden = book.phase === 'waiting';
+      // Shown once a case is open: before, the errands have the corner.
+      panel.hidden = book.phase === 'waiting' || book.phase === 'calling';
       if (!panel.hidden) render(book);
     },
   };

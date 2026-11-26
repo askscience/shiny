@@ -190,6 +190,16 @@ static STATE: Mutex<String> = Mutex::new(String::new());
 /// Where the traffic is, as the page may read it (`hw_traffic`).
 static TRAFFIC: Mutex<String> = Mutex::new(String::new());
 
+/// How much is being drawn, as the page may read it (`hw_render`).
+static RENDER: Mutex<String> = Mutex::new(String::new());
+
+/// Publish how much is being drawn: for measuring.
+pub fn publish_render(json: String) {
+    if let Ok(mut render) = RENDER.lock() {
+        *render = json;
+    }
+}
+
 /// The notebook of the case in play, as the page may read it (`hw_case`).
 static CASE: Mutex<String> = Mutex::new(String::new());
 
@@ -258,6 +268,16 @@ mod exports {
 
     /// Where the character is and what it is doing, as JSON: for tests and
     /// for the page's log, never for the game itself.
+    /// How much is being drawn (meshes, how many are on screen, their
+    /// triangles): for measuring.
+    #[wasm_bindgen]
+    pub fn hw_render() -> String {
+        super::RENDER
+            .lock()
+            .map(|render| render.clone())
+            .unwrap_or_default()
+    }
+
     #[wasm_bindgen]
     pub fn hw_traffic() -> String {
         super::TRAFFIC

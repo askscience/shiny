@@ -622,6 +622,30 @@ def clue():
     return m
 
 
+def alert():
+    """A big exclamation mark over someone who needs help."""
+    m = Model(5, 3, 15)
+    glyph = [
+        ".###.",
+        ".###.",
+        ".###.",
+        ".###.",
+        "..#..",
+        "..#..",
+        "..#..",
+        ".....",
+        ".###.",
+        ".###.",
+    ]
+    for row, line in enumerate(glyph):
+        z = 14 - row
+        for x, ch in enumerate(line):
+            if ch == "#":
+                m.box(x, 0, z, x, 2, z, "lamp")
+                m.set(x, 0, z, "awning")
+    return m
+
+
 def cone():
     m = Model(5, 5, 7)
     m.box(0, 0, 0, 4, 4, 0, "awning")
@@ -676,6 +700,7 @@ MODELS = {
     "bike_c": lambda: bike("mint"),
     "bike_crank": crank,
     "clue": clue,
+    "alert": alert,
     "cone": cone,
 }
 
