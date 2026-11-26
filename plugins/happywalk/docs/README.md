@@ -321,6 +321,7 @@ its grammar, so it only proposes these words.
 | Slower | (più) piano, lento, rallenta | slower, slow (down) | one pace down |
 | Wave | saluta, ciao, buongiorno | wave, hello, hi | waves; a passer-by nearby answers |
 | Go to | forno, edicola, parco, piazza, bar, fiorista, fruttivendolo | bakery, newsstand, park, square, cafe, florist, grocer | walks to the nearest such place by itself |
+| Accuse | accuso Lino, è stato Lino | it was Lino, accuse Lino | accuses a suspect of the case in play |
 
 Words around a command are skipped, so "gira a sinistra, per favore" is a
 left turn and "vai a destra" is a walk and a turn.
@@ -408,10 +409,46 @@ a row: every line different, about a second each.
 
 ## Mysteries
 
-The game is turning into a detective story: the character is the assistant
-of a detective who is never seen (the player, the Voice), and the town has
-small absurd crimes to solve. This part is being built; the generator is
-done.
+Happy Walk is a detective story: the character is the assistant of a
+detective who is never seen (the player, the Voice), and the player's town
+has small absurd crimes to solve, one case after another, longer and more
+tangled as the levels go up.
+
+### Playing a case
+
+`game/src/mystery.rs` puts a generated case in the town and runs it:
+
+1. **The case opens** as soon as the character is in town (after the
+   wardrobe): whoever reports it comes up and tells what happened (the
+   model plays them, from the case's facts); the notebook gets the crime and
+   anything they saw.
+2. **The scene** is marked by a floating question mark by its place;
+   walking up to it finds the trace, and the character comments.
+3. **The suspects** wait on the pavement by their usual places (the bakery,
+   the newsstand...), each a person of their own with a name over the head.
+   Next to one, the notebook offers three quick questions (where were you,
+   did you see anything, what is that on you), and by voice anything can be
+   asked: there the recogniser stops expecting commands and listens freely.
+   The model answers as that suspect, from a persona the case writes for
+   them (`suspect_persona`): an innocent tells the truth about where they
+   were and with whom and may let a harmless secret slip; the culprit lies
+   about where they were and never admits it. Talking to someone writes in
+   the notebook what shows (the traces they carry), where they say they
+   were, and what they saw.
+4. **The accusation**, by voice ("è stato Lino", "accuso Lino") or with the
+   notebook's button. Right: the culprit confesses with their absurd motive
+   and the character gloats. Wrong: the culprit gets away and the character
+   says what it thinks. Either way the notebook offers the next case.
+
+**The notebook** (`web/notebook.js`) is drawn by the page from what the
+game publishes (`hw_case`) a few times a second, with LiteAura's controls,
+and folds away. It is also what makes the game playable without a
+microphone. **Progress** (the next case's number, cases solved and failed)
+is kept per profile; the level goes up one every two cases solved. While a
+case is on, errands wait.
+
+Tried on 2026-11-26 against the configured model, a whole level-1 case
+from report to confession: every line in character, about a second each.
 
 ### The case generator
 

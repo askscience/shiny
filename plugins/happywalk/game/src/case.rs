@@ -26,10 +26,13 @@
 //! trace (so the trace alone is not enough), sightings that rule out fewer at
 //! a time, and alibis to check from level 3 on.
 
-use bevy::math::IVec2;
-
 use crate::figure::Look;
 use crate::gen::PlaceKind;
+
+/// Is the player's language Italian? Everything else shows in English.
+fn italian(lang: &str) -> bool {
+    lang.starts_with("it")
+}
 
 /// The dice of one case.
 struct Dice(u64);
@@ -112,6 +115,40 @@ impl Trace {
             Trace::Wool => "loose threads of pink wool",
             Trace::Sawdust => "a little pile of sawdust",
             Trace::Glitter => "a lot of glitter",
+        }
+    }
+
+    /// As found at the scene, in the player's language.
+    pub fn at_scene_in(self, lang: &str) -> &'static str {
+        if !italian(lang) {
+            return self.at_scene();
+        }
+        match self {
+            Trace::Flour => "impronte infarinate",
+            Trace::BluePaint => "gocce di vernice blu",
+            Trace::Feathers => "una scia di piume",
+            Trace::Soil => "zolle di terra fresca",
+            Trace::Ink => "impronte d'inchiostro",
+            Trace::Wool => "fili di lana rosa",
+            Trace::Sawdust => "un mucchietto di segatura",
+            Trace::Glitter => "tantissimi brillantini",
+        }
+    }
+
+    /// As carried by someone, in the player's language.
+    pub fn on_someone_in(self, lang: &str) -> &'static str {
+        if !italian(lang) {
+            return self.on_someone();
+        }
+        match self {
+            Trace::Flour => "farina sulle maniche",
+            Trace::BluePaint => "vernice blu sulle mani",
+            Trace::Feathers => "una piuma attaccata ai vestiti",
+            Trace::Soil => "terra sulle scarpe",
+            Trace::Ink => "inchiostro sulle dita",
+            Trace::Wool => "fili di lana rosa sui vestiti",
+            Trace::Sawdust => "segatura nei capelli",
+            Trace::Glitter => "brillantini dappertutto",
         }
     }
 
@@ -202,6 +239,33 @@ pub const CRIMES: &[Crime] = &[
     },
 ];
 
+impl Crime {
+    /// What happened, in the player's language.
+    pub fn what_in(&self, lang: &str) -> &'static str {
+        if !italian(lang) {
+            return self.what;
+        }
+        let index = CRIMES.iter().position(|c| c.what == self.what).unwrap_or(0);
+        CRIMES_IT[index]
+    }
+}
+
+/// [`CRIMES`] in Italian, row by row.
+const CRIMES_IT: &[&str] = &[
+    "tutto il pane del forno è sparito in una notte",
+    "la fontana della piazza è stata dipinta di blu acceso",
+    "quaranta anatre sono state trovate sedute al bar, senza ordinare niente",
+    "tutti i fiori del fiorista sono stati scambiati con broccoli",
+    "tutti i giornali dell'edicola ora stampano solo ricette",
+    "qualcuno ha fatto una sciarpa a maglia per ogni albero del parco",
+    "tutte le panchine del parco sono state girate verso il muro",
+    "le angurie del fruttivendolo sono state impilate a piramide sul tetto",
+    "a tutte le torte del forno sono stati disegnati dei baffetti",
+    "i piccioni della piazza sono stati trovati con dei cappellini",
+    "le sedie del bar sono state incollate al soffitto",
+    "l'edicola è stata ricoperta di brillantini da cima a fondo",
+];
+
 /// Why someone would do such a thing.
 pub const MOTIVES: &[&str] = &[
     "lost a bet with their cousin",
@@ -234,6 +298,36 @@ pub const ROLES: &[(&str, Option<Trace>)] = &[
     ("ice-cream seller", None),
     ("opera singer", None),
     ("dog walker", None),
+];
+
+/// A job in the player's language.
+pub fn role_in(role: &str, lang: &str) -> &'static str {
+    let index = ROLES.iter().position(|(r, _)| *r == role).unwrap_or(0);
+    if italian(lang) {
+        ROLES_IT[index]
+    } else {
+        ROLES[index].0
+    }
+}
+
+/// [`ROLES`] in Italian, row by row.
+const ROLES_IT: &[&str] = &[
+    "fornaio",
+    "imbianchino",
+    "allevatore di piccioni",
+    "giardiniere",
+    "giornalaio",
+    "campione di maglia",
+    "falegname",
+    "organizzatore di feste",
+    "tassista",
+    "insegnante in pensione",
+    "spazzino",
+    "mimo",
+    "postino",
+    "gelataio",
+    "cantante lirico",
+    "dogsitter",
 ];
 
 pub const NAMES: &[&str] = &[
@@ -306,6 +400,46 @@ impl Feature {
             Feature::ColourfulHair => "had brightly coloured hair".into(),
             Feature::ShavedHead => "had a shaved head".into(),
             Feature::Dressed(colour) => format!("was dressed in {colour}"),
+        }
+    }
+}
+
+impl Feature {
+    /// As the notebook puts it, in the player's language: "the culprit ...".
+    pub fn words_in(self, lang: &str) -> String {
+        if !italian(lang) {
+            return self.words();
+        }
+        match self {
+            Feature::Glasses => "portava gli occhiali".into(),
+            Feature::NoGlasses => "non aveva gli occhiali".into(),
+            Feature::Beard => "aveva barba o baffi".into(),
+            Feature::NoBeard => "non aveva la barba".into(),
+            Feature::Hat => "portava un cappello".into(),
+            Feature::NoHat => "non aveva il cappello".into(),
+            Feature::Tall => "era alto".into(),
+            Feature::Short => "era basso".into(),
+            Feature::DarkHair => "aveva i capelli scuri".into(),
+            Feature::RedHair => "aveva i capelli rossi".into(),
+            Feature::FairHair => "aveva i capelli biondi".into(),
+            Feature::GreyHair => "aveva i capelli grigi o bianchi".into(),
+            Feature::ColourfulHair => "aveva i capelli colorati".into(),
+            Feature::ShavedHead => "aveva la testa rasata".into(),
+            Feature::Dressed(colour) => {
+                let it = match colour {
+                    "orange" => "arancione",
+                    "pink" => "rosa",
+                    "red" => "rosso",
+                    "blue" => "blu",
+                    "green" => "verde",
+                    "purple" => "viola",
+                    "cream" => "color crema",
+                    "yellow" => "giallo",
+                    "white" => "bianco",
+                    _ => "grigio",
+                };
+                format!("era vestito di {it}")
+            }
         }
     }
 }
@@ -770,6 +904,22 @@ mod tests {
     }
 
     #[test]
+    fn every_row_has_its_italian() {
+        assert_eq!(CRIMES.len(), CRIMES_IT.len());
+        assert_eq!(ROLES.len(), ROLES_IT.len());
+        for crime in CRIMES {
+            assert_ne!(crime.what_in("it"), crime.what);
+            assert_eq!(crime.what_in("en"), crime.what);
+        }
+        assert_eq!(role_in("baker", "it"), "fornaio");
+        assert_eq!(Trace::Flour.on_someone_in("it-IT"), "farina sulle maniche");
+        assert_eq!(
+            Feature::Dressed("red").words_in("it"),
+            "era vestito di rosso"
+        );
+    }
+
+    #[test]
     fn every_crime_happens_somewhere_a_city_has() {
         use crate::gen;
         for crime in CRIMES {
@@ -779,6 +929,5 @@ mod tests {
                 crime.what
             );
         }
-        let _ = IVec2::ZERO;
     }
 }

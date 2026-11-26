@@ -25,6 +25,7 @@
 //! * [`brain`] — what the character says, asked of the user's language model.
 //! * [`nav`] — "go to the bakery": routes along the streets, walked alone.
 //! * [`quest`] — errands: small things to do, five to a round.
+//! * [`mystery`] — the case in play: the scene, the suspects, questions, the accusation.
 //! * [`lines`] — stand-in lines for when the model cannot answer.
 //! * [`hud`] — the speech bubble, "I am listening", what was understood.
 
@@ -47,6 +48,7 @@ pub mod intent;
 pub mod keyboard;
 pub mod lines;
 pub mod movers;
+pub mod mystery;
 pub mod nav;
 pub mod npc;
 pub mod player;
@@ -106,6 +108,7 @@ pub fn app(seed: u64, pixel_ratio: f32) -> App {
     // A tuple holds fifteen plugins at most: the rest in a second one.
     .add_plugins((
         studio::StudioPlugin,
+        mystery::MysteryPlugin,
         npc::NpcPlugin,
         traffic::TrafficPlugin,
         nav::NavPlugin,

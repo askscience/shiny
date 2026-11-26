@@ -22,6 +22,11 @@ const LINE_MAX_CHARS: usize = 160;
 
 #[derive(Deserialize, Debug, Default)]
 pub struct Request {
+    /// Who the model plays, when it is not the character: a suspect, a
+    /// witness, written by the game. Empty means the character
+    /// (`personality.md`).
+    #[serde(default)]
+    pub persona: String,
     #[serde(default)]
     pub situation: String,
     #[serde(default)]
@@ -95,8 +100,13 @@ pub fn system_prompt(request: &Request) -> String {
                 .join(", ")
         )
     };
+    let who = if request.persona.is_empty() {
+        PERSONALITY
+    } else {
+        request.persona.as_str()
+    };
     format!(
-        "{PERSONALITY}\n\
+        "{who}\n\
          Answer at once, without deliberating, with one JSON object and nothing else: \
          {{{actions}, \"say\": your one spoken line, in {language}, at most 18 words}}.",
         language = language(&request.lang),
@@ -106,6 +116,10 @@ pub fn system_prompt(request: &Request) -> String {
 /// What the model is told about the moment: the game's description, and the
 /// angle to try this time.
 pub fn user_message(request: &Request, salt: u64) -> String {
+    // Somebody else than the character: no comic angle, they are who they are.
+    if !request.persona.is_empty() {
+        return request.situation.clone();
+    }
     format!("{}\nThis time, go for: {}.", request.situation, angle(salt))
 }
 
@@ -448,6 +462,7 @@ mod tests {
             situation: String::new(),
             allowed_actions: Vec::new(),
             lang: "it".into(),
+            ..Default::default()
         };
         let prompt = system_prompt(&request);
         assert!(!prompt.contains("one of"));
@@ -485,6 +500,7 @@ mod tests {
             situation: String::new(),
             allowed_actions: Vec::new(),
             lang: "it".into(),
+            ..Default::default()
         });
         assert!(prompt.starts_with(PERSONALITY));
         assert!(prompt.contains("Italian"));
@@ -501,10 +517,25 @@ mod tests {
                 situation: "Now: x".into(),
                 allowed_actions: Vec::new(),
                 lang: "it".into(),
+                ..Default::default()
             },
             1,
         );
         assert!(message.starts_with("Now: x\nThis time, go for: "));
+    }
+
+    #[test]
+    fn a_persona_replaces_the_character() {
+        let request = Request {
+            persona: "You are Gina, the baker.".into(),
+            situation: "Where were you?".into(),
+            lang: "it".into(),
+            ..Default::default()
+        };
+        let prompt = system_prompt(&request);
+        assert!(prompt.starts_with("You are Gina, the baker."));
+        assert!(!prompt.contains(PERSONALITY));
+        assert_eq!(user_message(&request, 3), "Where were you?");
     }
 
     #[test]
@@ -520,6 +551,7 @@ mod tests {
             situation: String::new(),
             allowed_actions: allowed(),
             lang: "it".into(),
+            ..Default::default()
         });
         assert!(prompt.contains(r#"one of ["stop", "turn_left"]"#));
         assert!(prompt.contains("Italian"));

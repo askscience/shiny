@@ -51,7 +51,12 @@
   the same name, the same town. The wardrobe is a studio with a podium
   before a painted town. A mystery generator writes fair, levelled cases
   (absurd crimes, suspects, traces, sightings, alibis) for the detective
-  story the game is becoming.
+  story the game is becoming, and the cases can be played: someone reports
+  the crime, a question mark marks the scene, suspects wait by their places
+  and answer questions (from the notebook or freely by voice) as the model
+  plays them, and an accusation closes the case with a confession or an
+  escape. A notebook beside the game shows the clues and works without a
+  microphone.
   The character has a personality of its own (theatrical, a proud citizen
   with grudges against lamp posts and a weakness for bread), each line is
   asked from a different comic angle, and the model is told concretely what

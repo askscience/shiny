@@ -302,6 +302,30 @@ async function openWardrobe() {
   game.hw_wardrobe(true);
 }
 
+/* ── The notebook ────────────────────────────────────────────── */
+
+// The case in play, drawn beside the game, a few times a second; how far
+// the player has come is kept per profile.
+
+function progressKey() {
+  return lookKey().replace('happywalk.look', 'happywalk.progress');
+}
+
+async function startNotebook() {
+  const { createNotebook } = await import('./notebook.js');
+  const notebook = createNotebook({
+    game,
+    lang: voiceLang(),
+    onProgress: (progress) => {
+      try { window.localStorage.setItem(progressKey(), JSON.stringify(progress)); } catch (_) { /* storage blocked */ }
+    },
+  });
+  document.getElementById('wardrobe-slot').appendChild(notebook.element);
+  const kept = stored(progressKey());
+  if (kept) game.hw_progress(kept);
+  setInterval(() => notebook.update(game.hw_case()), 300);
+}
+
 /* ── Clips ───────────────────────────────────────────────────── */
 
 // The last seconds of play are always on tape, so the funny moment can be
@@ -479,6 +503,11 @@ window.happywalkHost = {
     game?.hw_spoke(id, ok, ms);
   },
 
+  /** The notebook of the case in play, as the game publishes it. */
+  get case() {
+    try { return JSON.parse(game?.hw_case() || 'null'); } catch (_) { return null; }
+  },
+
   /** Open the wardrobe, where the player dresses the character. */
   openWardrobe,
 
@@ -555,6 +584,7 @@ async function start() {
     wardrobeButton.hidden = false;
     game.hw_wardrobe(false);
   }
+  await startNotebook().catch((error) => log(`notebook failed: ${error?.message || error}`));
   startClips();
   try {
     await startListening();

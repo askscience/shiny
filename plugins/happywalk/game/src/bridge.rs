@@ -42,6 +42,9 @@ pub struct Heard {
 /// What the game asks the character's brain.
 #[derive(Serialize, Clone, Debug, Default)]
 pub struct BrainRequest {
+    /// Who the model plays, when it is not the character (a suspect).
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub persona: String,
     /// What just happened, in plain words ("the player said X, then Y").
     pub situation: String,
     /// The only actions the answer may choose from.
@@ -175,6 +178,7 @@ enum Inbound {
     Clip { ok: bool, seconds: f32 },
     Look(String),
     City(String),
+    Detective(crate::mystery::Detective),
     Wardrobe(bool),
 }
 
@@ -185,6 +189,16 @@ static STATE: Mutex<String> = Mutex::new(String::new());
 
 /// Where the traffic is, as the page may read it (`hw_traffic`).
 static TRAFFIC: Mutex<String> = Mutex::new(String::new());
+
+/// The notebook of the case in play, as the page may read it (`hw_case`).
+static CASE: Mutex<String> = Mutex::new(String::new());
+
+/// Publish the notebook.
+pub fn publish_case(json: String) {
+    if let Ok(mut case) = CASE.lock() {
+        *case = json;
+    }
+}
 
 /// Publish where the traffic is: for tests and screenshots.
 pub fn publish_traffic(json: String) {
@@ -318,6 +332,48 @@ mod exports {
         (seed ^ (seed >> 32)) as u32 | 1
     }
 
+    /// The notebook of the case in play, as JSON (see `mystery.rs`).
+    #[wasm_bindgen]
+    pub fn hw_case() -> String {
+        super::CASE
+            .lock()
+            .map(|case| case.clone())
+            .unwrap_or_default()
+    }
+
+    /// A quick question from the notebook to a suspect nearby.
+    #[wasm_bindgen]
+    pub fn hw_ask(suspect: u32, question: u32) {
+        push(Inbound::Detective(crate::mystery::Detective::Ask {
+            suspect: suspect as usize,
+            question: question as usize,
+        }));
+    }
+
+    /// The detective accuses a suspect.
+    #[wasm_bindgen]
+    pub fn hw_accuse(suspect: u32) {
+        push(Inbound::Detective(crate::mystery::Detective::Accuse(
+            suspect as usize,
+        )));
+    }
+
+    /// On to the next case, once this one is closed.
+    #[wasm_bindgen]
+    pub fn hw_next_case() {
+        push(Inbound::Detective(crate::mystery::Detective::NextCase));
+    }
+
+    /// How far the player had come, as kept by the page.
+    #[wasm_bindgen]
+    pub fn hw_progress(json: &str) {
+        if let Ok(progress) = serde_json::from_str(json) {
+            push(Inbound::Detective(crate::mystery::Detective::Progress(
+                progress,
+            )));
+        }
+    }
+
     #[wasm_bindgen]
     pub fn hw_status(json: &str) {
         push(Inbound::Status(json.to_string()));
@@ -397,6 +453,7 @@ fn pump(
     mut clips: MessageWriter<ClipSaved>,
     mut looks: MessageWriter<LookChosen>,
     mut cities: MessageWriter<crate::city::CityNamed>,
+    mut detective: MessageWriter<crate::mystery::Detective>,
     mut wardrobe: ResMut<Wardrobe>,
     mut laps: MessageWriter<Lap>,
     mut status: ResMut<HostStatus>,
@@ -469,6 +526,9 @@ fn pump(
                 if let Ok(look) = serde_json::from_str::<crate::figure::Look>(&json) {
                     looks.write(LookChosen(look.checked()));
                 }
+            }
+            Inbound::Detective(move_) => {
+                detective.write(move_);
             }
             Inbound::City(name) => {
                 cities.write(crate::city::CityNamed(name));

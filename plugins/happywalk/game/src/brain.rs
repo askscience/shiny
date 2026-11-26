@@ -257,6 +257,8 @@ fn notice(
     mut errands: MessageReader<ErrandDone>,
     mut nowhere: MessageReader<NoSuchPlace>,
     quest: Res<Quest>,
+    mystery: Res<crate::mystery::Mystery>,
+    talking: Res<crate::mystery::Talking>,
     city: Res<crate::city::CityName>,
     daylight: Res<crate::sky::Daylight>,
     mut last_hoot: Local<f32>,
@@ -269,9 +271,18 @@ fn notice(
     if memory.city != city.0 {
         memory.city = city.0.clone();
     }
-    let errand = quest.errand().map(|e| e.task).unwrap_or_default();
+    let briefing = mystery.briefing();
+    let errand = if briefing.is_empty() {
+        quest
+            .errand()
+            .map(|e| e.task)
+            .unwrap_or_default()
+            .to_string()
+    } else {
+        briefing
+    };
     if memory.errand != errand {
-        memory.errand = errand.to_string();
+        memory.errand = errand;
     }
     for done in errands.read() {
         memory.errand_at = Some(now);
@@ -283,6 +294,7 @@ fn notice(
             moment.push_str(", which finishes the round: all the errands are done");
         }
         let request = BrainRequest {
+            persona: String::new(),
             situation: situation(&memory, &last.text, &format!("{moment}.")),
             allowed_actions: Vec::new(),
             lang: String::new(),
@@ -301,6 +313,7 @@ fn notice(
             missing.kind.name()
         );
         let request = BrainRequest {
+            persona: String::new(),
             situation: situation(&memory, &last.text, &format!("{moment}.")),
             allowed_actions: Vec::new(),
             lang: String::new(),
@@ -342,6 +355,7 @@ fn notice(
             .collect::<Vec<_>>()
             .join(" ");
         let request = BrainRequest {
+            persona: String::new(),
             situation: situation_with(
                 &memory,
                 &last.text,
@@ -379,6 +393,7 @@ fn notice(
         };
         let moment = format!("standing in the road where you were told to, {who} at you");
         let request = BrainRequest {
+            persona: String::new(),
             situation: situation(&memory, &last.text, &format!("{moment}. Nobody was hurt.")),
             allowed_actions: Vec::new(),
             lang: String::new(),
@@ -392,11 +407,16 @@ fn notice(
         });
     }
     for sentence in lost.read() {
+        // Said next to a suspect: a question for them, answered by the case.
+        if talking.0.is_some() {
+            continue;
+        }
         let moment = format!(
             "the player said \"{}\", which is none of your commands",
             sentence.text
         );
         let request = BrainRequest {
+            persona: String::new(),
             situation: situation(
                 &memory,
                 &sentence.text,

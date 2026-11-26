@@ -175,6 +175,22 @@ impl PlaceKind {
             PlaceKind::Square => "the square",
         }
     }
+
+    /// Its name in the player's language (Italian or English).
+    pub fn name_in(self, lang: &str) -> &'static str {
+        if !lang.starts_with("it") {
+            return self.name();
+        }
+        match self {
+            PlaceKind::Bakery => "il forno",
+            PlaceKind::Florist => "il fiorista",
+            PlaceKind::Cafe => "il bar",
+            PlaceKind::Grocer => "il fruttivendolo",
+            PlaceKind::Newsstand => "l'edicola",
+            PlaceKind::Park => "il parco",
+            PlaceKind::Square => "la piazza",
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]

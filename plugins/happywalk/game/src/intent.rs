@@ -333,6 +333,11 @@ impl Vocabulary {
     }
 }
 
+/// Words the recogniser should expect besides the commands (a case's
+/// names and how to accuse).
+#[derive(Resource, Default, Clone, PartialEq)]
+pub struct ExtraWords(pub Vec<String>);
+
 /// How many commands of the sentence being spoken were already carried out,
 /// so a growing partial result only adds the new ones.
 #[derive(Resource, Default)]
@@ -363,6 +368,7 @@ pub struct IntentPlugin;
 impl Plugin for IntentPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Utterance>()
+            .init_resource::<ExtraWords>()
             .add_message::<Order>()
             .add_message::<NotUnderstood>()
             .add_systems(PreUpdate, (teach_recogniser, understand).chain());
@@ -370,12 +376,31 @@ impl Plugin for IntentPlugin {
 }
 
 /// Give the recogniser the vocabulary of the language it listens in.
-fn teach_recogniser(status: Res<HostStatus>, host: Res<Host>, mut taught: Local<String>) {
-    if status.lang.is_empty() || *taught == status.lang {
+fn teach_recogniser(
+    status: Res<HostStatus>,
+    host: Res<Host>,
+    extra: Res<ExtraWords>,
+    talking: Option<Res<crate::mystery::Talking>>,
+    mut taught: Local<Option<(String, bool, Vec<String>)>>,
+) {
+    if status.lang.is_empty() {
         return;
     }
-    *taught = status.lang.clone();
-    host.set_grammar(&vocabulary(&status.lang).grammar());
+    // Next to a suspect the player asks anything: the recogniser listens
+    // freely there. Elsewhere it expects the commands, and a case's names.
+    let free = talking.is_some_and(|t| t.0.is_some());
+    let now = (status.lang.clone(), free, extra.0.clone());
+    if taught.as_ref() == Some(&now) {
+        return;
+    }
+    if free {
+        host.set_grammar(&[]);
+    } else {
+        let mut words: Vec<&str> = vocabulary(&status.lang).grammar();
+        words.extend(extra.0.iter().map(String::as_str));
+        host.set_grammar(&words);
+    }
+    *taught = Some(now);
 }
 
 fn understand(

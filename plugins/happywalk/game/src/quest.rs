@@ -133,6 +133,9 @@ pub fn arrow(from: Vec2, facing: f32, to: Vec2) -> char {
 #[derive(Component)]
 struct QuestLabel;
 
+#[derive(Component)]
+struct QuestPanel;
+
 pub struct QuestPlugin;
 
 impl Plugin for QuestPlugin {
@@ -150,11 +153,13 @@ fn progress(
     mut quest: ResMut<Quest>,
     mut done: MessageWriter<ErrandDone>,
     wardrobe: Res<crate::bridge::Wardrobe>,
+    mystery: Res<crate::mystery::Mystery>,
 ) {
     if seed.is_changed() && !seed.is_added() {
         *quest = Quest::default();
     }
-    if wardrobe.0 {
+    // While there is a case to solve, errands wait.
+    if wardrobe.0 || mystery.case.is_some() {
         return;
     }
     let Ok(player) = players.single() else { return };
@@ -192,12 +197,27 @@ fn show(
     players: Query<(&Player, &Transform)>,
     mut labels: Query<&mut Text, With<QuestLabel>>,
     mut shown: Local<String>,
+    mystery: Res<crate::mystery::Mystery>,
+    mut panels: Query<&mut Visibility, With<QuestPanel>>,
 ) {
+    // The notebook of the case takes the corner while there is one.
+    let hidden = mystery.case.is_some();
+    for mut visibility in &mut panels {
+        let want = if hidden {
+            Visibility::Hidden
+        } else {
+            Visibility::Inherited
+        };
+        if *visibility != want {
+            *visibility = want;
+        }
+    }
     let Some(font) = font else { return };
     let Ok(mut label) = labels.single_mut() else {
         commands
             .spawn((
                 crate::hud::HudRoot,
+                QuestPanel,
                 Node {
                     position_type: PositionType::Absolute,
                     right: Val::Px(20.0),
