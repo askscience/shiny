@@ -37,18 +37,57 @@ const VOXEL: f32 = 0.1;
 /// A bicycle is drawn finer than a car.
 const BIKE_VOXEL: f32 = 0.05;
 /// Where a cyclist sits, from the middle of the bicycle's base.
-const SADDLE: Vec3 = Vec3::new(0.0, 0.86, 0.2);
+const SADDLE: Vec3 = Vec3::new(0.0, 0.65, 0.175);
+/// The crank's axle (the bottom bracket), and how long a crank is.
+const BRACKET: Vec3 = Vec3::new(0.0, 0.275, 0.025);
+const CRANK: f32 = 0.1;
+/// How far apart the feet are, each side of the middle.
+const STANCE: f32 = 0.1;
+/// A cyclist's thigh and shin: long enough to reach the pedal at the bottom
+/// of its turn with the knee still a little bent.
+const THIGH: f32 = 0.25;
+const SHIN: f32 = 0.27;
 /// How far a cyclist leans forward, in radians.
 const LEAN: f32 = 0.7;
 /// Where a cyclist's hands hold the handlebars (left, right).
-const GRIPS: [Vec3; 2] = [Vec3::new(-0.17, 0.94, -0.47), Vec3::new(0.17, 0.94, -0.47)];
+const GRIPS: [Vec3; 2] = [
+    Vec3::new(-0.17, 0.725, -0.475),
+    Vec3::new(0.17, 0.725, -0.475),
+];
 
-/// A cyclist's leg, turning the pedals.
-#[derive(Component)]
-struct Pedal {
-    side: f32,
-    hip: Vec3,
-    length: f32,
+/// A cyclist's leg piece (thigh or shin) or crank, on one side.
+#[derive(Component, Clone, Copy)]
+enum Pedalling {
+    Thigh(f32),
+    Shin(f32),
+    Crank(f32),
+}
+
+/// Where a crank's pedal is on `side`, `turn` radians into its circle (0 at
+/// the top, going forward, the two sides half a turn apart).
+pub fn pedal_at(turn: f32, side: f32) -> Vec3 {
+    let turn = if side > 0.0 {
+        turn
+    } else {
+        turn + std::f32::consts::PI
+    };
+    BRACKET + Vec3::new(side * STANCE, CRANK * turn.cos(), -CRANK * turn.sin())
+}
+
+/// The knee of a leg from `hip` to `foot` with a thigh and a shin of these
+/// lengths, bent forward (towards `-z`). Out of reach, the leg is as straight
+/// (or as folded) as it goes.
+pub fn knee(hip: Vec3, foot: Vec3, thigh: f32, shin: f32) -> Vec3 {
+    let towards = foot - hip;
+    let reach = towards
+        .length()
+        .clamp((thigh - shin).abs() + 1e-3, thigh + shin - 1e-3);
+    let along = towards.normalize_or(Vec3::NEG_Y);
+    // The angle at the hip between the line to the foot and the thigh.
+    let bend = ((thigh * thigh + reach * reach - shin * shin) / (2.0 * thigh * reach))
+        .clamp(-1.0, 1.0)
+        .acos();
+    hip + Quat::from_rotation_x(bend) * along * thigh
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -156,7 +195,8 @@ impl Vehicle {
         };
         let change = if want < self.speed { 14.0 } else { 3.0 } * dt;
         self.speed += (want - self.speed).clamp(-change, change);
-        self.pedal += self.speed * dt * 2.2;
+        // About one turn of the pedals for every four metres.
+        self.pedal += self.speed * dt * 1.6;
         let mut step = self.speed * dt;
         if let Some(gap) = gap {
             step = step.min((gap - 0.05).max(0.0));
@@ -268,8 +308,6 @@ fn arrivals(
     // A cyclist is a person like the passers-by, sat on the saddle.
     let look = Look::random(((dice.roll() as u64) << 32) | dice.roll() as u64);
     let voxel = look.voxel();
-    let leg = look.leg();
-    let length = leg.size.y as f32 * voxel;
     let piece = |mesh: Handle<Mesh>, at: Vec3| {
         (
             Mesh3d(mesh),
@@ -279,9 +317,8 @@ fn arrivals(
     };
     let arm_model = look.arm();
     let arm_length = arm_model.size.y as f32 * voxel;
-    let (body, leg, arm) = (
+    let (body, arm) = (
         meshes.add(look.body_without_arms().mesh()),
-        meshes.add(leg.mesh()),
         meshes.add(arm_model.mesh()),
     );
     commands
@@ -308,9 +345,19 @@ fn arrivals(
                 hold.2.scale.y *= (reach.length() / arm_length).clamp(0.8, 1.5);
                 bike.spawn(hold);
             }
+            // Legs in two pieces each, and the cranks they turn: placed every
+            // frame by `pedal`.
+            let (thigh, shin) = (
+                meshes.add(look.thigh(THIGH).mesh()),
+                meshes.add(look.shin(SHIN).mesh()),
+            );
             for side in [-1.0, 1.0] {
-                let hip = Vec3::new(side * (0.07 + voxel), SADDLE.y, SADDLE.z);
-                bike.spawn((Pedal { side, hip, length }, piece(leg.clone(), hip)));
+                bike.spawn((Pedalling::Thigh(side), piece(thigh.clone(), SADDLE)));
+                bike.spawn((Pedalling::Shin(side), piece(shin.clone(), SADDLE)));
+                bike.spawn((
+                    Pedalling::Crank(side),
+                    library.place("bike_crank", BRACKET, BIKE_VOXEL, 0),
+                ));
             }
         });
 }
@@ -378,21 +425,43 @@ fn drive(
         transform.rotation = Quat::from_rotation_y(vehicle.facing());
         movers.vehicles.push(vehicle.mover());
     }
+    // Where everything is, for tests and screenshots.
+    let list: Vec<String> = movers
+        .vehicles
+        .iter()
+        .map(|v| {
+            format!(
+                r#"{{"model":"{}","x":{:.2},"z":{:.2}}}"#,
+                v.model, v.at.x, v.at.y
+            )
+        })
+        .collect();
+    crate::bridge::publish_traffic(format!("[{}]", list.join(",")));
 }
 
 /// Cyclists' legs go round with the pedals.
-fn pedal(vehicles: Query<(&Vehicle, &Children)>, mut legs: Query<(&Pedal, &mut Transform)>) {
+fn pedal(vehicles: Query<(&Vehicle, &Children)>, mut parts: Query<(&Pedalling, &mut Transform)>) {
     for (vehicle, children) in &vehicles {
         for child in children.iter() {
-            if let Ok((leg, mut transform)) = legs.get_mut(child) {
-                // Forward of straight down, more or less as the pedal turns;
-                // the two legs half a turn apart.
-                let swing =
-                    0.75 + 0.45 * (vehicle.pedal + leg.side * std::f32::consts::FRAC_PI_2).sin();
-                let turn = Quat::from_rotation_x(swing);
-                transform.rotation = turn;
-                transform.translation = leg.hip + turn * Vec3::new(0.0, -leg.length, 0.0);
-            }
+            let Ok((part, mut transform)) = parts.get_mut(child) else {
+                continue;
+            };
+            let side = match *part {
+                Pedalling::Thigh(side) | Pedalling::Shin(side) | Pedalling::Crank(side) => side,
+            };
+            let foot = pedal_at(vehicle.pedal, side);
+            let hip = Vec3::new(side * STANCE, SADDLE.y, SADDLE.z);
+            let knee = knee(hip, foot, THIGH, SHIN);
+            // A piece's model stands on its base and rises along `+y`: put
+            // the base at one end and turn `+y` towards the other.
+            let (base, top) = match *part {
+                Pedalling::Thigh(_) => (knee, hip),
+                Pedalling::Shin(_) => (foot, knee),
+                Pedalling::Crank(_) => (Vec3::new(side * STANCE, BRACKET.y, BRACKET.z), foot),
+            };
+            transform.translation = base;
+            transform.rotation =
+                Quat::from_rotation_arc(Vec3::Y, (top - base).normalize_or(Vec3::Y));
         }
     }
 }
@@ -515,6 +584,44 @@ mod tests {
                 assert!(shoulder.y > grip.y, "and below them");
             }
         }
+    }
+
+    #[test]
+    fn feet_stay_on_the_pedals_all_the_way_round() {
+        for step in 0..64 {
+            let turn = step as f32 / 64.0 * std::f32::consts::TAU;
+            for side in [-1.0, 1.0] {
+                let foot = pedal_at(turn, side);
+                assert!(
+                    (foot - Vec3::new(side * STANCE, BRACKET.y, BRACKET.z)).length() - CRANK < 1e-4
+                );
+                let hip = Vec3::new(side * STANCE, SADDLE.y, SADDLE.z);
+                // The pedal is always within reach: the leg is never pulled
+                // off it.
+                let reach = (foot - hip).length();
+                assert!(
+                    reach < THIGH + SHIN && reach > (THIGH - SHIN).abs(),
+                    "turn {turn}: {reach}"
+                );
+                let knee = knee(hip, foot, THIGH, SHIN);
+                assert!(((knee - hip).length() - THIGH).abs() < 1e-3, "thigh");
+                assert!(((foot - knee).length() - SHIN).abs() < 1e-3, "shin");
+                // The knee bends forward, in front of the line from hip to foot.
+                let line = hip.z + (foot.z - hip.z) * ((knee.y - hip.y) / (foot.y - hip.y));
+                assert!(knee.z < line, "turn {turn}: knee behind the leg");
+            }
+            // The two pedals are always opposite.
+            let (left, right) = (pedal_at(turn, -1.0), pedal_at(turn, 1.0));
+            assert!((left.y + right.y - 2.0 * BRACKET.y).abs() < 1e-4);
+        }
+    }
+
+    #[test]
+    fn the_pedals_go_round_forward() {
+        // A quarter turn after the top, the right pedal is at the front.
+        let top = pedal_at(0.0, 1.0);
+        let quarter = pedal_at(std::f32::consts::FRAC_PI_2, 1.0);
+        assert!(top.y > quarter.y && quarter.z < top.z);
     }
 
     #[test]

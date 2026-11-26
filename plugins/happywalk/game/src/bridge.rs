@@ -182,6 +182,16 @@ static INBOX: Mutex<VecDeque<Inbound>> = Mutex::new(VecDeque::new());
 /// The game's state as the page may read it (`hw_state`).
 static STATE: Mutex<String> = Mutex::new(String::new());
 
+/// Where the traffic is, as the page may read it (`hw_traffic`).
+static TRAFFIC: Mutex<String> = Mutex::new(String::new());
+
+/// Publish where the traffic is: for tests and screenshots.
+pub fn publish_traffic(json: String) {
+    if let Ok(mut traffic) = TRAFFIC.lock() {
+        *traffic = json;
+    }
+}
+
 /// Publish the state the page may read.
 pub fn publish_state(json: String) {
     if let Ok(mut state) = STATE.lock() {
@@ -233,6 +243,14 @@ mod exports {
 
     /// Where the character is and what it is doing, as JSON: for tests and
     /// for the page's log, never for the game itself.
+    #[wasm_bindgen]
+    pub fn hw_traffic() -> String {
+        super::TRAFFIC
+            .lock()
+            .map(|traffic| traffic.clone())
+            .unwrap_or_default()
+    }
+
     #[wasm_bindgen]
     pub fn hw_state() -> String {
         super::STATE

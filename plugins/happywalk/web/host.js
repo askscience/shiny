@@ -480,6 +480,11 @@ window.happywalkHost = {
   /** Put the character somewhere (tests and screenshots). */
   place(x, z, facing = 0) { game?.hw_place(x, z, facing); },
 
+  /** Where the cars and bikes are (tests and screenshots). */
+  get traffic() {
+    try { return JSON.parse(game?.hw_traffic() || '[]'); } catch (_) { return []; }
+  },
+
   get status() { return { ...status }; },
   get audio() { return { ...audio, context: audioContext?.state || 'none' }; },
   get logLines() { return [...logLines]; },

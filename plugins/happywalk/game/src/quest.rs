@@ -190,6 +190,7 @@ fn show(
     let Ok(mut label) = labels.single_mut() else {
         commands
             .spawn((
+                crate::hud::HudRoot,
                 Node {
                     position_type: PositionType::Absolute,
                     right: Val::Px(20.0),

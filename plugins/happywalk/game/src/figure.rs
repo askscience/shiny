@@ -885,6 +885,60 @@ fn leg(look: &Look) -> Sculpt {
     m
 }
 
+/// The colour a leg shows: cloth, or skin under shorts, a skirt or a dress.
+fn leg_colours(look: &Look) -> (Rgb, Rgb) {
+    let (cloth, skin) = (Look::cloth(look.bottom_colour), look.skin_rgb());
+    let shorts = BOTTOMS[look.bottom as usize % BOTTOMS.len()] == "shorts" && look.top != 4;
+    let upper = if shorts || !look.bare_legs() {
+        cloth
+    } else {
+        skin
+    };
+    let lower = if look.bare_legs() { skin } else { cloth };
+    (upper, lower)
+}
+
+/// A thigh `voxels` long, hanging from its top (the hip).
+fn thigh(look: &Look, voxels: i32) -> Sculpt {
+    let voxels = voxels.max(3);
+    let mut m = Sculpt::new(4, voxels, 4);
+    let length = voxels as f32;
+    m.ball(
+        Vec3::new(1.5, length / 2.0 - 0.5, 1.5),
+        Vec3::new(2.2, length / 2.0 + 0.6, 2.2),
+        leg_colours(look).0,
+        ANY,
+    );
+    m
+}
+
+/// A shin and its shoe, `voxels` long from the sole to the knee.
+fn shin(look: &Look, voxels: i32) -> Sculpt {
+    let voxels = voxels.max(4);
+    let mut m = Sculpt::new(4, voxels, 7);
+    let length = voxels as f32;
+    m.ball(
+        Vec3::new(1.5, length / 2.0 + 0.5, 4.0),
+        Vec3::new(2.0, length / 2.0, 2.0),
+        leg_colours(look).1,
+        |_, y, _| y >= 2,
+    );
+    m.ball(
+        Vec3::new(1.5, 0.8, 3.2),
+        Vec3::new(2.2, 1.5, 3.4),
+        Look::cloth(look.shoes),
+        |_, y, _| y <= 1,
+    );
+    for x in 0..4 {
+        for z in 0..7 {
+            if m.get(x, 0, z) != 0 {
+                m.set(x, 0, z, INK);
+            }
+        }
+    }
+    m
+}
+
 fn backpack(look: &Look) -> Option<Sculpt> {
     if look.backpack == 0 {
         return None;
@@ -968,6 +1022,16 @@ impl Look {
 
     pub fn leg(&self) -> VoxModel {
         leg(self).model()
+    }
+
+    /// A thigh about `metres` long, for a leg that bends (a cyclist's).
+    pub fn thigh(&self, metres: f32) -> VoxModel {
+        thigh(self, (metres / self.voxel()).round() as i32).model()
+    }
+
+    /// A shin with its shoe, about `metres` long.
+    pub fn shin(&self, metres: f32) -> VoxModel {
+        shin(self, (metres / self.voxel()).round() as i32).model()
     }
 }
 

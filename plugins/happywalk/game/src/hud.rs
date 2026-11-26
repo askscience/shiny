@@ -78,7 +78,7 @@ struct TitleCard;
 
 /// Everything of the HUD, to put it away for a photo.
 #[derive(Component)]
-struct HudRoot;
+pub struct HudRoot;
 
 /// The other speaker's bubble: where in the world it hangs.
 #[derive(Component)]

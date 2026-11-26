@@ -428,7 +428,8 @@ def bike(frame, basket=False):
                     m.set(x, y, z, "metal")
                 elif d < 4.9 and (y - wy == 0 or z - wz == 0):
                     m.set(x, y, z, "trim")
-    bracket, seat, head = (x, 18, 6), (x, 21, 15), (x, 9, 16)
+    # A small town bike: a low saddle and bars, so a short rider reaches.
+    bracket, seat, head = (x, 18, 5), (x, 21, 11), (x, 9, 12)
     line(m, bracket, seat, frame)
     line(m, seat, (x, rear[0], hub_z), frame)
     line(m, bracket, (x, rear[0], hub_z), frame)
@@ -436,21 +437,30 @@ def bike(frame, basket=False):
     line(m, seat, head, frame)
     line(m, head, (x, front[0], hub_z), "metal")
     # Saddle, handlebars with grips, pedals.
-    m.box(x - 1, 19, 16, x + 1, 23, 16, "ink")
-    m.box(x, 9, 17, x, 9, 18, "metal")
-    m.box(0, 8, 18, 8, 8, 18, "metal")
-    m.box(0, 8, 18, 1, 8, 18, "ink")
-    m.box(7, 8, 18, 8, 8, 18, "ink")
-    m.box(x - 3, 18, 6, x + 3, 18, 6, "metal")
-    m.box(x - 3, 17, 6, x - 3, 19, 6, "ink")
-    m.box(x + 3, 17, 6, x + 3, 19, 6, "ink")
-    m.set(x, 7, 15, "lamp")
+    # Saddle, handlebars with grips, the axle the cranks turn on (the cranks
+    # and pedals are a model of their own, turned by the game).
+    m.box(x - 1, 19, 12, x + 1, 23, 12, "ink")
+    m.box(x, 9, 13, x, 9, 14, "metal")
+    m.box(0, 8, 14, 8, 8, 14, "metal")
+    m.box(0, 8, 14, 1, 8, 14, "ink")
+    m.box(7, 8, 14, 8, 8, 14, "ink")
+    m.box(x - 1, 18, 5, x + 1, 18, 5, "metal")
+    m.set(x, 7, 12, "lamp")
     m.box(x, 30, 12, x, 33, 13, "roof_red")
     if basket:
         m.box(1, 1, 13, 7, 5, 17, "wood")
         m.box(2, 2, 14, 6, 4, 17, None)
         m.box(2, 2, 15, 3, 3, 16, "leaf")
         m.box(5, 3, 16, 6, 4, 17, "awning")
+    return m
+
+
+def crank():
+    """A crank and its pedal, 5 cm a voxel, pointing up from the axle: the
+    game turns it about its base."""
+    m = Model(3, 3, 3)
+    m.box(1, 1, 0, 1, 1, 1, "metal")
+    m.box(0, 0, 2, 2, 2, 2, "ink")
     return m
 
 
@@ -500,6 +510,7 @@ MODELS = {
     "bike_a": lambda: bike("roof_red"),
     "bike_b": lambda: bike("roof_blue", basket=True),
     "bike_c": lambda: bike("mint"),
+    "bike_crank": crank,
     "cone": cone,
 }
 
