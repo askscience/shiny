@@ -129,9 +129,15 @@ pub fn describe(into: SolidKind, model: &str) -> String {
         "flower_buckets" => "the florist's buckets of flowers on the pavement",
         "cafe_table" => "a café table outside, with someone's coffee on it",
         "crates" => "the crates of fruit outside the greengrocer's",
-        "car_red" => "the side of a parked-looking red car that was in fact driving",
-        "car_blue" => "the side of a small blue car",
-        "car_cream" => "the side of a cream-coloured car",
+        "car_small_red" => "the side of a small red car",
+        "car_small_blue" => "the side of a small blue car",
+        "car_small_cream" => "the side of a small cream-coloured car",
+        "car_small_mint" => "the side of a small mint-green car",
+        "car_taxi" => "the side of a yellow taxi",
+        "car_van_cream" | "car_van_sky" => {
+            "the side of a delivery van with a loaf of bread painted on it"
+        }
+        "car_icecream" => "the ice-cream van (closed, sadly)",
         m if m.starts_with("bike") => "a cyclist",
         _ => "",
     };
@@ -350,10 +356,17 @@ fn notice(
             continue;
         }
         *last_hoot = now.max(0.001);
-        let who = if hoot.by == SolidKind::Bike {
-            "a cyclist had to brake and rang the bell"
-        } else {
-            "a car had to brake hard and hooted"
+        let who = match hoot.what {
+            m if m.starts_with("bike") => "a cyclist had to brake and rang the bell".to_string(),
+            "car_icecream" => "the ice-cream van had to brake and played its jingle".to_string(),
+            "car_taxi" => "a taxi had to brake hard and hooted".to_string(),
+            m if m.starts_with("car_van") => {
+                "a delivery van had to brake hard and honked".to_string()
+            }
+            m => format!(
+                "{} had to brake hard and hooted",
+                describe(hoot.by, m).trim_start_matches("the side of ")
+            ),
         };
         let moment = format!("standing in the road where you were told to, {who} at you");
         let request = BrainRequest {
@@ -489,7 +502,8 @@ mod tests {
         assert!(describe(SolidKind::Bench, "cafe_table").contains("café table"));
         assert!(describe(SolidKind::Building, "home_garden_b").contains("climbing plants"));
         assert_eq!(describe(SolidKind::Lamp, "lamp"), "a lamp post");
-        assert!(describe(SolidKind::Car, "car_blue").contains("blue car"));
+        assert!(describe(SolidKind::Car, "car_small_blue").contains("blue car"));
+        assert!(describe(SolidKind::Car, "car_icecream").contains("ice-cream"));
     }
 
     #[test]

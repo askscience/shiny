@@ -22,7 +22,53 @@ use crate::vox::VoxLibrary;
 #[derive(Message, Clone, Copy, Debug)]
 pub struct Hooted {
     pub by: SolidKind,
+    /// Which vehicle (its model).
+    pub what: &'static str,
 }
+
+/// The cars on the streets, the small ones most often.
+const CARS_MODELS: [&str; 10] = [
+    "car_small_red",
+    "car_small_blue",
+    "car_small_cream",
+    "car_small_mint",
+    "car_small_red",
+    "car_small_blue",
+    "car_taxi",
+    "car_van_cream",
+    "car_van_sky",
+    "car_icecream",
+];
+
+/// What a vehicle says when it has to stop for the character.
+pub fn horn(model: &str) -> &'static str {
+    match model {
+        m if m.starts_with("bike") => "DRIN DRIN!",
+        "car_icecream" => "♪ DIN DON DAN ♪",
+        "car_taxi" => "PEEP PEEP!",
+        m if m.starts_with("car_van") => "HOOONK!",
+        _ => "BEEP!",
+    }
+}
+
+/// A car's wheel, turning about its axle.
+#[derive(Component)]
+struct Wheel;
+
+/// Car wheels: where the axles are (left and right, front and back), and
+/// how big a wheel is.
+const AXLES: [Vec3; 4] = [
+    Vec3::new(-0.775, WHEEL_RADIUS, -1.075),
+    Vec3::new(0.775, WHEEL_RADIUS, -1.075),
+    Vec3::new(-0.775, WHEEL_RADIUS, 1.075),
+    Vec3::new(0.775, WHEEL_RADIUS, 1.075),
+];
+const WHEEL_RADIUS: f32 = 0.325;
+/// Where the driver sits: on the left, the side away from the kerb.
+const DRIVER: Vec3 = Vec3::new(-0.42, 0.36, 0.05);
+/// A driver is drawn a little smaller than people in the street, to fit
+/// under the roof.
+const DRIVER_VOXEL: f32 = 0.034;
 
 /// How many vehicles are kept around the player.
 const CARS: usize = 4;
@@ -33,7 +79,8 @@ const ARRIVE: f32 = 58.0;
 const GONE: f32 = 66.0;
 /// How far from the middle of the street a lane's middle is.
 const LANE: f32 = 1.5;
-const VOXEL: f32 = 0.1;
+/// Cars are drawn at 5 cm a voxel.
+const CAR_VOXEL: f32 = 0.05;
 /// A bicycle is drawn finer than a car.
 const BIKE_VOXEL: f32 = 0.05;
 /// Where a cyclist sits, from the middle of the bicycle's base.
@@ -116,6 +163,8 @@ pub struct Vehicle {
     pub model: &'static str,
     /// Where a cyclist's pedals are in their turn.
     pedal: f32,
+    /// Metres driven: how far the wheels have turned.
+    travelled: f32,
 }
 
 impl Vehicle {
@@ -202,6 +251,7 @@ impl Vehicle {
             step = step.min((gap - 0.05).max(0.0));
         }
         self.along += self.way * step;
+        self.travelled += step;
     }
 }
 
@@ -219,7 +269,10 @@ impl Plugin for TrafficPlugin {
     fn build(&self, app: &mut App) {
         app.add_message::<Hooted>()
             .add_systems(Startup, open_garage)
-            .add_systems(Update, (arrivals, drive, pedal).chain().before(PlayerSet));
+            .add_systems(
+                Update,
+                (arrivals, drive, pedal, roll).chain().before(PlayerSet),
+            );
     }
 }
 
@@ -273,7 +326,7 @@ fn arrivals(
             3.2 + dice.unit() * 1.2,
         ),
         _ => (
-            ["car_red", "car_blue", "car_cream"][dice.below(3) as usize],
+            CARS_MODELS[dice.below(CARS_MODELS.len() as u32) as usize],
             5.0 + dice.unit() * 2.5,
         ),
     };
@@ -289,6 +342,7 @@ fn arrivals(
         quiet: 10.0,
         model,
         pedal: 0.0,
+        travelled: 0.0,
     };
     // Not on top of one already there.
     if vehicles
@@ -299,10 +353,39 @@ fn arrivals(
     }
     let at = vehicle.at();
     if kind != SolidKind::Bike {
-        commands.spawn((
-            vehicle,
-            library.place(model, Vec3::new(at.x, 0.0, at.y), VOXEL, 0),
-        ));
+        // A car: the body, four wheels on their axles, and someone at the
+        // wheel (a passer-by's look, sat down).
+        let driver = Look::random(((dice.roll() as u64) << 32) | dice.roll() as u64);
+        let driver = meshes.add(driver.body().mesh());
+        commands
+            .spawn((
+                vehicle,
+                Transform::from_xyz(at.x, 0.0, at.y),
+                Visibility::default(),
+            ))
+            .with_children(|car| {
+                car.spawn(library.place(model, Vec3::ZERO, CAR_VOXEL, 0));
+                for axle in AXLES {
+                    car.spawn((
+                        Wheel,
+                        Transform::from_translation(axle),
+                        Visibility::default(),
+                    ))
+                    .with_children(|wheel| {
+                        wheel.spawn(library.place(
+                            "car_wheel",
+                            Vec3::new(0.0, -WHEEL_RADIUS, 0.0),
+                            CAR_VOXEL,
+                            0,
+                        ));
+                    });
+                }
+                car.spawn((
+                    Mesh3d(driver),
+                    MeshMaterial3d(library.material.clone()),
+                    Transform::from_translation(DRIVER).with_scale(Vec3::splat(DRIVER_VOXEL)),
+                ));
+            });
         return;
     }
     // A cyclist is a person like the passers-by, sat on the saddle.
@@ -407,13 +490,12 @@ fn drive(
         vehicle.quiet += dt;
         if for_player.is_some_and(|g| g < 3.5) && vehicle.speed > 0.6 && vehicle.quiet > 6.0 {
             vehicle.quiet = 0.0;
-            hooted.write(Hooted { by: vehicle.kind });
+            hooted.write(Hooted {
+                by: vehicle.kind,
+                what: vehicle.model,
+            });
             let at = vehicle.at();
-            let text = if vehicle.kind == SolidKind::Bike {
-                "DRIN DRIN!"
-            } else {
-                "BEEP!"
-            };
+            let text = horn(vehicle.model);
             said.write(OtherSaid {
                 text: text.into(),
                 at: Vec3::new(at.x, 2.0, at.y),
@@ -437,6 +519,19 @@ fn drive(
         })
         .collect();
     crate::bridge::publish_traffic(format!("[{}]", list.join(",")));
+}
+
+/// Car wheels turn as far as the car has gone.
+fn roll(vehicles: Query<(&Vehicle, &Children)>, mut wheels: Query<&mut Transform, With<Wheel>>) {
+    for (vehicle, children) in &vehicles {
+        // Rolling forward (towards -z) turns the top of the wheel forward.
+        let turn = Quat::from_rotation_x(-vehicle.travelled / WHEEL_RADIUS);
+        for child in children.iter() {
+            if let Ok(mut transform) = wheels.get_mut(child) {
+                transform.rotation = turn;
+            }
+        }
+    }
 }
 
 /// Cyclists' legs go round with the pedals.
@@ -480,8 +575,9 @@ mod tests {
             speed: 6.0,
             cruise: 6.0,
             quiet: 10.0,
-            model: "car_red",
+            model: "car_small_red",
             pedal: 0.0,
+            travelled: 0.0,
         }
     }
 
@@ -622,6 +718,21 @@ mod tests {
         let top = pedal_at(0.0, 1.0);
         let quarter = pedal_at(std::f32::consts::FRAC_PI_2, 1.0);
         assert!(top.y > quarter.y && quarter.z < top.z);
+    }
+
+    #[test]
+    fn every_car_on_the_street_is_a_model_with_a_horn() {
+        let sizes = crate::vox::sizes();
+        for model in CARS_MODELS {
+            let size = sizes
+                .get(model)
+                .unwrap_or_else(|| panic!("no model {model}"));
+            // As big as the box the traffic gives a car.
+            assert_eq!((size.x, size.z), (36, 72), "{model}");
+            assert!(!horn(model).is_empty());
+        }
+        assert_eq!(horn("car_icecream"), "♪ DIN DON DAN ♪");
+        assert!(sizes.contains_key("car_wheel"));
     }
 
     #[test]

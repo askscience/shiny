@@ -88,7 +88,7 @@ mod tests {
                 at: Vec2::new(0.0, 10.0),
                 half: Vec2::new(0.9, 1.8),
                 kind: SolidKind::Car,
-                model: "car_red",
+                model: "car_small_red",
             }],
         };
         assert_eq!(

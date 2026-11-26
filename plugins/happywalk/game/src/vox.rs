@@ -523,7 +523,7 @@ mod tests {
     fn the_front_of_a_model_faces_minus_z() {
         // A car's headlights are on MagicaVoxel's low-y side, its tail
         // lights on the other.
-        let (_, car) = models().find(|(name, _)| *name == "car_red").unwrap();
+        let (_, car) = models().find(|(name, _)| *name == "car_small_red").unwrap();
         let half = car.size.z as i32 / 2;
         let has = |rgb: [u8; 3], depths: std::ops::Range<i32>| {
             depths

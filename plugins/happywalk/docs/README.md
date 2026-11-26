@@ -154,7 +154,15 @@ has a brain; theirs are template lines, shown in a second bubble where they
 stand. Who lives on a lot, and what each looks like, comes from the city's
 seed. They exist only in the nine chunks around the player.
 
-**Cars and bikes** (`game/src/traffic.rs`). A cyclist is a person like the
+**Cars and bikes** (`game/src/traffic.rs`). Cars come in four kinds, drawn
+at 5 cm a voxel with rounded corners, door lines and handles, mirrors,
+lights, a grille and plates: small hatchbacks in four colours, a yellow
+taxi with its roof sign, delivery vans with a loaf of bread painted on the
+side, and a candy-striped ice-cream van with a cone on the roof. Each has a
+horn of its own (BEEP!, PEEP PEEP!, HOOONK!, the ice-cream van's jingle).
+The wheels are separate pieces that turn with the distance driven, and a
+driver (a passer-by's look, slightly smaller) sits at the wheel, seen
+through the open side windows. A cyclist is a person like the
 passers-by (`figure.rs`), every one different, sat on a bicycle drawn at
 5 cm a voxel (frame, saddle, handlebars, one with a basket), leaning over
 the bars with its hands on the grips (its arms are separate pieces, aimed

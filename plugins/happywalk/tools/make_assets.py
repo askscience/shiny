@@ -376,29 +376,161 @@ def sign_board():
 # ── Traffic ──────────────────────────────────────────────────────────────
 
 
-def car(paint):
-    """A small round-cornered car, 10 cm a voxel; the front is low y."""
-    m = Model(18, 36, 15)
-    m.box(1, 1, 3, 16, 34, 8, paint)
-    for x, y in ((1, 1), (16, 1), (1, 34), (16, 34)):
-        m.box(x, y, 3, x, y, 8, None)
-    # The cabin, with glass all round.
-    m.box(2, 10, 9, 15, 27, 13, paint)
-    m.box(2, 10, 9, 15, 10, 12, "glass")
-    m.box(2, 27, 9, 15, 27, 12, "glass")
-    m.box(2, 12, 10, 2, 25, 12, "glass")
-    m.box(15, 12, 10, 15, 25, 12, "glass")
-    m.box(3, 11, 14, 14, 26, 14, paint)
-    # Lights, bumpers, wheels.
-    for x in (3, 4, 13, 14):
-        m.set(x, 1, 6, "lamp")
-        m.set(x, 34, 6, "roof_red")
-    m.box(2, 0, 3, 15, 0, 4, "metal")
-    m.box(2, 35, 3, 15, 35, 4, "metal")
-    for x in (0, 16):
-        for y in (6, 26):
-            m.box(x, y, 0, x + 1, y + 4, 4, "ink")
-            m.set(x if x == 0 else x + 1, y + 2, 2, "trim")
+# Cars are drawn at 5 cm a voxel, 36 wide and 72 long (1.8 by 3.6 m), front
+# on the low-y side, with no wheels: the wheels are a model of their own
+# that the game turns, and they sit in the arches left for them here. The
+# side windows and the rear window are open, so the driver the game seats
+# inside can be seen.
+CAR_W, CAR_L = 36, 72
+WHEEL_Y = (14, 57)
+WHEEL_Z = 6
+
+
+def rounded_box(m, x0, y0, z0, x1, y1, z1, colour, r=2):
+    """A box with its vertical edges rounded off."""
+    for x in range(x0, x1 + 1):
+        for y in range(y0, y1 + 1):
+            dx = max(x0 + r - x, x - (x1 - r), 0)
+            dy = max(y0 + r - y, y - (y1 - r), 0)
+            if dx * dx + dy * dy <= r * r:
+                m.box(x, y, z0, x, y, z1, colour)
+
+
+def arches(m):
+    """Room for the wheels, on both sides."""
+    for wy in WHEEL_Y:
+        for y in range(wy - 8, wy + 9):
+            for z in range(0, 15):
+                if (y - wy) ** 2 + (z - WHEEL_Z) ** 2 <= 7.6 ** 2:
+                    m.box(0, y, z, 6, y, z, None)
+                    m.box(CAR_W - 7, y, z, CAR_W - 1, y, z, None)
+
+
+def car_ends(m, top):
+    """Lights, bumpers, grille and plates, front and back."""
+    for x0 in (4, CAR_W - 9):
+        m.box(x0, 0, 11, x0 + 4, 0, 13, "lamp")
+        m.box(x0, CAR_L - 1, 11, x0 + 4, CAR_L - 1, 13, "roof_red")
+    m.box(13, 0, 8, 22, 0, 11, "metal")
+    m.box(2, 0, 4, CAR_W - 3, 0, 6, "metal")
+    m.box(2, CAR_L - 1, 4, CAR_W - 3, CAR_L - 1, 6, "metal")
+    m.box(14, 0, 7, 21, 0, 7, "trim")
+    m.box(14, CAR_L - 1, 8, 21, CAR_L - 1, 9, "trim")
+
+
+def cabin(m, paint, y0, y1, roof, glass_front=True):
+    """Pillars, a roof, a windscreen; open side and rear windows; seats."""
+    belt = 17
+    # Pillars at the corners and in the middle.
+    for y in (y0, y0 + 1, (y0 + y1) // 2, y1 - 1, y1):
+        for x in (2, 3, CAR_W - 4, CAR_W - 3):
+            m.box(x, y, belt, x, y, roof - 1, paint)
+    rounded_box(m, 2, y0, roof, CAR_W - 3, y1, roof + 1, paint, r=2)
+    # The windscreen leans back.
+    if glass_front:
+        for z in range(belt, roof):
+            y = y0 + (z - belt) // 3
+            m.box(4, y, z, CAR_W - 5, y, z, "glass")
+    # Inside: a dark floor at the belt line, and two seats.
+    m.box(4, y0 + 2, belt - 1, CAR_W - 5, y1 - 2, belt - 1, "ink")
+    for x0 in (5, CAR_W - 15):
+        m.box(x0, y0 + 13, belt, x0 + 9, y0 + 17, belt + 3, "door")
+        m.box(x0, y0 + 18, belt, x0 + 9, y0 + 19, belt + 9, "door")
+    # Mirrors.
+    m.box(0, y0 + 2, belt + 1, 1, y0 + 3, belt + 2, paint)
+    m.box(CAR_W - 2, y0 + 2, belt + 1, CAR_W - 1, y0 + 3, belt + 2, paint)
+
+
+def car(paint, kind="small", accent=None):
+    """A car of a kind: "small" (a hatchback), "taxi", "van" or "icecream"."""
+    m = Model(CAR_W, CAR_L, 40)
+    if kind in ("small", "taxi"):
+        # The lower body, a short bonnet, the cabin, a boot.
+        rounded_box(m, 1, 1, 3, CAR_W - 2, CAR_L - 2, 16, paint, r=4)
+        rounded_box(m, 2, 2, 16, CAR_W - 3, 20, 16, paint, r=3)
+        rounded_box(m, 2, CAR_L - 16, 16, CAR_W - 3, CAR_L - 3, 16, paint, r=3)
+        cabin(m, paint, 21, CAR_L - 17, 29)
+        # Door lines and handles.
+        for y in (22, 38):
+            m.box(1, y, 6, 1, y, 15, "metal")
+            m.box(CAR_W - 2, y, 6, CAR_W - 2, y, 15, "metal")
+        for y in (32, 48):
+            m.box(0, y, 14, 0, y + 2, 14, "trim")
+            m.box(CAR_W - 1, y, 14, CAR_W - 1, y + 2, 14, "trim")
+        if kind == "taxi":
+            m.box(12, 34, 31, 23, 40, 33, "trim")
+            m.box(14, 34, 32, 21, 34, 32, "ink")
+            for y in range(4, CAR_L - 4, 2):
+                m.set(1, y, 10, "ink")
+                m.set(CAR_W - 2, y, 10, "ink")
+    else:
+        # A van: a short nose, then a tall box all the way back.
+        rounded_box(m, 1, 1, 3, CAR_W - 2, 14, 16, paint, r=4)
+        rounded_box(m, 1, 12, 3, CAR_W - 2, CAR_L - 2, 31, paint, r=3)
+        # The cab: windscreen, open side windows, seats.
+        for z in range(17, 29):
+            y = 12 + (z - 17) // 3
+            m.box(4, y, z, CAR_W - 5, y, z, "glass")
+        for x in (1, 2, CAR_W - 3, CAR_W - 2):
+            m.box(x, 17, 18, x, 26, 27, None)
+        m.box(3, 14, 16, CAR_W - 4, 26, 29, None)
+        m.box(4, 14, 15, CAR_W - 5, 26, 15, "ink")
+        for x0 in (5, CAR_W - 15):
+            m.box(x0, 19, 16, x0 + 9, 22, 18, "door")
+            m.box(x0, 23, 16, x0 + 9, 24, 26, "door")
+        m.box(0, 15, 19, 1, 16, 20, paint)
+        m.box(CAR_W - 2, 15, 19, CAR_W - 1, 16, 20, paint)
+        if kind == "van":
+            # A band along the sides, a loaf painted on it, rear doors.
+            band = accent or "trim"
+            for x in (1, CAR_W - 2):
+                m.box(x, 30, 18, x, CAR_L - 6, 24, band)
+                m.box(x, 44, 19, x, 54, 23, "wood")
+                m.box(x, 46, 24, x, 52, 24, "wood")
+                m.box(x, 45, 20, x, 53, 20, "awning")
+            m.box(17, CAR_L - 2, 4, 18, CAR_L - 2, 30, "metal")
+        else:
+            # The ice-cream van: candy stripes, a serving hatch with an
+            # awning, and a big cone on the roof.
+            for x in (1, CAR_W - 2):
+                for y in range(28, CAR_L - 3):
+                    if (y // 3) % 2 == 0:
+                        m.box(x, y, 4, x, y, 12, "trim")
+            m.box(0, 32, 17, 2, 58, 26, None)
+            m.box(1, 32, 16, 3, 58, 16, "trim")
+            for y in range(31, 60):
+                m.set(0, y, 27, "flower" if (y // 2) % 2 == 0 else "trim")
+            for z in range(32, 38):
+                r = (z - 31) * 0.5
+                for x in range(CAR_W):
+                    for y in range(CAR_L):
+                        if (x - 17.5) ** 2 + (y - 44) ** 2 <= r * r:
+                            m.set(x, y, z, "wood")
+            for (cz, colour) in ((38, "flower"), (39, "lamp")):
+                for x in range(CAR_W):
+                    for y in range(CAR_L):
+                        if (x - 17.5) ** 2 + (y - 44) ** 2 <= 3.6 ** 2:
+                            m.set(x, y, cz, colour)
+            m.set(17, 44, 40 - 1, "roof_red")
+        m.box(1, CAR_L - 1, 4, CAR_W - 2, CAR_L - 1, 30, paint)
+    car_ends(m, 16)
+    arches(m)
+    return m
+
+
+def car_wheel():
+    """A wheel standing on its edge, 5 cm a voxel: tyre, rim, hub. The game
+    hangs it from its axle and turns it."""
+    m = Model(5, 13, 13)
+    for y in range(13):
+        for z in range(13):
+            d = ((y - 6) ** 2 + (z - 6) ** 2) ** 0.5
+            if d <= 6.5:
+                colour = "ink" if d > 4.2 else ("metal" if d > 1.8 else "trim")
+                m.box(0, y, z, 4, y, z, colour)
+    # A spoke of the rim's colour, so the turning shows.
+    m.box(0, 6, 2, 0, 6, 10, "trim")
+    m.box(4, 6, 2, 4, 6, 10, "trim")
     return m
 
 
@@ -504,9 +636,15 @@ MODELS = {
     "tree_dark": lambda: tree("leaf_dark"),
     "bench": bench,
     "planter": planter,
-    "car_red": lambda: car("roof_red"),
-    "car_blue": lambda: car("roof_blue"),
-    "car_cream": lambda: car("cream"),
+    "car_small_red": lambda: car("roof_red"),
+    "car_small_blue": lambda: car("roof_blue"),
+    "car_small_cream": lambda: car("cream"),
+    "car_small_mint": lambda: car("mint"),
+    "car_taxi": lambda: car("lamp", "taxi"),
+    "car_van_cream": lambda: car("cream", "van", accent="roof_red"),
+    "car_van_sky": lambda: car("sky", "van", accent="trim"),
+    "car_icecream": lambda: car("rose", "icecream"),
+    "car_wheel": car_wheel,
     "bike_a": lambda: bike("roof_red"),
     "bike_b": lambda: bike("roof_blue", basket=True),
     "bike_c": lambda: bike("mint"),

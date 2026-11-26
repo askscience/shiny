@@ -45,6 +45,8 @@
   a button for a random look), and every passer-by is a person of its own
   made the same way from the city's seed, no two alike, cyclists included
   (with their hands on the handlebars and their feet on turning pedals).
+  Cars come in four kinds (hatchbacks, a taxi, delivery vans, an ice-cream
+  van), with turning wheels, a driver at the wheel and a horn of their own.
   The character has a personality of its own (theatrical, a proud citizen
   with grudges against lamp posts and a weakness for bread), each line is
   asked from a different comic angle, and the model is told concretely what
