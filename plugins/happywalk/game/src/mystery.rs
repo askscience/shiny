@@ -35,7 +35,7 @@ use crate::camera::FollowCamera;
 use crate::case::{self, role_in, Case, Clue};
 use crate::city::{CityName, CitySeed, Solids, PAVED};
 use crate::gen::{self, PlaceKind};
-use crate::hud::{GameFont, OtherSaid};
+use crate::hud::GameFont;
 use crate::nav::REACH;
 use crate::player::{Player, PlayerSet};
 use crate::rooms::{self, Doors, GoIn, Inside, Passage, RoomKind, Space};
@@ -830,7 +830,7 @@ fn chat(
     }
 }
 
-/// The model's answers, into the conversation (and a bubble over the head).
+/// The model's answers, into the conversation.
 #[allow(clippy::too_many_arguments)]
 fn answers(
     status: Res<HostStatus>,
@@ -838,8 +838,6 @@ fn answers(
     mut answered: MessageReader<BrainAnswered>,
     mut pending: ResMut<Pending>,
     mut mystery: ResMut<Mystery>,
-    mut others: MessageWriter<OtherSaid>,
-    people: Query<(&Transform, Option<&Suspect>), Or<(With<Suspect>, With<Client>)>>,
 ) {
     let it = italian(&status);
     let mut lines: Vec<(Person, Option<String>)> = Vec::new();
@@ -877,15 +875,6 @@ fn answers(
             });
             continue;
         };
-        if let Some((t, _)) = people.iter().find(|(_, s)| match who {
-            Person::Client => s.is_none(),
-            Person::Suspect(n) => s.is_some_and(|s| s.0 == n),
-        }) {
-            others.write(OtherSaid {
-                text: text.clone(),
-                at: t.translation + Vec3::Y * 1.8,
-            });
-        }
         mystery
             .chats
             .entry(who)

@@ -4,8 +4,9 @@
 #   web/game/<build>/happywalk_game.js, happywalk_game_bg.wasm (+ .gz)
 #   web/game/build.json   {"build": "<build>"}
 #
-# <build> is a hash of the output, so a new build is a new URL and the core's
-# immutable caching of plugin files never serves a stale game.
+# <build> is a hash of the output and of the page's scripts, so a new build
+# is a new URL and the core's immutable caching of plugin files never serves
+# a stale game or script: run this after changing a script in web/ too.
 #
 #   plugins/happywalk/scripts/build-web.sh           # release
 #   plugins/happywalk/scripts/build-web.sh --dev     # quicker, bigger, slower
@@ -38,7 +39,8 @@ if [ "$profile" = release ] && command -v wasm-opt >/dev/null 2>&1; then
     mv "$stage/opt.wasm" "$stage/happywalk_game_bg.wasm"
 fi
 
-build=$(cat "$stage/happywalk_game.js" "$stage/happywalk_game_bg.wasm" | sha256sum | cut -c1-12)
+# The page's own scripts count too: the page loads them with this number.
+build=$(cat "$stage/happywalk_game.js" "$stage/happywalk_game_bg.wasm" "$HERE"/web/*.js "$HERE/web/index.html" | sha256sum | cut -c1-12)
 rm -rf "$OUT"
 mkdir -p "$OUT/$build"
 cp "$stage/happywalk_game.js" "$stage/happywalk_game_bg.wasm" "$OUT/$build/"

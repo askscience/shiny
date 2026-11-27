@@ -12,8 +12,10 @@
 //   * a walk to someone's door, or to the office (`hw_go`);
 //   * an accusation (`hw_accuse`), and the next case (`hw_next_case`).
 //
-// The chat box is built once and kept: the rest is redrawn when the game's
-// notebook changes, so what the player is typing is never lost.
+// The chat is a sheet of its own along the bottom of the screen, like a
+// messaging app: it rises when the character is next to someone and goes
+// when it walks away. It is built once and kept, so what the player is
+// typing is never lost; the notebook above holds the clues and the people.
 
 import { button, chip, iconButton, input } from '../../ui/index.js';
 
@@ -25,6 +27,7 @@ const WORDS = {
     send: 'Invia', speak: 'Parla', stop: 'Basta, invia', listening: 'Ti ascolto…', thinking: 'sta pensando…',
     go: 'Vai', toOffice: 'Torna in ufficio: arriverà un cliente.', waiting: 'Aspetta: sta arrivando un cliente…',
     away: 'm', talked: 'sentito', nobody: 'Avvicinati a qualcuno per parlargli.', noMic: 'Microfono non disponibile',
+    hide: 'Nascondi la chat', show: 'Parla con', start: 'Fai una domanda, scrivendo o col microfono.',
   },
   en: {
     title: 'Notebook', suspects: 'Suspects', notes: 'Clues', accuse: 'Accuse', next: 'Next case',
@@ -33,6 +36,7 @@ const WORDS = {
     send: 'Send', speak: 'Speak', stop: 'Done, send', listening: 'Listening…', thinking: 'is thinking…',
     go: 'Go', toOffice: 'Back to the office: a client will come.', waiting: 'Wait: a client is coming…',
     away: 'm', talked: 'questioned', nobody: 'Go up to someone to talk to them.', noMic: 'No microphone',
+    hide: 'Hide the chat', show: 'Talk to', start: 'Ask something, typing or with the microphone.',
   },
 };
 
@@ -52,7 +56,7 @@ function el(tag, className, text) {
  * `lang` the player's language; `dictate` writes down speech
  * (`{ start(onText), stop() → Promise<text> }`, or null with no microphone);
  * `onProgress` is told whenever the progress changes, to keep it. Returns
- * `{ element, update(json) }`.
+ * `{ element, sheet, update(json) }`: the notebook and the chat sheet.
  */
 export function createNotebook({ game, lang = 'en', dictate = null, onProgress }) {
   const w = (key) => word(lang, key);
@@ -68,21 +72,34 @@ export function createNotebook({ game, lang = 'en', dictate = null, onProgress }
 
   // Parts redrawn from the game's notebook.
   const status = el('div', 'notebook-status');
-  const chatBox = el('section', 'notebook-chat');
-  const who = el('p', 'notebook-near');
-  const lines = el('div', 'notebook-lines');
-  const asks = el('div', 'notebook-asks');
   const rest = el('div', 'notebook-rest');
 
+  // The chat sheet.
+  const chatBox = el('section', 'chat-sheet');
+  chatBox.hidden = true;
+  chatBox.setAttribute('aria-live', 'polite');
+  const chatHead = el('div', 'chat-head');
+  const who = el('p', 'chat-who');
+  const hide = iconButton({ icon: 'ui/chevron-down', label: w('hide'), onClick: () => setMinimised(true) });
+  chatHead.append(who, hide);
+  const lines = el('div', 'chat-lines');
+  const asks = el('div', 'chat-asks');
+  const reopen = button({ label: '', variant: 'primary', onClick: () => setMinimised(false) });
+  reopen.classList.add('chat-reopen');
+  reopen.hidden = true;
+
   // The chat's input row: built once, kept.
-  const field = input({ placeholder: w('write'), label: w('write'), autocomplete: 'off', className: 'notebook-input' });
+  const field = input({ placeholder: w('write'), label: w('write'), autocomplete: 'off', className: 'chat-input' });
   const send = iconButton({ icon: 'ui/send', label: w('send'), onClick: () => submit() });
   const mic = iconButton({ icon: 'ui/mic', label: w('speak'), onClick: () => toggleMic() });
   if (!dictate) mic.hidden = true;
-  const inputRow = el('div', 'notebook-input-row');
-  inputRow.append(field, mic, send);
-  chatBox.append(who, lines, asks, inputRow);
-  body.append(status, chatBox, rest);
+  mic.classList.add('chat-mic');
+  const inputRow = el('div', 'chat-input-row');
+  inputRow.append(mic, field, send);
+  chatBox.append(chatHead, lines, asks, inputRow);
+  body.append(status, rest);
+  const sheet = el('div', 'chat-slot');
+  sheet.append(chatBox, reopen);
 
   field.addEventListener('focus', () => game.hw_typing(true));
   field.addEventListener('blur', () => game.hw_typing(false));
@@ -96,6 +113,15 @@ export function createNotebook({ game, lang = 'en', dictate = null, onProgress }
   let lastProgress = '';
   let book = null;
   let listening = false;
+  let minimised = false;
+  let talkingTo = null;
+  // On a small screen the notebook starts folded: the game comes first.
+  if (window.matchMedia?.('(max-width: 640px)').matches) setFolded(true);
+
+  function setMinimised(value) {
+    minimised = value;
+    if (book) render();
+  }
 
   function setFolded(value) {
     folded = value;
@@ -155,16 +181,22 @@ export function createNotebook({ game, lang = 'en', dictate = null, onProgress }
         button({ label: w('next'), variant: 'primary', onClick: () => game.hw_next_case() }),
       );
     }
-    // The conversation.
-    chatBox.hidden = !book.talking;
+    // The conversation: a new person opens it again.
+    const person = book.talking ? book.talking.who : null;
+    if (person !== talkingTo) { talkingTo = person; minimised = false; }
+    chatBox.hidden = !book.talking || minimised;
+    reopen.hidden = !book.talking || !minimised;
+    document.body.classList.toggle('is-chatting', !!book.talking && !minimised);
     if (book.talking) {
-      who.textContent = `${w('talking')} ${book.talking.name}, ${book.talking.role}`;
+      who.textContent = `${book.talking.name} · ${book.talking.role}`;
+      reopen.textContent = `${w('show')} ${book.talking.name}`;
       lines.textContent = '';
-      for (const line of book.chat) lines.appendChild(el('p', `notebook-line is-${line.from}`, line.text));
-      if (book.thinking) lines.appendChild(el('p', 'notebook-line is-note', `${book.talking.name} ${w('thinking')}`));
+      if (!book.chat.length && !book.thinking) lines.appendChild(el('p', 'chat-line is-note', w('start')));
+      for (const line of book.chat) lines.appendChild(el('p', `chat-line is-${line.from}`, line.text));
+      if (book.thinking) lines.appendChild(el('p', 'chat-line is-note', `${book.talking.name} ${w('thinking')}`));
       lines.scrollTop = lines.scrollHeight;
       asks.textContent = '';
-      if (!book.chat.length && book.talking.who !== 'client') {
+      if (!book.chat.some((line) => line.from === 'you') && book.talking.who !== 'client') {
         for (const question of book.questions) asks.appendChild(chip({ label: question, onClick: () => submit(question) }));
       }
       field.disabled = !!book.thinking;
@@ -210,6 +242,7 @@ export function createNotebook({ game, lang = 'en', dictate = null, onProgress }
 
   return {
     element: panel,
+    sheet,
     /** Show the latest notebook (a JSON string from `hw_case`). */
     update(json) {
       if (!json || json === last) return;

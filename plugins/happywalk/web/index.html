@@ -67,16 +67,31 @@
     .notebook-result { margin: 0; font-size: 18px; font-weight: 700; }
     .notebook-row { display: flex; align-items: center; gap: 8px; }
     .notebook-hint { margin: 0; flex: 1; font-weight: 600; }
-    .notebook-chat { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 12px; background: color-mix(in srgb, var(--accent, #c25) 9%, transparent); }
-    .notebook-chat[hidden] { display: none; }
-    .notebook-lines { display: flex; flex-direction: column; gap: 6px; max-height: 38vh; overflow-y: auto; }
-    .notebook-line { margin: 0; padding: 7px 10px; border-radius: 12px; line-height: 1.4; max-width: 88%; }
-    .notebook-line.is-them { align-self: flex-start; background: var(--bg-elevated, #fff); }
-    .notebook-line.is-you { align-self: flex-end; background: color-mix(in srgb, var(--accent, #c25) 22%, var(--bg-elevated, #fff)); }
-    .notebook-line.is-note { align-self: center; opacity: 0.65; font-style: italic; background: none; padding: 2px; }
-    .notebook-input-row { display: flex; align-items: center; gap: 4px; }
-    .notebook-input-row .ui-input { flex: 1; min-width: 0; }
-    .notebook-input-row .is-active { color: var(--accent, #c25); }
+    /* The chat: a sheet along the bottom, like a messaging app. */
+    .chat-slot { position: absolute; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; align-items: center; pointer-events: none; padding: 0 12px max(12px, env(safe-area-inset-bottom)); }
+    .chat-slot > * { pointer-events: auto; }
+    .chat-sheet {
+      width: min(560px, 100%); display: flex; flex-direction: column; gap: 8px; padding: 10px 12px 12px;
+      border-radius: 20px; background: var(--bg-elevated, #fff); color: var(--text, #222);
+      box-shadow: 0 10px 40px rgba(40, 50, 80, 0.22); font-family: var(--font-body, system-ui, sans-serif); font-size: 14px;
+    }
+    .chat-sheet[hidden], .chat-reopen[hidden] { display: none; }
+    .chat-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .chat-who { margin: 0; font-weight: 700; font-size: 15px; }
+    .chat-lines { display: flex; flex-direction: column; gap: 6px; max-height: 32vh; overflow-y: auto; }
+    .chat-line { margin: 0; padding: 8px 12px; border-radius: 16px; line-height: 1.45; max-width: 85%; }
+    .chat-line.is-them { align-self: flex-start; background: color-mix(in srgb, var(--text, #222) 7%, transparent); border-bottom-left-radius: 4px; }
+    .chat-line.is-you { align-self: flex-end; background: var(--accent, #c25); color: var(--on-accent, #fff); border-bottom-right-radius: 4px; }
+    .chat-line.is-note { align-self: center; opacity: 0.6; font-style: italic; background: none; padding: 2px; text-align: center; }
+    .chat-asks { display: flex; flex-wrap: wrap; gap: 6px; }
+    .chat-asks:empty { display: none; }
+    .chat-asks .ui-chip { white-space: normal; text-align: left; padding: 6px 10px; }
+    .chat-input-row { display: flex; align-items: center; gap: 6px; }
+    .chat-input-row .ui-input { flex: 1; min-width: 0; }
+    .chat-mic { width: 44px; height: 44px; border-radius: 50%; background: color-mix(in srgb, var(--accent, #c25) 14%, transparent); }
+    .chat-mic.is-active { background: var(--accent, #c25); color: var(--on-accent, #fff); }
+    .chat-reopen { margin-bottom: 4px; }
+    body.is-chatting .joystick { display: none; }
     .notebook-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
     /* The touch joystick, bottom left. */
     .joystick {
@@ -100,6 +115,12 @@
   <pre id="log" hidden></pre>
   <!-- The wardrobe and its button are put here by host.js. -->
   <div id="wardrobe-slot"></div>
-  <script type="module" src="host.js"></script>
+  <!-- The core caches the page's scripts for good (only this file is asked
+       again): they are loaded with the build's number, so a new build is
+       new to every device. -->
+  <script type="module">
+    const built = await fetch('game/build.json', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : {})).catch(() => ({}));
+    await import(`./host.js?v=${built.build || Date.now()}`);
+  </script>
 </body>
 </html>

@@ -14,6 +14,10 @@
 // Everything is asynchronous and reports how long it took.
 
 const LOG_KEEP = 200;
+/** The build this page belongs to: its modules are asked for with it, so no
+ *  device keeps an old one (the core caches them for good). */
+const VERSION = new URL(import.meta.url).searchParams.get('v') || '';
+const versioned = (path) => (VERSION ? `${path}?v=${VERSION}` : path);
 /** Audio is handed to the recogniser in blocks of this many frames (64 ms). */
 const BLOCK_FRAMES = 1024;
 const SAMPLE_RATE = 16000;
@@ -248,7 +252,7 @@ function keepLook(look) {
 
 async function openWardrobe() {
   if (!game) return;
-  const { createWardrobe, word } = await import('./wardrobe.js');
+  const { createWardrobe, word } = await import(versioned('./wardrobe.js'));
   const city = savedCity() || startCity;
   const { iconButton } = await import('../../ui/index.js');
   const lang = voiceLang();
@@ -301,7 +305,7 @@ function progressKey() {
 }
 
 async function startNotebook() {
-  const { createNotebook } = await import('./notebook.js');
+  const { createNotebook } = await import(versioned('./notebook.js'));
   const notebook = createNotebook({
     game,
     lang: voiceLang(),
@@ -310,7 +314,7 @@ async function startNotebook() {
       try { window.localStorage.setItem(progressKey(), JSON.stringify(progress)); } catch (_) { /* storage blocked */ }
     },
   });
-  document.getElementById('wardrobe-slot').appendChild(notebook.element);
+  document.getElementById('wardrobe-slot').append(notebook.element, notebook.sheet);
   const kept = stored(progressKey());
   if (kept) game.hw_progress(kept);
   setInterval(() => notebook.update(game.hw_case()), 300);
@@ -483,7 +487,7 @@ async function start() {
   // seed, so the same name is the same city every time. Before a name is
   // chosen the game starts in one it suggests. `?seed=` in the address
   // overrides it (tests).
-  const { suggestTown } = await import('./wardrobe.js');
+  const { suggestTown } = await import(versioned('./wardrobe.js'));
   startCity = savedCity() || suggestTown(voiceLang());
   const asked = Number(new URLSearchParams(window.location.search).get('seed'));
   const seed = Number.isInteger(asked) && asked > 0 ? asked >>> 0 : game.hw_city_seed(startCity);
@@ -508,7 +512,7 @@ async function start() {
     game.hw_wardrobe(false);
   }
   await startNotebook().catch((error) => log(`notebook failed: ${error?.message || error}`));
-  const { startControls } = await import('./controls.js');
+  const { startControls } = await import(versioned('./controls.js'));
   startControls({ game, canvas: document.getElementById('happywalk-canvas'), lang: voiceLang() });
   startClips();
 }

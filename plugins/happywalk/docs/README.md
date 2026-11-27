@@ -227,7 +227,8 @@ Letting go stops the character. Keys are read only while the game has them
 wardrobe is open.
 
 **The joystick** (`web/controls.js`) is drawn by the page in the bottom left
-corner, only on a screen whose pointer is coarse (`pointer: coarse`). It
+corner on any touch screen (some app views on a phone report a fine
+pointer, so touch points count too), and hidden while the chat is open. It
 reports both axes from -1 to 1 (`hw_steer`); below 0.15 it counts as at
 rest.
 
@@ -423,16 +424,18 @@ are played by the language model, and the character itself says nothing.
    character there (`hw_go`); outside, it also tells how far the office is.
    Inside, the suspect stands beside the counter or in the room, a name over
    their head.
-3. **The chat.** Next to someone (within 2.6 m) the notebook becomes a
-   conversation with them. The player writes a question, picks one of three
+3. **The chat.** Next to someone (within 2.6 m) a chat sheet rises along
+   the bottom of the screen, like a messaging app: their name and role, the
+   conversation, the input with a microphone button and a send button. It
+   can be put away and opened again, and goes when the character walks off. The player writes a question, picks one of three
    suggested ones (where were you, did you see anything strange, what is
    that on you), or dictates with the microphone button. The message goes to
    the game (`hw_chat`), which asks the model to answer as that person, from
    a persona the case writes for them (`client_persona`, `suspect_persona`)
    and the whole conversation so far as history: an innocent tells the truth
    about where they were and with whom and may let a harmless secret slip;
-   the culprit lies about where they were and never admits it. The answer
-   shows in the chat and in a bubble over their head. A late or failed
+   the culprit lies about where they were and never admits it. Nobody invents
+   clues: the personas forbid it. The answer shows in the chat. A late or failed
    answer shows a note in the chat instead. Each person has a conversation of
    their own, kept for the whole case.
 4. **The notes.** After a suspect's first answer the notebook notes what
@@ -520,6 +523,11 @@ and their triangles. `happywalkHost.state` gives the character's place,
 facing, pace and whether it walks (tests use it).
 
 ## Build and run
+
+The core caches a web app's files for good and asks again only for
+`index.html`, so the page loads `host.js` and its modules with the build's
+number (`?v=<build>`), and the number counts the page's scripts as well as
+the game: after changing anything in `web/`, run `build-web.sh` again.
 
 ```sh
 plugins/happywalk/scripts/build-web.sh          # the game → web/game/<build>/

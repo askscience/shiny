@@ -31,7 +31,11 @@ export function startControls({ game, canvas, lang = 'en' }) {
     game.hw_tap(event.clientX - box.left, event.clientY - box.top);
   });
 
-  if (!window.matchMedia?.('(pointer: coarse)').matches) return;
+  // Any touch screen gets the joystick (some app views report a fine
+  // pointer even on a phone).
+  const touch = navigator.maxTouchPoints > 0 || 'ontouchstart' in window || window.matchMedia?.('(pointer: coarse)').matches;
+  if (!touch) return;
+  document.body.classList.add('has-joystick');
 
   // The joystick.
   const pad = document.createElement('div');
