@@ -65,6 +65,9 @@ pub struct Solids {
     seed: u64,
     sizes: HashMap<&'static str, UVec3>,
     loaded: HashMap<IVec2, Vec<Solid>>,
+    /// The walls and furniture of the room the character is in: while there
+    /// are any, they are all there is.
+    room: Vec<Solid>,
 }
 
 impl Solids {
@@ -73,7 +76,13 @@ impl Solids {
             seed,
             sizes: crate::vox::sizes(),
             loaded: HashMap::new(),
+            room: Vec::new(),
         }
+    }
+
+    /// The solids of the room the character is in (none: back in the city).
+    pub fn set_room(&mut self, room: Vec<Solid>) {
+        self.room = room;
     }
 
     fn of(&self, chunk: &gen::Chunk) -> Vec<Solid> {
@@ -111,6 +120,9 @@ impl Solids {
         let low = gen::chunk_of(at - Vec2::splat(radius));
         let high = gen::chunk_of(at + Vec2::splat(radius));
         let fits = |s: &Solid| s.touches(at, radius) && wanted(s);
+        if !self.room.is_empty() {
+            return self.room.iter().find(|s| fits(s)).copied();
+        }
         for x in low.x..=high.x {
             for z in low.y..=high.y {
                 let coord = IVec2::new(x, z);
@@ -260,6 +272,7 @@ fn stream(
     mut solids: ResMut<Solids>,
     mut here: Local<Option<IVec2>>,
     wardrobe: Res<crate::bridge::Wardrobe>,
+    inside: Res<crate::rooms::Inside>,
 ) {
     // A new name is a new city: everything of the old one goes.
     if seed.is_changed() && !seed.is_added() {
@@ -271,9 +284,9 @@ fn stream(
         *solids = Solids::new(seed.0);
         *here = None;
     }
-    // While the character is being dressed it is in the studio, far away:
-    // the city stays as it is.
-    if wardrobe.0 {
+    // While the character is being dressed (in the studio) or is in a room,
+    // it is far away: the city stays as it is.
+    if wardrobe.0 || inside.0.is_some() {
         return;
     }
     let at = players

@@ -1,14 +1,12 @@
-//! `UiPlugin`: the speech bubble over the character, the "I am listening"
-//! mark, what was understood, and (F3) the timings of the voice chain.
+//! `HudPlugin`: a bubble over whoever answers in the chat, the notices
+//! ("clip saved"), the title, and (F3) the timings and what is drawn.
 
 use bevy::prelude::*;
 
-use crate::brain::Said;
-use crate::bridge::{ClipSaved, Heard, Host, HostStatus};
+use crate::bridge::{ClipSaved, Host, HostStatus};
 use crate::camera::Direction;
 use crate::camera::FollowCamera;
-use crate::intent::Order;
-use crate::player::Player;
+use crate::control::Order;
 use crate::telemetry::Latency;
 
 /// Somebody else says something: a passer-by, a car's horn. Shown in a
@@ -23,25 +21,11 @@ pub struct HudPlugin;
 
 impl Plugin for HudPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<LastHeard>()
-            .add_message::<OtherSaid>()
+        app.add_message::<OtherSaid>()
             .add_systems(Startup, setup)
-            .add_systems(
-                Update,
-                (remember, draw, toggle_timings, clips, title, photo).chain(),
-            )
-            .add_systems(
-                PostUpdate,
-                (bubble, other_bubble).after(TransformSystems::Propagate),
-            );
+            .add_systems(Update, (draw, toggle_timings, clips, title, photo).chain())
+            .add_systems(PostUpdate, other_bubble.after(TransformSystems::Propagate));
     }
-}
-
-/// The latest thing the recogniser understood.
-#[derive(Resource, Default)]
-pub struct LastHeard {
-    pub text: String,
-    pub is_final: bool,
 }
 
 /// The game's typeface: the engine's own has no accented letters.
@@ -49,22 +33,7 @@ pub struct LastHeard {
 pub struct GameFont(pub Handle<Font>);
 
 #[derive(Component)]
-struct ListeningLabel;
-
-#[derive(Component)]
-struct HeardLabel;
-
-#[derive(Component)]
 struct LatencyLabel;
-
-#[derive(Component)]
-struct Bubble {
-    /// Seconds the line stays up.
-    left: f32,
-}
-
-#[derive(Component)]
-struct BubbleText;
 
 /// A short notice in the middle of the top edge ("clip saved").
 #[derive(Component)]
@@ -91,7 +60,6 @@ struct OtherBubble {
 struct OtherBubbleText;
 
 const INK: Color = Color::srgb(0.20, 0.22, 0.30);
-const BUBBLE_WIDTH: f32 = 340.0;
 const OTHER_WIDTH: f32 = 240.0;
 
 fn setup(mut commands: Commands, mut fonts: ResMut<Assets<Font>>) {
@@ -123,32 +91,7 @@ fn setup(mut commands: Commands, mut fonts: ResMut<Assets<Font>>) {
             },
         ))
         .with_children(|hud| {
-            hud.spawn((Text::new(""), text(16.0), ListeningLabel));
-            hud.spawn((Text::new(""), text(30.0), HeardLabel));
             hud.spawn((Text::new(""), text(13.0), LatencyLabel, Visibility::Hidden));
-        });
-
-    commands
-        .spawn((
-            Bubble { left: 0.0 },
-            Node {
-                position_type: PositionType::Absolute,
-                width: Val::Px(BUBBLE_WIDTH),
-                padding: UiRect::axes(Val::Px(16.0), Val::Px(10.0)),
-                justify_content: JustifyContent::Center,
-                border_radius: BorderRadius::all(Val::Px(16.0)),
-                ..default()
-            },
-            BackgroundColor(Color::srgba(1.0, 1.0, 1.0, 0.94)),
-            Visibility::Hidden,
-        ))
-        .with_children(|bubble| {
-            bubble.spawn((
-                Text::new(""),
-                text(18.0),
-                TextLayout::justify(Justify::Center),
-                BubbleText,
-            ));
         });
 
     // A notice at the top, and the title across the middle.
@@ -325,16 +268,6 @@ fn photo(
     }
 }
 
-fn remember(mut heard: MessageReader<Heard>, mut last: ResMut<LastHeard>) {
-    for h in heard.read() {
-        if h.text.is_empty() {
-            continue;
-        }
-        last.text = h.text.clone();
-        last.is_final = h.is_final;
-    }
-}
-
 fn toggle_timings(
     keys: Res<ButtonInput<KeyCode>>,
     mut panel: Query<&mut Visibility, With<LatencyLabel>>,
@@ -346,55 +279,7 @@ fn toggle_timings(
     }
 }
 
-fn draw(
-    status: Res<HostStatus>,
-    last: Res<LastHeard>,
-    latency: Res<Latency>,
-    mut listening: Query<
-        &mut Text,
-        (
-            With<ListeningLabel>,
-            Without<HeardLabel>,
-            Without<LatencyLabel>,
-        ),
-    >,
-    mut heard: Query<
-        &mut Text,
-        (
-            With<HeardLabel>,
-            Without<ListeningLabel>,
-            Without<LatencyLabel>,
-        ),
-    >,
-    mut timings: Query<
-        &mut Text,
-        (
-            With<LatencyLabel>,
-            Without<ListeningLabel>,
-            Without<HeardLabel>,
-        ),
-    >,
-) {
-    if status.is_changed() {
-        if let Ok(mut text) = listening.single_mut() {
-            **text = match (status.voice.as_str(), status.speaking) {
-                ("listening", true) => format!("((•)) {}", status.lang),
-                ("listening", false) => format!("(•) {}", status.lang),
-                (other, _) => format!("{other} {} {}", status.lang, status.detail)
-                    .trim()
-                    .to_string(),
-            };
-        }
-    }
-    if last.is_changed() {
-        if let Ok(mut text) = heard.single_mut() {
-            **text = match (last.text.is_empty(), last.is_final) {
-                (true, _) => String::new(),
-                (false, true) => last.text.clone(),
-                (false, false) => format!("{}…", last.text),
-            };
-        }
-    }
+fn draw(latency: Res<Latency>, mut timings: Query<&mut Text, With<LatencyLabel>>) {
     if latency.is_changed() {
         if let Ok(mut text) = timings.single_mut() {
             **text = latency
@@ -415,40 +300,5 @@ fn draw(
                 "\ndrawn  {seen} of {all} meshes, {triangles} triangles"
             ));
         }
-    }
-}
-
-/// Show what the character says, over its head, for a few seconds.
-fn bubble(
-    time: Res<Time>,
-    mut said: MessageReader<Said>,
-    players: Query<&GlobalTransform, With<Player>>,
-    cameras: Query<(&Camera, &GlobalTransform), With<FollowCamera>>,
-    mut bubbles: Query<(&mut Bubble, &mut Node, &mut Visibility)>,
-    mut texts: Query<&mut Text, With<BubbleText>>,
-) {
-    let Ok((mut bubble, mut node, mut visibility)) = bubbles.single_mut() else {
-        return;
-    };
-    for line in said.read() {
-        if let Ok(mut text) = texts.single_mut() {
-            **text = line.text.clone();
-        }
-        // Long enough to read: a base, and more for a longer line.
-        bubble.left = 2.2 + line.text.chars().count() as f32 * 0.05;
-    }
-    bubble.left = (bubble.left - time.delta_secs()).max(0.0);
-    let (Ok(player), Ok((camera, view))) = (players.single(), cameras.single()) else {
-        return;
-    };
-    let above = player.translation() + Vec3::Y * 2.3;
-    match camera.world_to_viewport(view, above) {
-        Ok(at) if bubble.left > 0.0 => {
-            *visibility = Visibility::Visible;
-            node.left = Val::Px(at.x - BUBBLE_WIDTH / 2.0);
-            node.bottom = Val::Auto;
-            node.top = Val::Px((at.y - 70.0).max(8.0));
-        }
-        _ => *visibility = Visibility::Hidden,
     }
 }

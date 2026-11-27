@@ -4,7 +4,7 @@
 
 ### Added
 
-- **Happy Walk, a game steered by voice (in development, not published).**
+- **Happy Walk, a voxel detective story (in development, not published).**
   The foundations of a third-person walk through a pastel voxel city where
   the character is moved only by voice and answers back: a Bevy game built
   for the web and framed in a window (`plugins/happywalk/game`), a bridge to
@@ -71,7 +71,27 @@
   The character has a personality of its own (theatrical, a proud citizen
   with grudges against lamp posts and a weakness for bread), each line is
   asked from a different comic angle, and the model is told concretely what
-  happened (what was hit, how often, the hour, a mood that builds up). See
+  happened (what was hit, how often, the hour, a mood that builds up).
+  Then the game was redesigned as a detective story with ordinary controls.
+  Taken out: the character's lines and every spoken voice, the always-on
+  voice commands, the errands, the fixed stand-in lines, the character's
+  personality file and its comic angles; passers-by no longer speak, they
+  stop and hop when bumped or greeted. The character now walks with the
+  keys (arrows or WASD, Shift to run), a joystick on touch screens, or a tap
+  on the ground that sends it there along the streets, and it slides along
+  walls instead of stopping at a graze; only people give a jolt. Doors open
+  onto rooms built on the spot and thrown away on leaving: the detective's
+  office, shops and homes, seen from the open front like a doll's house,
+  while the city outside waits. The game starts in the office, where a
+  client comes in and tells what happened; every suspect waits in a shop or
+  home of their own, which the notebook lists with the distance and a
+  button to walk there. Next to someone the notebook becomes a chat, typed
+  or dictated with a microphone button (free speech, only while it is on),
+  and the language model answers as that person with the whole
+  conversation as history; after a first answer the notebook notes what
+  showed. A right accusation makes the culprit confess in their chat, and
+  back at the office the next client comes. Tried in a headless browser
+  against a stand-in model, not yet with the real model or a microphone. See
   `plugins/happywalk/docs/README.md`.
 - **Shared UI: `swatches`.** A row of colours to pick one from, with roving
   keyboard focus like `segmented` and a "none" choice

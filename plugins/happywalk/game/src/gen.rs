@@ -150,6 +150,9 @@ pub enum PlaceKind {
     Newsstand,
     Park,
     Square,
+    /// Somebody's front door, in a lot of homes. Not a public place: not in
+    /// [`PlaceKind::ALL`].
+    Home,
 }
 
 impl PlaceKind {
@@ -173,6 +176,7 @@ impl PlaceKind {
             PlaceKind::Newsstand => "the newsstand",
             PlaceKind::Park => "the park",
             PlaceKind::Square => "the square",
+            PlaceKind::Home => "home",
         }
     }
 
@@ -189,6 +193,7 @@ impl PlaceKind {
             PlaceKind::Newsstand => "l'edicola",
             PlaceKind::Park => "il parco",
             PlaceKind::Square => "la piazza",
+            PlaceKind::Home => "casa",
         }
     }
 }
@@ -389,6 +394,10 @@ pub fn chunk(seed: u64, coord: IVec2) -> Chunk {
                     );
                     model
                 } else {
+                    out.places.push(Place {
+                        kind: PlaceKind::Home,
+                        at: Vec2::new(at.x, lot.y + facing * front),
+                    });
                     let homes = district(seed, coord).homes();
                     homes[pick(seed, coord, salt, homes.len() as u32) as usize]
                 };

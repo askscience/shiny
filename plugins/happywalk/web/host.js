@@ -1,21 +1,19 @@
 // host.js — the page side of the game's LiteAuraBridge.
 //
-// The game (game/src/bridge.rs) recognises no speech, runs no model and has
-// no voice of its own. This page gives it LiteAura's:
+// The game (game/src/bridge.rs) recognises no speech and runs no model. This
+// page gives it LiteAura's:
 //
-//   * speech in: the shell's own Vosk build and the model of the user's
-//     voice language, run here in a worker with a restricted vocabulary;
-//     partial and final results go to the game with their times;
 //   * the language model: the plugin's /api/happywalk/brain route, which asks
-//     the model chosen in Settings and checks the answer;
-//   * the voice out: the core's /api/tts with the user's voice settings.
+//     the model chosen in Settings to answer as the people of the case;
+//   * dictation for the chat: while the notebook's microphone button is on,
+//     the shell's own Vosk build and the model of the user's voice language
+//     write down what is said (free speech, nothing listens otherwise);
+//   * the controls a touch screen needs (controls.js): a joystick and a tap
+//     on the ground.
 //
-// Everything is asynchronous and reports how long it took. Times are
-// performance.now() milliseconds, the clock the game uses too.
+// Everything is asynchronous and reports how long it took.
 
 const LOG_KEEP = 200;
-/** Above this level a block of audio counts as speech (0..1 RMS). */
-const SPEECH_RMS = 0.012;
 /** Audio is handed to the recogniser in blocks of this many frames (64 ms). */
 const BLOCK_FRAMES = 1024;
 const SAMPLE_RATE = 16000;
@@ -92,26 +90,22 @@ function apiFetch(path, init = {}) {
 /* ── The game ────────────────────────────────────────────────── */
 
 let game = null;
-const status = { voice: 'starting', lang: '', detail: '', speaking: false };
+const status = { voice: 'off', lang: '', detail: '', speaking: false };
 
 function report(change) {
   Object.assign(status, change);
   game?.hw_status(JSON.stringify(status));
 }
 
-/* ── Speech in ───────────────────────────────────────────────── */
+/* ── Dictation for the chat ─────────────────────────────────── */
+
+// Only while the player holds the microphone on: the speech model is loaded
+// the first time, the microphone opened for each message and closed after.
 
 let model = null;
-let recognizer = null;
-let grammar = [];
-let audioContext = null;
-/** While the character speaks, the microphone is not fed to the recogniser. */
-let deaf = false;
+let modelLoading = null;
 /** What the microphone delivered, for the log and for tests. */
-const audio = { blocks: 0, peak: 0, results: 0 };
-/** When the player's voice was last heard, and whether it has stopped since. */
-let lastLoudAt = 0;
-let quietSince = 0;
+const audio = { blocks: 0, results: 0 };
 
 function loadScript(src) {
   return new Promise((resolve, reject) => {
@@ -123,102 +117,97 @@ function loadScript(src) {
   });
 }
 
-function makeRecognizer() {
-  recognizer?.remove();
-  recognizer = null;
-  if (!model) return;
-  // A grammar is a JSON list of the phrases to expect; "[unk]" takes the rest.
-  const words = grammar.length ? JSON.stringify([...grammar, '[unk]']) : undefined;
-  let lastPartial = '';
-  const next = new model.KaldiRecognizer(SAMPLE_RATE, words);
-  next.setWords(false);
-  const deliver = (text, isFinal) => {
-    audio.results += 1;
-    const clean = String(text || '').replaceAll('[unk]', ' ').replace(/\s+/g, ' ').trim();
-    const now = performance.now();
-    if (!clean) {
-      // Nothing was understood, but a final result still ends the sentence:
-      // the game has to know, or the next one would be read as its sequel.
-      if (isFinal && lastPartial) game?.hw_heard('', true, now, 0);
-      if (isFinal) lastPartial = '';
-      return;
+async function speechModel() {
+  if (model) return model;
+  modelLoading ??= (async () => {
+    const lang = voiceLang();
+    const started = performance.now();
+    const reply = await apiFetch(`voice/status?lang=${encodeURIComponent(lang)}`);
+    // This core route answers with its fields beside `success`, not in `data`.
+    const voice = (await reply.json().catch(() => null)) || {};
+    const sttLang = voice.stt_lang || lang;
+    if (voice.vosk === 'missing') {
+      log(`the ${sttLang} speech model is not installed: asking the server to fetch it`);
+      await apiFetch('voice/download', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lang }),
+      });
     }
-    // The recogniser repeats its partial result with every block of audio:
-    // only a change is news.
-    if (!isFinal && clean === lastPartial) return;
-    lastPartial = isFinal ? '' : clean;
-    const speechEnd = quietSince ? lastLoudAt : 0;
-    log(`heard "${clean}" ${isFinal ? 'final' : 'partial'}${speechEnd ? ` +${(now - speechEnd).toFixed(0)} ms after speech` : ''}`);
-    game?.hw_heard(clean, isFinal, now, speechEnd);
-  };
-  next.on('partialresult', (message) => deliver(message.result?.partial, false));
-  next.on('result', (message) => deliver(message.result?.text, true));
-  recognizer = next;
+    if (!globalThis.Vosk) await loadScript('/vendor/vosk-browser/vosk.js');
+    model = await globalThis.Vosk.createModel(`/api/voice/models/vosk/${sttLang}.tar.gz?v=2`);
+    log(`speech model ${sttLang} in ${(performance.now() - started).toFixed(0)} ms`);
+    return model;
+  })();
+  try { return await modelLoading; } catch (error) { modelLoading = null; throw error; }
 }
 
-async function startListening() {
-  const lang = voiceLang();
-  report({ voice: 'loading-model', lang });
-  const started = performance.now();
-  const reply = await apiFetch(`voice/status?lang=${encodeURIComponent(lang)}`);
-  // This core route answers with its fields beside `success`, not in `data`.
-  const voice = (await reply.json().catch(() => null)) || {};
-  const sttLang = voice.stt_lang || lang;
-  if (voice.vosk === 'missing') {
-    log(`the ${sttLang} speech model is not installed: asking the server to fetch it`);
-    await apiFetch('voice/download', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ lang }),
-    });
-  }
-  if (!globalThis.Vosk) await loadScript('/vendor/vosk-browser/vosk.js');
-  model = await globalThis.Vosk.createModel(`/api/voice/models/vosk/${sttLang}.tar.gz?v=2`);
-  log(`latency model-load ${(performance.now() - started).toFixed(0)} ms (${sttLang})`);
+let session = null;
 
+/** Start writing down speech; `onText` gets the words so far. */
+async function startDictation(onText) {
+  await stopDictation().catch(() => {});
+  const vosk = await speechModel();
   const stream = await navigator.mediaDevices.getUserMedia({
     video: false,
     audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1, sampleRate: SAMPLE_RATE },
   });
-  audioContext = new AudioContext({ sampleRate: SAMPLE_RATE });
-  if (mix) tapeSound(mix.context.createMediaStreamSource(stream), false);
-  makeRecognizer();
-  const source = audioContext.createMediaStreamSource(stream);
-  const processor = audioContext.createScriptProcessor(BLOCK_FRAMES, 1, 1);
-  // The recogniser gets a buffer of its own, as the shell does: the node's
-  // input buffer is only valid inside the callback.
-  const block = audioContext.createBuffer(1, BLOCK_FRAMES, SAMPLE_RATE);
-  let failed = false;
+  const context = new AudioContext({ sampleRate: SAMPLE_RATE });
+  const recognizer = new vosk.KaldiRecognizer(SAMPLE_RATE);
+  recognizer.setWords(false);
+  const said = [];
+  let partial = '';
+  let finished = null;
+  const clean = (text) => String(text || '').replaceAll('[unk]', ' ').replace(/\s+/g, ' ').trim();
+  const shown = () => [...said, partial].filter(Boolean).join(' ');
+  recognizer.on('partialresult', (message) => {
+    partial = clean(message.result?.partial);
+    onText?.(shown());
+  });
+  recognizer.on('result', (message) => {
+    audio.results += 1;
+    const text = clean(message.result?.text);
+    if (text) said.push(text);
+    partial = '';
+    onText?.(shown());
+    finished?.();
+  });
+  const source = context.createMediaStreamSource(stream);
+  const processor = context.createScriptProcessor(BLOCK_FRAMES, 1, 1);
+  const block = context.createBuffer(1, BLOCK_FRAMES, SAMPLE_RATE);
   processor.onaudioprocess = (event) => {
-    if (deaf || !recognizer) return;
-    const samples = event.inputBuffer.getChannelData(0);
-    block.copyToChannel(samples, 0);
-    let sum = 0;
-    for (let i = 0; i < samples.length; i++) sum += samples[i] * samples[i];
-    const level = Math.sqrt(sum / samples.length);
+    block.copyToChannel(event.inputBuffer.getChannelData(0), 0);
     audio.blocks += 1;
-    audio.peak = Math.max(audio.peak, level);
-    const loud = level > SPEECH_RMS;
-    const now = performance.now();
-    if (loud) {
-      lastLoudAt = now;
-      quietSince = 0;
-    } else if (lastLoudAt && !quietSince) {
-      quietSince = now;
-    }
-    if (loud !== status.speaking) report({ speaking: loud });
-    try {
-      recognizer.acceptWaveform(block);
-    } catch (error) {
-      // Once is enough: this runs fifteen times a second.
-      if (!failed) log(`the recogniser refused the audio: ${error?.message || error}`);
-      failed = true;
-    }
+    try { recognizer.acceptWaveform(block); } catch (_) { /* one bad block */ }
   };
   source.connect(processor);
-  processor.connect(audioContext.destination);
-  report({ voice: 'listening', lang: sttLang, detail: '' });
-  log(`listening (${sttLang}${grammar.length ? `, ${grammar.length} phrases` : ', free speech'})`);
+  processor.connect(context.destination);
+  report({ voice: 'listening', speaking: true });
+  log('dictation on');
+  session = {
+    async stop() {
+      // The last words: whatever the recogniser still holds.
+      const done = new Promise((resolve) => { finished = resolve; setTimeout(resolve, 900); });
+      try { recognizer.retrieveFinalResult(); } catch (_) { /* nothing held */ }
+      await done;
+      processor.disconnect();
+      source.disconnect();
+      for (const track of stream.getTracks()) track.stop();
+      await context.close().catch(() => {});
+      recognizer.remove();
+      return [...said, partial].filter(Boolean).join(' ');
+    },
+  };
+}
+
+async function stopDictation() {
+  const current = session;
+  session = null;
+  if (!current) return '';
+  const text = await current.stop();
+  report({ voice: 'off', speaking: false });
+  log(`dictation off: "${text}"`);
+  return text;
 }
 
 /* ── The wardrobe ────────────────────────────────────────────── */
@@ -316,6 +305,7 @@ async function startNotebook() {
   const notebook = createNotebook({
     game,
     lang: voiceLang(),
+    dictate: navigator.mediaDevices?.getUserMedia ? { start: startDictation, stop: stopDictation } : null,
     onProgress: (progress) => {
       try { window.localStorage.setItem(progressKey(), JSON.stringify(progress)); } catch (_) { /* storage blocked */ }
     },
@@ -335,18 +325,16 @@ async function startNotebook() {
 // oldest pieces dropped would not play: only the first piece of a recording
 // carries the header.)
 //
-// The picture is the game's canvas, bubbles and transcript included; the
-// sound is the character's voice and the player's microphone.
+// The picture is the game's canvas, bubbles included. There is no sound.
 
 const CLIP_TURN = 30;
 const CLIP_KEEP = 4;
 const clips = [];
 const recorders = [];
 let clipStream = null;
-let mix = null;
 
 function clipMime() {
-  return ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'].find((type) => window.MediaRecorder?.isTypeSupported(type)) || '';
+  return ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'].find((type) => window.MediaRecorder?.isTypeSupported(type)) || '';
 }
 
 function startRecorder(slot) {
@@ -369,25 +357,9 @@ function startClips() {
     return;
   }
   clipStream = canvas.captureStream(30);
-  try {
-    // A mixer of its own, at the device's rate (the recogniser's context
-    // runs at 16 kHz): the voice and the microphone go to the tape.
-    const context = new AudioContext();
-    mix = { context, tape: context.createMediaStreamDestination() };
-    for (const track of mix.tape.stream.getAudioTracks()) clipStream.addTrack(track);
-  } catch (error) {
-    log(`clips: no sound (${error?.message || error})`);
-  }
   startRecorder(0);
   setTimeout(() => startRecorder(1), (CLIP_TURN / 2) * 1000);
   log(`clips: recording the last ${CLIP_TURN / 2} to ${CLIP_TURN} s (${clipMime() || 'default format'})`);
-}
-
-/** Send a source of sound to the tape (and to the speakers when `aloud`). */
-function tapeSound(node, aloud) {
-  if (!mix) return;
-  node.connect(mix.tape);
-  if (aloud) node.connect(mix.context.destination);
 }
 
 function saveClip() {
@@ -421,19 +393,11 @@ function saveClip() {
 
 /* ── What the game calls ─────────────────────────────────────── */
 
-let playing = null;
-
 window.happywalkHost = {
   log,
 
-  /** The phrases to expect (a JSON list); empty means free speech. */
-  setGrammar(wordsJson) {
-    try { grammar = JSON.parse(wordsJson) || []; } catch (_) { grammar = []; }
-    if (model) makeRecognizer();
-    log(`grammar: ${grammar.length ? grammar.join(', ') : 'free speech'}`);
-  },
-
-  /** Ask the character's brain; the answer goes to hw_brain_answered. */
+  /** Ask the language model, as a person of the case; the answer goes to
+   *  hw_brain_answered. */
   async brain(id, requestJson) {
     const started = performance.now();
     let answer = '';
@@ -457,52 +421,6 @@ window.happywalkHost = {
     game?.hw_brain_answered(id, answer, ms);
   },
 
-  /** Speak a line with the user's voice settings; hw_spoke when it starts. */
-  async say(id, text) {
-    const started = performance.now();
-    let ok = false;
-    try {
-      const engine = setting('voice.tts_engine') === 'qwen' ? 'qwen' : 'supertonic';
-      const body = { text, lang: voiceLang(), engine };
-      const voice = setting(engine === 'qwen' ? 'voice.qwen_voice' : 'voice.tts_voice');
-      const speed = Number(setting('voice.tts_speed'));
-      if (voice) body.voice = voice;
-      if (Number.isFinite(speed) && speed > 0) body.speed = Math.min(2, Math.max(0.7, speed));
-      const reply = await apiFetch('tts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      if (!reply.ok) throw new Error(`HTTP ${reply.status}`);
-      const url = URL.createObjectURL(await reply.blob());
-      playing?.pause();
-      const audio = new Audio(url);
-      playing = audio;
-      if (mix) {
-        // Through the mixer, so the line is on the tape as well.
-        if (mix.context.state === 'suspended') await mix.context.resume().catch(() => {});
-        tapeSound(mix.context.createMediaElementSource(audio), true);
-      }
-      // The character must not hear itself: the microphone is ignored while
-      // its line plays.
-      const done = () => {
-        URL.revokeObjectURL(url);
-        if (playing === audio) { playing = null; deaf = false; }
-      };
-      audio.addEventListener('ended', done);
-      audio.addEventListener('error', done);
-      deaf = true;
-      await audio.play();
-      ok = true;
-    } catch (error) {
-      deaf = false;
-      log(`voice #${id} failed: ${error?.message || error}`);
-    }
-    const ms = performance.now() - started;
-    log(`voice #${id} ${ok ? 'speaking' : 'failed'} after ${ms.toFixed(0)} ms`);
-    game?.hw_spoke(id, ok, ms);
-  },
-
   /** The notebook of the case in play, as the game publishes it. */
   get case() {
     try { return JSON.parse(game?.hw_case() || 'null'); } catch (_) { return null; }
@@ -516,12 +434,12 @@ window.happywalkHost = {
 
   get clips() { return clips.map((clip) => ({ ...clip })); },
 
-  /** For tests and the keyboard: as if the recogniser had heard `text`. */
-  hear(text, isFinal = true) {
-    const now = performance.now();
-    log(`heard "${text}" ${isFinal ? 'final' : 'partial'} (typed)`);
-    game?.hw_heard(String(text), !!isFinal, now, 0);
-  },
+  /** Say something to whoever the character is next to (tests). */
+  chat(text) { game?.hw_chat(String(text)); },
+  /** Walk to a suspect's door, or to the office with -1 (tests). */
+  go(target) { game?.hw_go(target); },
+  /** Accuse a suspect (tests). */
+  accuse(index) { game?.hw_accuse(index); },
 
   /** Where the character is and what it is doing (tests and debugging). */
   get state() {
@@ -541,7 +459,7 @@ window.happywalkHost = {
   },
 
   get status() { return { ...status }; },
-  get audio() { return { ...audio, context: audioContext?.state || 'none' }; },
+  get audio() { return { ...audio, dictating: !!session }; },
   get logLines() { return [...logLines]; },
 };
 
@@ -560,7 +478,7 @@ async function start() {
   game = module;
   log(`latency game-load ${(performance.now() - started).toFixed(0)} ms (build ${built.build})`);
   say('');
-  game.hw_status(JSON.stringify(status));
+  report({ lang: voiceLang() });
   // The city is the player's: its name (chosen in the wardrobe) is its
   // seed, so the same name is the same city every time. Before a name is
   // chosen the game starts in one it suggests. `?seed=` in the address
@@ -590,13 +508,9 @@ async function start() {
     game.hw_wardrobe(false);
   }
   await startNotebook().catch((error) => log(`notebook failed: ${error?.message || error}`));
+  const { startControls } = await import('./controls.js');
+  startControls({ game, canvas: document.getElementById('happywalk-canvas'), lang: voiceLang() });
   startClips();
-  try {
-    await startListening();
-  } catch (error) {
-    report({ voice: 'error', detail: String(error?.message || error) });
-    log(`voice failed: ${error?.message || error}`);
-  }
 }
 
 start();

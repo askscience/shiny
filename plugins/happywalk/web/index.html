@@ -43,6 +43,7 @@
     .wardrobe-chips .ui-chip { padding: 6px 12px; }
     .wardrobe-foot { display: flex; justify-content: space-between; padding: 10px 14px 14px; }
     #wardrobe-open { position: absolute; left: 14px; bottom: 14px; }
+    @media (pointer: coarse) { #wardrobe-open { left: auto; right: 14px; } }
     /* The detective's notebook: top right, foldable. */
     .notebook {
       position: absolute; top: 12px; right: 12px; width: min(330px, calc(100vw - 24px)); max-height: calc(100vh - 24px);
@@ -60,11 +61,31 @@
     .notebook-suspect { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
     .notebook-suspect-text { display: flex; flex-direction: column; min-width: 0; }
     .notebook-meta { opacity: 0.7; font-size: 12px; margin: 0; }
-    .notebook-talk { display: flex; flex-direction: column; gap: 6px; padding: 10px; border-radius: 12px; background: color-mix(in srgb, var(--accent, #c25) 10%, transparent); }
     .notebook-near { margin: 0; font-weight: 600; }
     .notebook-asks { display: flex; flex-wrap: wrap; gap: 6px; }
     .notebook-asks .ui-chip { white-space: normal; text-align: left; padding: 6px 10px; }
     .notebook-result { margin: 0; font-size: 18px; font-weight: 700; }
+    .notebook-row { display: flex; align-items: center; gap: 8px; }
+    .notebook-hint { margin: 0; flex: 1; font-weight: 600; }
+    .notebook-chat { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 12px; background: color-mix(in srgb, var(--accent, #c25) 9%, transparent); }
+    .notebook-chat[hidden] { display: none; }
+    .notebook-lines { display: flex; flex-direction: column; gap: 6px; max-height: 38vh; overflow-y: auto; }
+    .notebook-line { margin: 0; padding: 7px 10px; border-radius: 12px; line-height: 1.4; max-width: 88%; }
+    .notebook-line.is-them { align-self: flex-start; background: var(--bg-elevated, #fff); }
+    .notebook-line.is-you { align-self: flex-end; background: color-mix(in srgb, var(--accent, #c25) 22%, var(--bg-elevated, #fff)); }
+    .notebook-line.is-note { align-self: center; opacity: 0.65; font-style: italic; background: none; padding: 2px; }
+    .notebook-input-row { display: flex; align-items: center; gap: 4px; }
+    .notebook-input-row .ui-input { flex: 1; min-width: 0; }
+    .notebook-input-row .is-active { color: var(--accent, #c25); }
+    .notebook-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+    /* The touch joystick, bottom left. */
+    .joystick {
+      position: absolute; left: max(18px, env(safe-area-inset-left)); bottom: max(18px, env(safe-area-inset-bottom));
+      width: 116px; height: 116px; border-radius: 50%; touch-action: none;
+      background: rgba(255, 255, 255, 0.28); box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.55);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .joystick-knob { width: 48px; height: 48px; border-radius: 50%; background: rgba(255, 255, 255, 0.85); box-shadow: 0 3px 10px rgba(40, 50, 80, 0.25); pointer-events: none; }
     @media (max-width: 640px) { .notebook { width: calc(100vw - 24px); max-height: 45vh; } }
     #wardrobe-open[hidden] { display: none; }
     @media (max-width: 640px) {
@@ -75,7 +96,7 @@
 <body>
   <div id="stage"><canvas id="happywalk-canvas" tabindex="0"></canvas></div>
   <div id="notice" role="status"></div>
-  <!-- The chain's log (recognised text and the time of every link). F2 shows it. -->
+  <!-- The page's log (the model's answers and how long they took). F2 shows it. -->
   <pre id="log" hidden></pre>
   <!-- The wardrobe and its button are put here by host.js. -->
   <div id="wardrobe-slot"></div>

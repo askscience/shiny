@@ -123,6 +123,7 @@ fn follow(
     direction: Res<Direction>,
     wardrobe: Res<Wardrobe>,
     solids: Res<Solids>,
+    inside: Res<crate::rooms::Inside>,
     mut room: Local<Option<f32>>,
     players: Query<(&Player, &Transform), Without<FollowCamera>>,
     mut cameras: Query<&mut Transform, With<FollowCamera>>,
@@ -153,6 +154,22 @@ fn follow(
         let aside = Quat::from_rotation_y(player.facing) * Vec3::new(-0.75, 0.0, 0.0);
         let look = camera
             .looking_at(ground + Vec3::Y * 0.8 + aside, Vec3::Y)
+            .rotation;
+        camera.rotation = camera.rotation.slerp(look, ease.max(0.2));
+        return;
+    }
+    // In a room: from its open front, up high, like looking into a doll's
+    // house, leaning a little towards where the character is.
+    if let Some(inside) = &inside.0 {
+        let middle = inside.at(Vec2::ZERO);
+        let middle = Vec3::new(middle.x, 0.0, middle.y);
+        // The notebook covers the right of the screen: the room sits a
+        // little to the left.
+        let lean = (ground - middle) * 0.35 + Vec3::new(1.3, 0.0, 0.0);
+        let want = middle + lean + Vec3::new(0.0, 6.2, inside.half.y + 5.6);
+        camera.translation = camera.translation.lerp(want, ease);
+        let look = camera
+            .looking_at(middle + lean + Vec3::new(0.0, 0.5, 0.2), Vec3::Y)
             .rotation;
         camera.rotation = camera.rotation.slerp(look, ease.max(0.2));
         return;

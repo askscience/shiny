@@ -1,6 +1,6 @@
 //! `NpcPlugin`: passers-by. Each walks round the pavement of its lot at its
-//! own pace, waits when the character is in the way, and says something from
-//! a short list when walked into or greeted. They are the same figure as the
+//! own pace, waits when the character is in the way, and stops with a hop
+//! when walked into or greeted. They are the same figure as the
 //! character in other clothes, drawn in three pieces each.
 //!
 //! Who lives where comes from the city's seed, so a lot has the same people
@@ -15,8 +15,6 @@ use bevy::prelude::*;
 use crate::city::{CitySeed, PAVED};
 use crate::figure::Look;
 use crate::gen::{self, SolidKind};
-use crate::hud::OtherSaid;
-use crate::lines::{passer_by, Remark};
 use crate::movers::{Mover, Movers};
 use crate::player::{Bumped, Player, PlayerSet, Waved};
 use crate::vox::VoxLibrary;
@@ -141,6 +139,7 @@ fn populate(
     mut housed: ResMut<Housed>,
     mut here: Local<Option<IVec2>>,
     wardrobe: Res<crate::bridge::Wardrobe>,
+    inside: Res<crate::rooms::Inside>,
 ) {
     if seed.is_changed() && !seed.is_added() {
         for (_, people) in housed.0.drain() {
@@ -150,7 +149,7 @@ fn populate(
         }
         *here = None;
     }
-    if wardrobe.0 {
+    if wardrobe.0 || inside.0.is_some() {
         return;
     }
     let Ok(player) = players.single() else { return };
@@ -277,44 +276,35 @@ fn stroll(
 }
 
 /// Walked into, or greeted: the nearest passer-by answers.
+/// Walked into or greeted, a passer-by stops and hops; nobody says a word.
 fn react(
     mut bumps: MessageReader<Bumped>,
     mut waves: MessageReader<Waved>,
-    status: Res<crate::bridge::HostStatus>,
     mut people: Query<(&mut Npc, &Transform)>,
-    mut said: MessageWriter<OtherSaid>,
-    mut turn: Local<usize>,
 ) {
-    let mut answer =
-        |from: Vec2, within: f32, remark: Remark, people: &mut Query<(&mut Npc, &Transform)>| {
-            let nearest = people
-                .iter_mut()
-                .map(|(npc, at)| {
-                    (
-                        Vec2::new(at.translation.x, at.translation.z).distance(from),
-                        npc,
-                        at.translation,
-                    )
-                })
-                .filter(|(distance, ..)| *distance < within)
-                .min_by(|a, b| a.0.total_cmp(&b.0));
-            if let Some((_, mut npc, at)) = nearest {
-                npc.pause = 2.6;
-                npc.hop = 1.0;
-                *turn += 1;
-                said.write(OtherSaid {
-                    text: passer_by(&status.lang, remark, *turn + npc.stride as usize).to_string(),
-                    at: at + Vec3::Y * 1.75,
-                });
-            }
-        };
+    let startle = |from: Vec2, within: f32, people: &mut Query<(&mut Npc, &Transform)>| {
+        let nearest = people
+            .iter_mut()
+            .map(|(npc, at)| {
+                (
+                    Vec2::new(at.translation.x, at.translation.z).distance(from),
+                    npc,
+                )
+            })
+            .filter(|(distance, _)| *distance < within)
+            .min_by(|a, b| a.0.total_cmp(&b.0));
+        if let Some((_, mut npc)) = nearest {
+            npc.pause = 2.6;
+            npc.hop = 1.0;
+        }
+    };
     for bump in bumps.read() {
         if bump.into == SolidKind::Person {
-            answer(bump.at, 1.6, Remark::WalkedInto, &mut people);
+            startle(bump.at, 1.6, &mut people);
         }
     }
     for wave in waves.read() {
-        answer(wave.at, 7.0, Remark::Greeted, &mut people);
+        startle(wave.at, 7.0, &mut people);
     }
 }
 

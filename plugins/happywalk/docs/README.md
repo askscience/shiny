@@ -1,22 +1,28 @@
 # Happy Walk
 
-A third-person walk through a procedural pastel voxel city. The player steers
-the character **only by voice**. The character knows it is being steered by
-voice and answers back, with irony, when things go wrong: bumping into walls,
-people, cars and bikes, or orders it misunderstood. Everyday life, small tasks
-and errands, nothing violent. The aim is clips worth sharing.
+A detective story in a procedural pastel voxel city, seen from behind the
+character's shoulder. The character is the assistant of a detective who is
+never seen: the player. Clients come to the office with small absurd crimes,
+the suspects are found in their shops and homes, and the player questions
+them in a real chat, where the user's language model plays each person.
+Everyday life, nothing violent. The aim is cases worth solving and clips
+worth sharing.
 
-The plugin is built through all its planned phases but **not published**:
-`publish = false` in `plugin.toml` keeps it out of the catalogue
-(`scripts/plugin-catalog.py`) until it has been played on the real machine
-(see "Before it is published").
+The character is moved with the keys, a joystick on a touch screen, or a tap
+on the ground; nobody steers it by voice, and nobody in the game speaks out
+loud. Speech is only for the chat: a microphone button writes down what the
+player says, and only while it is on.
+
+The plugin is **not published**: `publish = false` in `plugin.toml` keeps it
+out of the catalogue (`scripts/plugin-catalog.py`) until it has been played
+on the real machine (see "Before it is published").
 
 ## How it is built
 
 | Part | Where | What it is |
 | --- | --- | --- |
 | The game | `game/` | A Bevy app (its own Cargo workspace), built for the web. One Bevy plugin per module. |
-| The page | `web/` | Hosts the game's canvas and is the page side of the bridge (`host.js`). |
+| The page | `web/` | Hosts the game's canvas, the notebook, the wardrobe and the touch controls, and is the page side of the bridge (`host.js`). |
 | The plugin process | `src/` | The game's way to the language model chosen in Settings (`/api/happywalk/*`). |
 
 The plugin is `kind = "hybrid"`: the shell frames `web/index.html` in a
@@ -24,31 +30,26 @@ window, as it does for Oorbit's Godot export.
 
 ### Why the game runs in the window, as WebAssembly
 
-LiteAura's desktop is a web page, and its voice lives there: the recogniser
-runs in the browser, the microphone is the browser's, and the voice settings
-are per profile. A native Bevy window would sit outside the desktop and would
-have to redo all of that. Built for the web, the game is a window like any
-other and uses the host's voice as it is.
+LiteAura's desktop is a web page, and its engines are reached from there:
+the speech recogniser runs in the browser, the microphone is the browser's,
+the settings are per profile. A native Bevy window would sit outside the
+desktop and would have to redo all of that. Built for the web, the game is a
+window like any other and uses the host's engines as they are.
 
 Consequences:
 
 - **No threads.** A plugin window is not cross-origin isolated, so there is
   no `SharedArrayBuffer`: the build is single-threaded (Bevy's
   `multi_threaded` feature is off). "Never block a frame" is kept by making
-  every call to the host asynchronous, not by threads: the recogniser already
-  runs in a worker of its own, and the model and the voice are HTTP requests.
+  every call to the host asynchronous, not by threads: the model is an HTTP
+  request, and dictation runs in the recogniser's own worker.
 - **WebGL2**, the renderer the kiosk's web engine has.
-- **No audio in the engine.** The host speaks; Bevy's audio is not built.
+- **No audio.** Bevy's audio is not built, and the game makes no sound.
 
 ### The engines are LiteAura's
 
 Nothing is reimplemented, and the user's settings decide:
 
-- **Speech recognition:** Vosk, the shell's own build
-  (`/vendor/vosk-browser/vosk.js`) with the model of the user's voice
-  language (`/api/voice/models/vosk/<lang>.tar.gz`). The page gives it a
-  **restricted vocabulary** (the game's `Host::set_grammar`) and forwards
-  **partial results**, so a command can act before the sentence ends.
 - **Language model:** the assistant's own choice in Settings → AI, read the
   way the core reads it (`src/brain.rs`): the user's OpenAI-compatible
   endpoint when one is set up (`ai.provider`, `ai.openai_base_url`,
@@ -56,53 +57,73 @@ Nothing is reimplemented, and the user's settings decide:
   server's Ollama with the user's model (`ai.ollama_model`) or the server's
   default. There is no separate llama.cpp to run. It is off when the user
   turned AI off (`ai.enabled`).
-- **Voice:** `/api/tts` with the user's engine, voice and speed.
+- **Dictation for the chat:** Vosk, the shell's own build
+  (`/vendor/vosk-browser/vosk.js`) with the model of the user's voice
+  language (`/api/voice/models/vosk/<lang>.tar.gz`, fetched by the server
+  the first time if it is missing). It listens to free speech, with no
+  grammar, and only while the notebook's microphone button is on.
 
 ## The bridge
 
 `game/src/bridge.rs` (`LiteAuraBridgePlugin`) and `web/host.js`
-(`window.happywalkHost`) are the two sides. Three flows, all asynchronous:
+(`window.happywalkHost`) are the two sides. All of it is asynchronous.
 
 | Flow | Game side | Page side |
 | --- | --- | --- |
-| Recognised text in | `Heard { text, is_final, heard_at_ms, speech_end_ms }` | `hw_heard(...)` on every partial and final result |
-| Ask the model, get a structured answer | `Host::ask_brain(&BrainRequest)` → `BrainAnswered { id, answer }` | `happywalkHost.brain(id, json)` → `POST /api/happywalk/brain` → `hw_brain_answered(id, json, ms)` |
-| Text to speak out | `Host::say(text)` → `Spoke { id, ok }` | `happywalkHost.say(id, text)` → `POST /api/tts`, plays it → `hw_spoke(id, ok, ms)` |
+| Ask the model, get an answer | `Host::ask_brain(&BrainRequest)` → `BrainAnswered { id, answer }` | `happywalkHost.brain(id, json)` → `POST /api/happywalk/brain` → `hw_brain_answered(id, json, ms)` |
+| The chat | the `Detective` message (`mystery.rs`) | `hw_chat(text)` from the notebook; `hw_typing(bool)` while the chat box has the keys |
+| The controls | `Steer` and `TapTo` (`control.rs`) | `hw_steer(forward, turn)` from the joystick, `hw_tap(x, y)` from a tap on the canvas |
+| The detective's moves | the `Detective` message | `hw_go(target)` (a suspect's door, or `-1` for the office), `hw_accuse(suspect)`, `hw_next_case()` |
+| The notebook | `publish_case(json)` | `hw_case()`, read by the page a few times a second |
 
-Also: `Host::set_grammar(words)` → `happywalkHost.setGrammar(json)`;
-`hw_status(json)` → the `HostStatus` resource (`voice`, `lang`, `detail`,
-`speaking`); `happywalkHost.hear(text, isFinal)` injects text as if it had
-been heard (tests, and later the keyboard fallback).
+Also: `Host::save_clip()` → `happywalkHost.saveClip()` → `hw_clip_saved`;
+`hw_status(json)` → the `HostStatus` resource (`lang`, and whether
+dictation is on); the wardrobe's calls (`hw_look`, `hw_wardrobe`,
+`hw_look_options`, `hw_city`). For tests the page has
+`happywalkHost.chat(text)`, `go(target)`, `accuse(index)`, `place(x, z,
+facing)`, and reads `state`, `case`, `render` and `traffic`.
 
 The page's `hw_*` calls only push onto a queue; the `pump` system drains it at
-the start of each frame (`First`) and turns it into Bevy messages. While a
-line is being spoken the microphone is not fed to the recogniser, so the
-character does not hear itself.
+the start of each frame (`First`) and turns it into Bevy messages.
 
 ### The brain route
 
-`POST /api/happywalk/brain` takes `{situation, allowed_actions, lang}` and
-answers `{answer: {action, say} | null, reason, model, ms}`. The system
-prompt is the character (steered by voice and aware of it, ironic, warm,
-never mean) and asks for one JSON object. On Ollama the output is
-**constrained** to that shape (`format`, a JSON schema whose `action` is an
-enum of the offered actions), with no reasoning trace and few tokens, so a
-small model cannot wander off. An OpenAI-compatible endpoint is asked for
-JSON mode and for no reasoning (`response_format`, `thinking`), with room in
-the token limit for a model that reasons anyway; an endpoint that refuses
-those two fields is asked again without them. Either way `src/brain.rs` then takes the first
-object in the reply, keeps the action only if the game offered it, and trims
-the line to one short sentence. No answer (`reason`: `ai-off`, `unavailable`,
-`late` after 6 s, `malformed`) is a normal outcome.
+`POST /api/happywalk/brain` takes `{persona, history, situation, lang}` and
+answers `{answer: {action, say} | null, reason, model, ms}`:
+
+- `persona` is who the model plays, written by the game: the client, or a
+  suspect with their facts, their manner, what they know and what they hide.
+  It is required: without one the answer is `no-persona`.
+- `history` is the conversation so far, oldest first, as
+  `[{from: "detective" | "them", text}]`.
+- `situation` is what the detective says now (or, to open, what is
+  happening: "you have just come into the office").
+
+The model gets them as chat messages: the persona as the system prompt, then
+the history as alternating user and assistant turns, then the situation. It
+is asked for one JSON object with a reply of at most 70 words. On Ollama the
+output is **constrained** to that shape (`format`, a JSON schema), with no
+reasoning trace. An OpenAI-compatible endpoint is asked for JSON mode and
+for no reasoning (`response_format`, `thinking`), with room in the token
+limit for a model that reasons anyway; an endpoint that refuses those two
+fields is asked again without them. Either way `src/brain.rs` then takes the
+first object in the reply and trims it to 600 characters. (The route still
+accepts an `allowed_actions` list, and keeps an action only if it was
+offered; the game offers none.) No answer
+(`reason`: `ai-off`, `no-persona`, `unavailable`, `late` after 20 s,
+`malformed`) is a normal outcome: the chat then shows "Nessuna risposta:
+controlla l'IA in Impostazioni" ("No answer: check the AI in Settings").
+The game also gives up on its own after 25 s.
 
 ## The game so far
 
 An endless city grown from a seed (`game/src/gen.rs`): lots of homes, shops,
 parks and squares along a grid of streets, in districts that change slowly
 across the map. The character is a small voxel figure in separate parts that
-walks where it is told (`game/src/player.rs`), followed by a soft third-person
+the player walks about (`game/src/player.rs`), followed by a soft third-person
 camera (`game/src/camera.rs`), under a pastel sky that turns slowly from day
-to evening (`game/src/sky.rs`).
+to evening (`game/src/sky.rs`). Some doors open onto rooms built on the spot
+(`game/src/rooms.rs`), and a case is always in play (`game/src/mystery.rs`).
 
 ### The city
 
@@ -117,10 +138,12 @@ same city everywhere, and nothing is stored.
   benches and planters on the pavement), *parks* (grass, trees on a loose
   grid, a fountain or flowers, benches) and *squares* (a fountain, a
   newsstand, benches, planters).
-- **Places** have names the character and the errands can use: the bakery,
-  the florist, the café, the greengrocer, the newsstand, the park, the
-  square. A place is where to stand to be at it, on the street in front.
-  `gen::nearest_place(seed, from, kind, reach)` finds one.
+- **Places** have names the case can use: the bakery, the florist, the
+  café, the greengrocer, the newsstand, the park, the square. A place is
+  where to stand to be at it, on the street in front.
+  `gen::nearest_place(seed, from, kind, reach)` finds one. Every house on a
+  lot of homes is a place too (`PlaceKind::Home`, its front door), but not a
+  public one: it is left out of `PlaceKind::ALL`.
 - A lot's content is a list of `Prop`s (model, place, turn, voxel size,
   solid or not). To add a kind of lot: add it to `LotKind`, give it a weight
   per district, write its layout.
@@ -132,8 +155,8 @@ hides where the drawing stops. `Solids` answers "is there something here?"
 anywhere: chunks on screen are remembered, any other is worked out from the
 seed on the spot.
 
-The page picks the seed: `?seed=<number>` in the address for a known city,
-otherwise a new one each time (it is in the log). To see a seed's city
+The seed is the town's name, chosen in the wardrobe (see below);
+`?seed=<number>` in the address overrides it for tests (it is in the log). To see a seed's city
 without running the game:
 
 ```sh
@@ -147,12 +170,10 @@ each kind. `happywalkHost.place(x, z, facing)` puts the character somewhere
 ### People and traffic
 
 **Passers-by** (`game/src/npc.rs`) walk round the kerb of their lot, each at
-its own pace, wait when the character is in the way, and answer from a short
-list when walked into or greeted (`saluta`, `ciao`, `wave`, `hello`: the
-character waves and the nearest one within 7 m replies). Only the character
-has a brain; theirs are template lines, shown in a second bubble where they
-stand. Who lives on a lot, and what each looks like, comes from the city's
-seed. They exist only in the nine chunks around the player.
+its own pace, wait when the character is in the way, and stop with a little
+hop when walked into or greeted (`H` waves; the nearest one within 7 m
+hops). They never speak. Who lives on a lot, and what each looks like,
+comes from the city's seed. They exist only in the nine chunks around the player.
 
 **Cars and bikes** (`game/src/traffic.rs`). Cars come in four kinds, drawn
 at 5 cm a voxel with rounded corners, door lines and handles, mirrors,
@@ -174,55 +195,101 @@ metres. `happywalkHost.traffic` lists where every vehicle is (tests and
 screenshots). Vehicles keep to the right-hand lane, give
 way at crossings (streets along `x` yield), and **always stop for the
 character**: a vehicle slows as the gap closes and never moves into the box
-around the player, so standing in a lane gets a hoot ("BEEP!", and a line
-from the character's brain at most every 25 seconds), never a hit. Walking
+around the player, so standing in a lane gets a hoot (its horn in a bubble,
+at most every 6 seconds a vehicle), never a hit. Walking
 down the middle line of a street is in nobody's lane. Six vehicles are kept
 around the player, each new one arriving from beyond the fog.
 
 `game/src/movers.rs` is how the two meet the rest: every frame each writes
 the boxes of what it moves, and the player's step tests them after the
 city's solids, so walking into a passer-by or the side of a car is a bump
-like any other.
+like any other. While the character is in a room, passers-by and traffic
+stand still where they were, and none arrive.
 
-### Going places, and errands
+### Controls
 
-**"Vai al forno."** A place named in an order (`forno`, `edicola`, `parco`,
-`piazza`, `bar`, `fiorista`, `fruttivendolo`; `bakery`, `newsstand`, `park`
-and so on in English) sets a route to the nearest one within eight chunks,
-and the character walks it by itself (`game/src/nav.rs`): down the street it
-is on to the right crossing, then along the street the place is on. Routes
-are lists of points from a plain function and never leave the streets. Any
-order about where to go ends the walk, and so does walking into something.
-If there is no such place near, the character says so.
+Every way of moving ends up in one of two things (`game/src/control.rs`):
+the **held controls** (`Steer`: how much forward or back, how much turning,
+whether to run) or **a point to walk to** (`TapTo`).
 
-**Errands** (`game/src/quest.rs`) are small things to do, one at a time:
-buy bread, fetch the paper, sit in the park. Each is a row in a table (the
-place, the words in each language, how to tell the model). The city's seed
-decides the order; being within 3 m of the place does the errand, however
-the character got there; five make a round. The corner of the screen shows
-the errand in hand, an arrow towards it, the distance and the count.
+| Control | Keys | Touch screen | What the character does |
+| --- | --- | --- | --- |
+| Walk, back | arrows or W / S, held | the joystick up or down | walks while held (3.2 m/s), steps back slowly without turning |
+| Turn | arrows or A / D, held | the joystick sideways | turns while held |
+| Run | Shift, held | the joystick pushed to the edge | runs (6.2 m/s) |
+| Go there | a click on the ground | a tap on the ground | walks there by itself |
+| Wave | H | | waves; the nearest passer-by hops |
+| Clip | C | | keeps the last seconds as a video |
+| Photo mode | P | | stops the game and circles the character |
 
-The character's brain knows the errand ("Your errand right now: buy bread
-at the bakery") in everything it is asked, says a line when one is done or a
-round is over, and may answer a free sentence with a place to go: "ho fame"
-can become a walk to the bakery.
+Letting go stops the character. Keys are read only while the game has them
+(click it first), and not while the player types in the chat or the
+wardrobe is open.
+
+**The joystick** (`web/controls.js`) is drawn by the page in the bottom left
+corner, only on a screen whose pointer is coarse (`pointer: coarse`). It
+reports both axes from -1 to 1 (`hw_steer`); below 0.15 it counts as at
+rest.
+
+**A tap or a click on the ground** (a short press that hardly moves) sends
+the point of the canvas (`hw_tap`); the game finds the ground under it and
+the character walks there by itself (`game/src/nav.rs`). In the city a far
+point is reached along the streets: down the street it is on to the right
+crossing, then along the street the point is on. A point within 12 m, or
+anywhere inside a room, is walked to straight. Routes are lists of points
+from a plain function. The held controls win over a walk, and walking into
+something ends it.
+
+**Bumps.** Everything that can be walked into is a `Solid`: a box aligned to
+the ground grid, of a kind (building, lamp post, tree, bench, planter,
+fountain, newsstand, and in rooms their walls and furniture). The character
+takes a small square on the ground. A step that only grazes a solid slides
+along it; a step straight into one is not taken, and the character simply
+stops. Only people (a passer-by, a suspect) give a jolt: it is thrown back a
+little with its arms up. This is the game's own collision test, a few lines
+that are easy to unit test.
+
+### Inside places
+
+Some doors open (`game/src/rooms.rs`): the **detective's office** (the home
+nearest the start of the walk), the **shops** where suspects work (the
+bakery, the florist, the café, the greengrocer, the newsstand) and the
+**homes** where they live. Walking up to an open door (within 0.9 m) goes
+in; stepping on the doormat at the room's open front comes back out onto the
+pavement, a step from the door. Which doors open is up to the case (the
+`Doors` resource): the office, and the places of the people of the case in
+play.
+
+**A room is never stored.** It is built the moment the character goes in,
+from the kind of place and a number of its own (so two homes are not
+furnished alike), and thrown away as soon as it steps back out. Only one
+exists at a time, at `ROOMS` (-20000, 0, -20000), far from the city and the
+studio. It is two merged meshes: the shell (floor, walls, a pale ground
+around it like a table the model stands on), which casts no shadow, and the
+furniture, which does. Each kind has its own: the office has a desk, a pin
+board with the case, filing cabinets, a bookcase, a coat stand; a shop has a
+counter across the back and the wares of its trade; a home has a table and
+chairs, a lamp, a bookcase, a plant. While the character is inside, the
+room's solids are all there is to walk into, and the city around the door is
+left as it was: no chunks stream, no passers-by or vehicles come.
+
+**The camera looks in from the open front**, up high, like looking into a
+doll's house, leaning a little towards the character, with the room a
+little to the left so the notebook does not cover it.
 
 ### Clips, and the camera's moments
 
 **The last seconds are always on tape** (`web/host.js`). Two recorders run
 half a turn apart on the game's canvas, each starting over every 30 seconds;
-saying `clip` (or `salva`, `registra`, `save`; key `C`) stops the one that
-has run longer and keeps it: a WebM of the last 15 to 30 seconds, handed to
+the key `C` stops the one that has run longer and keeps it: a WebM of the last 15 to 30 seconds, handed to
 the browser as a download (the shell files it) and listed in
-`happywalkHost.clips`. The picture is the canvas, so bubbles and transcript
-are in it; the sound is the character's voice and the player's microphone,
-mixed for the tape. `?clips=0` in the address turns recording off (encoding
+`happywalkHost.clips`. The picture is the canvas, so the bubbles are in it
+(the notebook, drawn by the page, is not); there is no sound. `?clips=0` in the address turns recording off (encoding
 video costs processor time).
 
 **A bump gets a close look** (`game/src/camera.rs`): the camera comes in low
-for a second and the first half of it runs at a third of the speed. **The
-character looks back at the camera** while it says its line. The game's name
-is shown as it starts. **Photo mode** (`P`) stops the game, puts the HUD
+for a second and the first half of it runs at a third of the speed. The
+game's name is shown as it starts. **Photo mode** (`P`) stops the game, puts the HUD
 away and takes the camera slowly round the character.
 
 ### Light and colour
@@ -288,8 +355,8 @@ that. The character goes to a **studio** far from the city
 backdrop of a pastel town (`game/assets/backdrop.png`, drawn by
 `tools/make_backdrop.py`; a picture, not the game's own city). The backdrop
 hangs from the camera and is sized to cover any window without being
-stretched; the camera goes round to the front, a soft light comes on, the
-character takes no orders, and every choice rebuilds it on the spot. (The
+stretched; the camera goes round to the front, the sun turns to light the
+character, which does not move, and every choice rebuilds it on the spot. (The
 browser cannot draw the game's canvas see-through, so the picture is in the
 game, not behind it.)
 
@@ -298,8 +365,8 @@ that suggests one (Borgo Pastello, Villa Confetto, Pandolce...). **The name
 is the city:** it is hashed into the seed (`city::seed_for`), so the same
 name always gives the same town, and naming it anew moves the game to that
 town at once (the old one is dropped and the new one grows around the
-character). The name is kept per profile, and the character's brain is told
-it. One button rolls a look at random, the other keeps
+character). The name is kept per profile, and the people of the case are
+told it. One button rolls a look at random, the other keeps
 the look (per profile, in the browser's storage) and closes. The panel is
 built from the game's own list (`hw_look_options`) with LiteAura's shared
 controls (colours as `swatches`, styles as chips), so a choice added in
@@ -320,159 +387,77 @@ number where the part is sculpted. A look from outside the game (the page,
 an older save) is never trusted: missing fields take their default, values
 out of range are brought in.
 
-### Commands
-
-`game/src/intent.rs` turns recognised words into orders with no model in
-between. The vocabulary is per language (Italian, English, Spanish, French
-and German; any other language uses the English words) and is also what the recogniser is given as
-its grammar, so it only proposes these words.
-
-| Order | Italian | English | What the character does |
-| --- | --- | --- | --- |
-| Forward | avanti, vai, cammina | forward, go, walk | walks straight on until told otherwise |
-| Back | indietro | back, backward | turns round and walks |
-| Left / Right | sinistra / destra | left / right | turns a quarter turn (and keeps walking if it was) |
-| Stop | fermati, fermo, ferma, stop, alt | stop, halt | stands still |
-| Faster | (più) veloce, corri | faster, run | one pace up: slow, walk, run; sets off if standing |
-| Slower | (più) piano, lento, rallenta | slower, slow (down) | one pace down |
-| Wave | saluta, ciao, buongiorno | wave, hello, hi | waves; a passer-by nearby answers |
-| Go to | forno, edicola, parco, piazza, bar, fiorista, fruttivendolo | bakery, newsstand, park, square, cafe, florist, grocer | walks to the nearest such place by itself |
-| Accuse | accuso Lino, è stato Lino | it was Lino, accuse Lino | accuses a suspect of the case in play |
-
-Words around a command are skipped, so "gira a sinistra, per favore" is a
-left turn and "vai a destra" is a walk and a turn.
-
-**Orders act on partial results.** The recogniser's partial result grows as
-the player speaks ("avanti" → "avanti sinistra"); each new command in it is
-carried out at once and never twice, and the final result only adds what the
-partials had not shown yet. A final result with nothing understood still ends
-the sentence (the page sends it empty). A whole sentence with no command in
-it is reported as `NotUnderstood`, which Phase 2 gives to the model.
-
-**The keyboard is a stand-in for testing**, through the same path
-(`game/src/keyboard.rs`): arrows or WASD, Space to stop, `E`/`+` faster,
-`Q`/`-` slower. Click the game first so it has the keys.
-
-### Bumps
-
-Everything that can be walked into is a `Solid`: a box aligned to the ground
-grid, of a kind (building, lamp post, tree, bench, planter, fountain,
-newsstand). The character
-takes a small square on the ground and a step that would touch a solid is
-not taken: it stops, is thrown back a little with its arms up, and says
-something. After a bump it turns on the spot before walking off, so turning
-away from a wall does not hit it again.
-
-This is the game's own collision test, a few lines that are easy to unit
-test; avian3d comes in when something has to move and collide on its own
-(traffic, objects).
-
-### What the character says
-
-Its lines are written by the user's language model, not by the game. Three
-things make them funny rather than samey:
-
-- **A personality of its own**, in a file of its own
-  (`src/personality.md`, the start of every request): a small voxel person
-  who knows a voice from outside steers it, theatrical about small things, a
-  proud citizen with opinions on every house, petty grudges against objects
-  (lamp posts are plotting against it), a weakness for bread, warm
-  underneath; and how it talks (one spoken line, concrete, varied, a list of
-  worn-out phrases it must not use). Change the character there.
-- **A different angle for every line** (`ANGLES` in `src/brain.rs`): an
-  operatic tragedy, deadpan understatement, a nature-documentary narrator, a
-  grudge, a word to whoever will watch the clip, a breaking-news report, a
-  polite complaint to the city council, a sports commentator, and more; one
-  is picked at random and suggested with the moment. The model is also asked
-  not to repeat words and turns of phrase (frequency and presence penalties,
-  or Ollama's repeat penalty).
-- **Concrete moments** (`game/src/brain.rs`): not "you walked into a
-  building" but what it was (the bakery's window full of bread, a café table
-  with someone's coffee, a house smothered in climbing plants, the side of a
-  blue car), how fast, how many times at that spot, the errand in hand, the
-  player's last order, the hour (evening, with the lamps on), and a **mood**
-  that builds as the bumps add up (a little ruffled, fed up, at the end of
-  its tether like a soap opera) and turns to pride after an errand. The last
-  six moments and six lines go with it, with the instruction to say
-  something different.
-
-A sentence that was no command is asked about too, with the orders offered
-as actions; if the model picks one it is carried out, so "andiamo un po' più
-svelti" can become *faster*.
-
-The line is spoken by the host and shown in a bubble over the character's
-head. **The moment does not wait:** if no answer is here within 2.5 seconds,
-or the AI is off or unreachable, the character says a stand-in line from a
-short fixed list (`game/src/lines.rs`) and a late answer is dropped. The
-stand-ins exist only for that.
-
-Tried on 2026-11-26 against an OpenAI-compatible model over eight moments in
-a row: every line different, about a second each.
-
 ### Known limits
 
-- Other languages than Italian and English have their commands but not
-  their own errand texts or stand-in lines (those fall back to English;
-  the model's lines are in the player's language anyway).
+- The notebook's words are in Italian and English only; the people of the
+  case answer in the player's language anyway.
 - The camera keeps out of buildings, not out of tree crowns.
-- With a restricted grammar the recogniser maps other speech onto the
-  nearest command: a recorded English sentence fed to the Italian commands
-  produced a stream of orders. Background talk will move the character.
-  Whether that is a problem or part of the fun is to be seen with real
-  players; a list of decoy words in the grammar would soften it.
+- Everything the case says comes from the language model: with AI off or
+  unreachable, a case opens but nobody answers, and the chat says so.
 - The game is slower than real time below 20 frames a second (a long frame
   never carries the character through a wall).
 
 ## Mysteries
 
 Happy Walk is a detective story: the character is the assistant of a
-detective who is never seen (the player, the Voice), and the player's town
-has small absurd crimes to solve, one case after another, longer and more
-tangled as the levels go up.
+detective who is never seen (the player), and the player's town has small
+absurd crimes to solve, one case after another, longer and more tangled as
+the levels go up. Nobody in it has fixed lines: the client and the suspects
+are played by the language model, and the character itself says nothing.
 
 ### Playing a case
 
 `game/src/mystery.rs` puts a generated case in the town and runs it:
 
-1. **Someone needs help.** Cases are met while running errands. After two
-   errands (`ERRANDS_BEFORE_CALL`), someone waits on the pavement along the
-   way to the next one, about 30 m ahead (or most of the way, on a short
-   walk), in the open rather than under a tree, with an exclamation mark
-   jumping over their head (`caller_spot`). The errand panel adds "someone
-   needs help", with an arrow and the distance. Within 14 m they call out
-   (a short line from the model, playing them); errands go on meanwhile.
-2. **The case opens** when the character reaches them: they tell what
-   happened (the model plays them, from the case's facts); the notebook
-   gets the crime and anything they saw.
-3. **The scene** is marked by a floating question mark by its place;
-   walking up to it finds the trace, and the character comments.
-4. **The suspects** wait on the pavement by their usual places (the bakery,
-   the newsstand...), each a person of their own with a name over the head.
-   Next to one, the notebook offers three quick questions (where were you,
-   did you see anything, what is that on you), and by voice anything can be
-   asked: there the recogniser stops expecting commands and listens freely.
-   The model answers as that suspect, from a persona the case writes for
-   them (`suspect_persona`): an innocent tells the truth about where they
-   were and with whom and may let a harmless secret slip; the culprit lies
-   about where they were and never admits it. Talking to someone writes in
-   the notebook what shows (the traces they carry), where they say they
-   were, and what they saw.
-5. **The accusation**, by voice ("è stato Lino", "accuso Lino") or with the
-   notebook's button. Right: the culprit confesses with their absurd motive
-   and the character gloats. Wrong: the culprit gets away and the character
-   says what it thinks. Either way the notebook offers to go back to the
-   errands; the case's people go home, and two errands later someone else
-   needs help.
+1. **The office.** The game starts in the detective's office. With no case
+   open, a client comes in after about 2.5 seconds, stands before the desk
+   and tells what happened (the model plays them, from the case's facts and
+   anything they glimpsed). The notebook gets the crime, the scene, the
+   client's name and what they saw. The client stays in the office until the
+   case is over and can be questioned like anyone else.
+2. **The people.** Every suspect has a space of their own (`spaces_of`): the
+   shop they work in, if they work in one and nobody else of the case is
+   there already, otherwise a home near their usual place, never a door
+   shared with another. The notebook lists each suspect with where they are
+   ("il forno", "a casa"), how far the door is, and a button that walks the
+   character there (`hw_go`); outside, it also tells how far the office is.
+   Inside, the suspect stands beside the counter or in the room, a name over
+   their head.
+3. **The chat.** Next to someone (within 2.6 m) the notebook becomes a
+   conversation with them. The player writes a question, picks one of three
+   suggested ones (where were you, did you see anything strange, what is
+   that on you), or dictates with the microphone button. The message goes to
+   the game (`hw_chat`), which asks the model to answer as that person, from
+   a persona the case writes for them (`client_persona`, `suspect_persona`)
+   and the whole conversation so far as history: an innocent tells the truth
+   about where they were and with whom and may let a harmless secret slip;
+   the culprit lies about where they were and never admits it. The answer
+   shows in the chat and in a bubble over their head. A late or failed
+   answer shows a note in the chat instead. Each person has a conversation of
+   their own, kept for the whole case.
+4. **The notes.** After a suspect's first answer the notebook notes what
+   shows (the traces they carry), where they say they were, and what they
+   saw (`suspect_notes`).
+5. **The scene**, outside, is marked by a floating question mark by its
+   place; walking up to it (within 3 m) notes the trace found there.
+6. **The accusation**, with the notebook's Accuse button by each suspect.
+   Right: the culprit confesses with their absurd motive, in their own chat.
+   Wrong: the notebook says who it really was, who got away. Either way the
+   notebook offers "Prossimo caso" ("Next case"); back at the office the
+   next client comes in.
 
 **The notebook** (`web/notebook.js`) is drawn by the page from what the
 game publishes (`hw_case`) a few times a second, with LiteAura's controls,
-and folds away. It is also what makes the game playable without a
-microphone. **Progress** (the next case's number, cases solved and failed)
-is kept per profile; the level goes up one every two cases solved. While a
-case is open, errands wait.
+and folds away. The chat box is built once and kept, so what the player is
+typing is never lost when the rest is redrawn. **Progress** (the next case's
+number, cases solved and failed) is kept per profile; the level goes up one
+every two cases solved.
 
-Tried on 2026-11-26 against the configured model, a whole level-1 case
-from report to confession: every line in character, about a second each.
+Tried on 2026-11-27 in a headless browser against a stand-in model: the
+office, the client's opening and a question, out of the door, the walk to a
+suspect's shop with the notebook's button, the chat, the notes and an
+accusation. Not yet tried with the real configured model or a real
+microphone.
 
 ### The case generator
 
@@ -523,26 +508,16 @@ cd plugins/happywalk/game && cargo run --example case -- "Borgo Pastello" 4 4
 
 ## Latency
 
-Every link of the chain is measured where it happens and logged, on one clock
-(`performance.now()` milliseconds):
-
-| Link | From → to |
-| --- | --- |
-| `model-load` | start → the speech model is ready |
-| `game-load` | start → the game module is running |
-| `speech→text` | the player's voice goes quiet → the recogniser has the text |
-| `text→game` | the recogniser has the text → a frame of the game has it |
-| `text→move` | the recogniser has the text → the order is carried out (the same frame as `text→game`) |
-| `speech→move` | the player's voice goes quiet → the order is carried out, when the result came after the voice stopped |
-| `brain` | the request leaves → the checked answer is back (the route's own time is in the log line) |
-| `voice` | the request leaves → the line starts playing |
-
-The game reports each as a `Lap` message (`game/src/telemetry.rs`), which is
-logged and kept in the `Latency` resource (last, mean, worst, count) for the
-HUD. The page logs its own side. Both logs go to the browser console with the
-prefix `[happywalk]` and to the log panel in the window (**F2**). **F3**
-shows the figures in the game's corner. `happywalkHost.state` gives the
-character's place, facing, pace and whether it walks (tests use it).
+The chain is short now: what takes time is the model's answer. The page logs
+how long each request took, with the model's name and the route's own time
+(`brain #<id> <ms> ms (<model>, server <ms> ms)`), and the game reports it as
+a `brain` lap (`game/src/telemetry.rs`), kept in the `Latency` resource
+(last, mean, worst, count). The page also logs `game-load`, from start to the
+game module running. Both logs go to the browser console with the prefix
+`[happywalk]` and to the log panel in the window (**F2**). **F3** shows the
+timings in the game's corner, with how many meshes exist, how many are drawn
+and their triangles. `happywalkHost.state` gives the character's place,
+facing, pace and whether it walks (tests use it).
 
 ## Build and run
 
@@ -555,9 +530,12 @@ cargo build --release -p shiny-happywalk-plugin # the plugin process
 `wasm32-unknown-unknown` target and a `wasm-bindgen` CLI of the version pinned
 in `game/Cargo.toml`.
 
-Unit tests: `cargo test -p shiny-happywalk-plugin` (the brain's checks) and
-`cargo test` in `game/` (commands and partial results, the city's solids,
-walking, turning and bumping, the lines, the bridge's parsing, the latency
+Unit tests: `cargo test -p shiny-happywalk-plugin` (the brain route's
+checks: the conversation in order, the answer's shape, a long reply cut) and
+`cargo test` in `game/` (the city and its solids, routes along the streets,
+walking, turning, sliding and bumping, the joystick, rooms that leave a way
+from the door to whoever is there, every suspect with a door of their own,
+the personas and the notes, fair cases, the bridge's parsing, the latency
 figures).
 
 The game's typeface is DejaVu Sans Bold (`game/assets/`, with its licence):
@@ -568,24 +546,26 @@ the engine's built-in font has no accented letters.
 These are rules, not hopes: new work follows them.
 
 - **One Bevy plugin per module, talking through messages.** A module owns
-  its state and announces what happened (`Order`, `Bumped`, `Said`,
-  `Heard`); nobody reaches into another module's components. A new feature
+  its state and announces what happened (`Order`, `TapTo`, `Bumped`,
+  `Passage`, `BrainAnswered`, `Detective`); nobody reaches into another module's components. A new feature
   is a new plugin added to the list in `game/src/lib.rs`, reading the
   messages it cares about.
 - **Content is data, found by name.** A voxel model is a file in
   `game/assets/vox/` (dropping one there builds it in). The city is a list
   of `Prop`s (model, place, turn, voxel size, solid or not): whatever writes
-  the list, a fixed layout or a generator, changes nothing else. Commands
-  and stand-in lines are per-language tables. Adding a thing to the street,
-  a word to the vocabulary or a language does not touch the engine code.
-- **The rules are plain functions with unit tests.** Parsing commands,
-  walking and bumping, laying out the city, meshing a model, describing a
-  moment to the model: each works without a window or a browser and is
-  tested that way (`cargo test` in `game/`).
+  the list, a fixed layout or a generator, changes nothing else. Crimes,
+  traces and jobs are rows in the case generator's tables, and a room's
+  furniture is a list of boxes per kind of place. Adding a thing to the
+  street, a crime or a kind of room does not touch the engine code.
+- **The rules are plain functions with unit tests.** Walking and bumping,
+  routes, laying out the city and its rooms, meshing a model, writing a case
+  and the personas the model is given: each works without a window or a
+  browser and is tested that way (`cargo test` in `game/`).
 - **The host stays behind the bridge.** Only `bridge.rs` and `web/host.js`
-  know about LiteAura. The game sees text in, answers in, a line out.
-- **Nothing waits.** Every call out of the frame is asynchronous and has a
-  stand-in for when it is late.
+  know about LiteAura. The game sees calls in and answers in, and asks the
+  model out.
+- **Nothing waits.** Every call out of the frame is asynchronous, and a
+  late answer is a note in the chat, not a stuck game.
 
 ### Performance budget
 
@@ -629,8 +609,11 @@ These are rules, not hopes: new work follows them.
   the one or two chunks it touches, however big the city is.
 - **A small engine.** Bevy is built with only the features the game uses
   (`game/Cargo.toml`); the release build is optimised for size.
-- **Frames first.** Recognition runs in a worker, the model and the voice
-  are requests; systems that have nothing new do nothing (texts are
+- **Rooms cost nothing until entered.** A room is two meshes, built when
+  the character goes in and dropped when it comes out; meanwhile the city
+  does not stream, and passers-by and traffic wait.
+- **Frames first.** The model is a request and dictation runs in a worker;
+  systems that have nothing new do nothing (texts are
   rewritten only when their source changes, chunks are looked at only when
   the player enters a new one).
 - Targets to hold as the game grows: 60 frames a second on the kiosk's
@@ -638,35 +621,37 @@ These are rules, not hopes: new work follows them.
 
 ## Plan
 
+The game began as a walk steered only by voice, with a character that
+answered back with ironic lines. On 2026-11-27 it became a detective story
+with ordinary controls: the voice commands, the character's lines and its
+spoken voice, the errands, the stand-in lines and the passers-by's lines were
+taken out. The phases below are kept as history, with what is left of each.
+
 - **Phase 0, foundations (done):** the workspace, one Bevy plugin per
-  module, the bridge with its three flows, and the latency log.
-- **Phase 1, basic voice control (done; not yet tried with a real voice):**
-  the known commands on a restricted grammar, acted on from partial results;
-  keyboard as a fallback; bumps.
-- **Phase 2, the character's brain (built; the route was tried with a real
-  OpenAI-compatible model, answers in about a second; not yet played with a
-  real voice):** lines and actions from the user's model, a short memory,
-  stand-ins when it is late.
+  module, the bridge, and the latency log.
+- **Phase 1, basic voice control (removed):** commands on a restricted
+  grammar, acted on from partial results. Replaced by the keys, the touch
+  joystick and a tap on the ground; bumps stay.
+- **Phase 2, the character's brain (removed):** lines and actions from the
+  user's model. The brain route now plays the people of a case instead.
 - **Phase 3, the voxel look (in progress):** one shared pastel palette; a
   kit of voxel models written by `tools/make_assets.py` as MagicaVoxel
   files (buildings, trees, benches, planters, lamps, the hedge, the
   character in parts), meshed greedily with soft ambient occlusion; a pastel
-  sky and a slow turn from day to evening. Still to do: interchangeable
-  character parts (hair, clothes), windows that light up in the evening,
-  cars and bikes as models.
+  sky and a slow turn from day to evening. Still to do: windows that light up
+  in the evening.
 - **Phase 4, a city from a seed (done):** a generator that writes each
   chunk's props from the seed (districts, four kinds of lot, shops that are
   named places), chunks spawned and dropped around the player, no edge.
   Still to do in later phases: lots of other sizes and streets that are not
   a plain grid, building fronts assembled from kit pieces.
-- **Phase 5, people and traffic (done):** passers-by with template lines,
-  cars and bikes that always stop for the character, the `saluta` order.
-  Not done: things that tumble when kicked (and so no avian3d yet).
-- **Phase 6, errands (done):** places as orders, routes along the streets
-  walked alone, errands in rounds of five, the brain aware of them.
-- **Phase 7, made to be shared (done):** clips of the last seconds with
-  sound, a close slowed look at bumps, the look back at the camera, a title,
-  photo mode.
+- **Phase 5, people and traffic (done):** passers-by (now silent, they
+  hop), cars and bikes that always stop for the character, waving. Not
+  done: things that tumble when kicked (and so no avian3d yet).
+- **Phase 6, errands (removed):** the routes along the streets stay, for a
+  tap on the ground and the notebook's buttons.
+- **Phase 7, made to be shared (done):** clips of the last seconds (now
+  without sound), a close slowed look at bumps, a title, photo mode.
 - **Phase 8, refinement of the look (done; asked for by the author on
   2026-11-25):** a building is a function with options (balconies with pots,
   shutters, flower boxes, a climber up a corner, a chimney, a roof garden),
@@ -680,29 +665,30 @@ These are rules, not hopes: new work follows them.
 - **Phase 9, ready to publish (prepared, not published):** the publish
   workflow builds the game for the web (`build-web.sh`) before packing the
   plugin; CI tests the game, checks that it compiles for the web and that
-  the committed models are what the script writes; commands in Italian,
-  English, Spanish, French and German. `publish = false` stays until the
-  author has played it with a real voice on the kiosk; see "Before it is
+  the committed models are what the script writes. `publish = false` stays
+  until the author has played it on the kiosk; see "Before it is
   published".
+- **Phase 10, the detective story (built; tried against a stand-in model):**
+  the office and a client per case, rooms built on the spot for the office,
+  shops and homes, suspects in spaces of their own, the notebook's chat with
+  dictation on demand, the controls.
 
 ## Before it is published
 
 What nobody has checked yet, because it needs the real machine and a
 person:
 
-1. **Play it by voice.** Every command so far was typed or injected. The
-   time from the end of a word to the movement (the target is under 300 ms)
-   is unmeasured with a real voice.
-2. **Frame rate on the kiosk's GPU.** Every run here was on a software
+1. **A case with the real model.** The whole flow was tried only against a
+   stand-in model. How the configured model plays a client and the suspects
+   over a long conversation, and how long it takes, is untried.
+2. **Dictation.** The microphone button was never used with a real
+   microphone.
+3. **Frame rate on the kiosk's GPU.** Every run here was on a software
    renderer (2 to 8 frames a second). The budget above is 60.
-3. **Stray speech.** With a restricted grammar the recogniser maps other
-   speech onto the nearest command (a recorded English sentence fed to the
-   Italian commands produced a stream of orders). Decoy words would soften
-   it.
-4. **The voice.** `/api/tts` was replaced by a stand-in in the tests.
+4. **The touch joystick** on a real touch screen.
 5. **Ollama.** The constrained-output path was never run against a model
    (the server's default is a cloud model with no credit left); the
-   OpenAI-compatible path was, and answers in about a second.
+   OpenAI-compatible path was.
 6. **Clips in the shell.** The download works in a browser; whether the
    kiosk's shell files it where the player expects is untried.
 
@@ -724,10 +710,10 @@ and open Happy Walk from the tray.
 | Bevy and its crates | MIT or Apache-2.0 | see `game/Cargo.lock` for the full tree |
 | DejaVu Sans Bold (`game/assets/`) | Bitstream Vera / DejaVu licence | free to redistribute; the licence file is beside it |
 | The voxel models | this repository's | written by `tools/make_assets.py` |
-| Vosk and its models | Apache-2.0 for the library; **each language's model has its own licence** | the models are LiteAura's (`voice/download_vosk.py`): check the ones shipped |
+| Vosk and its models (dictation) | Apache-2.0 for the library; **each language's model has its own licence** | the models are LiteAura's (`voice/download_vosk.py`): check the ones shipped |
 | The language model | the user's own choice in Settings | nothing is shipped with the game |
-| The voice (Supertonic, Qwen) | LiteAura's | **to check before release**, as for any use of them |
 
-The two lines in bold are the "licences of the model weights" the plan asks
-to verify before a release: they are LiteAura's engines, not the game's,
-but the game is one more use of them.
+The line in bold is the "licence of the model weights" the plan asks to
+verify before a release: it is LiteAura's engine, not the game's, but the
+game is one more use of it. The game no longer uses LiteAura's voice
+(text to speech).

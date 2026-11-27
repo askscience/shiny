@@ -1,17 +1,13 @@
 //! `LiteAuraBridge`: the game's only door to LiteAura.
 //!
-//! The game never recognises speech, runs a model or synthesises a voice: the
-//! host does, with the engines and the settings the user already has. The
-//! contract is three flows, all asynchronous:
-//!
-//! * **in — recognised text**: [`Heard`], partial results included, so a
-//!   command can act before the player has finished the sentence;
-//! * **out — a request to the language model**, **in — its structured
-//!   answer**: [`Host::ask_brain`] → [`BrainAnswered`];
-//! * **out — text to speak**: [`Host::say`] → [`Spoke`].
+//! The game never runs a model or recognises speech: the host does, with the
+//! engines and the settings the user already has. The game asks the
+//! language model for the people of a case ([`Host::ask_brain`] →
+//! [`BrainAnswered`]), and gets the player's chat (typed, or spoken and
+//! written down by the page) and controls as calls.
 //!
 //! On the web the other side is `web/host.js` (`window.happywalkHost`), which
-//! runs the recogniser in a worker and talks to the plugin's routes. It
+//! talks to the plugin's routes. It
 //! answers by calling the exported `hw_*` functions, which only push onto a
 //! queue; [`pump`] drains the queue at the start of each frame. No frame ever
 //! waits for the host.
@@ -24,34 +20,30 @@ use serde::{Deserialize, Serialize};
 
 use crate::telemetry::Lap;
 
-/// Text the recogniser understood.
-#[derive(Message, Clone, Debug)]
-pub struct Heard {
-    /// Lower case. Empty only for a final result in which nothing was
-    /// understood: the sentence is over, that is all.
-    pub text: String,
-    /// `false` for a partial result: the phrase may still grow or change.
-    pub is_final: bool,
-    /// When the recogniser produced it.
-    pub heard_at_ms: f64,
-    /// When the player's voice last went quiet before that (0 when the
-    /// result arrived while they were still speaking).
-    pub speech_end_ms: f64,
-}
-
 /// What the game asks the character's brain.
 #[derive(Serialize, Clone, Debug, Default)]
 pub struct BrainRequest {
     /// Who the model plays, when it is not the character (a suspect).
     #[serde(skip_serializing_if = "String::is_empty")]
     pub persona: String,
-    /// What just happened, in plain words ("the player said X, then Y").
+    /// The conversation so far, oldest first.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub history: Vec<Turn>,
+    /// What the detective says now (or, to open, what is happening).
     pub situation: String,
     /// The only actions the answer may choose from.
     pub allowed_actions: Vec<String>,
     /// The language the line must be in (the host's voice language).
     #[serde(skip_serializing_if = "String::is_empty")]
     pub lang: String,
+}
+
+/// One turn of a conversation: who spoke (`"detective"` or `"them"`), and
+/// what they said.
+#[derive(Serialize, Clone, Debug, Default, PartialEq)]
+pub struct Turn {
+    pub from: &'static str,
+    pub text: String,
 }
 
 /// The brain's answer: one allowed action and a line to say. The plugin
@@ -94,11 +86,9 @@ pub struct Placed {
     pub facing: f32,
 }
 
-#[derive(Message, Clone, Debug)]
-pub struct Spoke {
-    pub id: u32,
-    pub ok: bool,
-}
+/// The player is typing in the chat: keys are letters, not controls.
+#[derive(Resource, Default, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Typing(pub bool);
 
 /// What the page reports about itself.
 #[derive(Resource, Deserialize, Clone, Debug, Default, PartialEq)]
@@ -135,22 +125,9 @@ impl Host {
         id
     }
 
-    /// Speak a line with the host's voice. [`Spoke`] follows when it starts.
-    pub fn say(&mut self, text: &str) -> u32 {
-        let id = self.id();
-        js::say(id, text);
-        id
-    }
-
     /// Keep the last seconds of play as a clip. [`ClipSaved`] follows.
     pub fn save_clip(&self) {
         js::save_clip();
-    }
-
-    /// The words the recogniser should expect (a restricted vocabulary is
-    /// faster and far more accurate than free dictation). Empty: free speech.
-    pub fn set_grammar(&self, words: &[&str]) {
-        js::set_grammar(&serde_json::to_string(words).unwrap_or_default());
     }
 }
 
@@ -166,13 +143,11 @@ pub fn now_ms() -> f64 {
 
 // ── The queue the host fills ─────────────────────────────────────────────
 
-// Off the web only tests feed the queue, and only with recognised text.
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 #[derive(Debug)]
 enum Inbound {
-    Heard(Heard),
     Brain { id: u32, json: String, ms: f64 },
-    Spoke { id: u32, ok: bool, ms: f64 },
+    Typing(bool),
     Status(String),
     Place { x: f32, z: f32, facing: f32 },
     Clip { ok: bool, seconds: f32 },
@@ -224,20 +199,11 @@ pub fn publish_state(json: String) {
     }
 }
 
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 fn push(message: Inbound) {
     if let Ok(mut inbox) = INBOX.lock() {
         inbox.push_back(message);
     }
-}
-
-/// Recognised text, from the host. Tests and the keyboard use it too.
-pub fn deliver_heard(text: &str, is_final: bool, heard_at_ms: f64, speech_end_ms: f64) {
-    push(Inbound::Heard(Heard {
-        text: text.trim().to_lowercase(),
-        is_final,
-        heard_at_ms,
-        speech_end_ms,
-    }));
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -245,11 +211,6 @@ mod exports {
     use wasm_bindgen::prelude::*;
 
     use super::{push, Inbound};
-
-    #[wasm_bindgen]
-    pub fn hw_heard(text: &str, is_final: bool, heard_at_ms: f64, speech_end_ms: f64) {
-        super::deliver_heard(text, is_final, heard_at_ms, speech_end_ms);
-    }
 
     /// `json` is `{"action": …, "say": …}`, or empty when there is no answer.
     #[wasm_bindgen]
@@ -261,9 +222,32 @@ mod exports {
         });
     }
 
+    /// The page's joystick: forward and turn, each -1..1 (0, 0 at rest).
     #[wasm_bindgen]
-    pub fn hw_spoke(id: u32, ok: bool, ms: f64) {
-        push(Inbound::Spoke { id, ok, ms });
+    pub fn hw_steer(forward: f32, turn: f32) {
+        crate::control::steer(forward, turn);
+    }
+
+    /// A tap or a click on the canvas, in CSS pixels from its top left: walk
+    /// there.
+    #[wasm_bindgen]
+    pub fn hw_tap(x: f32, y: f32) {
+        crate::control::tap(x, y);
+    }
+
+    /// Whether the player is typing in the chat.
+    #[wasm_bindgen]
+    pub fn hw_typing(typing: bool) {
+        push(Inbound::Typing(typing));
+    }
+
+    /// A message for whoever the character is talking to (typed, or spoken
+    /// and written down by the page).
+    #[wasm_bindgen]
+    pub fn hw_chat(text: &str) {
+        push(Inbound::Detective(crate::mystery::Detective::Chat(
+            text.trim().to_string(),
+        )));
     }
 
     /// Where the character is and what it is doing, as JSON: for tests and
@@ -361,16 +345,14 @@ mod exports {
             .unwrap_or_default()
     }
 
-    /// A quick question from the notebook to a suspect nearby.
+    /// Walk to a suspect's door, or to the office with a negative number.
     #[wasm_bindgen]
-    pub fn hw_ask(suspect: u32, question: u32) {
-        push(Inbound::Detective(crate::mystery::Detective::Ask {
-            suspect: suspect as usize,
-            question: question as usize,
-        }));
+    pub fn hw_go(target: i32) {
+        push(Inbound::Detective(crate::mystery::Detective::GoTo(
+            (target >= 0).then_some(target as usize),
+        )));
     }
 
-    /// The detective accuses a suspect.
     #[wasm_bindgen]
     pub fn hw_accuse(suspect: u32) {
         push(Inbound::Detective(crate::mystery::Detective::Accuse(
@@ -409,10 +391,6 @@ mod js {
         #[wasm_bindgen(js_namespace = ["window", "happywalkHost"])]
         pub fn brain(id: u32, request_json: &str);
         #[wasm_bindgen(js_namespace = ["window", "happywalkHost"])]
-        pub fn say(id: u32, text: &str);
-        #[wasm_bindgen(js_namespace = ["window", "happywalkHost"], js_name = setGrammar)]
-        pub fn set_grammar(words_json: &str);
-        #[wasm_bindgen(js_namespace = ["window", "happywalkHost"])]
         pub fn log(line: &str);
         #[wasm_bindgen(js_namespace = ["window", "happywalkHost"], js_name = saveClip)]
         pub fn save_clip();
@@ -426,8 +404,6 @@ mod js {
 #[cfg(not(target_arch = "wasm32"))]
 mod js {
     pub fn brain(_id: u32, _request_json: &str) {}
-    pub fn say(_id: u32, _text: &str) {}
-    pub fn set_grammar(_words_json: &str) {}
     pub fn log(_line: &str) {}
     pub fn save_clip() {}
     pub fn now() -> f64 {
@@ -448,9 +424,8 @@ impl Plugin for LiteAuraBridgePlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Host>()
             .init_resource::<HostStatus>()
-            .add_message::<Heard>()
             .add_message::<BrainAnswered>()
-            .add_message::<Spoke>()
+            .init_resource::<Typing>()
             .add_message::<Placed>()
             .add_message::<ClipSaved>()
             .add_message::<LookChosen>()
@@ -466,9 +441,8 @@ pub fn parse_answer(json: &str) -> Option<BrainAnswer> {
 }
 
 fn pump(
-    mut heard: MessageWriter<Heard>,
     mut answered: MessageWriter<BrainAnswered>,
-    mut spoke: MessageWriter<Spoke>,
+    mut typing: ResMut<Typing>,
     mut placed: MessageWriter<Placed>,
     mut clips: MessageWriter<ClipSaved>,
     mut looks: MessageWriter<LookChosen>,
@@ -485,33 +459,8 @@ fn pump(
     if pending.is_empty() {
         return;
     }
-    let now = now_ms();
     for message in pending {
         match message {
-            Inbound::Heard(h) => {
-                if h.text.is_empty() {
-                    // An empty final result only marks the end of a sentence.
-                    if h.is_final {
-                        heard.write(h);
-                    }
-                    continue;
-                }
-                let kind = if h.is_final { "final" } else { "partial" };
-                let about = format!("\"{}\", {kind}", h.text);
-                if h.speech_end_ms > 0.0 && h.heard_at_ms >= h.speech_end_ms {
-                    laps.write(Lap {
-                        link: "speech→text",
-                        ms: h.heard_at_ms - h.speech_end_ms,
-                        about: about.clone(),
-                    });
-                }
-                laps.write(Lap {
-                    link: "text→game",
-                    ms: (now - h.heard_at_ms).max(0.0),
-                    about,
-                });
-                heard.write(h);
-            }
             Inbound::Brain { id, json, ms } => {
                 let answer = parse_answer(&json);
                 let about = match &answer {
@@ -525,13 +474,10 @@ fn pump(
                 });
                 answered.write(BrainAnswered { id, answer });
             }
-            Inbound::Spoke { id, ok, ms } => {
-                laps.write(Lap {
-                    link: "voice",
-                    ms,
-                    about: format!("#{id} {}", if ok { "speaking" } else { "failed" }),
-                });
-                spoke.write(Spoke { id, ok });
+            Inbound::Typing(now) => {
+                if typing.0 != now {
+                    typing.0 = now;
+                }
             }
             Inbound::Place { x, z, facing } => {
                 placed.write(Placed {

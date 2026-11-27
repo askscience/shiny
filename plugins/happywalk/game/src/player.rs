@@ -2,14 +2,14 @@
 //! body, arms, legs) that walks where it is told, swings its limbs as it
 //! goes, and stops with a jolt when it walks into something.
 
-use std::f32::consts::{FRAC_PI_2, PI};
+use std::f32::consts::PI;
 
 use bevy::prelude::*;
 
 use crate::bridge::{LookChosen, Wardrobe};
 use crate::city::{SolidKind, Solids, START};
+use crate::control::{Order, Steer, DEAD};
 use crate::figure::Look;
-use crate::intent::Order;
 use crate::movers::Movers;
 use crate::vox::VoxLibrary;
 
@@ -47,26 +47,14 @@ impl Pace {
             Pace::Run => 6.2,
         }
     }
-
-    fn faster(self) -> Self {
-        match self {
-            Pace::Slow => Pace::Walk,
-            _ => Pace::Run,
-        }
-    }
-
-    fn slower(self) -> Self {
-        match self {
-            Pace::Run => Pace::Walk,
-            _ => Pace::Slow,
-        }
-    }
 }
 
 /// Half the side of the square the character takes on the ground.
 pub const RADIUS: f32 = 0.38;
 /// How long the jolt of a bump lasts, in seconds.
 const JOLT: f32 = 0.5;
+/// Metres a second walking backwards.
+const BACK_SPEED: f32 = 1.4;
 /// Radians a second.
 const TURN_RATE: f32 = 7.0;
 /// Seconds a glance at the camera lasts.
@@ -91,6 +79,11 @@ pub struct Player {
     pub waving: f32,
     /// Seconds left of looking over its shoulder at the camera.
     pub glance: f32,
+    /// Walking backwards (a key or the joystick held back).
+    pub backing: bool,
+    /// Stopped by something last step: a bump is told once, not every frame
+    /// it is pushed against.
+    blocked: bool,
     /// Where the limbs are in their swing, and how wide it is (0..1).
     stride: f32,
     swing: f32,
@@ -108,6 +101,8 @@ impl Default for Player {
             waving: 0.0,
             hit_model: "",
             glance: 0.0,
+            backing: false,
+            blocked: false,
             stride: 0.0,
             swing: 0.0,
         }
@@ -115,29 +110,15 @@ impl Default for Player {
 }
 
 impl Player {
-    /// Carry out a command.
-    pub fn obey(&mut self, command: Order) {
-        match command {
-            Order::Forward => self.walking = true,
-            Order::Back => {
-                self.heading += PI;
-                self.walking = true;
-            }
-            Order::Left => self.heading += FRAC_PI_2,
-            Order::Right => self.heading -= FRAC_PI_2,
-            Order::Stop => self.walking = false,
-            Order::Faster => {
-                // "Faster" to someone standing still means "get going".
-                if self.walking {
-                    self.pace = self.pace.faster();
-                }
-                self.walking = true;
-            }
-            Order::Slower => self.pace = self.pace.slower(),
-            Order::Wave => self.waving = 1.4,
-            // Where to go is the navigator's business.
-            Order::GoTo(_) | Order::Clip => {}
-        }
+    /// Follow the held controls: turn while they turn, walk while they
+    /// push.
+    pub fn drive(&mut self, steer: &Steer) {
+        // A heading a little ahead of where it faces: it turns at its own
+        // rate, as long as the control is held.
+        self.heading = self.facing - steer.turn * 0.6;
+        self.walking = steer.forward.abs() > DEAD;
+        self.backing = steer.forward < -DEAD;
+        self.pace = if steer.run { Pace::Run } else { Pace::Walk };
     }
 
     /// The direction the character faces, on the ground (`x`, `z`).
@@ -174,25 +155,41 @@ impl Player {
         if !self.walking || turn.abs() > ABOUT_FACE {
             return (at, None);
         }
-        let next = at + self.forward() * self.pace.speed() * dt;
-        let hit = solids
-            .what(next, RADIUS)
-            .map(|solid| (solid.kind, solid.model))
-            .or_else(|| {
-                movers
-                    .what(next, RADIUS)
-                    .map(|mover| (mover.kind, mover.model))
-            });
-        match hit {
-            Some((into, model)) => {
-                self.hit_model = model;
-                self.walking = false;
-                self.jolt = JOLT;
-                self.thrown = -self.forward();
-                (at, Some(into))
+        let speed = if self.backing {
+            -BACK_SPEED
+        } else {
+            self.pace.speed()
+        };
+        let step = self.forward() * speed * dt;
+        let hit = |p: Vec2| {
+            solids
+                .what(p, RADIUS)
+                .map(|solid| (solid.kind, solid.model))
+                .or_else(|| {
+                    movers
+                        .what(p, RADIUS)
+                        .map(|mover| (mover.kind, mover.model))
+                })
+        };
+        let Some((into, model)) = hit(at + step) else {
+            self.blocked = false;
+            return (at + step, None);
+        };
+        // Along the wall, if it is only grazed.
+        for slide in [Vec2::new(step.x, 0.0), Vec2::new(0.0, step.y)] {
+            if slide.length() > step.length() * 0.3 && hit(at + slide).is_none() {
+                return (at + slide, None);
             }
-            None => (next, None),
         }
+        self.hit_model = model;
+        // Into a person: a jolt back. Into anything else it just stops.
+        if into == SolidKind::Person && self.jolt == 0.0 {
+            self.jolt = JOLT;
+            self.thrown = -self.forward();
+        }
+        let first = !self.blocked;
+        self.blocked = true;
+        (at, first.then_some(into))
     }
 }
 
@@ -224,9 +221,7 @@ impl Plugin for PlayerPlugin {
             .add_systems(Startup, spawn)
             .add_systems(
                 Update,
-                (choose, dress, glance, walk, animate)
-                    .chain()
-                    .in_set(PlayerSet),
+                (choose, dress, walk, animate).chain().in_set(PlayerSet),
             );
     }
 }
@@ -355,14 +350,6 @@ fn dress(
 }
 
 /// A line said after something went wrong comes with a look at the camera.
-fn glance(mut said: MessageReader<crate::brain::Said>, mut players: Query<&mut Player>) {
-    if said.read().count() > 0 {
-        if let Ok(mut player) = players.single_mut() {
-            player.glance = GLANCE;
-        }
-    }
-}
-
 fn walk(
     time: Res<Time>,
     solids: Res<Solids>,
@@ -370,6 +357,9 @@ fn walk(
     wardrobe: Res<Wardrobe>,
     mut waves: MessageWriter<Waved>,
     mut orders: MessageReader<Order>,
+    steer: Res<Steer>,
+    mut steering: Local<bool>,
+    mut route: ResMut<crate::nav::Route>,
     mut placed: MessageReader<crate::bridge::Placed>,
     mut bumps: MessageWriter<Bumped>,
     mut players: Query<(&mut Player, &mut Transform)>,
@@ -378,12 +368,22 @@ fn walk(
         return;
     };
     for order in orders.read() {
-        player.obey(*order);
         if *order == Order::Wave {
+            player.waving = 1.4;
             waves.write(Waved {
                 at: Vec2::new(transform.translation.x, transform.translation.z),
             });
         }
+    }
+    // Held controls win over a walk set by a tap; letting go stops.
+    if steer.active() {
+        player.drive(&steer);
+        *route = crate::nav::Route::default();
+        *steering = true;
+    } else if *steering {
+        *steering = false;
+        player.walking = false;
+        player.backing = false;
     }
     for place in placed.read() {
         transform.translation = Vec3::new(place.at.x, 0.0, place.at.y);
@@ -473,75 +473,131 @@ mod tests {
 
     const SEED: u64 = 9;
 
-    fn walk_until_bump(
+    fn held(forward: f32, turn: f32, run: bool) -> Steer {
+        Steer { forward, turn, run }
+    }
+
+    /// Steps of 1/60 s with the controls held, until it is stopped.
+    fn walk_held(
         player: &mut Player,
         mut at: Vec2,
+        steer: Steer,
         solids: &Solids,
+        movers: &Movers,
         steps: usize,
     ) -> (Vec2, Option<SolidKind>) {
         for _ in 0..steps {
-            let (next, bumped) = player.step(at, 1.0 / 60.0, solids, &Movers::default());
-            at = next;
-            if bumped.is_some() || !player.walking {
-                return (at, bumped);
+            player.drive(&steer);
+            let (next, bumped) = player.step(at, 1.0 / 60.0, solids, movers);
+            if bumped.is_some() {
+                return (next, bumped);
             }
+            at = next;
         }
         (at, None)
     }
 
-    /// On the street beside a built lot, told to walk at its wall.
-    fn facing_a_wall(solids: &Solids) -> (Player, Vec2) {
-        let mut player = Player::default();
-        let mut at = gen::centre(a_built_lot(SEED)) + Vec2::new(PITCH / 2.0, -1.5);
-        player.obey(Order::Left);
-        player.obey(Order::Forward);
-        for _ in 0..30 {
-            at = player.step(at, 1.0 / 60.0, solids, &Movers::default()).0;
-        }
-        (player, at)
-    }
-
     #[test]
-    fn forward_walks_up_the_street_without_end() {
+    fn held_forward_walks_up_the_street_without_end() {
         let solids = Solids::new(SEED);
         let mut player = Player::default();
-        player.obey(Order::Forward);
-        player.obey(Order::Faster);
         let start = Vec2::new(START.x, START.z);
         // Three minutes at a run: more than a kilometre, and no edge.
-        let (at, bumped) = walk_until_bump(&mut player, start, &solids, 60 * 180);
+        let (at, bumped) = walk_held(
+            &mut player,
+            start,
+            held(1.0, 0.0, true),
+            &solids,
+            &Movers::default(),
+            60 * 180,
+        );
         assert_eq!(bumped, None);
-        assert!(player.walking);
+        assert_eq!(player.pace, Pace::Run);
         assert!(at.y < start.y - 1000.0, "{at:?}");
     }
 
     #[test]
-    fn a_turn_into_the_lot_ends_in_a_building() {
-        let solids = Solids::new(SEED);
-        let (mut player, at) = facing_a_wall(&solids);
-        let (_, bumped) = walk_until_bump(&mut player, at, &solids, 2000);
-        assert_eq!(bumped, Some(SolidKind::Building));
+    fn turning_while_held_goes_round() {
+        let mut player = Player::default();
+        for _ in 0..30 {
+            player.drive(&held(0.0, 1.0, false));
+            player.step(
+                Vec2::ZERO,
+                1.0 / 60.0,
+                &Solids::new(SEED),
+                &Movers::default(),
+            );
+        }
+        // Right turns clockwise seen from above: the facing goes down.
+        assert!(player.facing < -1.0, "{}", player.facing);
         assert!(!player.walking);
-        assert!(player.jolt > 0.0);
     }
 
     #[test]
-    fn turning_back_after_a_bump_does_not_bump_again() {
+    fn back_walks_backwards_without_turning() {
         let solids = Solids::new(SEED);
-        let (mut player, at) = facing_a_wall(&solids);
-        let (mut at, bumped) = walk_until_bump(&mut player, at, &solids, 2000);
-        assert_eq!(bumped, Some(SolidKind::Building));
-        let wall = at;
-        // Told to go back while still reeling: it turns round and walks
-        // off, back to the street.
-        player.obey(Order::Back);
-        for _ in 0..120 {
+        let mut player = Player::default();
+        let start = Vec2::new(START.x, START.z);
+        let (at, _) = walk_held(
+            &mut player,
+            start,
+            held(-1.0, 0.0, false),
+            &solids,
+            &Movers::default(),
+            60,
+        );
+        assert!(at.y > start.y + 1.0, "{at:?}");
+        assert!(player.facing.abs() < 1e-6);
+    }
+
+    #[test]
+    fn a_building_stops_it_once_and_without_a_jolt() {
+        let solids = Solids::new(SEED);
+        let mut player = Player {
+            facing: std::f32::consts::FRAC_PI_2,
+            heading: std::f32::consts::FRAC_PI_2,
+            ..default()
+        };
+        let mut at = gen::centre(a_built_lot(SEED)) + Vec2::new(PITCH / 2.0, -1.5);
+        let steer = held(1.0, 0.0, false);
+        let mut bumps = 0;
+        for _ in 0..600 {
+            player.drive(&steer);
+            player.heading = player.facing;
             let (next, bumped) = player.step(at, 1.0 / 60.0, &solids, &Movers::default());
-            assert_eq!(bumped, None);
+            bumps += usize::from(bumped.is_some());
             at = next;
         }
-        assert!(player.walking);
-        assert!(at.x > wall.x + 2.0, "{at:?}");
+        assert_eq!(bumps, 1, "told once, however long it pushes");
+        assert_eq!(player.jolt, 0.0);
+    }
+
+    #[test]
+    fn a_passer_by_in_the_way_is_a_bump_with_a_jolt() {
+        use crate::movers::Mover;
+        let solids = Solids::new(SEED);
+        let mut player = Player::default();
+        let start = Vec2::new(START.x, START.z);
+        let movers = Movers {
+            people: vec![Mover {
+                at: start + Vec2::new(0.0, -3.0),
+                half: Vec2::splat(0.28),
+                kind: SolidKind::Person,
+                model: "person",
+            }],
+            vehicles: Vec::new(),
+        };
+        let (at, bumped) = walk_held(
+            &mut player,
+            start,
+            held(1.0, 0.0, false),
+            &solids,
+            &movers,
+            600,
+        );
+        assert_eq!(bumped, Some(SolidKind::Person));
+        assert!(player.jolt > 0.0);
+        assert!(at.y > start.y - 3.0);
     }
 
     #[test]
@@ -558,57 +614,5 @@ mod tests {
         assert_eq!(player.jolt, 0.0);
         let still = player.step(at, 1.0 / 60.0, &solids, &Movers::default()).0;
         assert_eq!(still, at);
-    }
-
-    #[test]
-    fn a_passer_by_in_the_way_is_a_bump_too() {
-        use crate::movers::Mover;
-        let solids = Solids::new(SEED);
-        let mut player = Player::default();
-        player.obey(Order::Forward);
-        let start = Vec2::new(START.x, START.z);
-        let movers = Movers {
-            people: vec![Mover {
-                at: start + Vec2::new(0.0, -3.0),
-                half: Vec2::splat(0.28),
-                kind: SolidKind::Person,
-                model: "person",
-            }],
-            vehicles: Vec::new(),
-        };
-        let mut at = start;
-        let mut bumped = None;
-        for _ in 0..600 {
-            let (next, hit) = player.step(at, 1.0 / 60.0, &solids, &movers);
-            at = next;
-            if hit.is_some() {
-                bumped = hit;
-                break;
-            }
-        }
-        assert_eq!(bumped, Some(SolidKind::Person));
-        assert!(at.y > start.y - 3.0);
-    }
-
-    #[test]
-    fn orders() {
-        let mut player = Player::default();
-        player.obey(Order::Faster);
-        assert!(player.walking);
-        assert_eq!(player.pace, Pace::Walk);
-        player.obey(Order::Faster);
-        assert_eq!(player.pace, Pace::Run);
-        player.obey(Order::Slower);
-        player.obey(Order::Slower);
-        assert_eq!(player.pace, Pace::Slow);
-        player.obey(Order::Stop);
-        assert!(!player.walking);
-        player.obey(Order::Back);
-        assert!(player.walking);
-        assert!((player.heading - PI).abs() < 1e-6);
-        player.obey(Order::Right);
-        assert!((player.heading - FRAC_PI_2).abs() < 1e-6);
-        player.obey(Order::Wave);
-        assert!(player.waving > 0.0);
     }
 }

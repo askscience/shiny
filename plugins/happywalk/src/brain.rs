@@ -1,11 +1,12 @@
-//! The character's brain: one question to the user's language model, one
-//! structured answer.
+//! The people of the case: one turn of a conversation with the user's
+//! language model, one structured answer.
 //!
-//! The game sends what just happened and the actions it would accept; the
+//! The game sends who the model plays (a client, a suspect: their facts and
+//! manner), the conversation so far and what the detective says now; the
 //! model answers `{"action": …, "say": …}`. The answer is checked here, so
-//! the game only ever sees an action it offered and a short line. Anything
-//! else (the AI switched off, no model, a late or malformed answer) is "no
-//! answer": the game then uses a line of its own, and never waits.
+//! the game only ever sees an action it offered and a reply of reasonable
+//! length. Anything else (the AI switched off, no model, a late or malformed
+//! answer) is "no answer", and the game says so in the chat.
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -16,23 +17,35 @@ use shiny_plugin_sdk::db::Value;
 use shiny_plugin_sdk::routes::{bridged_route, ok, user_id, RouteHandler};
 use shiny_plugin_sdk::services::PluginCtx;
 
-/// Longer than this and the moment the line was for has passed.
-const ANSWER_WITHIN: Duration = Duration::from_secs(6);
-const LINE_MAX_CHARS: usize = 160;
+/// A conversation can wait for its answer, but not for ever.
+const ANSWER_WITHIN: Duration = Duration::from_secs(20);
+const LINE_MAX_CHARS: usize = 600;
 
 #[derive(Deserialize, Debug, Default)]
 pub struct Request {
-    /// Who the model plays, when it is not the character: a suspect, a
-    /// witness, written by the game. Empty means the character
-    /// (`personality.md`).
+    /// Who the model plays (a client, a suspect), written by the game:
+    /// their facts, their manner, what they know and what they hide.
     #[serde(default)]
     pub persona: String,
+    /// The conversation so far, oldest first.
+    #[serde(default)]
+    pub history: Vec<Turn>,
+    /// What the detective says now (or, to open, what is happening).
     #[serde(default)]
     pub situation: String,
     #[serde(default)]
     pub allowed_actions: Vec<String>,
     #[serde(default)]
     pub lang: String,
+}
+
+/// One turn of a conversation: `from` is `"detective"` or `"them"`.
+#[derive(Deserialize, Debug, Default, Clone, PartialEq)]
+pub struct Turn {
+    #[serde(default)]
+    pub from: String,
+    #[serde(default)]
+    pub text: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq)]
@@ -54,38 +67,6 @@ fn language(lang: &str) -> &'static str {
     }
 }
 
-/// Who the character is: its own file, to be edited without touching code.
-pub const PERSONALITY: &str = include_str!("personality.md");
-
-/// Ways to make a line funny. One is suggested for each line, at random, so
-/// two moments in a row are never joked about the same way.
-pub const ANGLES: &[&str] = &[
-    "a tragic overreaction, as if it were the last act of an opera",
-    "deadpan understatement",
-    "a nature-documentary narrator describing yourself",
-    "a petty grudge against the thing, as if it did it on purpose",
-    "speak to the people who will watch this clip",
-    "an absurd comparison",
-    "desperate optimism: the bright side, however small",
-    "a philosophical thought far too deep for the moment",
-    "a backhanded compliment to the player",
-    "a breaking-news report",
-    "a callback to something that happened earlier, if anything fits",
-    "make it about food",
-    "a very polite complaint to the city council",
-    "pretend it was all part of your plan",
-    "a sports commentator, live",
-    "a dramatic confession",
-];
-
-/// The angle for one line: different from one request to the next.
-pub fn angle(salt: u64) -> &'static str {
-    let mut z = salt.wrapping_add(0x9E37_79B9_7F4A_7C15);
-    z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-    z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-    ANGLES[((z ^ (z >> 31)) % ANGLES.len() as u64) as usize]
-}
-
 pub fn system_prompt(request: &Request) -> String {
     let actions = if request.allowed_actions.is_empty() {
         "\"action\": \"\" (there is nothing to do, only something to say)".to_string()
@@ -100,27 +81,28 @@ pub fn system_prompt(request: &Request) -> String {
                 .join(", ")
         )
     };
-    let who = if request.persona.is_empty() {
-        PERSONALITY
-    } else {
-        request.persona.as_str()
-    };
     format!(
         "{who}\n\
          Answer at once, without deliberating, with one JSON object and nothing else: \
-         {{{actions}, \"say\": your one spoken line, in {language}, at most 18 words}}.",
+         {{{actions}, \"say\": your reply, in {language}, at most 70 words}}.",
+        who = request.persona,
         language = language(&request.lang),
     )
 }
 
-/// What the model is told about the moment: the game's description, and the
-/// angle to try this time.
-pub fn user_message(request: &Request, salt: u64) -> String {
-    // Somebody else than the character: no comic angle, they are who they are.
-    if !request.persona.is_empty() {
-        return request.situation.clone();
+/// The whole exchange as chat messages: the persona, every earlier turn
+/// (theirs in the answer's own shape), and what the detective says now.
+pub fn messages(request: &Request) -> serde_json::Value {
+    let mut out = vec![json!({ "role": "system", "content": system_prompt(request) })];
+    for turn in &request.history {
+        out.push(if turn.from == "detective" {
+            json!({ "role": "user", "content": turn.text })
+        } else {
+            json!({ "role": "assistant", "content": json!({ "action": "", "say": turn.text }).to_string() })
+        });
     }
-    format!("{}\nThis time, go for: {}.", request.situation, angle(salt))
+    out.push(json!({ "role": "user", "content": request.situation }));
+    serde_json::Value::Array(out)
 }
 
 /// The model's text as a checked answer: the first JSON object in it, an
@@ -259,11 +241,8 @@ fn http() -> &'static reqwest::Client {
 }
 
 /// One question, one reply: the model's text.
-async fn ask(provider: &Provider, request: &Request, salt: u64) -> Result<String, String> {
-    let messages = json!([
-        { "role": "system", "content": system_prompt(request) },
-        { "role": "user", "content": user_message(request, salt) },
-    ]);
+async fn ask(provider: &Provider, request: &Request) -> Result<String, String> {
+    let messages = messages(request);
     match provider {
         Provider::Ollama { url, model } => {
             let mut body = json!({
@@ -271,11 +250,11 @@ async fn ask(provider: &Provider, request: &Request, salt: u64) -> Result<String
                 "messages": messages,
                 "stream": false,
                 "format": answer_schema(&request.allowed_actions),
-                // A line is short, and the moment passes quickly: no
-                // reasoning trace, few tokens, the model kept loaded.
+                // A reply of a few sentences: no reasoning trace, the
+                // model kept loaded between turns.
                 "think": false,
                 "keep_alive": "30m",
-                "options": { "num_predict": 96, "temperature": 1.0, "repeat_penalty": 1.2 },
+                "options": { "num_predict": 300, "temperature": 0.9, "repeat_penalty": 1.1 },
             });
             let mut reply = http()
                 .post(format!("{url}/api/chat"))
@@ -312,10 +291,10 @@ async fn ask(provider: &Provider, request: &Request, salt: u64) -> Result<String
                 "messages": messages,
                 "stream": false,
                 "max_tokens": 700,
-                "temperature": 1.0,
-                // Words and turns of phrase it already used cost it.
-                "frequency_penalty": 0.7,
-                "presence_penalty": 0.6,
+                "temperature": 0.9,
+                // Words and turns of phrase it already used cost it a little.
+                "frequency_penalty": 0.3,
+                "presence_penalty": 0.2,
             });
             let mut asked = plain.clone();
             asked["response_format"] = json!({ "type": "json_object" });
@@ -375,15 +354,14 @@ pub fn route(ctx: Arc<PluginCtx>) -> RouteHandler {
             ) {
                 return Ok(none("ai-off", "", started));
             }
+            // Somebody must be played: the game always says who.
+            if request.persona.trim().is_empty() {
+                return Ok(none("no-persona", "", started));
+            }
             let provider = provider(&ctx, &uid);
-            // A different number every request: the angle of the line.
-            let salt = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_nanos() as u64)
-                .unwrap_or_default();
             let name = provider.model().to_string();
             let text =
-                match tokio::time::timeout(ANSWER_WITHIN, ask(&provider, &request, salt)).await {
+                match tokio::time::timeout(ANSWER_WITHIN, ask(&provider, &request)).await {
                     Err(_) => return Ok(none("late", &name, started)),
                     Ok(Err(e)) => {
                         tracing::info!("happywalk: the brain got no answer: {e}");
@@ -495,52 +473,29 @@ mod tests {
     }
 
     #[test]
-    fn the_character_has_a_personality_and_angles_vary() {
-        let prompt = system_prompt(&Request {
-            situation: String::new(),
-            allowed_actions: Vec::new(),
-            lang: "it".into(),
-            ..Default::default()
-        });
-        assert!(prompt.starts_with(PERSONALITY));
-        assert!(prompt.contains("Italian"));
-        let angles: std::collections::HashSet<&str> =
-            (0..200u64).map(|i| angle(i * 7919)).collect();
-        assert!(
-            angles.len() > ANGLES.len() * 3 / 4,
-            "{} angles of {}",
-            angles.len(),
-            ANGLES.len()
-        );
-        let message = user_message(
-            &Request {
-                situation: "Now: x".into(),
-                allowed_actions: Vec::new(),
-                lang: "it".into(),
-                ..Default::default()
-            },
-            1,
-        );
-        assert!(message.starts_with("Now: x\nThis time, go for: "));
-    }
-
-    #[test]
-    fn a_persona_replaces_the_character() {
+    fn the_conversation_is_sent_in_order() {
         let request = Request {
             persona: "You are Gina, the baker.".into(),
-            situation: "Where were you?".into(),
+            history: vec![
+                Turn { from: "detective".into(), text: "Dov'eri?".into() },
+                Turn { from: "them".into(), text: "Al forno.".into() },
+            ],
+            situation: "Con chi?".into(),
             lang: "it".into(),
             ..Default::default()
         };
-        let prompt = system_prompt(&request);
-        assert!(prompt.starts_with("You are Gina, the baker."));
-        assert!(!prompt.contains(PERSONALITY));
-        assert_eq!(user_message(&request, 3), "Where were you?");
+        let messages = messages(&request);
+        let roles: Vec<&str> = messages.as_array().unwrap().iter().map(|m| m["role"].as_str().unwrap()).collect();
+        assert_eq!(roles, ["system", "user", "assistant", "user"]);
+        assert!(messages[0]["content"].as_str().unwrap().starts_with("You are Gina, the baker."));
+        assert!(messages[0]["content"].as_str().unwrap().contains("Italian"));
+        assert!(messages[2]["content"].as_str().unwrap().contains("Al forno."));
+        assert_eq!(messages[3]["content"], "Con chi?");
     }
 
     #[test]
     fn a_long_line_is_cut() {
-        let long = "a".repeat(400);
+        let long = "a".repeat(LINE_MAX_CHARS + 100);
         let answer = parse(&format!(r#"{{"say": "{long}"}}"#), &allowed()).unwrap();
         assert_eq!(answer.say.chars().count(), LINE_MAX_CHARS);
     }

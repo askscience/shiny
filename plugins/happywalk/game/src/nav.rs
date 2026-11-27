@@ -1,6 +1,5 @@
-//! `NavPlugin`: "go to the bakery". An order naming a place sets a route
-//! along the streets to the nearest one, and the character walks it by
-//! itself until it arrives, is told something else, or walks into
+//! `NavPlugin`: a tap on the ground sets a route there, and the character
+//! walks it by itself until it arrives, is steered by hand, or walks into
 //! something.
 //!
 //! Routes follow the street grid: down the street the character is on to
@@ -12,26 +11,13 @@ use std::collections::VecDeque;
 use bevy::prelude::*;
 
 use crate::city::{CitySeed, PITCH};
-use crate::gen::{self, PlaceKind};
-use crate::intent::Order;
+use crate::control::TapTo;
 use crate::player::{Bumped, Player, PlayerSet};
 
-/// The character reached the place it was walking to.
-#[derive(Message, Clone, Copy, Debug)]
-pub struct Arrived {
-    pub kind: PlaceKind,
-}
-
-/// A place was asked for and there is none near enough.
-#[derive(Message, Clone, Copy, Debug)]
-pub struct NoSuchPlace {
-    pub kind: PlaceKind,
-}
-
-/// Where the character is walking to by itself, if anywhere.
+/// Where the character is walking to by itself, and the way there.
 #[derive(Resource, Default, Debug)]
 pub struct Route {
-    pub to: Option<PlaceKind>,
+    pub to: Option<Vec2>,
     points: VecDeque<Vec2>,
 }
 
@@ -102,43 +88,32 @@ pub struct NavPlugin;
 impl Plugin for NavPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Route>()
-            .add_message::<Arrived>()
-            .add_message::<NoSuchPlace>()
             .add_systems(Update, (set_out, steer).chain().before(PlayerSet))
             .add_systems(Update, give_up.after(PlayerSet));
     }
 }
 
-/// An order naming a place starts a route; any other order about where to
-/// go ends it.
+/// A tap starts a walk to that point: along the streets in the city, straight
+/// across a room.
 fn set_out(
     seed: Res<CitySeed>,
-    mut orders: MessageReader<Order>,
+    inside: Res<crate::rooms::Inside>,
+    mut taps: MessageReader<TapTo>,
     players: Query<&Transform, With<Player>>,
     mut route: ResMut<Route>,
-    mut none: MessageWriter<NoSuchPlace>,
 ) {
     if seed.is_changed() && !seed.is_added() {
         *route = Route::default();
     }
     let Ok(player) = players.single() else { return };
     let at = Vec2::new(player.translation.x, player.translation.z);
-    for order in orders.read() {
-        match order {
-            Order::GoTo(kind) => match gen::nearest_place(seed.0, at, *kind, REACH) {
-                Some(place) => {
-                    route.to = Some(*kind);
-                    route.points = route_points(at, place.at);
-                }
-                None => {
-                    none.write(NoSuchPlace { kind: *kind });
-                }
-            },
-            Order::Forward | Order::Back | Order::Left | Order::Right | Order::Stop => {
-                *route = Route::default()
-            }
-            Order::Faster | Order::Slower | Order::Wave | Order::Clip => {}
-        }
+    for TapTo(to) in taps.read() {
+        route.to = Some(*to);
+        route.points = if inside.0.is_some() || at.distance(*to) < 12.0 {
+            VecDeque::from([*to])
+        } else {
+            route_points(at, *to)
+        };
     }
 }
 
@@ -147,12 +122,10 @@ fn route_points(from: Vec2, to: Vec2) -> VecDeque<Vec2> {
 }
 
 /// Walk the route: face the next point, keep walking, tick points off.
-fn steer(
-    mut route: ResMut<Route>,
-    mut players: Query<(&mut Player, &Transform)>,
-    mut arrived: MessageWriter<Arrived>,
-) {
-    let Some(kind) = route.to else { return };
+fn steer(mut route: ResMut<Route>, mut players: Query<(&mut Player, &Transform)>) {
+    if route.to.is_none() {
+        return;
+    }
     let Ok((mut player, transform)) = players.single_mut() else {
         return;
     };
@@ -167,7 +140,6 @@ fn steer(
     let Some(next) = route.points.front().copied() else {
         *route = Route::default();
         player.walking = false;
-        arrived.write(Arrived { kind });
         return;
     };
     // The heading nearest to where it faces now, so it never spins round.
@@ -176,6 +148,8 @@ fn steer(
         - std::f32::consts::PI;
     player.heading = player.facing + turn;
     player.walking = true;
+    player.backing = false;
+    player.pace = crate::player::Pace::Walk;
 }
 
 /// Walking into something ends the walk: the character stops there.
@@ -189,6 +163,7 @@ fn give_up(mut bumps: MessageReader<Bumped>, mut route: ResMut<Route>) {
 mod tests {
     use super::*;
     use crate::city::Solids;
+    use crate::gen::{self, PlaceKind};
 
     /// Every leg of a route runs along one axis, on a street line.
     fn follows_streets(from: Vec2, points: &[Vec2]) {

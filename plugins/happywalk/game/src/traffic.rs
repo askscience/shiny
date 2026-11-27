@@ -289,8 +289,9 @@ fn arrivals(
     players: Query<&Transform, With<Player>>,
     vehicles: Query<(Entity, &Vehicle)>,
     wardrobe: Res<crate::bridge::Wardrobe>,
+    inside: Res<crate::rooms::Inside>,
 ) {
-    if wardrobe.0 {
+    if wardrobe.0 || inside.0.is_some() {
         return;
     }
     let Ok(player) = players.single() else { return };
