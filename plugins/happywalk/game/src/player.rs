@@ -111,8 +111,20 @@ impl Default for Player {
 
 impl Player {
     /// Follow the held controls: turn while they turn, walk while they
-    /// push.
-    pub fn drive(&mut self, steer: &Steer) {
+    /// push. A joystick points the way to walk, seen from `view` (the way
+    /// the camera looked, as a facing, when it was first pushed).
+    pub fn drive(&mut self, steer: &Steer, view: f32) {
+        if let Some(stick) = steer.stick {
+            // Right on the screen turns clockwise seen from above.
+            let towards = view - stick.x.atan2(stick.y);
+            // The nearest way round to it from where it faces.
+            let turn = (towards - self.facing + PI).rem_euclid(std::f32::consts::TAU) - PI;
+            self.heading = self.facing + turn;
+            self.walking = true;
+            self.backing = false;
+            self.pace = if steer.run { Pace::Run } else { Pace::Walk };
+            return;
+        }
         // A heading a little ahead of where it faces: it turns at its own
         // rate, as long as the control is held.
         self.heading = self.facing - steer.turn * 0.6;
@@ -359,6 +371,8 @@ fn walk(
     mut orders: MessageReader<Order>,
     steer: Res<Steer>,
     mut steering: Local<bool>,
+    mut view: Local<Option<f32>>,
+    cameras: Query<&Transform, (With<crate::camera::FollowCamera>, Without<Player>)>,
     mut route: ResMut<crate::nav::Route>,
     mut placed: MessageReader<crate::bridge::Placed>,
     mut bumps: MessageWriter<Bumped>,
@@ -377,11 +391,30 @@ fn walk(
     }
     // Held controls win over a walk set by a tap; letting go stops.
     if steer.active() {
-        player.drive(&steer);
+        // The view the joystick is read in: as it was when first pushed.
+        let seen = match (steer.stick, *view) {
+            (Some(_), Some(seen)) => seen,
+            (Some(_), None) => {
+                // Which way the camera looks, as a facing.
+                let look = cameras.single().map(|c| c.forward().as_vec3()).unwrap_or(Vec3::NEG_Z);
+                let seen = if look.x.abs() + look.z.abs() > 1e-3 {
+                    (-look.x).atan2(-look.z)
+                } else {
+                    player.facing
+                };
+                *view.insert(seen)
+            }
+            (None, _) => {
+                *view = None;
+                player.facing
+            }
+        };
+        player.drive(&steer, seen);
         *route = crate::nav::Route::default();
         *steering = true;
     } else if *steering {
         *steering = false;
+        *view = None;
         player.walking = false;
         player.backing = false;
     }
@@ -474,7 +507,12 @@ mod tests {
     const SEED: u64 = 9;
 
     fn held(forward: f32, turn: f32, run: bool) -> Steer {
-        Steer { forward, turn, run }
+        Steer {
+            forward,
+            turn,
+            run,
+            ..default()
+        }
     }
 
     /// Steps of 1/60 s with the controls held, until it is stopped.
@@ -487,7 +525,7 @@ mod tests {
         steps: usize,
     ) -> (Vec2, Option<SolidKind>) {
         for _ in 0..steps {
-            player.drive(&steer);
+            player.drive(&steer, player.facing);
             let (next, bumped) = player.step(at, 1.0 / 60.0, solids, movers);
             if bumped.is_some() {
                 return (next, bumped);
@@ -520,7 +558,7 @@ mod tests {
     fn turning_while_held_goes_round() {
         let mut player = Player::default();
         for _ in 0..30 {
-            player.drive(&held(0.0, 1.0, false));
+            player.drive(&held(0.0, 1.0, false), 0.0);
             player.step(
                 Vec2::ZERO,
                 1.0 / 60.0,
@@ -562,7 +600,7 @@ mod tests {
         let steer = held(1.0, 0.0, false);
         let mut bumps = 0;
         for _ in 0..600 {
-            player.drive(&steer);
+            player.drive(&steer, player.facing);
             player.heading = player.facing;
             let (next, bumped) = player.step(at, 1.0 / 60.0, &solids, &Movers::default());
             bumps += usize::from(bumped.is_some());
@@ -598,6 +636,32 @@ mod tests {
         assert_eq!(bumped, Some(SolidKind::Person));
         assert!(player.jolt > 0.0);
         assert!(at.y > start.y - 3.0);
+    }
+
+    #[test]
+    fn a_joystick_walks_the_way_it_is_pushed_without_circling() {
+        let solids = Solids::new(SEED);
+        let mut player = Player::default();
+        let start = Vec2::new(START.x, START.z);
+        let mut at = start;
+        // Pushed right and held: the view stays the one it was pushed in,
+        // so the character settles on one way (to the screen's right, +x)
+        // and walks it straight.
+        let steer = Steer {
+            stick: Some(Vec2::X),
+            ..default()
+        };
+        for _ in 0..120 {
+            player.drive(&steer, 0.0);
+            at = player.step(at, 1.0 / 60.0, &solids, &Movers::default()).0;
+        }
+        assert!(at.x > start.x + 4.0, "{at:?}");
+        assert!((at.y - start.y).abs() < 1.0, "{at:?}");
+        assert!(
+            (player.facing + std::f32::consts::FRAC_PI_2).abs() < 0.05,
+            "{}",
+            player.facing
+        );
     }
 
     #[test]

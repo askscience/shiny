@@ -2,8 +2,11 @@
 //!
 //! * **Keys held**: arrows or WASD walk forward and back and turn; Shift
 //!   runs. `H` waves, `C` keeps a clip.
-//! * **A joystick** on a touch screen, drawn by the page (`hw_steer`): up
-//!   and down walk, left and right turn, pushed to the edge it runs.
+//! * **A joystick** on a touch screen, drawn by the page (`hw_steer`): the
+//!   way it is pushed is the way the character walks, as the screen showed
+//!   it when the thumb came down (that view is kept while it is held, so the
+//!   camera swinging round behind never changes where "right" is); pushed to
+//!   the edge it runs.
 //! * **A tap or a click on the ground** (`hw_tap`): the character walks
 //!   there by itself (`nav.rs`).
 //!
@@ -25,19 +28,22 @@ pub enum Order {
     Clip,
 }
 
-/// The held controls: how much forward (-1 back .. 1), how much turning
-/// (-1 left .. 1 right), and whether to run.
+/// The held controls. From the keys: how much forward (-1 back .. 1), how
+/// much turning (-1 left .. 1 right). From the joystick: the way it is
+/// pushed on the screen (`x` right, `y` up, length up to 1). And whether to
+/// run.
 #[derive(Resource, Default, Clone, Copy, Debug, PartialEq)]
 pub struct Steer {
     pub forward: f32,
     pub turn: f32,
+    pub stick: Option<Vec2>,
     pub run: bool,
 }
 
 impl Steer {
     /// Is anything held?
     pub fn active(&self) -> bool {
-        self.forward.abs() > DEAD || self.turn.abs() > DEAD
+        self.forward.abs() > DEAD || self.turn.abs() > DEAD || self.stick.is_some()
     }
 }
 
@@ -111,10 +117,13 @@ fn held(
         }
     }
     let (forward, turn) = JOYSTICK.lock().map(|j| *j).unwrap_or_default();
-    if !wardrobe.0 && (forward.abs() > DEAD || turn.abs() > DEAD) {
-        next.forward = forward;
-        next.turn = turn;
-        next.run = Vec2::new(forward, turn).length() > 0.9;
+    let pushed = Vec2::new(turn, forward);
+    if !wardrobe.0 && pushed.length() > DEAD {
+        next = Steer {
+            stick: Some(pushed.clamp_length_max(1.0)),
+            run: pushed.length() > 0.9,
+            ..default()
+        };
     }
     if *steer != next {
         *steer = next;
@@ -159,11 +168,16 @@ mod tests {
         assert!(!Steer {
             forward: 0.1,
             turn: -0.1,
-            run: false
+            ..default()
         }
         .active());
         assert!(Steer {
             forward: 0.5,
+            ..default()
+        }
+        .active());
+        assert!(Steer {
+            stick: Some(Vec2::Y),
             ..default()
         }
         .active());

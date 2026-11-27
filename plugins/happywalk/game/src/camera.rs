@@ -168,14 +168,20 @@ fn follow(
         // whole room fits, and a little higher, since the chat takes the
         // bottom. On a wide one the notebook covers the right: the room sits
         // a little to the left.
-        let aspect = windows.single().map(|w| w.width() / w.height().max(1.0)).unwrap_or(1.6);
+        let aspect = windows
+            .single()
+            .map(|w| w.width() / w.height().max(1.0))
+            .unwrap_or(1.6);
         let back = (1.15 / aspect).clamp(1.0, 2.2);
         let aside = if aspect > 1.0 { 1.3 } else { 0.0 };
         let lean = (ground - middle) * 0.35 + Vec3::new(aside, 0.0, 0.0);
         let want = middle + lean + Vec3::new(0.0, 6.2 * back, (inside.half.y + 5.6) * back);
         camera.translation = camera.translation.lerp(want, ease);
         let look = camera
-            .looking_at(middle + lean + Vec3::new(0.0, 0.5, 0.2 + (back - 1.0) * 1.4), Vec3::Y)
+            .looking_at(
+                middle + lean + Vec3::new(0.0, 0.5, 0.2 + (back - 1.0) * 1.4),
+                Vec3::Y,
+            )
             .rotation;
         camera.rotation = camera.rotation.slerp(look, ease.max(0.2));
         return;

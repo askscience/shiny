@@ -214,8 +214,8 @@ whether to run) or **a point to walk to** (`TapTo`).
 
 | Control | Keys | Touch screen | What the character does |
 | --- | --- | --- | --- |
-| Walk, back | arrows or W / S, held | the joystick up or down | walks while held (3.2 m/s), steps back slowly without turning |
-| Turn | arrows or A / D, held | the joystick sideways | turns while held |
+| Walk, back | arrows or W / S, held | the joystick, pushed the way to go | walks while held (3.2 m/s); with the keys, back steps back slowly without turning |
+| Turn | arrows or A / D, held | (the joystick turns towards where it points) | turns while held |
 | Run | Shift, held | the joystick pushed to the edge | runs (6.2 m/s) |
 | Go there | a click on the ground | a tap on the ground | walks there by itself |
 | Wave | H | | waves; the nearest passer-by hops |
@@ -230,7 +230,11 @@ wardrobe is open.
 corner on any touch screen (some app views on a phone report a fine
 pointer, so touch points count too), and hidden while the chat is open. It
 reports both axes from -1 to 1 (`hw_steer`); below 0.15 it counts as at
-rest.
+rest. It points the way to walk on the screen: pushed right, the character
+walks to the right of the screen. The view it is read in is the camera's
+when the thumb comes down, and it is kept while the stick is held, so the
+camera swinging round behind the character never changes where "right" is
+and the character never walks in circles. Pushed to the edge, it runs.
 
 **A tap or a click on the ground** (a short press that hardly moves) sends
 the point of the canvas (`hw_tap`); the game finds the ground under it and
