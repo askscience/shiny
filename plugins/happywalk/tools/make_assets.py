@@ -3,7 +3,7 @@
 
     python3 plugins/happywalk/tools/make_assets.py
 
-Every model shares one pastel palette (PALETTE below) and is written to
+Every model shares one palette (full pastels) (PALETTE below) and is written to
 `game/assets/vox/<name>.vox`, where the game finds it by name. The files open
 in MagicaVoxel, so a model can be retouched or replaced by hand: a model
 drawn there only has to use the same palette and keep its name.
@@ -26,38 +26,38 @@ OUT = pathlib.Path(__file__).resolve().parent.parent / "game" / "assets" / "vox"
 # The palette, one pastel family. Index 0 is "no voxel" in the format, so
 # colours start at 1. Names are what the model functions use.
 PALETTE = [
-    ("rose", (249, 205, 210)),
-    ("peach", (252, 224, 186)),
-    ("sky", (204, 229, 250)),
-    ("lilac", (216, 210, 245)),
-    ("mint", (200, 237, 219)),
-    ("cream", (253, 238, 200)),
-    ("roof_red", (236, 152, 158)),
-    ("roof_blue", (140, 184, 220)),
-    ("roof_green", (158, 204, 178)),
-    ("glass", (158, 200, 230)),
+    ("rose", (246, 168, 182)),
+    ("peach", (252, 196, 140)),
+    ("sky", (150, 200, 245)),
+    ("lilac", (184, 168, 240)),
+    ("mint", (140, 220, 186)),
+    ("cream", (252, 224, 150)),
+    ("roof_red", (226, 104, 112)),
+    ("roof_blue", (92, 146, 214)),
+    ("roof_green", (96, 180, 136)),
+    ("glass", (110, 170, 224)),
     ("glass_lit", (255, 236, 170)),
-    ("door", (150, 112, 102)),
+    ("door", (140, 92, 80)),
     ("trim", (255, 250, 244)),
-    ("stone", (229, 226, 220)),
-    ("asphalt", (184, 188, 204)),
+    ("stone", (222, 214, 200)),
+    ("asphalt", (122, 126, 144)),
     ("line", (247, 245, 230)),
-    ("metal", (116, 122, 148)),
+    ("metal", (86, 92, 120)),
     ("lamp", (255, 246, 200)),
-    ("leaf", (160, 212, 170)),
-    ("leaf_dark", (128, 190, 150)),
-    ("bark", (168, 128, 110)),
-    ("wood", (214, 170, 130)),
+    ("leaf", (110, 196, 110)),
+    ("leaf_dark", (72, 160, 90)),
+    ("bark", (150, 104, 80)),
+    ("wood", (206, 146, 96)),
     ("skin", (252, 214, 190)),
     ("hair", (116, 84, 78)),
     ("shirt", (252, 178, 116)),
     ("trousers", (116, 144, 204)),
     ("shoe", (246, 246, 250)),
     ("ink", (52, 52, 68)),
-    ("pack", (140, 204, 184)),
+    ("pack", (100, 196, 170)),
     ("blush", (246, 170, 170)),
-    ("awning", (250, 190, 120)),
-    ("flower", (250, 160, 190)),
+    ("awning", (250, 160, 80)),
+    ("flower", (246, 110, 160)),
 ]
 INDEX = {name: i + 1 for i, (name, _) in enumerate(PALETTE)}
 

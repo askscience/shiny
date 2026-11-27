@@ -225,6 +225,22 @@ character looks back at the camera** while it says its line. The game's name
 is shown as it starts. **Photo mode** (`P`) stops the game, puts the HUD
 away and takes the camera slowly round the character.
 
+### Light and colour
+
+The sun does the lighting: warm and strong, so faces in the sun take their
+full colour, while a weaker blue-violet sky light fills the shade, so every
+block reads as a volume and the shadows of trees and buildings lie on the
+street (`sky.rs`, from day to evening). The palette is full pastels on a
+mid-grey asphalt (`tools/make_assets.py`, and the ground colours in
+`city.rs`); the fog starts at 38 m.
+
+There is only one directional light. In WebGL2 a second one, even dark,
+breaks the sun's shadow map: everything then counts as in shade and the sun
+lights nothing, which is how the city looked flat and washed out until
+2026-11-27 (a fill light for the wardrobe, and a strong ambient light that
+made up for the missing sun). In the wardrobe the sun itself turns to shine
+the way the camera looks.
+
 ### Voxel models
 
 Everything made of voxels is a MagicaVoxel `.vox` file in
@@ -573,12 +589,13 @@ These are rules, not hopes: new work follows them.
 
 ### Performance budget
 
-- **One draw a chunk.** Everything of a chunk that stands still (the
-  street, the pavement, the dashes, buildings, trees, benches...) is merged
-  into one mesh when the chunk is built (`city::chunk_geometry`): the models
-  share one material with the colour in the vertices, so nothing is lost. A
-  chunk is about one draw instead of twenty. People and vehicles stay
-  separate, since they move.
+- **Two draws a chunk.** Everything of a chunk that stands still is merged
+  when the chunk is built (`city::chunk_geometry`) into two meshes: the
+  ground (street, pavement, dashes), which casts no shadow, and what stands
+  on it (buildings, trees, benches...), which does. The models share one
+  material with the colour in the vertices, so nothing is lost. A chunk is
+  two draws instead of twenty. People and vehicles stay separate, since they
+  move.
 - **Coarser far away.** Chunks beyond the nearest ring are built from each
   model halved (2×2×2 voxels become one, of the colour most of them have;
   `VoxModel::halved`), about a quarter of the faces, and without the small
@@ -586,7 +603,7 @@ These are rules, not hopes: new work follows them.
 - **Nothing past the fog.** Chunks farther than 72 m from the camera, and
   people, cars and bikes farther than 56 m, are not drawn
   (`VisibilityRange`); frustum culling skips what is behind. The fog is
-  thick from 54 m, so nothing visibly pops.
+  whole at 56 m, so nothing visibly pops.
 - **Few triangles.** Greedy meshing, solid models (a hollow one would be
   drawn inside too) and no undersides keep a building at 300 to 550 quads.
   `cargo run --example stats` in `game/` lists every model's cost; one that

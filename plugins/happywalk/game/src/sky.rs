@@ -63,21 +63,23 @@ struct Look {
     height: f32,
 }
 
+// A warm sun and a cool, weaker sky light: faces in the sun are warm, faces
+// in shade lean blue-violet, so every block reads as a volume.
 const DAY: Look = Look {
-    sky: Color::srgb(0.78, 0.90, 0.98),
-    sun: Color::srgb(1.0, 0.97, 0.90),
-    illuminance: 9000.0,
-    ambient: Color::srgb(0.86, 0.92, 1.0),
-    brightness: 900.0,
+    sky: Color::srgb(0.66, 0.84, 0.99),
+    sun: Color::srgb(1.0, 0.92, 0.78),
+    illuminance: 12500.0,
+    ambient: Color::srgb(0.70, 0.76, 1.0),
+    brightness: 640.0,
     height: 0.95,
 };
 
 const EVENING: Look = Look {
     sky: Color::srgb(0.98, 0.78, 0.74),
     sun: Color::srgb(1.0, 0.72, 0.52),
-    illuminance: 5200.0,
-    ambient: Color::srgb(0.86, 0.78, 0.98),
-    brightness: 760.0,
+    illuminance: 7600.0,
+    ambient: Color::srgb(0.76, 0.66, 1.0),
+    brightness: 560.0,
     height: 0.32,
 };
 
@@ -112,6 +114,8 @@ fn turn(
     mut ambient: ResMut<GlobalAmbientLight>,
     mut suns: Query<(&mut DirectionalLight, &mut Transform), With<Sun>>,
     mut fogs: Query<&mut DistanceFog>,
+    wardrobe: Res<crate::bridge::Wardrobe>,
+    cameras: Query<&Transform, (With<crate::camera::FollowCamera>, Without<Sun>)>,
 ) {
     daylight.evening = evening_at(time.elapsed_secs(), daylight.cycle);
     let e = daylight.evening;
@@ -135,6 +139,14 @@ fn turn(
             around.sin() * height.cos(),
         );
         *transform = Transform::from_translation(from * 50.0).looking_at(Vec3::ZERO, Vec3::Y);
+        // In the wardrobe it lights the figure from where the camera looks,
+        // a little from above: a studio light. (WebGL2 takes one directional
+        // light well; a second one, even dark, breaks the sun's shadows.)
+        if wardrobe.0 {
+            if let Ok(camera) = cameras.single() {
+                transform.rotation = camera.rotation * Quat::from_rotation_x(-0.35);
+            }
+        }
     }
 }
 

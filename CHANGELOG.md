@@ -62,7 +62,12 @@
   and tells their story when reached; afterwards the notebook sends the
   character back to the errands. The city is drawn in far fewer pieces:
   each chunk is one mesh, far chunks use coarser models, nothing beyond the
-  fog is drawn, and the shadow map is smaller.
+  fog is drawn, and the shadow map is smaller. The sun now really lights the
+  city: a second light, meant for the wardrobe, kept every shadow on and the
+  sun off, and a strong ambient light had made up for it, flat and washed
+  out. With one light the sun is warm, the shade blue-violet, trees and
+  buildings cast shadows, and the palette is fuller (deeper pastels, a
+  darker asphalt, the fog farther off).
   The character has a personality of its own (theatrical, a proud citizen
   with grudges against lamp posts and a weakness for bread), each line is
   asked from a different comic angle, and the model is told concretely what

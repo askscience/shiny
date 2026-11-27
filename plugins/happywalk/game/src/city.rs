@@ -18,6 +18,7 @@ pub use crate::gen::{Solid, SolidKind, PAVED, PAVEMENT, PITCH};
 use crate::player::Player;
 use crate::vox::{Geometry, VoxLibrary};
 use bevy::camera::visibility::VisibilityRange;
+use bevy::light::NotShadowCaster;
 
 /// What the player called their city.
 #[derive(Resource, Clone, Debug, Default)]
@@ -176,11 +177,11 @@ fn rgb(r: u8, g: u8, b: u8) -> [f32; 4] {
     [c.red, c.green, c.blue, 1.0]
 }
 
-/// Everything of a chunk that stands still, as one mesh around the middle
-/// of its lot: the street, the pavement (stone, grass or the square's
-/// paving), the dashes, and every prop. A far chunk takes the halved models
+/// Everything of a chunk that stands still, as two meshes around the middle
+/// of its lot: the ground (the street, the pavement of stone, grass or the
+/// square's paving, the dashes) and every prop standing on it. A far chunk takes the halved models
 /// and leaves the small things out.
-pub fn chunk_geometry(chunk: &gen::Chunk, library: &VoxLibrary, far: bool) -> Geometry {
+pub fn chunk_geometry(chunk: &gen::Chunk, library: &VoxLibrary, far: bool) -> (Geometry, Geometry) {
     let lot = gen::centre(chunk.coord);
     let mut out = Geometry::default();
     let half = PITCH / 2.0;
@@ -188,12 +189,12 @@ pub fn chunk_geometry(chunk: &gen::Chunk, library: &VoxLibrary, far: bool) -> Ge
         Vec2::splat(-half),
         Vec2::splat(half),
         0.0,
-        rgb(184, 188, 204),
+        rgb(122, 126, 144),
     );
     let paving = match chunk.kind {
-        LotKind::Park => rgb(190, 228, 196),
-        LotKind::Square => rgb(244, 232, 214),
-        _ => rgb(229, 226, 220),
+        LotKind::Park => rgb(134, 206, 128),
+        LotKind::Square => rgb(240, 218, 180),
+        _ => rgb(222, 214, 200),
     };
     out.block(
         Vec3::new(-PAVED / 2.0, 0.0, -PAVED / 2.0),
@@ -204,6 +205,8 @@ pub fn chunk_geometry(chunk: &gen::Chunk, library: &VoxLibrary, far: bool) -> Ge
     for (centre, size) in dashes() {
         out.floor(centre - size, centre + size, 0.012, line);
     }
+    let ground = out;
+    let mut out = Geometry::default();
     for prop in chunk
         .props
         .iter()
@@ -220,7 +223,7 @@ pub fn chunk_geometry(chunk: &gen::Chunk, library: &VoxLibrary, far: bool) -> Ge
             .with_scale(Vec3::splat(voxel));
         out.append(model, &place);
     }
-    out
+    (ground, out)
 }
 
 /// Chunks whose middle is farther than this from the camera are not drawn:
@@ -325,18 +328,26 @@ fn stream(
         let chunk = gen::chunk(seed.0, coord);
         let detailed = (coord - home).abs().max_element() <= DETAILED;
         let lot = gen::centre(coord);
-        // The whole chunk in one draw.
-        let geometry = chunk_geometry(&chunk, &library, !detailed);
-        let triangles = geometry.triangles() as u32;
-        let entities = vec![commands
-            .spawn((
+        // The whole chunk in two draws: the ground, which casts no shadow
+        // (on itself it would only darken everything), and what stands on it.
+        let (ground, things) = chunk_geometry(&chunk, &library, !detailed);
+        let mut entities = Vec::with_capacity(2);
+        for (geometry, casts) in [(ground, false), (things, true)] {
+            if geometry.indices.is_empty() {
+                continue;
+            }
+            let mut entity = commands.spawn((
                 Mesh3d(meshes.add(geometry.mesh())),
                 MeshMaterial3d(library.material.clone()),
                 Transform::from_xyz(lot.x, 0.0, lot.y),
                 VisibilityRange::abrupt(0.0, DRAWN_WITHIN),
-                crate::vox::Triangles(triangles),
-            ))
-            .id()];
+                crate::vox::Triangles(geometry.triangles() as u32),
+            ));
+            if !casts {
+                entity.insert(NotShadowCaster);
+            }
+            entities.push(entity.id());
+        }
         solids.load(&chunk);
         loaded.0.insert(coord, (detailed, entities));
     }
